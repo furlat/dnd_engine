@@ -3367,6 +3367,11 @@ class SensoryUpdateEvent(Event):
         default=SensoryUpdateReason.UNKNOWN,
         description="Reason category used by clients to interpret the delta.",
     )
+    settlement: Optional[int] = Field(
+        default=None, ge=0,
+        description="The sensory settlement this update belongs to: the observers settled in one pass share it; "
+                    "an explicit refresh has its own. None in recordings that predate the marker.",
+    )
     visible_cells_added: CellMask = Field(
         default=EMPTY_CELLS,
         description="Cells newly visible to the observer.",
