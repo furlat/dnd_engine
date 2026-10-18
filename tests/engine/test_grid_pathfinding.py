@@ -39,7 +39,8 @@ from dnd.types.spatial_effects import (
     SpatialEffectTriggerKind,
 )
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
-from tests.engine.support import reset_combat_state
+from tests.engine.support import reset_combat_state, search_tables
+from dnd.core.navigation import has_route, route, route_count
 from dnd.types.cells import cell_in
 
 
@@ -186,12 +187,12 @@ def test_eb_11_003_dijkstra_paths_sum_tile_costs_and_can_ignore_difficult_terrai
             value=1,
         ))
 
-    distances, paths = grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING)
-    easy_distances, _ = grid.compute_paths(
+    distances, paths = search_tables(grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING))
+    easy_distances, _ = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
         ignore_difficult_terrain=True,
-    )
+    ))
 
     assert distances[(1, 0)] == 1
     assert distances[(2, 0)] == 3
@@ -205,12 +206,12 @@ def test_eb_11_012_diagonal_cost_return_and_exact_max_distance_match() -> None:
     reset_grid_state(width=2, height=2)
     grid = get_map()
 
-    distances, paths = grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING)
-    limited_distances, limited_paths = grid.compute_paths(
+    distances, paths = search_tables(grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING))
+    limited_distances, limited_paths = search_tables(grid.compute_paths(
         (0, 0),
         max_distance=1,
         movement_mode=MovementMode.WALKING,
-    )
+    ))
 
     assert distances[(1, 0)] == 1
     assert distances[(0, 1)] == 1
@@ -239,10 +240,10 @@ def test_eb_11_021_diagonal_transitions_need_one_cardinal_bridge_route() -> None
         (0, 0),
         boundary_direction=CardinalDirection.EAST,
     )
-    one_bridge_distances, one_bridge_paths = grid.compute_paths(
+    one_bridge_distances, one_bridge_paths = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
-    )
+    ))
 
     assert not grid.can_transition((0, 0), (1, 0))
     assert grid.can_transition((0, 0), (0, 1))
@@ -259,10 +260,10 @@ def test_eb_11_021_diagonal_transitions_need_one_cardinal_bridge_route() -> None
         (0, 0),
         boundary_direction=CardinalDirection.NORTH,
     )
-    no_bridge_distances, no_bridge_paths = grid.compute_paths(
+    no_bridge_distances, no_bridge_paths = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
-    )
+    ))
 
     assert not grid.can_transition((0, 0), (1, 0))
     assert not grid.can_transition((0, 0), (0, 1))
@@ -282,8 +283,8 @@ def test_eb_11_013_negative_coordinate_tiles_are_reachable() -> None:
     assert grid.has_tile(0, 0)
     assert grid.can_transition((-2, 0), (-1, 0))
 
-    distances, paths = grid.compute_paths((-2, 0), movement_mode=MovementMode.WALKING)
-    edge_distances, edge_paths = grid.compute_paths((-1, 0), movement_mode=MovementMode.WALKING)
+    distances, paths = search_tables(grid.compute_paths((-2, 0), movement_mode=MovementMode.WALKING))
+    edge_distances, edge_paths = search_tables(grid.compute_paths((-1, 0), movement_mode=MovementMode.WALKING))
 
     assert distances[(1, 0)] == 3
     assert paths[(1, 0)] == [(-2, 0), (-1, 0), (0, 0), (1, 0)]
@@ -358,8 +359,8 @@ def test_eb_11_015_dead_entities_become_non_blocking_for_paths() -> None:
 
     assert blocker.blocks_walking(requesting_entity_uuid=mover.uuid) is True
     assert not grid.is_walkable_for(2, 0, mover.uuid)
-    assert (2, 0) not in mover.senses.paths
-    assert (4, 0) not in mover.senses.paths
+    assert not has_route(mover.senses.paths, (2, 0))
+    assert not has_route(mover.senses.paths, (4, 0))
     assert blocker.uuid in mover.senses.entities
 
     blocker.receive_damage(blocker.get_hp() + 5, DamageType.BLUDGEONING, mover.uuid)
@@ -374,8 +375,8 @@ def test_eb_11_015_dead_entities_become_non_blocking_for_paths() -> None:
     mover.get_available_actions()
 
     assert mover.senses._paths_dirty is False
-    assert mover.senses.paths[(2, 0)] == [(0, 0), (1, 0), (2, 0)]
-    assert mover.senses.paths[(4, 0)] == [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
+    assert route(mover.senses.paths, (2, 0)) == [(0, 0), (1, 0), (2, 0)]
+    assert route(mover.senses.paths, (4, 0)) == [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
 
 
 def test_eb_11_006_boundary_structures_block_edges_and_emit_exact_facts() -> None:
@@ -619,16 +620,16 @@ def test_eb_11_008_hazards_can_be_excluded_from_safe_paths() -> None:
     )
     hazard_tile.add_condition(hazard)
 
-    normal_distances, normal_paths = grid.compute_paths(
+    normal_distances, normal_paths = search_tables(grid.compute_paths(
         (0, 0),
         requesting_entity_uuid=entity.uuid,
         walk_in_danger=True,
-    )
-    safe_distances, safe_paths = grid.compute_paths(
+    ))
+    safe_distances, safe_paths = search_tables(grid.compute_paths(
         (0, 0),
         requesting_entity_uuid=entity.uuid,
         walk_in_danger=False,
-    )
+    ))
 
     assert grid.is_position_hazardous_for(1, 0, entity.uuid)
     assert normal_paths[(2, 0)] == [(0, 0), (1, 0), (2, 0)]
@@ -659,10 +660,10 @@ def test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths() -> No
     Entity.update_all_entities_senses(max_distance=20)
 
     destination = (4, 1)
-    initial_path = observer.senses.paths[destination]
+    initial_path = route(observer.senses.paths, destination)
     assert (2, 1) in initial_path
     assert not grid.is_position_hazardous_for(2, 1, observer.uuid)
-    assert observer.senses.safe_paths == {}
+    assert route_count(observer.senses.safe_paths) == 0
     assert observer.senses._paths_dirty is False
 
     observer.add_condition(
@@ -677,12 +678,12 @@ def test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths() -> No
     assert observer.get_passive_perception() > hidden_trap.condition_stealth_dc
     assert grid.is_position_hazardous_for(2, 1, observer.uuid)
     assert observer.senses._paths_dirty is True
-    assert observer.senses.safe_paths == {}
+    assert route_count(observer.senses.safe_paths) == 0
 
     observer.get_available_actions()
 
-    recomputed_path = observer.senses.paths[destination]
-    safe_path = observer.senses.safe_paths[destination]
+    recomputed_path = route(observer.senses.paths, destination)
+    safe_path = route(observer.senses.safe_paths, destination)
     assert (2, 1) in recomputed_path
     assert (2, 1) not in safe_path
     assert observer.senses._paths_dirty is False

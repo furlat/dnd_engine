@@ -33,6 +33,7 @@ from dnd.core.dice import AttackOutcome, Dice, RollType
 from dnd.core.events import EventPhase, RangeType, Range, Damage, EventType, EventHandler, Trigger, Event, SavingThrowEvent, TakeDamageEvent, DamageAppliedEvent, EventQueue
 from dnd.types.abilities import AbilityName, SkillName
 from dnd.core.gridmap import get_map
+from dnd.core.navigation import route, route_items
 from dnd.core.view import cell_visible
 from dnd.core.elevation import support_distance_feet
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
@@ -1098,7 +1099,7 @@ class EyebitePanickedEffect(BaseCondition):
         best_path: List[Tuple[int, int]] = []
         best_score: Optional[Tuple[int, float, int]] = None
 
-        for position, normal_path in target.senses.paths.items():
+        for position, normal_path in route_items(target.senses.paths):
             if position == target.position:
                 continue
 
@@ -1108,7 +1109,7 @@ class EyebitePanickedEffect(BaseCondition):
                 normal_hazard_rank = 0 if self._path_is_hazardous(target, normal_path) else 1
                 path_options.append((normal_hazard_rank, normal_cost, list(normal_path)))
 
-            safe_path = target.senses.safe_paths.get(position)
+            safe_path = route(target.senses.safe_paths, position)
             if safe_path:
                 safe_cost = self._path_cost_feet(target, safe_path)
                 if safe_cost <= movement_budget:

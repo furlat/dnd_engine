@@ -25,7 +25,8 @@ from dnd.core.aoe import AoEShape, Sphere
 from dnd.core.base_block import LightLevel
 from dnd.core.base_block import MovementMode
 from dnd.core.base_tiles import Tile
-from dnd.core.dijkstra import dijkstra
+from dnd.core.navigation import route_cost, route_destinations
+from tests.engine.support import search_tables
 from dnd.core.events import (
     Event,
     EventPhase,
@@ -1103,8 +1104,8 @@ def test_grid_compute_paths_reuses_same_revision_result(
     grid = get_map()
     grid._path_cache.clear()
     solver_calls = 0
-    original_dijkstra = gridmap_module.dijkstra
-    original_bfs = gridmap_module.breadth_first_paths
+    original_dijkstra = gridmap_module.GridMap._dijkstra
+    original_bfs = gridmap_module.GridMap._breadth_first
 
     def track_dijkstra(*args: Any, **kwargs: Any) -> Any:
         nonlocal solver_calls
@@ -1116,34 +1117,27 @@ def test_grid_compute_paths_reuses_same_revision_result(
         solver_calls += 1
         return original_bfs(*args, **kwargs)
 
-    monkeypatch.setattr(gridmap_module, "dijkstra", track_dijkstra)
-    monkeypatch.setattr(gridmap_module, "breadth_first_paths", track_bfs)
+    monkeypatch.setattr(gridmap_module.GridMap, "_dijkstra", staticmethod(track_dijkstra))
+    monkeypatch.setattr(gridmap_module.GridMap, "_breadth_first", staticmethod(track_bfs))
 
-    first_distances, first_paths = grid.compute_paths(
+    first_distances, first_paths = search_tables(grid.compute_paths(
         actor.position,
         max_distance=20,
         requesting_entity_uuid=actor.uuid,
         subjective=True,
-    )
-    second_distances, second_paths = grid.compute_paths(
+    ))
+    second_distances, second_paths = search_tables(grid.compute_paths(
         actor.position,
         max_distance=20,
         requesting_entity_uuid=actor.uuid,
         subjective=True,
-    )
+    ))
 
     assert solver_calls == 1
     assert second_distances == first_distances
     assert second_paths == first_paths
-    sample_destination = next(iter(second_paths))
-    second_paths[sample_destination].append((999, 999))
-    _, third_paths = grid.compute_paths(
-        actor.position,
-        max_distance=20,
-        requesting_entity_uuid=actor.uuid,
-        subjective=True,
-    )
-    assert third_paths[sample_destination] == first_paths[sample_destination]
+    kept = grid.compute_paths(actor.position, max_distance=20, requesting_entity_uuid=actor.uuid, subjective=True)
+    assert not kept.tree.pred.flags.writeable and not kept.destinations.flags.writeable
 
 
 def test_unit_cost_paths_use_breadth_first_fast_path(
@@ -1156,7 +1150,7 @@ def test_unit_cost_paths_use_breadth_first_fast_path(
     grid._path_cache.clear()
     dijkstra_calls = 0
     bfs_calls = 0
-    original_bfs = gridmap_module.breadth_first_paths
+    original_bfs = gridmap_module.GridMap._breadth_first
 
     def reject_dijkstra(*_args: Any, **_kwargs: Any) -> Any:
         nonlocal dijkstra_calls
@@ -1168,15 +1162,15 @@ def test_unit_cost_paths_use_breadth_first_fast_path(
         bfs_calls += 1
         return original_bfs(*args, **kwargs)
 
-    monkeypatch.setattr(gridmap_module, "dijkstra", reject_dijkstra)
-    monkeypatch.setattr(gridmap_module, "breadth_first_paths", track_bfs)
+    monkeypatch.setattr(gridmap_module.GridMap, "_dijkstra", staticmethod(reject_dijkstra))
+    monkeypatch.setattr(gridmap_module.GridMap, "_breadth_first", staticmethod(track_bfs))
 
-    distances, paths = grid.compute_paths(
+    distances, paths = search_tables(grid.compute_paths(
         actor.position,
         max_distance=6,
         requesting_entity_uuid=actor.uuid,
         subjective=True,
-    )
+    ))
 
     assert dijkstra_calls == 0
     assert bfs_calls == 1
@@ -1205,7 +1199,7 @@ def test_weighted_paths_keep_dijkstra_selection(
         ))
     dijkstra_calls = 0
     bfs_calls = 0
-    original_dijkstra = gridmap_module.dijkstra
+    original_dijkstra = gridmap_module.GridMap._dijkstra
 
     def track_dijkstra(*args: Any, **kwargs: Any) -> Any:
         nonlocal dijkstra_calls
@@ -1217,16 +1211,16 @@ def test_weighted_paths_keep_dijkstra_selection(
         bfs_calls += 1
         raise AssertionError("weighted maps must use Dijkstra")
 
-    monkeypatch.setattr(gridmap_module, "dijkstra", track_dijkstra)
-    monkeypatch.setattr(gridmap_module, "breadth_first_paths", reject_bfs)
+    monkeypatch.setattr(gridmap_module.GridMap, "_dijkstra", staticmethod(track_dijkstra))
+    monkeypatch.setattr(gridmap_module.GridMap, "_breadth_first", staticmethod(reject_bfs))
 
-    distances, _ = grid.compute_paths(
+    distances, _ = search_tables(grid.compute_paths(
         actor.position,
         max_distance=6,
         requesting_entity_uuid=actor.uuid,
         movement_mode=MovementMode.WALKING,
         subjective=True,
-    )
+    ))
 
     assert dijkstra_calls == 1
     assert bfs_calls == 0
@@ -1254,10 +1248,10 @@ def test_move_discovery_uses_cached_senses_path_costs(
     )
 
     assert move_info.valid_targets
-    assert actor.senses.path_costs
+    assert route_destinations(actor.senses.paths)
     for target in move_info.valid_targets:
         assert target.position is not None
-        assert target.path_cost == actor.senses.path_costs[target.position]
+        assert target.path_cost == route_cost(actor.senses.paths, target.position)
 
 
 def test_weighted_move_discovery_uses_cached_senses_path_costs(
@@ -1269,9 +1263,9 @@ def test_weighted_move_discovery_uses_cached_senses_path_costs(
     grid = get_map()
     actor.update_entity_senses(max_distance=20)
     difficult_position = next(
-        position for position, cost in actor.senses.path_costs.items()
+        position for position in route_destinations(actor.senses.paths)
         if position != actor.position
-        and 0 < cost <= actor.action_economy.movement_remaining()
+        and 0 < (route_cost(actor.senses.paths, position) or 0) <= actor.action_economy.movement_remaining()
     )
     difficult_tile = grid.get_tile(*difficult_position)
     assert difficult_tile is not None
@@ -1298,8 +1292,8 @@ def test_weighted_move_discovery_uses_cached_senses_path_costs(
         if target.position == difficult_position
     )
 
-    assert actor.senses.path_costs[difficult_position] >= 10
-    assert target.path_cost == actor.senses.path_costs[difficult_position]
+    assert (route_cost(actor.senses.paths, difficult_position) or 0) >= 10
+    assert target.path_cost == route_cost(actor.senses.paths, difficult_position)
 
 
 def test_grid_compute_paths_invalidates_on_occupancy_change(
@@ -1312,8 +1306,8 @@ def test_grid_compute_paths_invalidates_on_occupancy_change(
     grid = get_map()
     grid._path_cache.clear()
     solver_calls = 0
-    original_dijkstra = gridmap_module.dijkstra
-    original_bfs = gridmap_module.breadth_first_paths
+    original_dijkstra = gridmap_module.GridMap._dijkstra
+    original_bfs = gridmap_module.GridMap._breadth_first
 
     def track_dijkstra(*args: Any, **kwargs: Any) -> Any:
         nonlocal solver_calls
@@ -1325,8 +1319,8 @@ def test_grid_compute_paths_invalidates_on_occupancy_change(
         solver_calls += 1
         return original_bfs(*args, **kwargs)
 
-    monkeypatch.setattr(gridmap_module, "dijkstra", track_dijkstra)
-    monkeypatch.setattr(gridmap_module, "breadth_first_paths", track_bfs)
+    monkeypatch.setattr(gridmap_module.GridMap, "_dijkstra", staticmethod(track_dijkstra))
+    monkeypatch.setattr(gridmap_module.GridMap, "_breadth_first", staticmethod(track_bfs))
 
     grid.compute_paths(
         actor.position,
@@ -1351,28 +1345,3 @@ def test_grid_compute_paths_invalidates_on_occupancy_change(
     )
 
     assert solver_calls == 2
-
-
-def test_dijkstra_hot_loop_does_not_allocate_neighbor_lists(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The pathfinder iterates bounded offsets without its allocating helper."""
-    def reject_neighbor_list(*_args: Any, **_kwargs: Any) -> list[tuple[int, int]]:
-        raise AssertionError("dijkstra allocated a per-node neighbor list")
-
-    monkeypatch.setitem(dijkstra.__globals__, "get_neighbors", reject_neighbor_list)
-    distances, paths = dijkstra(
-        (0, 0),
-        lambda x, y: (x, y) != (1, 1),
-        width=4,
-        height=3,
-        diagonal=True,
-        max_distance=4,
-        cost_func=lambda x, y: 2 if (x, y) == (2, 0) else 1,
-        can_enter=lambda source, target: (source, target) != ((1, 0), (2, 0)),
-    )
-
-    assert distances[(3, 0)] == 3
-    assert paths[(3, 0)][0] == (0, 0)
-    assert paths[(3, 0)][-1] == (3, 0)
-    assert (1, 1) not in paths

@@ -27,6 +27,7 @@ from tests.manual.authored_encounter_support import (
 )
 from dnd.types.cells import cell_in, no_cells
 from dnd.core.cells import mask_positions
+from dnd.core.navigation import has_route
 
 
 def reset_perception_tutorial_state(
@@ -568,12 +569,12 @@ def test_subjective_paths_do_not_leak_imperceivable_blockers(capsys) -> None:
     Entity.update_all_entities_senses(max_distance=5)
 
     assert invisible.uuid not in observer.senses.entities
-    assert (2, 0) in observer.senses.paths
-    assert (4, 0) in observer.senses.paths
+    assert has_route(observer.senses.paths, (2, 0))
+    assert has_route(observer.senses.paths, (4, 0))
     unknown_state = (
         invisible.uuid in observer.senses.entities,
-        (2, 0) in observer.senses.paths,
-        (4, 0) in observer.senses.paths,
+        has_route(observer.senses.paths, (2, 0)),
+        has_route(observer.senses.paths, (4, 0)),
     )
 
     observer.senses.sense_modes = [
@@ -582,12 +583,12 @@ def test_subjective_paths_do_not_leak_imperceivable_blockers(capsys) -> None:
     Entity.update_all_entities_senses(max_distance=5)
 
     assert invisible.uuid in observer.senses.entities
-    assert (2, 0) not in observer.senses.paths
-    assert (4, 0) not in observer.senses.paths
+    assert not has_route(observer.senses.paths, (2, 0))
+    assert not has_route(observer.senses.paths, (4, 0))
     known_state = (
         invisible.uuid in observer.senses.entities,
-        (2, 0) in observer.senses.paths,
-        (4, 0) in observer.senses.paths,
+        has_route(observer.senses.paths, (2, 0)),
+        has_route(observer.senses.paths, (4, 0)),
     )
 
     path_lines = [

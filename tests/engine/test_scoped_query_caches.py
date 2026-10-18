@@ -17,6 +17,7 @@ from dnd.entity import Entity
 from dnd.items.environment import DirectionalWall
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from tests.engine.test_grid_pathfinding import create_skeleton, reset_grid_state
+from tests.engine.support import search_tables
 
 Cell = Tuple[int, int]
 WIDTH, HEIGHT = 24, 16
@@ -70,7 +71,7 @@ def answers(walker: Entity) -> Dict[str, object]:
             result[f"fov {origin} {radius}"] = sorted(grid.compute_fov(origin, radius))
             result[f"propagation {origin} {radius}"] = sorted(grid.compute_propagation_fov(origin, radius))
         for distance in (8, None):
-            distances, paths = grid.compute_paths(origin, distance, requesting_entity_uuid=walker.uuid)
+            distances, paths = search_tables(grid.compute_paths(origin, distance, requesting_entity_uuid=walker.uuid))
             result[f"paths {origin} {distance}"] = (distances, paths)
     result["lit"] = sorted(position for position, tile in grid.get_all_tiles().items()
                            if tile_light_contributions(tile)[0])

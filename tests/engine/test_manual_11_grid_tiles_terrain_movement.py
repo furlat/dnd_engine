@@ -27,6 +27,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.items.environment import DirectionalWall
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from tests.engine.support import create_test_entity, reset_combat_state
+from tests.engine.support import search_tables
 
 
 def reset_world_state(width: int = 8, height: int = 8) -> None:
@@ -103,7 +104,7 @@ def test_paths_price_destination_tiles_and_directional_borders() -> None:
             value=1,
         ))
 
-    distances, paths = grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING)
+    distances, paths = search_tables(grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING))
 
     assert distances[(1, 0)] == 1
     assert distances[(2, 0)] == 3
@@ -119,10 +120,10 @@ def test_paths_price_destination_tiles_and_directional_borders() -> None:
         (1, 0),
         boundary_direction=CardinalDirection.EAST,
     )
-    blocked_distances, blocked_paths = grid.compute_paths(
+    blocked_distances, blocked_paths = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
-    )
+    ))
 
     assert not grid.can_transition((1, 0), (2, 0))
     assert (2, 0) not in blocked_distances
