@@ -1221,7 +1221,7 @@ def _world_update(world: PresentationTarget, remembered: PlayerState, occurrence
                 and previous.contained_items is not None):
             changed[identity] = replace(previous, contained_items=None)
     objects = tuple(changed[identity] for identity in sorted(changed, key=str))
-    connectors = tuple(row for row in world.world.connectors
+    connectors = tuple(row for row in world.recorded_world.connectors.values()
                        if all(cell_in(senses.visible, point) for point in row.endpoints))
     if (not tiles and not tile_changes and not lights and not objects and not removed
             and connectors == remembered.connectors):
