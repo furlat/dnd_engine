@@ -397,6 +397,10 @@ class GridMap:
         # never read on the channel that wrote them.
         self._transit: Dict[WorldEdgeChannel, CellLayer] = {
             channel: CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint16)) for channel in TRANSIT_CHANNELS}
+        # Each cell's coordinate tuple over the cell box, built with the box: a solve answers with
+        # these objects instead of a new tuple per cell (each new one is a tracked object the
+        # worker's post-request collection scans).
+        self._cell_positions = CellLayer(0, 0, np.empty((0, 0), dtype=object))
         # Advanced by every write that changes the Tile/obscurement or light grid; a settlement keyed
         # on them reads this map (perception forgets its fields when the map is replaced).
         self._sight_grid_revision = 0
@@ -573,6 +577,12 @@ class GridMap:
         for channel in TRANSIT_CHANNELS:
             self._transit[channel] = CellLayer(target[0], target[1],
                                                embed(self._transit[channel], target, np.dtype(np.uint16)))
+        positions = np.empty((target[2] - target[0] + 1) * (target[3] - target[1] + 1), dtype=object)
+        for index, position in enumerate((x, y) for x in range(target[0], target[2] + 1)
+                                         for y in range(target[1], target[3] + 1)):
+            positions[index] = position
+        self._cell_positions = CellLayer(target[0], target[1],
+                                         positions.reshape(target[2] - target[0] + 1, target[3] - target[1] + 1))
         self._bump_sight_grids()
         self._bump_light_grid()
         slots = self._cell_light_slots
@@ -4687,7 +4697,7 @@ class GridMap:
             record_action_count("grid.directional_fov.settled_predicates", settled)
             record_action_count("grid.directional_fov.visible_targets", len(rows_x))
             record_action_timing("grid.directional_fov.total_ms", total_started)
-        return list(zip((rows_x + min_x).tolist(), (rows_y + min_y).tolist()))
+        return layer_window(self._cell_positions, window)[rows_x, rows_y].tolist()
 
     def upper_volume_sight_planes(
         self, origin: Tuple[int, int], destination: Tuple[int, int],
@@ -6018,6 +6028,7 @@ class GridMap:
         self._cell_obscurement = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint8))
         for channel in TRANSIT_CHANNELS:
             self._transit[channel] = CellLayer(0, 0, np.zeros((0, 0), dtype=np.uint16))
+        self._cell_positions = CellLayer(0, 0, np.empty((0, 0), dtype=object))
         self._bump_sight_grids()
         self._bump_light_grid()
         self._condition_footprints.clear()
