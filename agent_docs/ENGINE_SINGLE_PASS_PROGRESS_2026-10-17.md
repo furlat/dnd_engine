@@ -632,3 +632,14 @@ Hard rules:
   - **HUD bytes per op** (G1): Fireball 5.2 → 2.7 KB, SG walk 1.5 → 0.4 KB, init 109 → 105 KB.
   - **ms:** within load noise; E5's own CPU is lower or equal.
   - **For the human:** H2c (a kept sheet per actor) instead of H2a (the whole sheet on each event), accepted by the integrator.
+- 2026-10-18: **E3-sensory lane (codex/enp-e3-sensory), walk-independent part, waiting for E3-world and E3-bodies.**
+  - **Settlement marker (f08ef192c).** `SensoryUpdateEvent.settlement` is a counter on `SpatialSensesSystem`, drawn once per `_emit_settlement` pass and once per explicit refresh.
+    - A refresh is its own settlement even when a group's settlement emits it: it has no cause, registers at once as its own root, and is captured apart from the group. A settlement composes only within one captured group. (Coordinator: accepted.)
+    - Gate: transcripts on 6 cases are identical apart from the field, and published bytes are byte-identical.
+  - **Schema-16 sensory types.** They are staged in `dnd/player/sensory_facts.py`, imported only by the client fold and the vector tooling. At the projector switch they move into facts.py and the module is deleted.
+  - **Client reference fold:** `reduction.fold_composed_sensory`.
+  - **Golden vectors V1–V8:** `sdk/protocol/fold-vectors/sensory/`, from `devtools/fold_vectors_sensory.py`.
+  - **Shape choices to confirm:**
+    - client lights move out of `senses` into `PlayerState.light_sources` (`PlayerLightSource`), because `PerceivedLightSource.revision` is required and server-only;
+    - attribution is three dicts (`entity_members`, `object_members`, `effect_members`).
+    - O1 and seat_oracle must read both from these places at the switch.
