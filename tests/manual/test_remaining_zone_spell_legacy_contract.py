@@ -41,6 +41,8 @@ from tests.manual.spell_regression_support import (
     force_save_result,
     reset_spell_regression_arena,
 )
+from tests.engine.support import route_paths, search_tables
+from dnd.core.navigation import route_count
 
 
 def test_movement_mode_pathfinding_preserves_terrain_specific_routes() -> None:
@@ -53,14 +55,14 @@ def test_movement_mode_pathfinding_preserves_terrain_specific_routes() -> None:
         tile=difficult_terrain_factory((2, 0)),
     )
 
-    walking_distances, walking_paths = grid.compute_paths(
+    walking_distances, walking_paths = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
-    )
-    flying_distances, flying_paths = grid.compute_paths(
+    ))
+    flying_distances, flying_paths = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.FLYING,
-    )
+    ))
 
     assert walking_distances[(4, 0)] == 5
     assert flying_distances[(4, 0)] == 4
@@ -77,10 +79,10 @@ def test_movement_mode_pathfinding_preserves_terrain_specific_routes() -> None:
     grid = get_map()
     grid.set_tile(1, 0, tile=wall_factory((1, 0)))
 
-    wall_flying_distances, _ = grid.compute_paths(
+    wall_flying_distances, _ = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.FLYING,
-    )
+    ))
 
     assert (2, 0) not in wall_flying_distances
 
@@ -89,29 +91,29 @@ def test_movement_mode_pathfinding_preserves_terrain_specific_routes() -> None:
     for x in range(3):
         grid.set_tile(x, 0, tile=water_factory((x, 0)))
 
-    swimming_distances, swimming_paths = grid.compute_paths(
+    swimming_distances, swimming_paths = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.SWIMMING,
-    )
+    ))
 
     assert swimming_distances[(2, 0)] == 2
     assert swimming_paths[(2, 0)] == [(0, 0), (1, 0), (2, 0)]
     assert (3, 0) not in swimming_distances
 
-    land_swimming_distances, _ = grid.compute_paths(
+    land_swimming_distances, _ = search_tables(grid.compute_paths(
         (3, 0),
         movement_mode=MovementMode.SWIMMING,
-    )
+    ))
     assert land_swimming_distances == {(3, 0): 0}
 
     reset_spell_regression_arena(3, 1)
     grid = get_map()
     grid.set_tile(1, 0, tile=water_factory((1, 0)))
 
-    water_walking_distances, _ = grid.compute_paths(
+    water_walking_distances, _ = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
-    )
+    ))
 
     assert (2, 0) not in water_walking_distances
 
@@ -142,7 +144,7 @@ def test_hazard_filters_and_factions_preserve_exact_requester_semantics() -> Non
     )
     neutral.faction = None
     Entity.update_all_entities_senses(max_distance=40)
-    assert caster.senses.safe_paths == {}
+    assert route_count(caster.senses.safe_paths) == 0
     tile = grid.get_tile(5, 2)
     assert tile is not None
 

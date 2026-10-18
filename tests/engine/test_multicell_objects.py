@@ -20,6 +20,7 @@ from dnd.core.events import (
     SpatialChangeEvent, SpatialHandler, Trigger,
 )
 from dnd.core.gridmap import get_map
+from dnd.core.navigation import has_route
 from dnd.core.item_types import ItemDestructionProfile, ItemIntegrity
 from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.entity import Entity, EntityConfig
@@ -211,7 +212,7 @@ def test_far_end_attack_and_same_identity_destruction_update_only_real_supports(
     assert item.uuid not in attacker.senses.objects
     # Paths are deliberately refreshed on action discovery, not every sensory fact.
     get_available_actions(attacker)
-    assert (3, 3) in attacker.senses.paths
+    assert has_route(attacker.senses.paths, (3, 3))
     assert tuple(get_map().get_tile(x, 3).uuid for x in (2, 3)) == tile_ids
     broken = [event for _, event in EventQueue.iter_events_since(cursor)
               if isinstance(event, ItemDestructionEvent) and event.phase is EventPhase.COMPLETION]

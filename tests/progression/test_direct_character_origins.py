@@ -70,6 +70,7 @@ from dnd.core.values import (
     parts,
 )
 from tests.engine.support import create_test_entity
+from dnd.core.navigation import route
 
 
 _BASE_SCORES: tuple[tuple[AbilityName, int], ...] = tuple(
@@ -823,7 +824,7 @@ def test_direct_lightfoot_capability_changes_creature_space_traversal() -> None:
     halfling.update_entity_senses(max_distance=20)
 
     assert not larger.blocks_walking(halfling.uuid)
-    assert halfling.senses.paths[(3, 0)] == [(1, 0), (2, 0), (3, 0)]
+    assert route(halfling.senses.paths, (3, 0)) == [(1, 0), (2, 0), (3, 0)]
     assert halfling.has_origin_capability(OriginCapability.NATURALLY_STEALTHY)
 
 

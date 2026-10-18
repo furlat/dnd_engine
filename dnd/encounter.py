@@ -34,6 +34,7 @@ from dnd.core.events import (
 )
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.gridmap import get_map
+from dnd.core.navigation import no_collisions, no_side_collisions
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.subjective_combat_log import project_combat_log
 from dnd.entity import Entity
@@ -892,8 +893,8 @@ class Encounter(BaseObject):
         Args:
             entity: Actor whose turn is starting.
         """
-        entity.senses.collision_blocked.clear()
-        entity.senses.directional_collision_blocked.clear()
+        entity.senses.collision_blocked = no_collisions()
+        entity.senses.directional_collision_blocked = no_side_collisions()
         entity.materialize_navigation(max_distance=20)
 
     def end_turn(self) -> Optional[TurnEndEvent]:

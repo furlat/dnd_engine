@@ -4,7 +4,7 @@ Reusable functions for setting up combat scenarios, forcing attack outcomes,
 and managing encounters for integration tests.
 """
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 
 from dnd.entity import Entity
@@ -22,6 +22,7 @@ from dnd.core.modifiers import (
 )
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.core.values import Channel, Kind, add_modifier, remove_modifier
+from dnd.core.navigation import Routes, route, route_cost, route_destinations, route_units
 
 
 def create_test_entity(
@@ -389,3 +390,19 @@ def admitted_in_discovery(action) -> bool:
     actor = Entity.get(action.source_entity_uuid)
     return actor is not None and action.discovery_error(
         actor.action_scan(subjective=True), action.current_selection()) is None
+
+
+def route_paths(routes: Routes) -> Dict[Tuple[int, int], List[Tuple[int, int]]]:
+    """Each destination's chosen path, in route order (the dict form assertions compare)."""
+    return {position: route(routes, position) or [] for position in route_destinations(routes)}
+
+
+def route_feet(routes: Routes) -> Dict[Tuple[int, int], int]:
+    """Each destination's movement cost in feet, in route order."""
+    return {position: route_cost(routes, position) or 0 for position in route_destinations(routes)}
+
+
+def search_tables(routes: Routes) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
+    """A search's reached cells as (cost in movement units, path) by cell, in the order it found them."""
+    return ({position: route_units(routes, position) or 0 for position in route_destinations(routes)},
+            route_paths(routes))

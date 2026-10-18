@@ -15,6 +15,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import ModifiableValue
+from tests.engine.support import route_paths, search_tables
 
 
 def reset_world_state() -> None:
@@ -36,15 +37,15 @@ def test_first_world_example_prints_visible_corridor_costs(capsys) -> None:
     difficult_tile = difficult_terrain_factory((2, 0))
     grid.set_tile(2, 0, tile=difficult_tile, fire_event=False)
 
-    distances, paths = grid.compute_paths(
+    distances, paths = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
-    )
-    easy_distances, _ = grid.compute_paths(
+    ))
+    easy_distances, _ = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
         ignore_difficult_terrain=True,
-    )
+    ))
     path_text = " -> ".join(str(position) for position in paths[(4, 0)])
     readout_lines = [
         f"tile count: {grid.tile_count()}",
@@ -92,15 +93,15 @@ def test_grid_tiles_have_bounds_lookup_and_movement_costs(capsys) -> None:
     assert difficult_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert difficult_tile.get_movement_cost(MovementMode.FLYING) == 1
 
-    distances, paths = grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING)
+    distances, paths = search_tables(grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING))
     assert distances[(4, 0)] == 5
     assert paths[(4, 0)] == [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
 
-    easier_distances, _ = grid.compute_paths(
+    easier_distances, _ = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
         ignore_difficult_terrain=True,
-    )
+    ))
     assert easier_distances[(4, 0)] == 4
     path_text = " -> ".join(str(position) for position in paths[(4, 0)])
 

@@ -7,7 +7,7 @@ masks. Python runs per observer, per target on hit cells, per hazard owner and p
 spatial condition; never per visible cell.
 """
 
-from typing import AbstractSet, Any, DefaultDict, Dict, FrozenSet, Iterable, List, Mapping, Optional, Self, Sequence, Set, Tuple
+from typing import AbstractSet, Any, Dict, FrozenSet, Iterable, List, Mapping, Optional, Self, Sequence, Set, Tuple
 from uuid import UUID
 from pydantic import Field, InstanceOf, PrivateAttr
 
@@ -15,7 +15,6 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
-from collections import defaultdict
 import time
 
 from dnd.core.effect_types import ObservedChangeRef, ObservedField
@@ -25,6 +24,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.base_tiles import Tile
 from dnd.core.gridmap import GridMap, SpatialConditionOwner, get_map
+from dnd.core.navigation import NO_ROUTES, Routes, has_route, no_collisions, no_side_collisions
 from dnd.core.geometry import ROUTE_STEP_SHIFT, supercover_line, supercover_route_table
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.values import ModifiableValue
@@ -99,35 +99,25 @@ class Senses(BaseBlock):
     )
     light_sources: Dict[UUID, PerceivedLightSource] = Field(default_factory=dict)
     light_source_removals: Dict[UUID, int] = Field(default_factory=dict)
-    walkable: Dict[Tuple[int, int], bool] = Field(default_factory=dict, description="Walkability for cells in geometric FOV.")
-    paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = Field(
-        default_factory=lambda: defaultdict(list),
-        description="Known subjective paths keyed by destination.",
-    )
-    path_costs: Dict[Tuple[int, int], int] = Field(
-        default_factory=dict,
-        description="Known subjective movement costs in feet keyed by destination.",
-    )
-    safe_paths: Dict[Tuple[int, int], List[Tuple[int, int]]] = Field(
-        default_factory=dict,
-        description="Known paths that avoid perceptible hazardous tiles.",
-    )
-    safe_path_costs: Dict[Tuple[int, int], int] = Field(
-        default_factory=dict,
-        description="Known safe-path movement costs in feet keyed by destination.",
-    )
+    walkable: InstanceOf[CellLayer] = Field(default_factory=_empty_seen, exclude=True,
+                                            description="Walkable visible cells (bool layer over the window).")
+    paths: InstanceOf[Routes] = Field(default=NO_ROUTES, exclude=True,
+                                      description="Known subjective routes: destinations, costs and paths.")
+    safe_paths: InstanceOf[Routes] = Field(default=NO_ROUTES, exclude=True,
+                                           description="Known routes that avoid perceptible hazardous tiles.")
     sense_modes: List[SenseMode] = Field(default_factory=list, description="Special sense modes with ranges.")
     sense_mode_sources: Dict[UUID, SenseMode] = Field(
         default_factory=dict,
         description="Source-owned structural special senses keyed by grant UUID.",
     )
-    collision_blocked: Set[Tuple[int, int]] = Field(
-        default_factory=set,
-        description="Cells discovered blocked by imperceivable entities or objects during movement.",
+    collision_blocked: InstanceOf[CellLayer] = Field(
+        default_factory=no_collisions, exclude=True,
+        description="Cells discovered blocked by imperceivable entities or objects during movement (bool layer).",
     )
-    directional_collision_blocked: Set[Tuple[Tuple[int, int], str]] = Field(
-        default_factory=set,
-        description="Tile-relative transitions discovered blocked by imperceivable blockers during movement.",
+    directional_collision_blocked: InstanceOf[CellLayer] = Field(
+        default_factory=no_side_collisions, exclude=True,
+        description="Tile sides discovered blocked by imperceivable blockers during movement "
+                    "(bit 1 << DIRECTION_STEP[direction] per cell).",
     )
     _paths_dirty: bool = PrivateAttr(default=False)
     _last_passive_perception: int = PrivateAttr(default=0)
@@ -256,31 +246,17 @@ class Senses(BaseBlock):
         """Return Euclidean distance in feet from this senses position."""
         return self.get_distance(position) * 5
 
-    def get_path_to_entity(self, entity_uuid: UUID, max_path_length: Optional[int] = None) -> List[Tuple[int, int]]:
-        """Return a cached path to a visible entity, optionally bounded by length."""
-        if entity_uuid not in self.entities:
-            return []
-        path = self.paths.get(self.entities[entity_uuid].position, [])
-        if max_path_length is None or len(path) <= max_path_length:
-            return path
-        else:
-            return []
-
     def replace_navigation(
         self,
-        walkable: Dict[Tuple[int, int], bool],
-        paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]],
-        path_costs: Optional[Dict[Tuple[int, int], int]] = None,
-        safe_paths: Optional[Dict[Tuple[int, int], List[Tuple[int, int]]]] = None,
-        safe_path_costs: Optional[Dict[Tuple[int, int], int]] = None,
+        walkable: CellLayer,
+        paths: Routes,
+        safe_paths: Routes,
         path_max_distance: Optional[int] = None,
     ) -> None:
         """Replace navigation facts without mutating perception-owned state."""
         self.walkable = walkable
         self.paths = paths
-        self.path_costs = path_costs if path_costs is not None else {}
-        self.safe_paths = safe_paths if safe_paths is not None else {}
-        self.safe_path_costs = safe_path_costs if safe_path_costs is not None else {}
+        self.safe_paths = safe_paths
         self._path_max_distance = path_max_distance
         self._paths_dirty = False
         self._path_revision += 1
@@ -1128,7 +1104,7 @@ class SpatialSensesSystem:
                 selected |= self._holders(hint.perceivability_entity, entity=True, item=True)
             if hint.requires_paths:
                 selected |= {identity for identity, senses in registered.items() if identity in self.fields
-                             and any(position in senses.paths or position in senses.safe_paths
+                             and any(has_route(senses.paths, position) or has_route(senses.safe_paths, position)
                                      for position in positions)}
         return {identity for identity in selected if identity in registered}
 

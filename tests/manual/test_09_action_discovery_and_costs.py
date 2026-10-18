@@ -1272,8 +1272,19 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
 
 
 def test_move_executes_affordable_disclosed_path_when_safe_alternative_is_too_costly() -> None:
-    """Execution must not replace a legal epoch path with an unaffordable route."""
+    """Execution must not replace a legal epoch path with an unaffordable route.
+
+    A disclosed hazard line from (2, 4) to (8, 4) leaves the direct route to (5, 6)
+    hazardous (15 ft) and the safe detour around its end at 40 ft, past the scout's
+    30 ft of movement.
+    """
     reset_action_state()
+    grid = get_map()
+    for x in range(2, 9):
+        tile = grid.get_tile(x, 4)
+        assert tile is not None
+        tile.add_condition(BaseCondition(name="Burning Ground", source_entity_uuid=uuid4(),
+                                         target_entity_uuid=tile.uuid, hazard_filter=HazardFilter.ALL))
     scout = create_skeleton(name="Scout", position=(5, 3), faction="heroes")
     Entity.update_all_entities_senses()
 
@@ -1287,21 +1298,9 @@ def test_move_executes_affordable_disclosed_path_when_safe_alternative_is_too_co
     assert target.path is not None
     assert target.path_cost is not None
     assert target.path_cost <= scout.action_economy.movement_remaining()
-
-    unaffordable_safe_path = [
-        (5, 3),
-        (4, 3),
-        (3, 3),
-        (2, 4),
-        (2, 5),
-        (3, 6),
-        (4, 6),
-        (5, 6),
-    ]
-    target.is_path_hazardous = True
-    target.safe_path = unaffordable_safe_path
-    target.safe_path_cost = 35
-    scout.senses.safe_paths[target.position] = unaffordable_safe_path
+    assert target.is_path_hazardous
+    assert target.safe_path is not None and target.safe_path_cost == 40
+    assert target.safe_path_cost > scout.action_economy.movement_remaining()
 
     result = execute_by_index(
         scout,
