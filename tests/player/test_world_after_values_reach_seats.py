@@ -17,12 +17,19 @@ from pydantic import TypeAdapter
 from dnd.core.events import EventPhase, EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.traversal_connectors import TraversalConnectorDefinition
+from dnd.player.application import capture_application_operation, initialize_audiences, seat_content
 from dnd.player.audience import PlayerAudience
 from dnd.player.capture import capture_interval, capture_lineages
-from dnd.player.facts import PlayerInitialization, PlayerLineage, PlayerState
+from dnd.player.content_composition import ui_content_manifest
+from dnd.player.facts import PlayerInitialization, PlayerLineage, PlayerState, PlayerUpdate
 from dnd.player.projection import ProjectionState, SessionProjection, begin_projection, project_lineage
-from dnd.player.reduction import reduce_initialization, reduce_lineage
-from dnd.player.session import Session, close_session, create_session
+from dnd.player.reduction import reduce_initialization, reduce_lineage, reduce_operation
+from dnd.player.session import Operation, Session, close_session, create_session
+from dnd.spatial.gas_traps import materialize_gas_vent
+from dnd.spatial.portals import materialize_portal
+from dnd.spatial.triggers import materialize_pressure_plate
+from dnd.types.controls import ActivationLink
+from dnd.types.traps import TrapState
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.cells import cell_in
 from dnd.types.event_facts import WorldConnectorState
@@ -145,3 +152,35 @@ def test_connector_edits_after_initialization_reach_a_seat_that_sees_them(sessio
     assert ladder in held and held == visible_connectors(seat.client), case.name
     advance(seat, lambda: case.edit(ladder, uuid4()))
     assert seat.client.connectors == visible_connectors(seat.client), case.name
+
+
+def test_live_connector_edits_and_mechanism_installs_publish_to_every_seat(sessions):
+    """A connector edit and a mechanism installed mid-game are supported roots: the operation projector publishes
+    them (no unprojected committed state), and each seat's client keeps the connectors its view holds."""
+    session = sessions(battlefield_id='battlefield.elevation_proving_ground', player_positions=((2, 9), (3, 9)),
+        enemy_positions=((12, 4), (13, 4)))
+    catalog = ui_content_manifest()
+    runtimes, initializations = initialize_audiences(session, catalog)
+    clients = {seat: reduce_initialization(INITIALIZATION.validate_json(INITIALIZATION.dump_json(initial)),
+        content_additions=seat_content(runtimes[seat])) for seat, initial in initializations.items()}
+    ladder = session.battlefield.object_uuids['connector.proving.ladder']
+    author = uuid4()
+    vent = []
+    edits = (
+        lambda: set_world_connector_enabled(ladder, False, author_uuid=author),
+        lambda: materialize_portal({(2, 11)}, (2, 12), trap_state=TrapState.READY),
+        lambda: vent.append(materialize_gas_vent((3, 11))),
+        lambda: materialize_pressure_plate({(4, 11)}, ActivationLink(target_condition_uuid=vent[0].uuid)),
+        lambda: remove_world_connector(ladder, author_uuid=author),
+    )
+    for edit in edits:
+        start = EventQueue.event_cursor()
+        edit()
+        operation = Operation(start_cursor=start, end_cursor=EventQueue.event_cursor(),
+            roots=tuple(event for _, event in EventQueue.iter_events_since(start)
+                if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)))
+        for seat, update in capture_application_operation(runtimes, operation, catalog).items():
+            clients[seat] = reduce_operation(clients[seat], PlayerUpdate.model_validate_json(update.model_dump_json()))
+    for client in clients.values():
+        assert ladder not in client.connectors
+        assert client.connectors == visible_connectors(client)

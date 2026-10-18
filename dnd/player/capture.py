@@ -29,6 +29,7 @@ from dnd.core.events import (
     DeathSaveEvent,
     EncounterEvent,
     ActorSheetEvent, EncounterStartEvent, EntityCreatedEvent, EntityFactionChangedEvent, InitiativeOrderChangedEvent,
+    MechanismInstallEvent, TraversalConnectorChangeEvent,
     Event,
     EventPhase,
     EventQueue,
@@ -759,8 +760,11 @@ def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload:
             copied = event.model_copy(update=common)
         case DeathSaveEvent() | ReviveEvent() | InstantDeathEvent() | TurnEvent() | RoundEvent() | EncounterEvent():
             copied = event.model_copy(update=common)
-        case WorldInitializedEvent() | WorldModifiedEvent() | TileElevationChangeEvent() | SpatialEffectChangeEvent() | SpatialEffectInteractionEvent() | SpatialChangeEvent():
+        case WorldInitializedEvent() | WorldModifiedEvent() | TileElevationChangeEvent() | SpatialEffectChangeEvent() | SpatialEffectInteractionEvent() | SpatialChangeEvent() | MechanismInstallEvent():
             copied = event.model_copy(update=common)
+        case TraversalConnectorChangeEvent():
+            # The connector's cold rows are its world fact's (WorldModifiedEvent); the live connectors stay native.
+            copied = event.model_copy(update={**common, "old_connector": None, "new_connector": None})
         case ActionEvent() if type(event) is ActionEvent:
             copied = event.model_copy(update=common)
         case EquipmentEvent() | ItemResourceChangeEvent() | ItemHoldingsReleasedEvent():

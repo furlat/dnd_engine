@@ -750,3 +750,61 @@ Hard rules:
       - Dismiss Summon + InitiativeOrderChanged.
     - The other 10 gallery cases merge nothing. The earlier "101 of 586" counted repeated walks of one history and was not a merge count.
   - **Gate vs ad08ffa45:** 12 gallery cases byte-identical (summon_retirement's merged roots publish the same bytes); tests/player, ai, architecture failures = r29.
+- 2026-10-18: **E3-world: the schema-16 world wire (codex/enp-e3-world, 657dff66c; not merged).**
+  - **What changed.** The server keeps no copy of a seat's world, and each world update is built from what the occurrence wrote.
+    - Source: E2's fold returns `AppliedWorldFact`, which names the records written. Values are read from the session world as of the occurrence. `world_publication` compares no world values, and an architecture test pins that.
+    - A record perceived before and after the occurrence travels as a keyed change.
+    - A record entering perception travels whole. Entering cells (cells coming into view, or a visible tile written whole) are authoritative: every object touching them, every connector with an endpoint there, and the tile as a static row (once per uuid) plus packed columns.
+    - The seat sees an object go when the occurrence wrote it, or when it sees the object's support without it.
+    - Leaving perception sends nothing.
+    - Static rows go once per seat: the tile's surface and name, a residue material, an object's look, and a boundary structure keyed by a digest of its value.
+    - Placements are compact: no derivable uuid, kind or lone support, no defaults. `visual_item_name` is left out when it equals `name`.
+    - The client fold is `world_reduction.fold_world_update`. Godot note: `agent_docs/GODOT_CLIENT_FOLD_WORLD_2026-10-18.md`. Vectors: `sdk/protocol/fold-vectors/world/w1-w12` and `groups/g1`.
+    - A record publishes once per seat (a walked event's own, or a change its members saw happen). A kept tile's keyed rows and a connector removal need the cells seen before and after.
+  - **Decisions (coordinator):**
+    - **Object members** are exact whenever an object row is sent. Between rows, the client holds the last row's bits, and a contact's members are E3-sensory's `object_contact_members`. Members-only rows were dropped: they cost about 100-215 KB per G1 update.
+    - **A perceived record written again by another occurrence travels again.**
+      - That re-admits a node carrying only a world update. Fireball adds 5 nodes per seat that sees the breaking objects: G1 +10 over 2 seat updates, G2 +150 over 30, G3 +35 over 7. The other 8 oracle cases add none.
+      - **Native follow-up (not this lane):** `BaseItem.destroy` (dnd/blocks/base_item.py) emits `refresh_object_state` (OBJECT_CHANGED) and later `publish_location_state(FLOOR)` with the same after-value. A wall torch also emits `put_out`'s FLOOR fact (dnd/items/torches.py) in between, so the Wall Torch breaking gives OBJECT_CHANGED at 195 and FLOOR at 196 and 197.
+    - **Placement as static content by revision is not built.** It touches the no-remembered-room rule; it stays the human's option if a row is still over 100 KB after the three E3 lanes.
+    - **RecordedSequence 5** carries the startup world interval (E3-bodies' H4 rides on it).
+  - **Re-entry rows (D1).** Largest seat update in KB, base → 2095deeff:
+    | Row | G1 | G2 | G3 |
+    |---|---|---|---|
+    | Sleet drop | 85.7 → 88.8 | 38.6 → 115.5 | 58.1 → 139.7 |
+    | Daylight | 83.7 → 92.3 | 45.0 → 139.9 | 65.5 → 95.4 |
+    | room_reentry door_open | — | 27.8 → 87.6 | — |
+    - Re-entered walls are the bulk: 214 walls in Sleet drop G2.
+    - Measured, not built (columnar object rows): Sleet drop G2 → 79.0, Daylight G2 → 101.9, mass_healing_word G2 → 344.7, door_open G2 → 68.3.
+  - **Other rows** (no regression):
+    - Fireball 202.0 → 160.7 (G1), 178.7 → 137.2 (G2), 187.7 → 146.3 (G3).
+    - mass_healing_word G2 758.8 → 382.7 (world 301.3: the healed ally's first sight of the lit hall, entering whole).
+    - Sleet cast, Spirit Guardians steps, Wall of Stone, portal_plate and round_step_zones are equal or smaller.
+    - The largest startup record per G2 seat drops 1.73 → 1.20 MB.
+    - Op ms (one run each, on a machine loaded by the batches): lower on most rows; the few higher ones are within run noise. The 3-run quiet timing is not done.
+    - Measured, not built: mass_healing_word G2's 1,070 tile static rows are 174 KB (one distinct surface and name). Interning surface and name would make them about 115 KB.
+  - **End reviews (antislop, antiOOP) — fixed in dab1966d3 / 657dff66c:**
+    - one publication per record (antislop blocker: a removal sent twice made the client raise);
+    - keyed tile rows and connector removals need cells seen before and after;
+    - a key-only `AppliedWorldFact`;
+    - one rule for a tile's own condition names (`tile_own_condition_names`), and one client static-row writer (`fold_static_rows`);
+    - the senses fold is its own walk step;
+    - seat knowledge passed by keyword;
+    - dead walk fields, members-only leftovers and stale docstrings removed;
+    - `test_foreign_sensory_capture` projects per walk group;
+    - every tile field is in the vectors (w12, with the column bytes checked against the Godot note).
+    The 12 gallery cases are byte-identical before and after these fixes.
+  - **Kept, with the reason:**
+    - The walk-local `pending` static rows: plan §3.5 says "never mid-walk".
+    - `CaptureCheckpoint.names`: Phase A, accepted.
+    - The T6 look-constancy and T8 delta-arithmetic tests: the look census over 29 gallery cases stands in for T6, and T8 is not built.
+    - `seat_oracle` still imports `world_facts` privates. This is E0's harness.
+    - The minor items are listed in the lane report.
+  - **World-changing roots are supported (coordinator, from E0's portal_plate O1 class and E1's open connector-edit item).**
+    - `materialize_portal`, `materialize_pressure_plate` and `materialize_gas_vent` now publish a typed `MechanismInstallEvent` root instead of a bare `Event`.
+    - Capture retains that root, and also `TraversalConnectorChangeEvent` (its live connectors left out, since the connector's cold rows are its world fact's), as recorded families.
+    - A mid-game connector edit or mechanism install now publishes through the keyed world path. Before this, the live operation projector raised "Unprojected committed state".
+    - The harness publishes `portal_plate`'s and `gas_vent_plate`'s setups.
+    - O1 on portal_plate: `cells:field:hazard` 6/90/21 → 0 on G1/G2/G3. `body.normal_hp` (E3-bodies) is counted at one more checkpoint, the published setup.
+    - Test: `test_live_connector_edits_and_mechanism_installs_publish_to_every_seat`. It raised before the fix.
+    - The 12 gallery cases are byte-identical apart from portal_plate's published updates (its setup is now published). The trap tests and tests/player, ai and architecture match r29.

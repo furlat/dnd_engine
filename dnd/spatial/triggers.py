@@ -7,7 +7,7 @@ from pydantic import Field, model_validator
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, SpatialChangeEvent, StepMovementEvent, ForcedMovementEvent, MechanismActivationEvent, Trigger
+from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, SpatialChangeEvent, StepMovementEvent, ForcedMovementEvent, MechanismActivationEvent, MechanismInstallEvent, Trigger
 from typing import ClassVar
 
 from dnd.core.gridmap import CrossingChannel, get_map
@@ -129,9 +129,8 @@ def materialize_pressure_plate(positions: set[tuple[int, int]], link: ControlLin
     source = uuid4()
     cause = parent_event
     if cause is None:
-        cause = EventQueue.publish_declaration(Event(name="Install Pressure Plate",
-            event_type=EventType.BASE_ACTION, source_entity_uuid=source,
-            phase=EventPhase.DECLARATION, use_register=False))
+        cause = EventQueue.publish_declaration(MechanismInstallEvent(name="Install Pressure Plate",
+            source_entity_uuid=source, phase=EventPhase.DECLARATION, use_register=False))
         for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
             if cause.canceled:
                 raise RuntimeError("Pressure plate installation canceled")

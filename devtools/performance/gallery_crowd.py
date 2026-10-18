@@ -728,17 +728,15 @@ def door_named(name):
         if isinstance(door := BaseBlock.get(placement.object_uuid), DirectionalDoor) and door.name == name)
 
 
-def sequence_case(*steps, setup=None, published=True):
+def sequence_case(*steps, setup=None):
     """Measure each step in order in one fresh world (e.g. a cast, then a dispel), after an unmeasured `setup`,
-    published to every seat unless `published` is false (a trap materialized mid-game is battlefield authoring,
-    which the operation projector refuses as unsupported: such a setup reaches no seat, as before E0)."""
+    published to every seat (a trap materialized mid-game included: its install root is a `MechanismInstallEvent`)."""
 
     def case(runtime, driver, mode, caster_uuid):
         if setup is not None:
             cursor = EventQueue.event_cursor()
             setup(runtime)
-            if published:
-                driver.setup_rows.append(publish_setup(driver, cursor, 'case_setup'))
+            driver.setup_rows.append(publish_setup(driver, cursor, 'case_setup'))
         # The harness constructs these spells itself, outside any creature's content: build each as the
         # template a caster holds is built at character creation (its class and what it can create).
         incomplete = incomplete_models()
@@ -1197,8 +1195,8 @@ CASES = {
     # Remaining §1 rows (P0b-2). A third entry holds `crowd_recipe` options (roster variant, AI blue slot).
     'turn_undead': (False, sequence_case(use('action.class.cleric.turn_undead', actor=CLERIC_NAME)),
         {'roster': 'undead'}),
-    'gas_vent_plate': (False, sequence_case(move(PLATE, prefer_safe=False), setup=gas_vent_plate, published=False)),
-    'portal_plate': (False, sequence_case(move(PLATE, prefer_safe=False), setup=portal_plate, published=False)),
+    'gas_vent_plate': (False, sequence_case(move(PLATE, prefer_safe=False), setup=gas_vent_plate)),
+    'portal_plate': (False, sequence_case(move(PLATE, prefer_safe=False), setup=portal_plate)),
     # The single die is the enclosed witness's Dexterity save: a 20 makes it the escaper.
     'wall_of_stone': (False, sequence_case(cast('spell.wall_of_stone', aim=WALL_OF_STONE[0], faces=(20,),
         extra_target_positions=WALL_OF_STONE[1:], displacement_side='right')), {'roster': 'wall'}),
