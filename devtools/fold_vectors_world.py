@@ -32,9 +32,9 @@ from dnd.core.cells import mask_from_positions, values_from_items
 from dnd.core.traversal_connectors import ConnectorProvocationPolicy, TraversalConnectorKind
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.player.facts import (BoundaryStructureStatic, ContainedItem, ContainerContents, ContentsChange, ContributionRow,
-    FloorItem, ObjectRow, ResidueKey, ResidueMaterial, ResidueRow, TileConditions, TileFieldUpdate, TileStatic,
+    FloorItem, ObjectRow, ResidueKey, ResidueMaterial, ResidueRow, TileConditions, TileFieldUpdate, TileLook, TileStatic,
     WorldUpdate)
-from dnd.player.world_columns import pack_placement, pack_tile_columns, split_floor_item, structure_id
+from dnd.player.world_columns import pack_placement, pack_tile_columns, split_floor_item, structure_id, tile_look_id
 from dnd.types.event_facts import WorldConnectorState, WorldTileState
 from dnd.types.materials import Material, TileSurface
 from dnd.types.residues import ObjectResidueState, ResidueContribution, ResidueEllipse
@@ -79,7 +79,13 @@ def tile(position: Position, *, generation: int = 0, light: LightLevel = LightLe
 
 
 def static(row: WorldTileState) -> TileStatic:
-    return TileStatic(position=row.position, tile_uuid=row.tile_uuid, surface=row.surface, name=row.name)
+    return TileStatic(position=row.position, tile_uuid=row.tile_uuid, look=tile_look_id(row.surface, row.name))
+
+
+def tile_looks(rows: tuple[WorldTileState, ...]) -> tuple[TileLook, ...]:
+    """The distinct looks of these tiles, once each."""
+    looks = {tile_look_id(row.surface, row.name): row for row in rows}
+    return tuple(TileLook(look_id=identity, surface=row.surface, name=row.name) for identity, row in looks.items())
 
 
 def placement(identity: UUID, position: Position, direction: CardinalDirection | None = None) -> WorldObjectPlacement:
@@ -114,10 +120,12 @@ def connector(identity: UUID, endpoints: tuple[Position, Position]) -> WorldConn
 
 
 def entering(occurrence: int, tiles: tuple[WorldTileState, ...], *, statics: tuple[WorldTileState, ...] | None = None,
-             cells: tuple[Position, ...] = (), **rows) -> WorldUpdate:
-    """An update entering these cells: their tiles (static rows for `statics`, default all) and the given rows."""
+             looks: tuple[WorldTileState, ...] | None = None, cells: tuple[Position, ...] = (), **rows) -> WorldUpdate:
+    """An update entering these cells: their tiles (static rows for `statics`, default all; look rows for the
+    looks of `looks`, default those statics') and the given rows."""
+    statics = tiles if statics is None else statics
     return WorldUpdate(occurrence=occurrence, entered=mask_from_positions(cells or tuple(row.position for row in tiles)),
-        tile_statics=tuple(static(row) for row in (tiles if statics is None else statics)),
+        tile_looks=tile_looks(statics if looks is None else looks), tile_statics=tuple(static(row) for row in statics),
         tile_columns=pack_tile_columns({row.position: row for row in tiles}), **rows)
 
 
@@ -249,7 +257,7 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
                  view({"0,0": tile_view(floor[(0, 0)])}, {str(WALL): object_view(wall_at, name="Wall",
                      faces={str(BLOOD_ON_WALL): ["south"]})})),
             # The far side comes into view: its soot is seen there, the blood on the near face is not seen now.
-            Step(entering(1, (north_cell,), objects=(look_and_row(replace(wall, surface_residues=(
+            Step(entering(1, (north_cell,), looks=(), objects=(look_and_row(replace(wall, surface_residues=(
                      wall_residue(SOOT_ON_WALL, "residue.soot", CardinalDirection.NORTH),)),
                      None, faces=(CardinalDirection.NORTH,))[1],)),
                  view({"0,0": tile_view(floor[(0, 0)]), "0,1": tile_view(north_cell)},
@@ -298,7 +306,7 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
                  view({**t, "1,0": tile_view(tile((1, 0), light=LightLevel.DIM_LIGHT).model_copy(update={
                      "walking_cost": 2, "resolved_light": LightLevel.BRIGHT_LIGHT}),
                      conditions=("Difficult terrain",))})),
-            Step(entering(3, (replaced,)), view({**t, "1,0": tile_view(replaced)})),
+            Step(entering(3, (replaced,), looks=()), view({**t, "1,0": tile_view(replaced)})),
         ]),
         "w8_residues_are_keyed_by_cell_and_material": (
             "A new material arrives whole; a known one changes its amount and the contributions it set or appended; "

@@ -13,7 +13,8 @@ from uuid import UUID
 
 from dnd.core.cells import mask_from_positions, mask_positions
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
-from dnd.player.facts import FloorItem, ObjectLook, ObjectPlacement, ObjectState, TileColumns, TileStatic
+from dnd.player.facts import FloorItem, ObjectLook, ObjectPlacement, ObjectState, TileColumns, TileLook, TileStatic
+from dnd.types.materials import TileSurface
 from dnd.types.event_facts import WorldTileState
 from dnd.types.world import LightLevel
 from dnd.types.world_placement import (BoundaryStructure, WorldObjectPlacement, WorldObjectSupport,
@@ -48,9 +49,15 @@ def pack_tile_columns(tiles: Mapping[tuple[int, int], WorldTileState]) -> TileCo
         elevation_steps=elevations if any(elevations) else ())
 
 
-def unpack_tile_columns(columns: TileColumns, statics: Mapping[tuple[int, int], TileStatic]
-                        ) -> dict[tuple[int, int], WorldTileState]:
-    """The tiles the columns describe, each joined with its cell's static row; no conditions or residues yet."""
+def tile_look_id(surface: TileSurface, name: str) -> str:
+    """A tile look's content id: a digest of its surface and name."""
+    return sha256(f"{surface.model_dump_json()}\n{name}".encode()).hexdigest()[:16]
+
+
+def unpack_tile_columns(columns: TileColumns, statics: Mapping[tuple[int, int], TileStatic],
+                        looks: Mapping[str, TileLook]) -> dict[tuple[int, int], WorldTileState]:
+    """The tiles the columns describe, each joined with its cell's static row and that row's look; no conditions
+    or residues yet."""
     positions = mask_positions(columns.cells)
     count = len(positions)
     if any(len(column) != count for column in (columns.walking_cost, columns.flying_cost, columns.swimming_cost,
@@ -62,9 +69,12 @@ def unpack_tile_columns(columns: TileColumns, statics: Mapping[tuple[int, int], 
         static = statics.get(position)
         if static is None:
             raise ValueError("An entered tile requires its static row")
+        look = looks.get(static.look)
+        if look is None:
+            raise ValueError("A tile's static row requires its look")
         flags = columns.flags[index]
-        tiles[position] = WorldTileState(tile_uuid=static.tile_uuid, position=position, surface=static.surface,
-            name=static.name, blocks_optics=bool(flags & 1), blocks_propagation=bool(flags >> 1 & 1),
+        tiles[position] = WorldTileState(tile_uuid=static.tile_uuid, position=position, surface=look.surface,
+            name=look.name, blocks_optics=bool(flags & 1), blocks_propagation=bool(flags >> 1 & 1),
             walking_cost=columns.walking_cost[index], flying_cost=columns.flying_cost[index],
             swimming_cost=columns.swimming_cost[index], burrowing_cost=columns.burrowing_cost[index],
             elevation_steps=columns.elevation_steps[index] if columns.elevation_steps else 0,

@@ -15,6 +15,17 @@
      "height": 1,
      "bits": "AQ=="
     },
+    "tile_looks": [
+     {
+      "look_id": "652de935c25693e0",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     }
+    ],
     "tile_statics": [
      {
       "position": [
@@ -22,12 +33,7 @@
        0
       ],
       "tile_uuid": "00000000-0000-4000-8000-000100000000",
-      "surface": {
-       "base_material": "stone",
-       "layers": [],
-       "description": ""
-      },
-      "name": "Stone floor"
+      "look": "652de935c25693e0"
      }
     ],
     "tile_columns": {
@@ -181,12 +187,7 @@
        1
       ],
       "tile_uuid": "00000000-0000-4000-8000-000100000001",
-      "surface": {
-       "base_material": "stone",
-       "layers": [],
-       "description": ""
-      },
-      "name": "Stone floor"
+      "look": "652de935c25693e0"
      }
     ],
     "tile_columns": {

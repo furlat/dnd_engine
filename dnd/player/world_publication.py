@@ -28,9 +28,9 @@ from dnd.core.item_types import ItemIntegrity, ItemPresentationState, ItemRemnan
 from dnd.player.audience import AudiencePerception, PlayerAudience
 from dnd.player.facts import (BoundaryStructureStatic, ContainedItem, ContainerContents, ContentsChange,
     ContributionRow, FloorItem, ObjectLook, ObjectRow, ObjectState, PlayerObject, ResidueKey, ResidueMaterial,
-    ResidueRow, TileConditions, TileFieldUpdate, TileStatic, WorldUpdate)
+    ResidueRow, TileConditions, TileFieldUpdate, TileLook, TileStatic, WorldUpdate)
 from dnd.player.static_sent import StaticSent
-from dnd.player.world_columns import pack_placement, pack_tile_columns, split_floor_item
+from dnd.player.world_columns import pack_placement, pack_tile_columns, split_floor_item, tile_look_id
 from dnd.types.cells import EMPTY_CELLS, CellMask, cell_in
 from dnd.types.event_facts import (AppliedWorldFact, WorldConnectorState, WorldTileChanges, WorldTileState,
     tile_own_condition_names, tile_residue_names)
@@ -171,6 +171,7 @@ def _whole_residue(position: Position, residue: TileResidueState) -> ResidueRow:
 class _Rows:
     """One update's rows as they are built."""
 
+    tile_looks: list[TileLook]
     tile_statics: list[TileStatic]
     residue_materials: list[ResidueMaterial]
     object_looks: list[ObjectLook]
@@ -268,7 +269,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
         entered_cells = mask_union(entered_cells, mask_difference(visible, before))
         left.update(mask_positions(mask_difference(before, visible)))
     entered = set(mask_positions(entered_cells))
-    rows = _Rows([], [], [], [])
+    rows = _Rows([], [], [], [], [])
 
     # Tiles: the entered cells whole (their static rows first: a placement's anchor tile is derived from them).
     tiles = {position: world.tiles[position] for position in sorted(entered) if position in world.tiles}
@@ -277,8 +278,11 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
     residues_removed: dict[tuple[Position, str], ResidueKey] = {}
     for position, tile in tiles.items():
         if tile.tile_uuid not in sent.tiles and tile.tile_uuid not in pending.tiles:
-            rows.tile_statics.append(TileStatic(position=position, tile_uuid=tile.tile_uuid, surface=tile.surface,
-                name=tile.name))
+            look = tile_look_id(tile.surface, tile.name)
+            if look not in sent.tile_looks and look not in pending.tile_looks:
+                rows.tile_looks.append(TileLook(look_id=look, surface=tile.surface, name=tile.name))
+                pending.tile_looks.add(look)
+            rows.tile_statics.append(TileStatic(position=position, tile_uuid=tile.tile_uuid, look=look))
             pending.tiles.add(tile.tile_uuid)
         if own := tile_own_condition_names(tile):
             tile_conditions[position] = own
@@ -416,7 +420,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
                     for index in sorted(indexes)))
     tile_changes = {position: changes for position, changes in tile_changes.items() if changes}
     update = WorldUpdate(occurrence=occurrence, entered=entered_cells,
-        tile_statics=tuple(rows.tile_statics), tile_columns=pack_tile_columns(tiles),
+        tile_looks=tuple(rows.tile_looks), tile_statics=tuple(rows.tile_statics), tile_columns=pack_tile_columns(tiles),
         tile_conditions=tuple(TileConditions(position=position, names=names)
             for position, names in sorted(tile_conditions.items())),
         tile_changes=tuple(TileFieldUpdate(position=position, changes=changes)

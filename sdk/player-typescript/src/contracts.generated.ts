@@ -2294,13 +2294,16 @@ export type Y0 = number;
 export type Width1 = number;
 export type Height1 = number;
 export type Bits1 = string;
+export type LookId = string;
+export type Name12 = string;
+export type TileLooks = TileLook[];
 /**
  * @minItems 2
  * @maxItems 2
  */
 export type Position9 = [number, number];
 export type TileUuid3 = string;
-export type Name12 = string;
+export type Look = string;
 export type TileStatics = TileStatic[];
 export type WalkingCost1 = string;
 export type FlyingCost1 = string;
@@ -5515,6 +5518,7 @@ export interface PerceivedContact {
 export interface WorldUpdate {
   occurrence: Occurrence2;
   entered?: CellMask;
+  tile_looks?: TileLooks;
   tile_statics?: TileStatics;
   tile_columns?: TileColumns | null;
   tile_conditions?: TileConditions;
@@ -5544,14 +5548,21 @@ export interface CellMask {
   bits: Bits1;
 }
 /**
+ * A tile's surface and name, sent once per seat under its content id (a digest of the value).
+ */
+export interface TileLook {
+  look_id: LookId;
+  surface: TileSurface;
+  name: Name12;
+}
+/**
  * A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new
- * uuid).
+ * uuid). `look` is its surface and name's `TileLook` content id.
  */
 export interface TileStatic {
   position: Position9;
   tile_uuid: TileUuid3;
-  surface: TileSurface;
-  name: Name12;
+  look: Look;
 }
 /**
  * The changeable scalars of the entered cells that hold a tile, one byte per cell per column in `cells` order

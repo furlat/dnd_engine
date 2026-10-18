@@ -1855,6 +1855,12 @@ class TileConditions(TypedDict):
     names: list[str]
 
 
+class TileStatic(TypedDict):
+    position: list[PositionItem]
+    tile_uuid: str
+    look: str
+
+
 class TileSurface(TypedDict):
     base_material: Material
     layers: NotRequired[list[SurfaceLayer]]
@@ -2731,6 +2737,12 @@ class TileFieldUpdate(TypedDict):
     changes: WorldTileChanges
 
 
+class TileLook(TypedDict):
+    look_id: str
+    surface: TileSurface
+    name: str
+
+
 class TileResidueState(TypedDict):
     condition_uuid: str
     residue_id: str
@@ -2738,13 +2750,6 @@ class TileResidueState(TypedDict):
     amount: NotRequired[int]
     max_amount: NotRequired[int]
     contributions: NotRequired[list[ResidueContribution]]
-
-
-class TileStatic(TypedDict):
-    position: list[PositionItem]
-    tile_uuid: str
-    surface: TileSurface
-    name: str
 
 
 class UnequipItem(TypedDict):
@@ -3523,6 +3528,7 @@ class SensoryRows(TypedDict):
 class WorldUpdate(TypedDict):
     occurrence: int
     entered: NotRequired[CellMask]
+    tile_looks: NotRequired[list[TileLook]]
     tile_statics: NotRequired[list[TileStatic]]
     tile_columns: NotRequired[TileColumns | None]
     tile_conditions: NotRequired[list[TileConditions]]

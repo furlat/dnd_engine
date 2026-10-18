@@ -1085,14 +1085,22 @@ class PlayerObject:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class TileLook:
+    """A tile's surface and name, sent once per seat under its content id (a digest of the value)."""
+
+    look_id: str
+    surface: TileSurface
+    name: str
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TileStatic:
     """A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new
-    uuid)."""
+    uuid). `look` is its surface and name's `TileLook` content id."""
 
     position: tuple[int, int]
     tile_uuid: UUID
-    surface: TileSurface
-    name: str
+    look: str
 
 
 @packed_dataclass(frozen=True, slots=True, kw_only=True, config=PACKED)
@@ -1313,6 +1321,7 @@ class WorldUpdate:
 
     occurrence: int
     entered: CellMaskField = EMPTY_CELLS
+    tile_looks: Rows[TileLook] = ()
     tile_statics: Rows[TileStatic] = ()
     tile_columns: Annotated[TileColumns | None, Field(exclude_if=_unset)] = None
     tile_conditions: Rows[TileConditions] = ()
@@ -1337,6 +1346,7 @@ class StaticStore:
     materials by id, object looks by item uuid, boundary structures by content id."""
 
     tiles: dict[tuple[int, int], TileStatic] = field(default_factory=dict)
+    tile_looks: dict[str, TileLook] = field(default_factory=dict)
     residues: dict[str, ResidueMaterial] = field(default_factory=dict)
     object_looks: dict[UUID, ObjectLook] = field(default_factory=dict)
     boundary_structures: dict[str, BoundaryStructure] = field(default_factory=dict)

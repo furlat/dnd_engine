@@ -76,7 +76,8 @@ def copy_target(target: PlayerState) -> PlayerState:
     senses = target.senses
     return replace(target, tiles=dict(target.tiles), objects=dict(target.objects),
         object_members=dict(target.object_members), connectors=dict(target.connectors),
-        static=StaticStore(tiles=dict(target.static.tiles), residues=dict(target.static.residues),
+        static=StaticStore(tiles=dict(target.static.tiles), tile_looks=dict(target.static.tile_looks),
+            residues=dict(target.static.residues),
             object_looks=dict(target.static.object_looks),
             boundary_structures=dict(target.static.boundary_structures)), actors=dict(target.actors),
         items=dict(target.items), spatial_content=dict(target.spatial_content),
@@ -157,7 +158,8 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
     stage_static(result, lineage.world_updates)
     for update in lineage.world_updates:
         if update.tile_columns is not None:
-            for position, tile in unpack_tile_columns(update.tile_columns, result.static.tiles).items():
+            for position, tile in unpack_tile_columns(update.tile_columns, result.static.tiles,
+                    result.static.tile_looks).items():
                 result.tiles.setdefault(position, tile)
         for row in update.objects:
             if row.placement is not None and row.item_uuid not in result.objects:

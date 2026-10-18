@@ -38,6 +38,9 @@ def _members(row: ObjectRow, observers: int) -> int:
 def fold_static_rows(static: StaticStore, update: WorldUpdate) -> None:
     """The update's static rows into the client's store, which never prunes them; a static row never changes for
     its id (a tile's static row is the latest for its cell)."""
+    for row in update.tile_looks:
+        if static.tile_looks.setdefault(row.look_id, row) != row:
+            raise ValueError("A tile look's content id names another value")
     for row in update.tile_statics:
         static.tiles[row.position] = row
     for row in update.residue_materials:
@@ -56,7 +59,7 @@ def _reset_entered(memory: PlayerState, update: WorldUpdate, entered: frozenset[
     for position in entered:
         memory.tiles.pop(position, None)
     if update.tile_columns is not None:
-        tiles = unpack_tile_columns(update.tile_columns, memory.static.tiles)
+        tiles = unpack_tile_columns(update.tile_columns, memory.static.tiles, memory.static.tile_looks)
         if not tiles.keys() <= entered:
             raise ValueError("Tile columns describe entered cells only")
         memory.tiles.update(tiles)

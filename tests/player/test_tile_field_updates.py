@@ -17,7 +17,7 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventPhase, EventType, SpatialChangeEvent, SpatialChangeType
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.player.capture import CompletedLineage
-from dnd.player.facts import PlayerLineage, PlayerSequence, PlayerUpdate, TileFieldUpdate, TileStatic
+from dnd.player.facts import PlayerLineage, PlayerSequence, PlayerUpdate, TileFieldUpdate, TileLook, TileStatic
 from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.reduction import (decode_player_sequence, encode_player_sequence, reduce_initialization,
     reduce_lineage, reduce_operation, stage_lineage)
@@ -25,7 +25,7 @@ from dnd.types.materials import Material, TileSurface
 from dnd.types.residues import TileResidueState
 from dnd.types.world import LightLevel
 from dnd.core.cells import mask_from_positions, mask_positions, values_from_items
-from dnd.player.world_columns import pack_tile_columns, unpack_tile_columns
+from dnd.player.world_columns import pack_tile_columns, tile_look_id, unpack_tile_columns
 from dnd.types.cells import EMPTY_CELLS
 from tests.player.test_projection_local_world import initial, objective, sensory
 
@@ -103,8 +103,9 @@ def test_a_tile_written_whole_reenters_with_its_conditions_residues_and_clears()
     # The cell re-enters: its scalars travel as columns, its residue whole, its static row is already held.
     assert mask_positions(update.entered) == [(1, 0)] and update.tile_statics == () and update.tile_changes == ()
     assert update.tile_columns is not None
+    look = TileLook(look_id=tile_look_id(original.surface, original.name), surface=original.surface, name=original.name)
     assert unpack_tile_columns(update.tile_columns, {(1, 0): TileStatic(position=(1, 0), tile_uuid=original.tile_uuid,
-        surface=original.surface, name=original.name)})[(1, 0)] == enriched.model_copy(update=dict(
+        look=look.look_id)}, {look.look_id: look})[(1, 0)] == enriched.model_copy(update=dict(
             condition_names=(), residues=()))
     assert update.tile_conditions == () and [row.residue_id for row in update.residues] == ['test.ash']
     assert [row.name for row in update.residue_materials] == ['Ash']
@@ -186,7 +187,8 @@ def test_client_fold_checks_tile_bases_in_event_order_without_staging_future_val
     # carrying it has no ordinary fact. A future introduction cannot repair a gap.
     tile = before.tiles[(1, 0)].model_copy(update={'position': (99, 99), 'tile_uuid': uuid4()})
     entering = dict(entered=mask_from_positions([(99, 99)]), tile_statics=(TileStatic(position=(99, 99),
-        tile_uuid=tile.tile_uuid, surface=tile.surface, name=tile.name),), tile_columns=pack_tile_columns({(99, 99): tile}))
+        tile_uuid=tile.tile_uuid, look=tile_look_id(tile.surface, tile.name)),),
+        tile_columns=pack_tile_columns({(99, 99): tile}))
     later = project_event(session, projection, light_change(start.observer_uuid, LightLevel.DARKNESS), 3)
     introduction = replace(packet, events=(replace(packet.events[0], fact=None),),
         world_updates=(replace(packet.world_updates[0], tile_changes=(), **entering),))

@@ -19418,6 +19418,30 @@
       "type": "object",
       "additionalProperties": false
     },
+    "TileLook": {
+      "description": "A tile's surface and name, sent once per seat under its content id (a digest of the value).",
+      "properties": {
+        "look_id": {
+          "title": "Look Id",
+          "type": "string"
+        },
+        "surface": {
+          "$ref": "#/$defs/TileSurface"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "look_id",
+        "surface",
+        "name"
+      ],
+      "title": "TileLook",
+      "type": "object",
+      "additionalProperties": false
+    },
     "TileResidueState": {
       "additionalProperties": false,
       "description": "Observable membership of one persistent residue on its owning tile.",
@@ -19467,7 +19491,7 @@
       "type": "object"
     },
     "TileStatic": {
-      "description": "A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new\nuuid).",
+      "description": "A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new\nuuid). `look` is its surface and name's `TileLook` content id.",
       "properties": {
         "position": {
           "maxItems": 2,
@@ -19492,19 +19516,15 @@
           "title": "Tile Uuid",
           "type": "string"
         },
-        "surface": {
-          "$ref": "#/$defs/TileSurface"
-        },
-        "name": {
-          "title": "Name",
+        "look": {
+          "title": "Look",
           "type": "string"
         }
       },
       "required": [
         "position",
         "tile_uuid",
-        "surface",
-        "name"
+        "look"
       ],
       "title": "TileStatic",
       "type": "object",
@@ -20989,6 +21009,14 @@
             "height": 0,
             "bits": ""
           }
+        },
+        "tile_looks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TileLook"
+          },
+          "title": "Tile Looks",
+          "type": "array"
         },
         "tile_statics": {
           "default": [],
