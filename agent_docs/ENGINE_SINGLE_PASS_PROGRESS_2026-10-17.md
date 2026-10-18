@@ -1075,3 +1075,11 @@ Hard rules:
     - pyright: 0 new.
   - **KB, largest seat update, a4eb223b1 → digests (G1 | G2):** Sleet drop 77.6 → 73.9 | 104.1 → 80.4; Daylight 83.1 → 81.9 | 137.6 → 110.1; door_open 43.4 → 42.3 | 95.3 → 59.0.
   - **Not done:** a stamp advance on keyed changes that change the value, which needs per-seat unpublished-write tracking and the human's approval. The unsound version of it measured Sleet/Daylight G2 world 21.8/31.5 → 10.1/10.4 KB.
+- 2026-10-18 (session end): **Digest stamps merged (61b51584e).** G2 largest KB: Sleet drop 104 → 80, Daylight 138 → 110, door_open 95 → 59. A change seen in view keeps the stamp only if the value matches (sound against late publication).
+  - **Unfinished, committed as WIP on their branches:**
+    - E3-sensory (codex/enp-e3-sensory): S-3 wire switch;
+    - E3-bodies follow-ups (codex/enp-e3-bodies): admissions removal, the build-once combat log (Q8), visual-loadout encoding, body stamps.
+  - **Next session, in order:**
+    1. finish and merge E3-sensory and the E3-bodies follow-ups;
+    2. Q9, one side part per faction plus a per-player overlay (design on codex/shared-vision-proto);
+    3. E6 quiet re-time and the final table.
