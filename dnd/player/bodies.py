@@ -231,9 +231,9 @@ def change_rows(change: ActorFactChange, actors: Mapping[UUID, ActorState], *, c
                 ) -> tuple[ActorRows, ...]:
     """An event's actor change as rows: each actor's, seat-independent and in the order E2's fold applies them.
 
-    `actors` is the session fold before the event. Only the fields the record names are read: its scalar
-    after-values become rows as they are; its memberships, holdings and item operations are keyed against the
-    session fold's value of that same field. The engine-only scalars (`DISCLOSURE` NOBODY) have no row, and the
+    `actors` is the session fold before the event. Only the fields the record names are read, each against the
+    session fold's value of that same field: a scalar becomes a row when its after-value differs from it; the
+    memberships, holdings and item operations are keyed against it. The engine-only scalars (`DISCLOSURE` NOBODY) have no row, and the
     ones the event's own presentation fact carries (faction, life state, remains, occupancy) none either.
     `consumed` tells how an ended membership ended (its event's presentation; the record names only its key).
     """
@@ -246,21 +246,21 @@ def change_rows(change: ActorFactChange, actors: Mapping[UUID, ActorState], *, c
     if owner is not None:
         rows: list[ChangeRow] = []
         values = change.values
-        if "normal_hp" in values:
+        if "normal_hp" in values and values["normal_hp"] != owner.normal_hp:
             rows.append(NumberRow(field=ChangeField.NORMAL_HP, value=values["normal_hp"]))
-        if "maximum_hp" in values:
+        if "maximum_hp" in values and values["maximum_hp"] != owner.maximum_hp:
             rows.append(NumberRow(field=ChangeField.MAXIMUM_HP, value=values["maximum_hp"]))
-        if "temporary_hp" in values:
+        if "temporary_hp" in values and values["temporary_hp"] != owner.temporary_hp:
             rows.append(NumberRow(field=ChangeField.TEMPORARY_HP, value=values["temporary_hp"]))
-        if "temporary_hp_grant" in values:
+        if "temporary_hp_grant" in values and values["temporary_hp_grant"] != owner.temporary_hp_grant:
             rows.append(GrantRow(value=values["temporary_hp_grant"]))
-        if "armor_class" in values:
+        if "armor_class" in values and values["armor_class"] != owner.armor_class:
             rows.append(NumberRow(field=ChangeField.ARMOR_CLASS, value=values["armor_class"]))
-        if "resolved_size" in values:
+        if "resolved_size" in values and values["resolved_size"] != owner.resolved_size:
             rows.append(SizeRow(value=values["resolved_size"]))
-        if "spatial_disposition" in values:
+        if "spatial_disposition" in values and values["spatial_disposition"] != owner.spatial_disposition:
             rows.append(DispositionRow(value=values["spatial_disposition"]))
-        if "active_weapon_set" in values:
+        if "active_weapon_set" in values and values["active_weapon_set"] != owner.active_weapon_set:
             rows.append(WeaponSetRow(value=values["active_weapon_set"]))
         rows.extend(_member_rows(owner, change, consumed))
         if (identity := change.released_by_owner) is not None:
