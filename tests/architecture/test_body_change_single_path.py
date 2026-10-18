@@ -7,11 +7,13 @@ record are built only by the bodies module.
 """
 
 import ast
+from dataclasses import fields
 from functools import cache
 from pathlib import Path
 
 from dnd.player.bodies import DISCLOSURE
 from dnd.types.actor_facts import ChangeField
+from dnd.types.item_parts import ItemState
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -53,3 +55,34 @@ def test_the_bodies_module_builds_the_actor_change_fact_and_the_entering_body():
     assert {row.split(":")[0] for row in _calls("BodyRecord")} <= {"dnd/player/bodies.py",
         "devtools/fold_vectors_bodies.py"}
     assert {row.split(":")[0] for row in _calls("change_fact")} == {"dnd/player/projection.py"}
+
+
+def test_the_session_actor_fold_has_one_writer():
+    """The session's actors are written by `_fold_actors` alone, through the shared fold functions the capture fold
+    applies too (each fold has its one writer); nothing else in projection writes an actors mapping."""
+    folds = {"dnd/player/projection.py:_fold_actors", "dnd/player/capture.py:advance_capture"}
+    assert _calls("fold_birth") == folds and _calls("fold_completed_actors") == folds
+    writes = []
+    for function in ast.walk(_modules()["dnd/player/projection.py"]):
+        if not isinstance(function, ast.FunctionDef):
+            continue
+        for node in ast.walk(function):
+            targets = (node.targets if isinstance(node, (ast.Assign, ast.Delete))
+                       else [node.target] if isinstance(node, (ast.AugAssign, ast.AnnAssign)) else [])
+            writes += [function.name for target in targets if isinstance(target, ast.Subscript)
+                       and isinstance(target.value, ast.Attribute) and target.value.attr == "actors"]
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in ("pop", "update", "clear", "setdefault", "__setitem__")
+                    and isinstance(node.func.value, ast.Attribute) and node.func.value.attr == "actors"):
+                writes.append(function.name)
+    assert writes == []
+
+
+def test_an_item_state_row_compares_every_item_state_field():
+    """`ItemStateRow` changes are written field by field: the comparison names each `ItemState` field once."""
+    function = next(node for node in ast.walk(_modules()["dnd/player/bodies.py"])
+                    if isinstance(node, ast.FunctionDef) and node.name == "_state_changes")
+    written = [node.slice.value for node in ast.walk(function) if isinstance(node, ast.Subscript)
+               and isinstance(node.value, ast.Name) and node.value.id == "changes"
+               and isinstance(node.slice, ast.Constant)]
+    assert sorted(written) == sorted(row.name for row in fields(ItemState))
