@@ -11,6 +11,7 @@ from dnd.core.condition_types import DurationType
 from dnd.core.events import AreaReachEvent, EventPhase, EventQueue
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
+from dnd.player.audience import resolve_audience
 from dnd.player.capture import capture_interval, capture_lineages
 from dnd.player.actor_facts import PresentationTarget
 from dnd.player.facts import CombatLogAppend, ConditionChangeFact, PlayerLogEntry, PlayerState, PlayerWorld
@@ -34,7 +35,7 @@ def test_after_values_wait_for_all_disclosed_occurrences(native_order, expected)
     projection = ProjectionState(
         world=PresentationTarget(generation=generation, observer_uuid=observer), actors={},
         remembered=PlayerState(generation=generation, observer_uuid=observer, world=world),
-        public_cursors={native: local for local, native in enumerate(native_order)}, next_occurrence=len(native_order))
+        audience=resolve_audience(observer, None), public_cursors={native: local for local, native in enumerate(native_order)}, next_occurrence=len(native_order))
     entry = PlayerLogEntry(entry_type=CombatLogEntryType.ACTION, source_name="", source_uuid="", target_name=None,
         target_uuid=None, compact="", verbose="", detailed="", data=EmptyLogData(), success=None)
     revisions = []

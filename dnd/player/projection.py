@@ -60,6 +60,7 @@ from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelop
 from dnd.player.sheet_facts import sheet_fact
 from dnd.types.actor_sheet import PlayerResourceValue
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
+from dnd.player.static_sent import StaticSent
 from dnd.player.reduction import (apply_record_fact, apply_world_update, change_membership,
     commit_current, fold_senses, observe_body, observed_actor, occurrence_order)
 from dnd.player.compatibility import legacy_damage_reference
@@ -1313,6 +1314,7 @@ def _disclosed_items(patches: tuple[ItemPatch, ...], disclosed: LineageDisclosur
 def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...],
                    admissions: tuple[ActorAdmission, ...], conditions: tuple[ConditionFact, ...],
                    private_world: PresentationTarget, private_actors: dict[UUID, ActorState],
+                   observer: PlayerAudience, known_actors: Collection[UUID],
                    remembered: PlayerState, disclosed: set[int], world_index: WorldProjectionIndex,
                    audience_composition: AudienceComposition, logs: Mapping[UUID, PlayerLogEntry],
                    keys: NativeKeys, table: SensoryTable, observed_sources: tuple[Event, ...] = ()
@@ -1332,7 +1334,6 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...]
     """
     events = upgrade_recorded_spatial_commits(events, tuple(
         (row.lineage_uuid, row.event_uuid) for row in sorted(versions, key=lambda row: row.source_index)))
-    observer = remembered.viewing_audience
     indexes = {row.event_uuid: row.source_index for row in versions}
     occurrences = frozenset(indexes.values())
     disclosure = LineageDisclosure(disclosed, keys)
@@ -1342,7 +1343,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...]
     updates: list[WorldUpdate] = []
     nodes: list[PlayerNode] = []
     # The actors the seat has bodies for, and the condition memberships it holds, at this point of the walk.
-    known: set[UUID] = set(remembered.actors)
+    known: set[UUID] = set(known_actors)
     members: dict[UUID, dict[UUID, ConditionFact]] = {}
 
     def held_conditions(identity: UUID) -> dict[UUID, ConditionFact]:
@@ -1861,13 +1862,13 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
             fact = replace(fact, reaction=replace(fact.reaction, triggered_lineage=lineage(fact.reaction.triggered_lineage)))
         elif isinstance(fact, ConditionChangeFact) and node.occurrence not in known_removals:
             fact = replace(fact, condition=_public_condition(fact.condition, state.public_cursors, state.public_versions,
-                owned=state.remembered.viewing_audience.controls(fact.target_entity_uuid)))
+                owned=state.audience.controls(fact.target_entity_uuid)))
         elif isinstance(fact, AttackFact):
             fact = replace(fact, item_effects=_public_item_effects(fact.item_effects, state.public_cursors,
-                owned=state.remembered.viewing_audience.controls(fact.source_entity_uuid)))
+                owned=state.audience.controls(fact.source_entity_uuid)))
         elif isinstance(fact, EquipmentFact):
             fact = replace(fact, items=_public_items(fact.items, state.public_cursors,
-                owned=state.remembered.viewing_audience.controls(fact.source_entity_uuid)))
+                owned=state.audience.controls(fact.source_entity_uuid)))
         elif isinstance(fact, ObjectDestroyedFact) and fact.previous_item is not None:
             fact = replace(fact, previous_item=replace(fact.previous_item,
                 item_effects=_public_item_effects(fact.previous_item.item_effects, state.public_cursors)))
@@ -1885,8 +1886,8 @@ def _public_occurrences(state: "ProjectionState", nodes: tuple[PlayerNode, ...],
             content_attributions=attributions, resolution=resolution(node.occurrence)))
     observations = tuple(replace(row, occurrence=state.public_cursors[row.occurrence],
         changes=_public_changes(row.changes, state.public_cursors, state.public_versions,
-        owned=state.remembered.viewing_audience.controls(row.actor_uuid)), items=_public_items(row.items,
-        state.public_cursors, owned=state.remembered.viewing_audience.controls(row.actor_uuid))) for row in observations)
+        owned=state.audience.controls(row.actor_uuid)), items=_public_items(row.items,
+        state.public_cursors, owned=state.audience.controls(row.actor_uuid))) for row in observations)
     updates = tuple(replace(row, occurrence=state.public_cursors[row.occurrence],
         objects=tuple(_public_object(obj, state.public_cursors) for obj in row.objects)) for row in updates)
     return (tuple(result), VersionRows(occurrences=tuple(occurrences), lineages=tuple(lineages)), observations, updates,
@@ -1907,6 +1908,10 @@ class ProjectionState:
     world: PresentationTarget
     actors: dict[UUID, ActorState]
     remembered: PlayerState
+    # The seat's control and observers. `remembered` holds the same value for the client functions it still runs.
+    audience: PlayerAudience
+    # The static content the seat was sent, updated from each emitted group.
+    static_sent: StaticSent = field(default_factory=StaticSent)
     # Disclosed lineages, by their native key (`NativeKeys.lineages`).
     disclosed_lineages: set[int] = field(default_factory=set)
     public_versions: dict[UUID, int] = field(default_factory=dict)
@@ -2143,6 +2148,19 @@ def project_log_appends(state: ProjectionState, appends: tuple[CombatLogAppend, 
     return public_logs
 
 
+def known_connector_uuids(state: ProjectionState) -> frozenset[str]:
+    """The connectors the seat sees now, both endpoints in its composed view: those its combat log may name.
+
+    Every change of the view or of a connector is followed by a world update of the seat, which sends exactly
+    these, so they are the connectors its client holds as visible.
+    """
+    view = state.audience_composition.view
+    if view is None:
+        return frozenset()
+    return frozenset(str(row.connector_uuid) for row in state.world.recorded_world.connectors.values()
+        if all(cell_in(view.visible, point) for point in row.endpoints))
+
+
 def _public_set(state: ProjectionState, cursors: frozenset[int]) -> frozenset[int]:
     """The public occurrences of the walk's native versions that were admitted."""
     return frozenset(state.public_cursors[cursor] for cursor in cursors if cursor in state.public_cursors)
@@ -2156,26 +2174,30 @@ def begin_projection(initialization: IntervalEnvelope) -> tuple[ProjectionState,
     world = PlayerWorld(battlefield_id=world_event.battlefield_id, battlefield_name=world_event.battlefield_name,
         bounds=world_event.bounds, width=world_event.width, height=world_event.height)
     private_world = PresentationTarget(generation=initialization.generation, observer_uuid=initialization.observer_uuid)
-    remembered = PlayerState(generation=initialization.generation, observer_uuid=initialization.observer_uuid, world=world, audience=resolve_audience(initialization.observer_uuid, initialization.audience))
+    audience = resolve_audience(initialization.observer_uuid, initialization.audience)
+    remembered = PlayerState(generation=initialization.generation, observer_uuid=initialization.observer_uuid,
+        world=world, audience=audience)
     actors: dict[UUID, ActorState] = {}
     versions = initialization.objective_rows
-    state = ProjectionState(private_world, actors, remembered)
+    state = ProjectionState(private_world, actors, remembered, audience)
     _remember_versions(state.version_cursors, state.lineage_keys, versions)
     table = SensoryTable()
     nodes, observations, updates, superseded, known_removals, resolutions = _project_nodes(
         tuple(event for _, event in initialization.admitted), versions, initialization.admissions,
-        initialization.conditions, private_world, actors, remembered, state.disclosed_lineages, state.world_index,
+        initialization.conditions, private_world, actors, audience, state.static_sent.actor_births, remembered,
+        state.disclosed_lineages, state.world_index,
         state.audience_composition, initialization.logs, NativeKeys(state.version_cursors, state.lineage_keys), table)
     state.owned_spatial_effects.update(event.spatial_effect_uuid for _, event in initialization.admitted
-        if isinstance(event, SpatialEffectChangeEvent) and remembered.viewing_audience.controls(event.source_entity_uuid))
+        if isinstance(event, SpatialEffectChangeEvent) and audience.controls(event.source_entity_uuid))
     nodes, rows, observations, updates, resolution_rows = _public_occurrences(state, nodes, versions, observations,
         updates, known_removals, table, resolutions)
     nodes, sensory_rows, contacts = _shared_rows(nodes, table)
     nodes, observations = _emit_bodies(remembered, nodes, observations, _public_set(state, superseded),
         _public_set(state, known_removals), sensory_rows, contacts)
+    state.static_sent.actor_births.update(row.actor_uuid for row in observations)
     initial = PlayerInitialization(generation=initialization.generation, observer_uuid=initialization.observer_uuid,
         world=world, nodes=nodes, version_rows=rows, end_cursor=state.next_occurrence,
-        observations=observations, world_updates=updates, audience=remembered.audience, sensory_rows=sensory_rows,
+        observations=observations, world_updates=updates, audience=audience, sensory_rows=sensory_rows,
         resolutions=resolution_rows)
     return state, initial
 
@@ -2183,17 +2205,18 @@ def begin_projection(initialization: IntervalEnvelope) -> tuple[ProjectionState,
 def project_lineage(state: ProjectionState, lineage: CompletedLineage) -> PlayerLineage | None:
     """Advance the same private projection memory over one closed root."""
     if (state.world.generation != lineage.generation or state.world.observer_uuid != lineage.observer_uuid
-            or state.remembered.viewing_audience != resolve_audience(lineage.observer_uuid, lineage.audience)):
+            or state.audience != resolve_audience(lineage.observer_uuid, lineage.audience)):
         raise ValueError("recorded lineage belongs to another projection")
     start_cursor = state.next_occurrence
     state.owned_spatial_effects.update(event.spatial_effect_uuid for event in lineage.events
-        if isinstance(event, SpatialEffectChangeEvent) and state.remembered.viewing_audience.controls(event.source_entity_uuid))
+        if isinstance(event, SpatialEffectChangeEvent) and state.audience.controls(event.source_entity_uuid))
     versions = lineage.objective_rows
     _remember_versions(state.version_cursors, state.lineage_keys, versions)
     table = SensoryTable()
     nodes, observations, updates, superseded, known_removals, resolutions = _project_nodes(
         upgrade_recorded_resolutions(lineage.events), versions, lineage.admissions, lineage.conditions, state.world,
-        state.actors, state.remembered, state.disclosed_lineages, state.world_index, state.audience_composition,
+        state.actors, state.audience, state.static_sent.actor_births, state.remembered, state.disclosed_lineages,
+        state.world_index, state.audience_composition,
         lineage.logs, NativeKeys(state.version_cursors, state.lineage_keys), table, lineage.observed_sources)
     # Settled initialization needs resulting state only. Presenting a damage
     # operation additionally requires recorded causal ownership, or an explicit
@@ -2214,10 +2237,11 @@ def project_lineage(state: ProjectionState, lineage: CompletedLineage) -> Player
     nodes, sensory_rows, contacts = _shared_rows(nodes, table)
     nodes, observations = _emit_bodies(state.remembered, nodes, observations, _public_set(state, superseded),
         _public_set(state, known_removals), sensory_rows, contacts)
+    state.static_sent.actor_births.update(row.actor_uuid for row in observations)
     root_occurrence = state.public_cursors.get(state.version_cursors[lineage.root.uuid])
     root = next((index for index, node in enumerate(nodes) if node.occurrence == root_occurrence), None)
     return PlayerLineage(generation=lineage.generation, observer_uuid=lineage.observer_uuid,
         lineage=nodes[root].lineage if root is not None else rows.lineages[0],
         root=root, events=nodes, version_rows=rows, start_cursor=start_cursor,
-        end_cursor=state.next_occurrence, observations=observations, world_updates=updates, audience=state.remembered.audience,
+        end_cursor=state.next_occurrence, observations=observations, world_updates=updates, audience=state.audience,
         sensory_rows=sensory_rows, resolutions=resolution_rows)

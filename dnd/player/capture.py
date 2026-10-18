@@ -166,6 +166,7 @@ class CaptureCheckpoint:
     each still-open root; `pending` keeps the evidence of that root's folded
     versions until it completes, so a root's capture never folds history again.
     `initiative` is the encounter's order (its start, then each join or leave); a session has one encounter.
+    `names` keeps every born actor's name, never popped: the names a seat's combat log may show.
     """
 
     generation: UUID
@@ -178,6 +179,7 @@ class CaptureCheckpoint:
     trees: dict[UUID, list[UUID]] = field(default_factory=dict)
     pending: dict[UUID, dict[UUID, AdmissionEvidence]] = field(default_factory=dict)
     initiative: tuple[UUID, ...] = ()
+    names: dict[UUID, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -809,6 +811,7 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
         completed = event.phase is EventPhase.COMPLETION and not event.canceled
         if completed and isinstance(event, EntityCreatedEvent):
             actors[event.entity_uuid] = actor_from_birth(event)
+            checkpoint.names[event.entity_uuid] = actors[event.entity_uuid].name
         if (not event.canceled and event.phase is EventPhase.EFFECT
                 and isinstance(event, SpatialChangeEvent)
                 and event.change_type in (SpatialChangeType.ENTITY_LEFT, SpatialChangeType.ENTITY_ENTERED)

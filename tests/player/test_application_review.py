@@ -8,7 +8,7 @@ from pydantic import TypeAdapter
 
 from dnd.core.content.descriptors import ContentDescriptor, ContentVisibility
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.player.application import AudienceRuntime, capture_application_operation, initialize_audiences
+from dnd.player.application import AudienceRuntime, capture_application_operation, initialize_audiences, seat_content
 from dnd.player.audience import PlayerAudience
 from dnd.player.content import UIContentManifest
 from dnd.player.content_composition import admitted_content, ui_content_manifest
@@ -57,12 +57,13 @@ def client_initialization(started: Started) -> PlayerState:
     """Reduce the published initialization and admitted content after detaching them."""
     detached = INITIALIZATION.validate_json(INITIALIZATION.dump_json(started.initialization))
     content = tuple(ContentDescriptor.model_validate_json(row.model_dump_json())
-        for row in started.runtime.projection.remembered.content)
+        for row in seat_content(started.runtime))
     return reduce_initialization(detached, content_additions=content)
 
 
 def known_content(state: PlayerState) -> tuple:
-    # What both folds hold beyond the lineages; the HUD is the client's alone (the server keeps none).
+    # What the client holds beyond the lineages, against the content the seat was sent (`seat_content`); the
+    # HUD is the client's alone (the server keeps none).
     return state.content
 
 
@@ -74,8 +75,8 @@ def client_operation(started: Started, state: PlayerState, operation: Operation)
 
 def test_published_initialization_has_only_admitted_descriptors_and_replays_exactly(started):
     assert all(row.visibility in (ContentVisibility.PUBLIC, ContentVisibility.OBSERVED)
-        for row in started.runtime.projection.remembered.content)
-    assert known_content(client_initialization(started)) == known_content(started.runtime.projection.remembered)
+        for row in seat_content(started.runtime))
+    assert known_content(client_initialization(started)) == seat_content(started.runtime)
 
 
 def test_common_operation_replays_eventless_handler_after_values(started):
@@ -83,7 +84,7 @@ def test_common_operation_replays_eventless_handler_after_values(started):
     advanced = advance_controller(started.session)
     assert advanced.boundary is not None and advanced.boundary.status == "waiting_for_human"
     state = client_operation(started, state, advanced)
-    assert known_content(state) == known_content(started.runtime.projection.remembered)
+    assert known_content(state) == seat_content(started.runtime)
     actor = state.current_actor_uuid
     assert actor is not None and state.hud_snapshot is not None
     sheet = next(row for row in state.hud_snapshot.sheets if row.actor_uuid == actor)
@@ -91,7 +92,7 @@ def test_common_operation_replays_eventless_handler_after_values(started):
     discover_player_actions(started.session, actor)
     changed = toggle_player_handler(started.session, actor, handler.uuid, not handler.enabled)
     state = client_operation(started, state, changed)
-    assert known_content(state) == known_content(started.runtime.projection.remembered)
+    assert known_content(state) == seat_content(started.runtime)
     updated = next(row for row in state.hud_snapshot.sheets if row.actor_uuid == actor)
     assert next(row for row in updated.handler_details if row.uuid == handler.uuid).enabled != handler.enabled
 
