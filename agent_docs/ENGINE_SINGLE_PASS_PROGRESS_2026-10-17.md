@@ -1002,3 +1002,21 @@ Hard rules:
     - **Shield Bash 1-of-3.** Shield Bash replaces at most one of the Gladiator's three attacks; the SRD allows three melee attacks. This is the author's choice. Owner: human (product).
     - **NPC test slop.** Recipe-data re-assertions, the coverage test driven by agent_docs CSVs, private-state asserts (`spell_damage_resistance_sources`, handler dispatch counts), and fake provider wiring in `test_innate_reaction_spell_costs`. Owner: NPC lane.
     - **test_183 icon ledger.** `tests/manual/test_183_content_icon_bindings.py` has no rows for content newly public from the merged lanes (e.g. `creature.oath_captain_devil`, `spell.charm_monster`) and needs regenerating. Owner: content/icon ledger.
+- 2026-10-18: **NPC authoring merged (a4eb223b1; npc-merge 507c6ab6c).**
+  - 123 new native NPCs (148 identities) and their shared mechanics, after review and repositioning.
+  - Multiattack is one public parametrized action: 60 declarations with 6 patterns are retired.
+  - The contract is regenerated with `encounter_end`; schema stays 16.
+  - **Player-visible rules:**
+    - Assassinate applies on the assassin's first turn only;
+    - Brute adds a die of the held weapon (goblins included);
+    - Leadership is hear-only;
+    - Help Attack is a new standard action;
+    - Shield Bash replaces 1 of 3 Multiattack attacks;
+    - Multiattack labels are derived from the steps.
+  - **Gates:** published updates byte-identical; O3 equal; O4 only the public catalog; sweep nothing new; pyright 0 new.
+  - **Follow-ups with owners are in the lane's entry above.** Notable ones:
+    - one attack-source type;
+    - one save-for-half carrier;
+    - summon data-only subclasses (~12) could be parametrized like Multiattack;
+    - the `_POST_BASELINE_TEMPLATES` harness allowlist;
+    - NDClient references to retired multiattack ids.
