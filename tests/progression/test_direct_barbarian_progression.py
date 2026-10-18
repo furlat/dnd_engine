@@ -35,7 +35,7 @@ from dnd.core.events import Event, EventHandler, EventPhase, EventType, Trigger
 from dnd.core.events import EventQueue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.proficiency_types import ProficiencyMode
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, modifier_of, modifiers_of
 from dnd.entity import Entity, EntityConfig
 from dnd.conditions import Charmed, Frightened
 from dnd.runtime_reset import reset_engine_runtime
@@ -182,9 +182,7 @@ def test_barbarian_berserker_applies_1_to_20_and_removes_exactly() -> None:
         name="Sibling critical die",
         value=1,
     )
-    entity.equipment.crit_extra_dice_melee.self_static.add_value_modifier(
-        sibling_modifier,
-    )
+    add_modifier(entity.equipment.crit_extra_dice_melee, Channel.SELF_STATIC, Kind.VALUE, sibling_modifier)
     entity.skill_set.athletics.add_proficiency_source(
         sibling_source,
         ProficiencyMode.FULL,
@@ -198,7 +196,7 @@ def test_barbarian_berserker_applies_1_to_20_and_removes_exactly() -> None:
         capacity_policy="maximum",
     )
     baseline_blocks = set(BaseBlock._registry)
-    baseline_values = set(BaseValue._registry)
+    baseline_values = set(ModifiableValue._registry)
     baseline_objects = set(BaseObject._registry)
 
     receipts = tuple(
@@ -277,7 +275,7 @@ def test_barbarian_berserker_applies_1_to_20_and_removes_exactly() -> None:
     }
     assert entity.action_economy.resources["rage"].maximum == 1
     assert set(BaseBlock._registry) == baseline_blocks
-    assert set(BaseValue._registry) == baseline_values
+    assert set(ModifiableValue._registry) == baseline_values
     assert set(BaseObject._registry) == baseline_objects
 
 
@@ -401,7 +399,7 @@ def test_failed_frenzy_replacement_restores_exact_rage_owner(
         for feature_id, sources in entity.feature_sources.items()
     }
     block_registry = set(BaseBlock._registry)
-    value_registry = set(BaseValue._registry)
+    value_registry = set(ModifiableValue._registry)
     object_registry = set(BaseObject._registry)
     register_action = Entity.register_action
 
@@ -438,7 +436,7 @@ def test_failed_frenzy_replacement_restores_exact_rage_owner(
     ) == rage_configuration
     assert entity.feature_sources == feature_sources
     assert set(BaseBlock._registry) == block_registry
-    assert set(BaseValue._registry) == value_registry
+    assert set(ModifiableValue._registry) == value_registry
     assert set(BaseObject._registry) == object_registry
 
 
@@ -488,14 +486,14 @@ def test_failed_frenzied_child_admission_releases_its_raging_root(
     object_registry = set(BaseObject._registry)
     register_action = Entity.register_action
     modifier_owners = (
-        entity.skill_set.get_skill("athletics").skill_bonus.self_static.advantage_modifiers,
-        entity.saving_throws.get_saving_throw("strength").bonus.self_static.advantage_modifiers,
-        entity.equipment.melee_damage_bonus.self_contextual.value_modifiers,
-        entity.health.damage_reduction.self_static.resistance_modifiers,
+        (entity.skill_set.get_skill("athletics").skill_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE),
+        (entity.saving_throws.get_saving_throw("strength").bonus, Channel.SELF_STATIC, Kind.ADVANTAGE),
+        (entity.equipment.melee_damage_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE),
+        (entity.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE),
     )
-    modifier_rows = tuple(set(owner) for owner in modifier_owners)
-    cost_owner = entity.action_economy.bonus_actions.self_static.value_modifiers
-    cost_ids = set(cost_owner)
+    modifier_rows = tuple({modifier.uuid for modifier in modifiers_of(*owner)} for owner in modifier_owners)
+    cost_owner = (entity.action_economy.bonus_actions, Channel.SELF_STATIC, Kind.VALUE)
+    cost_ids = {modifier.uuid for modifier in modifiers_of(*cost_owner)}
     rage_modifier_ids: set[UUID] = set()
 
     def retain_raging_ownership(event: Event) -> None:
@@ -540,18 +538,18 @@ def test_failed_frenzied_child_admission_releases_its_raging_root(
     assert set(BaseBlock._registry) == block_registry
     # Completion facts evaluate and register derived stat values;
     # cleanup owns Rage's modifiers, not every value evaluated during execution.
-    assert tuple(set(owner) for owner in modifier_owners) == modifier_rows
+    assert tuple({modifier.uuid for modifier in modifiers_of(*owner)} for owner in modifier_owners) == modifier_rows
     assert rage_modifier_ids
     assert all(BaseObject.get(modifier_id) is None for modifier_id in rage_modifier_ids)
     assert object_registry <= set(BaseObject._registry)
-    committed_cost_ids = set(cost_owner) - cost_ids
+    committed_cost_ids = {modifier.uuid for modifier in modifiers_of(*cost_owner)} - cost_ids
     assert len(committed_cost_ids) == 1
-    committed_cost = cost_owner[committed_cost_ids.pop()]
+    committed_cost = modifier_of(*cost_owner, committed_cost_ids.pop())
     assert isinstance(committed_cost, NumericalModifier)
     assert committed_cost.name == "Frenzy_cost"
     assert (
-        committed_cost.uuid
-        in entity.action_economy.bonus_actions.self_static.value_modifiers
+        modifier_of(entity.action_economy.bonus_actions, Channel.SELF_STATIC, Kind.VALUE, committed_cost.uuid)
+        is not None
     )
 
 
@@ -612,7 +610,7 @@ def test_failed_raging_root_admission_releases_each_owned_artifact(
     )
     handler_uuids = set(entity.event_handlers)
     block_registry = set(BaseBlock._registry)
-    value_registry = set(BaseValue._registry)
+    value_registry = set(ModifiableValue._registry)
     object_registry = set(BaseObject._registry)
 
     if failure_mode == "handler_admission":
@@ -661,7 +659,7 @@ def test_failed_raging_root_admission_releases_each_owned_artifact(
     ) == action_rows
     assert set(entity.event_handlers) == handler_uuids
     assert set(BaseBlock._registry) == block_registry
-    assert set(BaseValue._registry) == value_registry
+    assert set(ModifiableValue._registry) == value_registry
     added_objects = set(BaseObject._registry) - object_registry
     assert object_registry - set(BaseObject._registry) == set()
     assert len(added_objects) == 1
@@ -669,8 +667,8 @@ def test_failed_raging_root_admission_releases_each_owned_artifact(
     assert isinstance(committed_cost, NumericalModifier)
     assert committed_cost.name == f"{action_name}_cost"
     assert (
-        committed_cost.uuid
-        in entity.action_economy.bonus_actions.self_static.value_modifiers
+        modifier_of(entity.action_economy.bonus_actions, Channel.SELF_STATIC, Kind.VALUE, committed_cost.uuid)
+        is not None
     )
 
 
@@ -898,7 +896,7 @@ def test_barbarian_owner_failure_rolls_back_only_the_partial_level() -> None:
     existing = entity.action_economy.resources["rage"]
     block_registry_before = set(BaseBlock._registry)
     object_registry_before = set(BaseObject._registry)
-    value_registry_before = set(BaseValue._registry)
+    value_registry_before = set(ModifiableValue._registry)
 
     with pytest.raises(ValueError, match="already uses short_rest recharge"):
         apply_barbarian_level(entity, _barbarian_level(1))
@@ -915,7 +913,7 @@ def test_barbarian_owner_failure_rolls_back_only_the_partial_level() -> None:
     assert (existing.current, existing.maximum) == (7, 7)
     assert set(BaseBlock._registry) == block_registry_before
     assert set(BaseObject._registry) == object_registry_before
-    assert set(BaseValue._registry) == value_registry_before
+    assert set(ModifiableValue._registry) == value_registry_before
 
 
 def test_barbarian_root_cleanup_uses_receipt_identity_not_semantic_key() -> None:

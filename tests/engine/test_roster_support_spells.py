@@ -28,6 +28,7 @@ from dnd.spells.transmutation import Barkskin, Fly, Longstrider, Shillelagh
 from dnd.spells.evocation import FireShield
 from dnd.spells.transmutation import HasteEffect, SlowedEffect
 from dnd.types.world import MovementMode
+from dnd.core.values import Channel, Kind, add_modifier, ValueRead, value_score
 
 
 @pytest.fixture
@@ -77,7 +78,7 @@ def test_longstrider_reapplication_and_removal_preserve_spent_movement(game):
 @pytest.mark.parametrize("base_ac", [10, 18, 23])
 def test_barkskin_is_whole_ac_floor_and_concentration_removes_it(game, base_ac):
     caster = actor(game)
-    caster.equipment.ac_bonus.self_static.add_value_modifier(NumericalModifier(name="Armor test", value=base_ac-10,
+    add_modifier(caster.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name="Armor test", value=base_ac-10,
         source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid))
     before = caster.ac_bonus().normalized_score
     cast(Barkskin, caster)
@@ -175,10 +176,10 @@ def test_shillelagh_offhand_style_uses_selected_casting_ability(game):
     assert caster.loot_item(club) and caster.equip_item(club.uuid,WeaponSlot.MELEE_OFF)
     cast(Shillelagh,caster,weapon_slot=WeaponSlot.MELEE_OFF)
     without_style = caster.get_damages(WeaponSlot.MELEE_OFF)[0]
-    assert without_style.damage_bonus.normalized_score == 0
+    assert value_score(without_style.damage_bonus, ValueRead(without_style.source_entity_uuid), normalized=True) == 0
     caster.add_condition(FightingStyleTwoWeaponFighting(source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid))
     with_style = caster.get_damages(WeaponSlot.MELEE_OFF)[0]
-    assert with_style.damage_bonus.normalized_score == 4
+    assert value_score(with_style.damage_bonus, ValueRead(with_style.source_entity_uuid), normalized=True) == 4
 
 
 def test_flight_lost_during_step_stops_without_spending_or_teleport(game):

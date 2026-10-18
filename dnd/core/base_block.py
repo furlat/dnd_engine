@@ -3,7 +3,7 @@ from dnd.core.action_types import ActionEconomyCostType, RestrictedActionGrant
 from typing import AbstractSet, Dict, Hashable, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, retire_value
 from dnd.core.base_object import BaseObject, CreatesModels, build_creatable_models, read_private_attribute
 from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent
 from dnd.core.condition_types import (
@@ -147,6 +147,14 @@ class BaseBlock(BaseModel):
     """
 
     __getattr__ = read_private_attribute
+    _value_field_names: ClassVar[tuple[str, ...]] = ()
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        """Record once per class which declared fields hold this block's values."""
+        super().__pydantic_init_subclass__(**kwargs)
+        cls._value_field_names = tuple(name for name, field in cls.model_fields.items()
+                                       if field.annotation in (ModifiableValue, Optional[ModifiableValue]))
 
     name: str = Field(
         default="A Block",
@@ -183,10 +191,6 @@ class BaseBlock(BaseModel):
     blocks: Dict[UUID, 'BaseBlock'] = Field(
         default_factory=dict,
         description="Dictionary of all BaseBlock instances that are attributes of this class."
-    )
-    values: Dict[UUID, 'ModifiableValue'] = Field(
-        default_factory=dict,
-        description="Dictionary of all ModifiableValue instances that are attributes of this class."
     )
 
     position: Tuple[int, int] = Field(
@@ -386,24 +390,28 @@ class BaseBlock(BaseModel):
             block: Block whose immediate values and child blocks should inherit
                 owner identity.
         """
-        for value in block.values.values():
-            value.set_source_entity(block.source_entity_uuid, block.source_entity_name)
+        for value in block.value_fields():
+            value.source_entity_uuid = block.source_entity_uuid
+            value.source_entity_name = block.source_entity_name
 
         for sub_block in block.blocks.values():
             sub_block.source_entity_uuid = block.source_entity_uuid
             sub_block.source_entity_name = block.source_entity_name
             self._set_values_and_blocks_source(sub_block)
 
-    def _populate_blocks_and_values(self) -> None:
-        """Discover direct child blocks and modifiable values on this model."""
+    def _populate_blocks(self) -> None:
+        """Discover direct child blocks on this model."""
         for name, _ in self.__class__.model_fields.items():
             attr_value = getattr(self, name)
-            if name in ['blocks', 'values']:
+            if name == 'blocks':
                 continue
-            if isinstance(attr_value, ModifiableValue):
-                self.values[attr_value.uuid] = attr_value
-            elif isinstance(attr_value, BaseBlock):
+            if isinstance(attr_value, BaseBlock):
                 self.blocks[attr_value.uuid] = attr_value
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's own values: its declared value fields, as they are now."""
+        return tuple(value for value in (getattr(self, name) for name in self._value_field_names)
+                     if value is not None)
 
     @model_validator(mode='after')
     def set_values_and_blocks_source(self) -> 'Self':
@@ -412,7 +420,7 @@ class BaseBlock(BaseModel):
         Returns:
             This block after propagation.
         """
-        self._populate_blocks_and_values()
+        self._populate_blocks()
         self._set_values_and_blocks_source(self)
         return self
 
@@ -427,7 +435,7 @@ class BaseBlock(BaseModel):
             ValueError: If a discovered value or child block has a mismatched
                 source UUID.
         """
-        for _, value in self.values.items():
+        for value in self.value_fields():
             if value.source_entity_uuid != self.source_entity_uuid:
                 raise ValueError(f"ModifiableValue '{value.name}' has mismatched source UUID")
 
@@ -501,7 +509,7 @@ class BaseBlock(BaseModel):
         Returns:
             Discovered modifiable values.
         """
-        values = list(self.values.values())
+        values = list(self.value_fields())
         if deep:
             for block in self.blocks.values():
                 values.extend(block.get_values(deep=True))
@@ -748,8 +756,9 @@ class BaseBlock(BaseModel):
         return False
 
     def owned_values(self) -> tuple[ModifiableValue, ...]:
-        """Return exact values whose local channels belong to this block."""
-        return tuple(self.values.values())
+        """Return exact values whose rows belong to this block: its value fields (blocks with list-held
+        values add them)."""
+        return self.value_fields()
 
     def owned_block_tree(self, *, excluded_uuids: frozenset[UUID] = frozenset()) -> tuple['BaseBlock', ...]:
         """Snapshot exact composition edges, never mutable source-identity matches."""
@@ -771,7 +780,7 @@ class BaseBlock(BaseModel):
             self.remove_event_handler(handler)
             handler.remove_from_register()
         for value in {value.uuid: value for value in self.owned_values()}.values():
-            value.retire_owned_state()
+            retire_value(value)
         BaseBlock.unregister(self.uuid)
 
     def on_owned_item_destroyed(
@@ -921,7 +930,7 @@ class BaseBlock(BaseModel):
         Returns:
             Matching direct value, or `None`.
         """
-        return self.values.get(uuid)
+        return next((value for value in self.value_fields() if value.uuid == uuid), None)
 
     def get_value_from_name(self, name: str) -> Optional[ModifiableValue]:
         """Return a direct value by name.
@@ -932,10 +941,7 @@ class BaseBlock(BaseModel):
         Returns:
             Matching direct value, or `None`.
         """
-        for value in self.values.values():
-            if value.name == name:
-                return value
-        return None
+        return next((value for value in self.value_fields() if value.name == name), None)
 
     def get_block_from_uuid(self, uuid: UUID) -> Optional['BaseBlock']:
         """Return a direct child block by UUID.

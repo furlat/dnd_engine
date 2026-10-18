@@ -19,6 +19,7 @@ from tests.manual.spell_regression_support import (
     force_save_result,
     reset_spell_regression_arena,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def test_ice_storm_applies_bludgeoning_and_cold_as_typed_components() -> None:
@@ -35,15 +36,13 @@ def test_ice_storm_applies_bludgeoning_and_cold_as_typed_components() -> None:
         (7, 4),
         "monsters",
     )
-    target.health.damage_reduction.self_static.add_resistance_modifier(
-        ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid,
             name="Ice Storm cold immunity",
             value=ResistanceStatus.IMMUNITY,
             damage_type=DamageType.COLD,
-        )
-    )
+        ))
     force_save_result(target, "dexterity", succeeds=False)
     Entity.update_all_entities_senses(max_distance=80)
     hp_before = get_hp(target)

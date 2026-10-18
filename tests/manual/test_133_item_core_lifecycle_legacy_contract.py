@@ -27,6 +27,7 @@ from dnd.core.events import Event
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from tests.engine.support import get_hp, get_max_hp, reset_combat_state, set_hp
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier
 
 
 THIS_FILE = "tests/manual/test_133_item_core_lifecycle_legacy_contract.py"
@@ -294,14 +295,12 @@ class AuraProbeItem(BaseItem):
         if entity is None:
             return
         self.modifier_uuid = (
-            entity.equipment.ac_bonus.self_static.add_value_modifier(
-                NumericalModifier(
+            add_modifier(entity.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name="Lifecycle Aura",
                     value=2,
                     source_entity_uuid=self.uuid,
                     target_entity_uuid=entity.uuid,
-                )
-            )
+                ))
         )
         self.modifier_owner_uuid = entity.uuid
 
@@ -312,7 +311,7 @@ class AuraProbeItem(BaseItem):
             else None
         )
         if owner is not None and self.modifier_uuid is not None:
-            owner.equipment.ac_bonus.self_static.remove_modifier(self.modifier_uuid)
+            remove_modifier(owner.equipment.ac_bonus, self.modifier_uuid, Channel.SELF_STATIC)
         self.modifier_uuid = None
         self.modifier_owner_uuid = None
 

@@ -46,6 +46,7 @@ from dnd.types.character_receipts import (
     FighterGrantReceipt,
     SorcererGrantReceipt, ClericGrantReceipt, PaladinGrantReceipt, WizardGrantReceipt,
 )
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier, modifier_of
 
 
 def _proficiency_source(entity: Entity) -> UUID:
@@ -99,16 +100,16 @@ def _reconcile_proficiency(entity: Entity, total_level: int) -> None:
     if entity.character_body_id is None:
         return
     source_id = _proficiency_source(entity)
-    existing = entity.proficiency_bonus.self_static.value_modifiers.get(source_id)
+    existing = modifier_of(entity.proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, source_id)
     if existing is not None:
-        entity.proficiency_bonus.self_static.remove_value_modifier(source_id)
+        remove_modifier(entity.proficiency_bonus, source_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(source_id)
     if total_level == 0:
         return
     progression_bonus = proficiency_bonus_for_level(total_level) - 2
     if progression_bonus == 0:
         return
-    entity.proficiency_bonus.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(entity.proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         uuid=source_id,
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,

@@ -14,7 +14,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import Damage, Event, EventQueue, EventType, SavingThrowEvent, SpatialChangeEvent, SpatialHandler
 from dnd.core.gridmap import get_map
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.entity import Entity
 from dnd.types.abilities import AbilityName
@@ -134,11 +134,11 @@ def _damage_entrant(profile: ResidueProfile, payload: ResidueDamage, tile: Tile,
         damage_dice=payload.dice_sides,
         dice_numbers=payload.dice_count,
         damage_type=payload.damage_type,
-        damage_bonus=ModifiableValue.create(
+        damage_bonus=parts(ModifiableValue(
             source_entity_uuid=tile.uuid,
-            base_value=0,
-            value_name=f"{profile.name} Damage",
-        ),
+            base=0,
+            name=f"{profile.name} Damage",
+        )),
     )
     roll = damage.get_dice(AttackOutcome.HIT).roll
     entity.receive_damage(

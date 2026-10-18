@@ -32,6 +32,7 @@ from dnd.types.character_progression import (
     RitualPreparationPolicy,
 )
 from dnd.types.character_receipts import SorcererGrantReceipt
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier, modifier_of
 
 
 _SORCERY_POINTS = "class_feature.sorcerer.sorcery_points"
@@ -810,15 +811,13 @@ def _validate_sorcerer_receipt_ownership(
         if source_id not in entity.equipment.armor_class_formula_candidates:
             raise RuntimeError("Sorcerer armor formula ownership changed")
     for modifier_id in receipt.maximum_hit_point_modifier_ids:
-        modifiers = entity.health.max_hit_points_bonus.self_static.value_modifiers
-        modifier = modifiers.get(modifier_id)
+        modifier = modifier_of(entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, modifier_id)
         if modifier is None or NumericalModifier.get(modifier_id) is not modifier:
             raise RuntimeError("Sorcerer hit-point modifier ownership changed")
     for ability, modifier_id in receipt.ability_score_modifier_ids:
-        modifiers = entity.ability_scores.get_ability(
+        modifier = modifier_of(entity.ability_scores.get_ability(
             ability,
-        ).ability_score.self_static.value_modifiers
-        modifier = modifiers.get(modifier_id)
+        ).ability_score, Channel.SELF_STATIC, Kind.VALUE, modifier_id)
         if modifier is None or NumericalModifier.get(modifier_id) is not modifier:
             raise RuntimeError("Sorcerer ability modifier ownership changed")
     for feature_id, source_id in receipt.feature_sources:
@@ -908,14 +907,12 @@ def _remove_sorcerer_receipt(
         if not entity.equipment.remove_armor_class_formula_candidate(source_id):
             raise RuntimeError("Sorcerer armor formula is missing")
     for modifier_id in reversed(receipt.maximum_hit_point_modifier_ids):
-        entity.health.max_hit_points_bonus.self_static.remove_value_modifier(
-            modifier_id,
-        )
+        remove_modifier(entity.health.max_hit_points_bonus, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for ability, modifier_id in reversed(receipt.ability_score_modifier_ids):
-        entity.ability_scores.get_ability(
+        remove_modifier(entity.ability_scores.get_ability(
             ability,
-        ).ability_score.self_static.remove_value_modifier(modifier_id)
+        ).ability_score, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for feature_id, source_id in reversed(receipt.feature_sources):
         if not entity.remove_feature_source(feature_id, source_id):
@@ -1062,9 +1059,9 @@ def apply_sorcerer_level(
 
         for ability, amount in resolved.ability_increases:
             modifier_id = _source(entity, f"{level.step_id}.asi.{ability}")
-            entity.ability_scores.get_ability(
+            add_modifier(entity.ability_scores.get_ability(
                 ability,
-            ).ability_score.self_static.add_value_modifier(NumericalModifier(
+            ).ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 uuid=modifier_id,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
@@ -1074,15 +1071,13 @@ def apply_sorcerer_level(
             ability_modifiers.append((ability, modifier_id))
 
         hp_modifier_id = _source(entity, f"{level.step_id}.draconic_resilience.hp")
-        entity.health.max_hit_points_bonus.self_static.add_value_modifier(
-            NumericalModifier(
+        add_modifier(entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 uuid=hp_modifier_id,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
                 name="Draconic Resilience HP",
                 value=1,
-            ),
-        )
+            ))
         maximum_hp.append(hp_modifier_id)
 
         for feature_id in resolved.feature_ids:

@@ -29,6 +29,7 @@ from dnd.spells.evocation import IceStorm, Sunbeam, SunbeamEffect, Sunburst
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor, force_save_result, reset_spell_regression_arena,
 )
+from dnd.core.values import Channel, Kind, add_modifier, remove_all_modifiers
 
 
 @pytest.fixture
@@ -319,7 +320,7 @@ def test_sunburst_success_halves_damage_and_repeat_save_survives_source_absence(
     before = target.get_normal_hp()
     assert not cast(Sunburst, caster, target.position).canceled
     assert before - target.get_normal_hp() == 24
-    target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_all_modifiers()
+    remove_all_modifiers(target.saving_throws.get_saving_throw("constitution").bonus)
     force_save_result(target, "constitution", succeeds=True)
     caster._detach_from_world()
     with fixed_dice_faces(*([2] * 100)):
@@ -332,7 +333,7 @@ def test_solar_success_halves_damage_without_blindness(scene, spell, destination
     caster, target = scene
     Entity.update_entity_position(target, (10, 5))
     Entity.update_all_entities_senses(max_distance=300)
-    target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_all_modifiers()
+    remove_all_modifiers(target.saving_throws.get_saving_throw("constitution").bonus)
     force_save_result(target, "constitution", succeeds=True)
     before = target.get_normal_hp()
     assert not cast(spell, caster, destination).canceled
@@ -341,7 +342,7 @@ def test_solar_success_halves_damage_without_blindness(scene, spell, destination
 
 def test_ice_storm_mixed_resistance_and_source_death_preserve_terrain_until_round(scene):
     caster, target = scene
-    target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
         source_entity_uuid=target.uuid, target_entity_uuid=target.uuid, name="Cold immunity",
         value=ResistanceStatus.IMMUNITY, damage_type=DamageType.COLD))
     before = target.get_normal_hp()

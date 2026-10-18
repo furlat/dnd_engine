@@ -23,6 +23,7 @@ from dnd.game import Game
 from dnd.items.consumables import build_timed_fire_weapon_coat
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.core.modifiers import NumericalModifier
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.fixture(autouse=True)
@@ -387,7 +388,7 @@ def test_concentration_coat_replacement_removes_each_old_condition_once(slots):
     owner = actor(game, "Owner", (1, 1))
     weapon = equip(owner, "weapon.dagger", WeaponSlot.MELEE_MAIN)
     if slots == 2:
-        owner.max_concentration_slots.self_static.add_value_modifier(NumericalModifier(
+        add_modifier(owner.max_concentration_slots, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             name="Second concentration slot", value=1,
             source_entity_uuid=owner.uuid, target_entity_uuid=owner.uuid))
         owner.add_condition(Concentrating(source_entity_uuid=owner.uuid,
@@ -414,7 +415,7 @@ def test_concentration_coat_replacement_removes_each_old_condition_once(slots):
 def test_coat_reapplication_preserves_a_pending_unused_concentration_slot():
     game = Game()
     owner = actor(game, "Owner", (1, 1))
-    owner.max_concentration_slots.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(owner.max_concentration_slots, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name="Second slot", value=1, source_entity_uuid=owner.uuid, target_entity_uuid=owner.uuid))
     weapon = equip(owner, "weapon.dagger", WeaponSlot.MELEE_MAIN)
     for _ in range(2):
@@ -427,7 +428,7 @@ def test_coat_reapplication_preserves_a_pending_unused_concentration_slot():
 def test_rejected_multislot_concentration_replacement_preserves_all_children():
     game = Game()
     owner = actor(game, "Owner", (1, 1))
-    owner.max_concentration_slots.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(owner.max_concentration_slots, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name="Second slot", value=1, source_entity_uuid=owner.uuid, target_entity_uuid=owner.uuid))
     weapon = equip(owner, "weapon.dagger", WeaponSlot.MELEE_MAIN)
     coat(owner, build_authored_item("consumable.weapon_coat.concentration_fire", owner.uuid))

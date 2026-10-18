@@ -31,6 +31,7 @@ from dnd.spells.spell_utils import living_recipients_error, spell_condition_prof
 from dnd.core.base_conditions import Duration
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.blocks.skills import all_skills
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 class SeeInvisibilityEffect(BaseCondition):
@@ -498,11 +499,11 @@ class ForesightEffect(BaseCondition):
                 target.saving_throws.get_saving_throw(ability).bonus))
         values.extend(target.skill_set.get_skill(skill).skill_bonus for skill in all_skills)
         for value in values:
-            ident = value.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
                 value=AdvantageStatus.ADVANTAGE, source_entity_uuid=target.uuid))
             modifiers.append((value.uuid, ident))
         value = target.equipment.ac_bonus
-        ident = value.to_target_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+        ident = add_modifier(value, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
             value=AdvantageStatus.DISADVANTAGE, source_entity_uuid=target.uuid))
         modifiers.append((value.uuid, ident))
         return modifiers, [], [], [], event.phase_to(EventPhase.EFFECT)

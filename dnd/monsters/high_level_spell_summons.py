@@ -335,8 +335,8 @@ def bound_weapon(
         if finesse
         else entity.ability_scores.strength.modifier
     )
-    value = lambda number: ModifiableValue.create(
-        source_entity_uuid=entity.uuid, base_value=number
+    value = lambda number: ModifiableValue(
+        source_entity_uuid=entity.uuid, base=number
     )
     if entity.content_ref is None:
         raise RuntimeError("Summon weapon requires its authored creature identity")

@@ -205,9 +205,7 @@ def test_divine_smite_appends_radiant_packet_and_spends_exact_slot() -> None:
         ),
         (2, 3),
     )
-    slot_base = paladin.action_economy.spell_slot_1.get_base_modifier()
-    assert slot_base is not None
-    slot_base.value = 1
+    paladin.action_economy.spell_slot_1.base = 1
     handler = create_divine_smite_handler(paladin.uuid, 1)
     paladin.add_event_handler(handler)
     Entity.update_all_entities_senses(max_distance=20)

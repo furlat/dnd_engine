@@ -18,6 +18,7 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.core.proficiency_types import ProficiencyMode
 from dnd.entity import Entity
 from dnd.types.character_receipts import CasterChassisReceipt
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier, modifier_of
 
 
 def class_level_source(entity: Entity, identity: str) -> UUID:
@@ -107,17 +108,15 @@ def apply_caster_chassis(
             saves.append((value.name, source))
         for ability, amount in resolved.ability_increases:
             identity = class_level_source(entity, level.step_id + ".asi." + ability)
-            entity.ability_scores.get_ability(
+            add_modifier(entity.ability_scores.get_ability(
                 ability
-            ).ability_score.self_static.add_value_modifier(
-                NumericalModifier(
+            ).ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     uuid=identity,
                     name=level.step_id + " ASI",
                     value=amount,
                     source_entity_uuid=entity.uuid,
                     target_entity_uuid=entity.uuid,
-                )
-            )
+                ))
             modifiers.append((ability, identity))
         for feature in resolved.feature_ids:
             source = class_level_source(entity, level.step_id + ".feature." + feature)
@@ -177,9 +176,9 @@ def remove_caster_chassis(entity: Entity, receipt: CasterChassisReceipt) -> None
     for feature, source in receipt.feature_sources:
         entity.remove_feature_source(feature, source)
     for ability, identity in receipt.ability_score_modifier_ids:
-        entity.ability_scores.get_ability(
+        remove_modifier(entity.ability_scores.get_ability(
             ability
-        ).ability_score.self_static.remove_value_modifier(identity)
+        ).ability_score, identity, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(identity)
     for name, source in receipt.saving_throw_proficiency_sources:
         entity.saving_throws.get_saving_throw(
@@ -211,9 +210,8 @@ def validate_caster_chassis(entity: Entity, receipt: CasterChassisReceipt) -> No
         if source not in entity.feature_sources.get(feature, set()):
             raise RuntimeError("Class feature ownership changed")
     for ability, identity in receipt.ability_score_modifier_ids:
-        value = entity.ability_scores.get_ability(
-            ability
-        ).ability_score.self_static.value_modifiers.get(identity)
+        value = modifier_of(entity.ability_scores.get_ability(ability).ability_score, Channel.SELF_STATIC, Kind.VALUE,
+                            identity)
         if value is None or NumericalModifier.get(identity) is not value:
             raise RuntimeError("Class ability modifier ownership changed")
     for name, source in receipt.saving_throw_proficiency_sources:

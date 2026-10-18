@@ -11,7 +11,7 @@ from dnd.core.condition_types import DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 
 
 class TutorialActor(BaseBlock):
@@ -28,15 +28,15 @@ def create_tutorial_actor(name: str) -> TutorialActor:
         name=name,
         source_entity_uuid=actor_id,
         allow_events_conditions=True,
-        guard_bonus=ModifiableValue.create(
+        guard_bonus=ModifiableValue(
             source_entity_uuid=actor_id,
-            value_name=f"{name} Guard",
-            base_value=10,
+            name=f"{name} Guard",
+            base=10,
         ),
-        focus_bonus=ModifiableValue.create(
+        focus_bonus=ModifiableValue(
             source_entity_uuid=actor_id,
-            value_name=f"{name} Focus",
-            base_value=1,
+            name=f"{name} Focus",
+            base=1,
         ),
     )
 
@@ -47,7 +47,7 @@ def reset_condition_state() -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseCondition._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     EventQueue.set_combat_log_callback(None)
 
 
@@ -65,14 +65,12 @@ class GuardedCondition(BaseCondition):
         block = TutorialActor.get(self.target_entity_uuid)
         assert isinstance(block, TutorialActor)
 
-        modifier_uuid = block.guard_bonus.self_static.add_value_modifier(
-            NumericalModifier.create(
+        modifier_uuid = add_modifier(block.guard_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
                 name="Guarded",
                 value=2,
-            )
-        )
+            ))
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             status_message=f"{block.name} is guarded",
@@ -138,14 +136,12 @@ class FocusBlockedCondition(BaseCondition):
         block = TutorialActor.get(self.target_entity_uuid)
         assert isinstance(block, TutorialActor)
 
-        modifier_uuid = block.focus_bonus.self_static.add_max_constraint(
-            NumericalModifier.create(
+        modifier_uuid = add_modifier(block.focus_bonus, Channel.SELF_STATIC, Kind.MAX, NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
                 name="Focus Blocked",
                 value=0,
-            )
-        )
+            ))
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             status_message=f"{block.name}'s focus is blocked",

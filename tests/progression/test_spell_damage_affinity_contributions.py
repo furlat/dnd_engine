@@ -12,6 +12,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import FireBolt, RayOfFrost
 from tests.engine.support import create_test_entity
+from dnd.core.values import ValueRead, value_score
 
 
 @pytest.fixture(autouse=True)
@@ -83,8 +84,8 @@ def test_matching_affinity_adds_charisma_once_per_cast_without_persisting(
     assert isinstance(second, SpellEvent) and second.damages
     assert first.damages[0].damage_bonus is not None
     assert second.damages[0].damage_bonus is not None
-    assert first.damages[0].damage_bonus.normalized_score == 4
-    assert second.damages[0].damage_bonus.normalized_score == 4
+    assert value_score(first.damages[0].damage_bonus, ValueRead(first.damages[0].source_entity_uuid), normalized=True) == 4
+    assert value_score(second.damages[0].damage_bonus, ValueRead(second.damages[0].source_entity_uuid), normalized=True) == 4
     assert caster.spellcasting.spell_damage_bonus.normalized_score == 0
 
     assert caster.spellcasting.remove_spell_damage_affinity_contribution(
@@ -97,7 +98,7 @@ def test_matching_affinity_adds_charisma_once_per_cast_without_persisting(
     )
     assert isinstance(third, SpellEvent) and third.damages
     assert third.damages[0].damage_bonus is not None
-    assert third.damages[0].damage_bonus.normalized_score == 0
+    assert value_score(third.damages[0].damage_bonus, ValueRead(third.damages[0].source_entity_uuid), normalized=True) == 0
 
 
 def test_affinity_does_not_apply_to_a_different_spell_damage_type(
@@ -122,7 +123,7 @@ def test_affinity_does_not_apply_to_a_different_spell_damage_type(
 
     assert isinstance(result, SpellEvent) and result.damages
     assert result.damages[0].damage_bonus is not None
-    assert result.damages[0].damage_bonus.normalized_score == 0
+    assert value_score(result.damages[0].damage_bonus, ValueRead(result.damages[0].source_entity_uuid), normalized=True) == 0
 
 
 def test_one_cast_context_can_claim_a_matching_affinity_only_once() -> None:
@@ -139,5 +140,5 @@ def test_one_cast_context_can_claim_a_matching_affinity_only_once() -> None:
         first = caster.get_spell_damage_bonus()
         second = caster.get_spell_damage_bonus()
 
-    assert first.normalized_score == 4
-    assert second.normalized_score == 0
+    assert value_score(first, ValueRead(caster.uuid), normalized=True) == 4
+    assert value_score(second, ValueRead(caster.uuid), normalized=True) == 0

@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.values import BaseValue, ContextualValue, ModifiableValue, StaticValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
 
 
@@ -21,7 +21,7 @@ def reset_identity_state() -> None:
     """Clear the global runtime indexes touched by these identity examples."""
     GridMap.reset()
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
@@ -157,17 +157,17 @@ def test_registry_families_print_separate_lookup_surfaces(capsys) -> None:
     reset_identity_state()
     source_id = uuid4()
 
-    value = BaseValue(source_entity_uuid=source_id, name="tutorial value")
+    value = ModifiableValue(source_entity_uuid=source_id, name="tutorial value")
     block = BaseBlock(source_entity_uuid=source_id, name="tutorial block")
 
     readout_lines = [
-        f"value family lookup: {BaseValue.get(value.uuid).name}",
+        f"value family lookup: {ModifiableValue.get(value.uuid).name}",
         f"root object lookup for value: {BaseObject.get(value.uuid)}",
         f"block family lookup: {BaseBlock.get(block.uuid).name}",
-        f"value lookup for block uuid: {BaseValue.get(block.uuid)}",
+        f"value lookup for block uuid: {ModifiableValue.get(block.uuid)}",
         (
             "registry sizes: "
-            f"values={len(BaseValue._registry)}, "
+            f"values={len(ModifiableValue._registry)}, "
             f"blocks={len(BaseBlock._registry)}, "
             f"root={len(BaseObject._registry)}"
         ),
@@ -182,11 +182,11 @@ def test_registry_families_print_separate_lookup_surfaces(capsys) -> None:
         "value lookup for block uuid: None",
         "registry sizes: values=1, blocks=1, root=0",
     ]
-    assert BaseValue.get(value.uuid) is value
+    assert ModifiableValue.get(value.uuid) is value
     assert BaseObject.get(value.uuid) is None
 
     assert BaseBlock.get(block.uuid) is block
-    assert BaseValue.get(block.uuid) is None
+    assert ModifiableValue.get(block.uuid) is None
     assert readout_lines == expected_lines
     assert capsys.readouterr().out.splitlines() == expected_lines
 
@@ -256,98 +256,26 @@ def test_entity_creation_prints_actor_position_and_map_lookup(capsys) -> None:
     )
 
 
-def test_value_subclass_lookup_contracts_print_type_boundaries(capsys) -> None:
-    """Value subclass lookup prints accepted, rejected, and missing lookups."""
+def test_value_registry_lookup_prints_owned_transient_and_missing(capsys) -> None:
+    """Value registry lookup prints owned, transient and missing records."""
     reset_identity_state()
     source_id = uuid4()
 
-    static_value = StaticValue(source_entity_uuid=source_id, name="static")
-    contextual_value = ContextualValue(source_entity_uuid=source_id, name="contextual")
-    modifiable_value = ModifiableValue.create(
-        source_entity_uuid=source_id,
-        value_name="modifiable",
-    )
-
-    assert BaseValue.get(static_value.uuid) is static_value
-    assert BaseValue.get(contextual_value.uuid) is contextual_value
-    assert BaseValue.get(modifiable_value.uuid) is modifiable_value
-
-    assert StaticValue.get(static_value.uuid) is static_value
-    assert ContextualValue.get(contextual_value.uuid) is contextual_value
-    assert ModifiableValue.get(modifiable_value.uuid) is modifiable_value
-
-    wrong_family_results = []
-    try:
-        StaticValue.get(contextual_value.uuid)
-    except ValueError as exc:
-        assert "is not a StaticValue" in str(exc)
-        wrong_family_results.append("StaticValue rejects ContextualValue")
-    else:
-        raise AssertionError("StaticValue accepted a ContextualValue UUID")
-
-    try:
-        ContextualValue.get(static_value.uuid)
-    except ValueError as exc:
-        assert "is not a ContextualValue" in str(exc)
-        wrong_family_results.append("ContextualValue rejects StaticValue")
-    else:
-        raise AssertionError("ContextualValue accepted a StaticValue UUID")
-
-    try:
-        ModifiableValue.get(static_value.uuid)
-    except ValueError as exc:
-        assert "is not a ModifiableValue" in str(exc)
-        wrong_family_results.append("ModifiableValue rejects StaticValue")
-    else:
-        raise AssertionError("ModifiableValue accepted a StaticValue UUID")
-
+    owned = ModifiableValue(source_entity_uuid=source_id, name="owned")
+    transient = ModifiableValue(source_entity_uuid=source_id, name="transient", use_register=False)
     missing_id = uuid4()
-    base_missing = BaseValue.get(missing_id) is None
-    contextual_missing = ContextualValue.get(missing_id) is None
-    modifiable_missing = ModifiableValue.get(missing_id) is None
-
-    try:
-        StaticValue.get(missing_id)
-    except ValueError as exc:
-        assert "is not a StaticValue" in str(exc)
-        static_missing = "raises ValueError"
-    else:
-        raise AssertionError("StaticValue accepted a missing UUID")
 
     readout_lines = [
-        (
-            "base lookup names: "
-            f"{[value.name for value in [BaseValue.get(static_value.uuid), BaseValue.get(contextual_value.uuid), BaseValue.get(modifiable_value.uuid)]]}"
-        ),
-        (
-            "typed lookup ok: "
-            f"static={StaticValue.get(static_value.uuid) is static_value}, "
-            f"contextual={ContextualValue.get(contextual_value.uuid) is contextual_value}, "
-            f"modifiable={ModifiableValue.get(modifiable_value.uuid) is modifiable_value}"
-        ),
-        f"wrong-family rejections: {wrong_family_results}",
-        (
-            "missing lookup: "
-            f"base={base_missing}, "
-            f"contextual={contextual_missing}, "
-            f"modifiable={modifiable_missing}, "
-            f"static={static_missing}"
-        ),
+        f"owned lookup: {ModifiableValue.get(owned.uuid) is owned}",
+        f"transient lookup: {ModifiableValue.get(transient.uuid)}",
+        f"missing lookup: {ModifiableValue.get(missing_id)}",
     ]
-
     print("\n".join(readout_lines))
 
     expected_lines = [
-        "base lookup names: ['static', 'contextual', 'modifiable']",
-        "typed lookup ok: static=True, contextual=True, modifiable=True",
-        (
-            "wrong-family rejections: ['StaticValue rejects ContextualValue', "
-            "'ContextualValue rejects StaticValue', 'ModifiableValue rejects StaticValue']"
-        ),
-        "missing lookup: base=True, contextual=True, modifiable=True, static=raises ValueError",
+        "owned lookup: True",
+        "transient lookup: None",
+        "missing lookup: None",
     ]
-    assert BaseValue.get(missing_id) is None
-    assert ContextualValue.get(missing_id) is None
-    assert ModifiableValue.get(missing_id) is None
     assert readout_lines == expected_lines
     assert capsys.readouterr().out.splitlines() == expected_lines

@@ -5,22 +5,30 @@ per measured operation, every stored event version (fields, identity and locatio
 presentations, combat log), the encounter combat-log slice and every seat's published update (its exact
 encoded JSON). Identities come from a seeded generator, dice faces from a dedicated seeded generator (so a
 change in other random draws cannot move a die), and the process hash seed must be fixed by the caller.
+Identities the value layer mints (in dnd/core/values.py) come from a third generator: the engine orders
+entities, items and conditions by identity, so a change in how many identities values mint must not move them.
 
     PYTHONHASHSEED=0 PYTHONPATH=<tree> python devtools/performance/gallery_transcript.py record <tree> <out.json> \
         --case fireball --mode ordinary --name <stem>
 
-compare: report whether two recordings are equal after uuid (first appearance) and timestamp
+compare: report whether two recordings are equal after uuid (first appearance, in the engine's own order:
+dicts keep their insertion order, so identities the engine keys by never sort by their raw values) and timestamp
 normalization, after projecting both onto a named representation. Published seat updates are compared
 byte for byte after uuid normalization. The engine on PYTHONPATH is imported but not run.
 
     PYTHONPATH=<tree> python devtools/performance/gallery_transcript.py compare <base.json> <new.json> \
-        [--representation value-read]
+        [--representation value-read|value-record]
 
 The `value-read` representation (value read context as data, PR 2026-10-17) projects the d20, attack and
 contest bonus fields that became evaluated readings onto their normalized score, advantage, critical and
 auto-hit states, drops the per-value target, context and imported channels from value dumps, and moves a
 damage bonus's context onto its damage packet. It does not hide the target of damage packets and of damage
 and healing rolls: those now carry the read's target where the base left the value's unset target (None).
+
+The `value-record` representation (value layer as data, PH-2 2026-10-18) projects every value dump (the old
+channel graph, a value record, or a composed read in a damage or healing packet) onto the read it gives with no
+target or context: name, owner, score, normalized score, advantage, critical and auto-hit states. Block dumps
+lose their `values` dict: a block's values are its value fields (still dumped, and named by `values_dict_*`).
 """
 
 import argparse
@@ -35,7 +43,22 @@ from pathlib import Path
 # Identities and dice are fixed before the engine is imported: identities from a seeded generator, die faces from
 # a dedicated one (`dnd.core.dice` draws faces through `random.randint`), other draws from the seeded module RNG.
 _IDENTITIES = random.Random(20261017)
-uuid.uuid4 = lambda: uuid.UUID(int=_IDENTITIES.getrandbits(128), version=4)
+_VALUE_IDENTITIES = random.Random(20261018)
+
+
+def _identity() -> uuid.UUID:
+    """A seeded identity; those the value layer mints (in dnd/core/values.py, directly or through a pydantic
+    default factory) come from their own generator, so a change in how many identities values mint does not
+    shift entity, item or event identities, which the engine orders by."""
+    frame = sys._getframe(1)
+    while frame is not None and '/pydantic' in frame.f_code.co_filename:
+        frame = frame.f_back
+    minted_by_values = frame is not None and frame.f_code.co_filename.endswith('dnd/core/values.py')
+    generator = _VALUE_IDENTITIES if minted_by_values else _IDENTITIES
+    return uuid.UUID(int=generator.getrandbits(128), version=4)
+
+
+uuid.uuid4 = _identity
 random.seed(4242)
 random.randint = random.Random(17).randint
 
@@ -112,7 +135,7 @@ def record(tree: Path, out: Path) -> None:
     try:
         gallery.entry()
     finally:
-        out.write_text(json.dumps(operations, sort_keys=True, default=str))
+        out.write_text(json.dumps(operations, default=str))
         print(f"TRANSCRIPT {out} operations={len(operations)} versions={[op['versions'] for op in operations]}",
               file=sys.stderr)
 
@@ -151,6 +174,23 @@ def _project_value_read(value):
     return projected
 
 
+VALUE_RECORD_FIELDS = ('name', 'source_entity_uuid', 'score', 'normalized_score', 'advantage', 'critical', 'auto_hit')
+
+
+def _project_value_record(value):
+    """Both sides onto the value-record representation: a value (an old channel graph dump, a record or a
+    composed read) becomes the read it gives with no target or context."""
+    if isinstance(value, list):
+        return [_project_value_record(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    if ('self_static' in value and 'to_target_static' in value) or (
+            'normalized_score' in value and ('parts' in value or 'modifiers' in value)):
+        return {field: value.get(field) for field in VALUE_RECORD_FIELDS}
+    block = 'values_dict_uuid_name' in value
+    return {key: _project_value_record(item) for key, item in value.items() if not (block and key == 'values')}
+
+
 def _normalized(text: str) -> str:
     names: dict[str, str] = {}
     return UUID_PATTERN.sub(lambda match: names.setdefault(match.group(0), f'U{len(names)}'), text)
@@ -187,7 +227,9 @@ def compare(base_path: Path, new_path: Path, representation: str | None) -> int:
         body = _clean(operations)
         if representation == 'value-read':
             body = _project_value_read(body)
-        loaded.append((json.loads(_normalized(json.dumps(body, sort_keys=True))),
+        elif representation == 'value-record':
+            body = _project_value_record(body)
+        loaded.append((json.loads(_normalized(json.dumps(body))),
                        [[{seat: _normalized(update) for seat, update in seats.items()} for seats in op]
                         for op in published]))
     (base, base_published), (new, new_published) = loaded
@@ -210,7 +252,7 @@ def main() -> None:
     parser.add_argument('command', choices=('compare',))
     parser.add_argument('base', type=Path)
     parser.add_argument('new', type=Path)
-    parser.add_argument('--representation', choices=('value-read',), default=None)
+    parser.add_argument('--representation', choices=('value-read', 'value-record'), default=None)
     args = parser.parse_args()
     sys.exit(compare(args.base, args.new, args.representation))
 

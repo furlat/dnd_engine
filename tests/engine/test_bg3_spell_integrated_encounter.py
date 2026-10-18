@@ -21,6 +21,7 @@ from dnd.summoning.system import bind_summoning
 from tests.engine.test_bg3_rank_one_two_spells import combatant, game
 from tests.engine.test_summoning_autonomous_turns import autonomous_attack
 from tests.manual.spell_regression_support import force_save_result
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def accepted(action):
@@ -46,7 +47,7 @@ def test_items_rider_field_control_and_autonomous_summon_share_native_turns(game
     caster=combatant(game)
     enemy=combatant(game,'Quarry',(5,2),'foes')
     controlled=combatant(game,'Control recipient',(7,5),'foes')
-    caster.max_concentration_slots.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(caster.max_concentration_slots, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name='Existing three-slot concentration capability',value=2,source_entity_uuid=caster.uuid))
     caster.receive_damage(20,DamageType.FORCE,enemy.uuid)
     for target,ability in ((enemy,'constitution'),(controlled,'wisdom')):

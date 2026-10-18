@@ -35,7 +35,16 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import AdvantageStatus, BaseValue, ValueReading
+from dnd.core.values import (
+    AdvantageStatus,
+    ModifiableValue,
+    ValueReading,
+    Channel,
+    Kind,
+    add_modifier,
+    ValueRead,
+    value_score,
+)
 from dnd.types.senses import PerceivedContact
 from dnd.conditions import Exhaustion
 from dnd.entity import Entity, EntityConfig
@@ -49,7 +58,7 @@ def reset_entity_state() -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, 20, 20)
 
 
@@ -218,7 +227,7 @@ def test_eb_06_003_health_action_economy_and_spellcasting_compose() -> None:
 
     assert entity.spell_save_dc() == 16
     assert entity.spell_attack_bonus().normalized_score == 9
-    assert entity.get_spell_damage_bonus().normalized_score == 4
+    assert value_score(entity.get_spell_damage_bonus(), ValueRead(entity.uuid), normalized=True) == 4
 
 
 def test_eb_06_004_action_economy_resources_recharge_by_type() -> None:
@@ -277,14 +286,12 @@ def test_eb_06_006_targeted_skill_bonus_imports_target_outgoing_modifiers() -> N
     target = configured_entity("Target", (1, 0), "monsters")
     base_athletics = actor.skill_bonus(None, "athletics").normalized_score
 
-    target.skill_set.athletics.skill_bonus.to_target_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(target.skill_set.athletics.skill_bonus, Channel.TO_TARGET_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=target.uuid,
             target_entity_uuid=actor.uuid,
             name="Slippery Target",
             value=-2,
-        )
-    )
+        ))
 
     targeted_athletics = actor.skill_bonus(target.uuid, "athletics")
 
@@ -365,7 +372,7 @@ def test_eb_06_009_bare_entity_creation_registers_and_normalizes_defaults() -> N
     assert entity.ability_scores.source_entity_uuid == source_uuid
     assert entity.health.source_entity_uuid == source_uuid
     assert all(block.source_entity_uuid == source_uuid for block in entity.blocks.values())
-    assert all(value.source_entity_uuid == source_uuid for value in entity.values.values())
+    assert all(value.source_entity_uuid == source_uuid for value in entity.value_fields())
     assert entity.proficiency_bonus.normalized_score == 2
     assert entity.get_hp() == 6
 

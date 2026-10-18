@@ -9,6 +9,7 @@ from dnd.core.events import RangeType
 from dnd.core.equipment_types import WeaponProperty
 from dnd.core.modifiers import AdvantageStatus
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.core.values import ValueRead, value_score
 
 
 def test_circus_weapon_materialization_preserves_all_mechanical_profiles() -> None:

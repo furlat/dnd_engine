@@ -17,7 +17,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.character_progression import (
@@ -177,15 +177,7 @@ def _runtime_snapshot(entity: Entity) -> dict[str, object]:
             row.uuid,
             row.spent_hit_dice,
             row.hit_dice_value.uuid,
-            row.hit_dice_value.self_static.uuid,
-            row.hit_dice_value.to_target_static.uuid,
-            row.hit_dice_value.self_contextual.uuid,
-            row.hit_dice_value.to_target_contextual.uuid,
             row.hit_dice_count.uuid,
-            row.hit_dice_count.self_static.uuid,
-            row.hit_dice_count.to_target_static.uuid,
-            row.hit_dice_count.self_contextual.uuid,
-            row.hit_dice_count.to_target_contextual.uuid,
         )
         for row in entity.health.hit_dices
     )
@@ -215,8 +207,7 @@ def _runtime_snapshot(entity: Entity) -> dict[str, object]:
         ),
         "base_objects": frozenset(BaseObject._registry),
         "base_blocks": frozenset(BaseBlock._registry),
-        "base_values": frozenset(BaseValue._registry),
-        "modifiable_values": frozenset(ModifiableValue._registry),
+        "values": frozenset(ModifiableValue._registry),
         "cursor": EventQueue.event_cursor(),
     }
 

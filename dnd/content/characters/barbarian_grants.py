@@ -28,6 +28,7 @@ from dnd.entity import Entity
 from dnd.types.abilities import AbilityName, SavingThrowName, SkillName
 from dnd.types.character_progression import AppliedClassLevel, CharacterClass
 from dnd.types.character_receipts import BarbarianGrantReceipt
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier, modifier_of
 
 
 _RAGE = "class_feature.barbarian.rage"
@@ -403,7 +404,7 @@ def _apply_level_features(
     if _DANGER_SENSE in features:
         modifier_id = _source(entity, f"{step_id}.{_DANGER_SENSE}")
         value = entity.saving_throws.get_saving_throw("dexterity").bonus
-        value.self_contextual.add_advantage_modifier(ContextualAdvantageModifier(
+        add_modifier(value, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
             uuid=modifier_id,
             name="Danger Sense",
             source_entity_uuid=entity.uuid,
@@ -457,11 +458,11 @@ def _apply_level_features(
             callable=barbarian.fast_movement_check,
         )
         for speed in entity.action_economy.speed_values:
-            speed.self_contextual.add_value_modifier(modifier)
+            add_modifier(speed, Channel.SELF_CONTEXTUAL, Kind.VALUE, modifier)
         walking.append(modifier_id)
     if _FERAL_INSTINCT in features:
         modifier_id = _source(entity, f"{step_id}.{_FERAL_INSTINCT}")
-        entity.initiative.self_static.add_advantage_modifier(AdvantageModifier(
+        add_modifier(entity.initiative, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             uuid=modifier_id,
             name="Feral Instinct",
             value=AdvantageStatus.ADVANTAGE,
@@ -471,15 +472,13 @@ def _apply_level_features(
         initiative.append(modifier_id)
     if _BRUTAL_CRITICAL in features:
         modifier_id = _source(entity, f"{step_id}.{_BRUTAL_CRITICAL}")
-        entity.equipment.crit_extra_dice_melee.self_static.add_value_modifier(
-            NumericalModifier(
+        add_modifier(entity.equipment.crit_extra_dice_melee, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 uuid=modifier_id,
                 name="Brutal Critical",
                 value=1,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
-            ),
-        )
+            ))
         critical.append(modifier_id)
     if _RELENTLESS_RAGE in features:
         source_id = _source(entity, f"{step_id}.{_RELENTLESS_RAGE}")
@@ -535,9 +534,9 @@ def _apply_level_features(
                 entity,
                 f"{step_id}.{_PRIMAL_CHAMPION}.{ability}",
             )
-            entity.ability_scores.get_ability(
+            add_modifier(entity.ability_scores.get_ability(
                 ability,
-            ).ability_score.self_static.add_value_modifier(NumericalModifier(
+            ).ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 uuid=modifier_id,
                 name=f"Primal Champion ({ability.upper()})",
                 value=4,
@@ -808,37 +807,33 @@ def _validate_barbarian_receipt_ownership(
             raise RuntimeError("Barbarian armor formula ownership changed")
 
     numerical_owners = (
-        (entity.equipment.crit_extra_dice_melee.self_static.value_modifiers,
+        (entity.equipment.crit_extra_dice_melee, Channel.SELF_STATIC, Kind.VALUE,
          receipt.melee_critical_extra_dice_modifier_ids),
     )
-    for modifiers, modifier_ids in numerical_owners:
+    for value, channel, kind, modifier_ids in numerical_owners:
         for modifier_id in modifier_ids:
-            modifier = modifiers.get(modifier_id)
+            modifier = modifier_of(value, channel, kind, modifier_id)
             if modifier is None or NumericalModifier.get(modifier_id) is not modifier:
                 raise RuntimeError("Barbarian numerical modifier ownership changed")
     for ability, modifier_id in receipt.ability_score_modifier_ids:
-        modifiers = entity.ability_scores.get_ability(
+        modifier = modifier_of(entity.ability_scores.get_ability(
             ability,
-        ).ability_score.self_static.value_modifiers
-        modifier = modifiers.get(modifier_id)
+        ).ability_score, Channel.SELF_STATIC, Kind.VALUE, modifier_id)
         if modifier is None or NumericalModifier.get(modifier_id) is not modifier:
             raise RuntimeError("Barbarian ability modifier ownership changed")
     for modifier_id in receipt.initiative_advantage_modifier_ids:
-        modifiers = entity.initiative.self_static.advantage_modifiers
-        modifier = modifiers.get(modifier_id)
+        modifier = modifier_of(entity.initiative, Channel.SELF_STATIC, Kind.ADVANTAGE, modifier_id)
         if modifier is None or AdvantageModifier.get(modifier_id) is not modifier:
             raise RuntimeError("Barbarian initiative modifier ownership changed")
     for modifier_id in receipt.walking_speed_modifier_ids:
-        modifiers = entity.action_economy.walking_speed.self_contextual.value_modifiers
-        modifier = modifiers.get(modifier_id)
+        modifier = modifier_of(entity.action_economy.walking_speed, Channel.SELF_CONTEXTUAL, Kind.VALUE, modifier_id)
         if (
             modifier is None
             or ContextualNumericalModifier.get(modifier_id) is not modifier
         ):
             raise RuntimeError("Barbarian movement modifier ownership changed")
     for modifier_id in receipt.dexterity_save_advantage_modifier_ids:
-        modifiers = entity.saving_throws.dexterity_saving_throw.bonus.self_contextual.advantage_modifiers
-        modifier = modifiers.get(modifier_id)
+        modifier = modifier_of(entity.saving_throws.dexterity_saving_throw.bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, modifier_id)
         if (
             modifier is None
             or ContextualAdvantageModifier.get(modifier_id) is not modifier
@@ -918,28 +913,22 @@ def _remove_barbarian_receipt(
         if not entity.equipment.remove_armor_class_formula_candidate(source_id):
             raise RuntimeError("Barbarian armor formula source is missing")
     for modifier_id in reversed(receipt.melee_critical_extra_dice_modifier_ids):
-        entity.equipment.crit_extra_dice_melee.self_static.remove_value_modifier(
-            modifier_id,
-        )
+        remove_modifier(entity.equipment.crit_extra_dice_melee, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.initiative_advantage_modifier_ids):
-        entity.initiative.self_static.remove_advantage_modifier(modifier_id)
+        remove_modifier(entity.initiative, modifier_id, Channel.SELF_STATIC, Kind.ADVANTAGE)
         AdvantageModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.walking_speed_modifier_ids):
         for speed in entity.action_economy.speed_values:
-            speed.self_contextual.remove_value_modifier(
-                modifier_id,
-            )
+            remove_modifier(speed, modifier_id, Channel.SELF_CONTEXTUAL, Kind.VALUE)
         ContextualNumericalModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.dexterity_save_advantage_modifier_ids):
-        entity.saving_throws.dexterity_saving_throw.bonus.self_contextual.remove_advantage_modifier(
-            modifier_id,
-        )
+        remove_modifier(entity.saving_throws.dexterity_saving_throw.bonus, modifier_id, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE)
         ContextualAdvantageModifier.unregister(modifier_id)
     for ability, modifier_id in reversed(receipt.ability_score_modifier_ids):
-        entity.ability_scores.get_ability(
+        remove_modifier(entity.ability_scores.get_ability(
             ability,
-        ).ability_score.self_static.remove_value_modifier(modifier_id)
+        ).ability_score, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for feature_id, source_id in reversed(receipt.feature_sources):
         if not entity.remove_feature_source(feature_id, source_id):
@@ -1066,9 +1055,9 @@ def apply_barbarian_level(
         _apply_proficiencies(entity, resolved, creature_sources, skills, saves)
         for ability, amount in resolved.ability_increases:
             modifier_id = _source(entity, f"{level.step_id}.asi.{ability}")
-            entity.ability_scores.get_ability(
+            add_modifier(entity.ability_scores.get_ability(
                 ability,
-            ).ability_score.self_static.add_value_modifier(NumericalModifier(
+            ).ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 uuid=modifier_id,
                 name=f"Barbarian level {level.resulting_class_level} ASI",
                 value=amount,

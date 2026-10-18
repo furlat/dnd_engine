@@ -6,7 +6,7 @@ cross-spell-file imports.
 from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
 from dnd.core.events import SavingThrowEvent
 from dnd.types.abilities import AbilityName
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from collections.abc import Sequence
 from typing import Literal
 from dnd.core.creature_types import DamageType
@@ -278,7 +278,7 @@ def condition_damage(owner: BaseCondition, target: Entity, boundary: Event, *,
     source = owner.source_entity_uuid or target.uuid
     damage = Damage(name=owner.get_display_name(), source_entity_uuid=source,
         target_entity_uuid=target.uuid, dice_numbers=count, damage_dice=die, damage_type=damage_type,
-        damage_bonus=ModifiableValue.create(source_entity_uuid=source, base_value=0),
+        damage_bonus=parts(ModifiableValue(source_entity_uuid=source, base=0)),
         effect_origin=owner.effect_origin)
     roll = roll_spell_damage(damage, parent_event=boundary, effect_origin=owner.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
     target.receive_damage(roll.total, damage_type, source, damages=[damage], damage_rolls=[roll],

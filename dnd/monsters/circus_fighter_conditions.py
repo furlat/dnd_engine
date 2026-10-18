@@ -18,6 +18,7 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.entity import Entity
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def elemental_advantage(
@@ -184,7 +185,7 @@ class DualWielder(BaseCondition):
         if isinstance(target_entity, Entity):
             outs = []
             dual_wielder = create_dual_wielder_ac_modifier(self.target_entity_uuid, self.source_entity_uuid)
-            modifier_uuid = target_entity.equipment.ac_bonus.self_contextual.add_value_modifier(dual_wielder)
+            modifier_uuid = add_modifier(target_entity.equipment.ac_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, dual_wielder)
             outs.append((target_entity.equipment.ac_bonus.uuid, modifier_uuid))
             effect_event = declaration_event.phase_to(
                 EventPhase.EFFECT,
@@ -231,9 +232,7 @@ class ElementalWeaponMastery(BaseCondition):
         if isinstance(target_entity, Entity):
             outs = []
             elemental_advantage_modifier = create_elemental_advantage_modifier(self.target_entity_uuid, self.source_entity_uuid)
-            modifier_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
-                elemental_advantage_modifier
-            )
+            modifier_uuid = add_modifier(target_entity.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, elemental_advantage_modifier)
             outs.append((target_entity.equipment.attack_bonus.uuid, modifier_uuid))
             effect_event = declaration_event.phase_to(
                 EventPhase.EFFECT,
@@ -292,8 +291,8 @@ class ElementalAffinity(BaseCondition):
                 damage_type=DamageType.COLD,
                 value=ResistanceStatus.VULNERABILITY,
             )
-            fire_resistance_uuid = target_entity.health.damage_reduction.self_static.add_resistance_modifier(fire_resistance)
-            cold_vulnerability_uuid = target_entity.health.damage_reduction.self_static.add_resistance_modifier(cold_vulnerability)
+            fire_resistance_uuid = add_modifier(target_entity.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, fire_resistance)
+            cold_vulnerability_uuid = add_modifier(target_entity.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, cold_vulnerability)
             effect_event = declaration_event.phase_to(
                 EventPhase.EFFECT,
                 update={"condition": self},
@@ -343,108 +342,88 @@ class CircusPerformer(BaseCondition):
             outs = []
 
             acrobatics = target_entity.skill_set.get_skill("acrobatics")
-            acro_mod_uuid = acrobatics.skill_bonus.self_static.add_value_modifier(
-                NumericalModifier(
+            acro_mod_uuid = add_modifier(acrobatics.skill_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name="Circus Training",
                     value=7,
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                )
-            )
+                ))
             outs.append((acrobatics.skill_bonus.uuid, acro_mod_uuid))
 
             history = target_entity.skill_set.get_skill("history")
-            hist_mod_uuid = history.skill_bonus.self_static.add_value_modifier(
-                NumericalModifier(
+            hist_mod_uuid = add_modifier(history.skill_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name="Circus Training",
                     value=-2,
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                )
-            )
+                ))
             outs.append((history.skill_bonus.uuid, hist_mod_uuid))
 
             strength_save = target_entity.saving_throws.get_saving_throw("strength")
-            strength_mod_uuid = strength_save.bonus.self_static.add_value_modifier(
-                NumericalModifier(
+            strength_mod_uuid = add_modifier(strength_save.bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name="Circus Training",
                     value=1,
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                )
-            )
+                ))
             outs.append((strength_save.bonus.uuid, strength_mod_uuid))
 
             intelligence_save = target_entity.saving_throws.get_saving_throw("intelligence")
-            intelligence_mod_uuid = intelligence_save.bonus.self_static.add_value_modifier(
-                NumericalModifier(
+            intelligence_mod_uuid = add_modifier(intelligence_save.bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name="Circus Training",
                     value=-1,
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                )
-            )
+                ))
             outs.append((intelligence_save.bonus.uuid, intelligence_mod_uuid))
 
-            reactions_mod_uuid = target_entity.action_economy.reactions.self_static.add_value_modifier(
-                NumericalModifier(
+            reactions_mod_uuid = add_modifier(target_entity.action_economy.reactions, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name="Circus Training",
                     value=2,
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                )
-            )
+                ))
             outs.append((target_entity.action_economy.reactions.uuid, reactions_mod_uuid))
 
-            extra_actions_mod_uuid = target_entity.action_economy.actions.self_static.add_value_modifier(
-                NumericalModifier(
+            extra_actions_mod_uuid = add_modifier(target_entity.action_economy.actions, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name="Circus Training",
                     value=99,
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                )
-            )
+                ))
             outs.append((target_entity.action_economy.actions.uuid, extra_actions_mod_uuid))
 
             for speed in target_entity.action_economy.speed_values:
-                movement_mod_uuid = speed.self_static.add_value_modifier(
-                    NumericalModifier(
+                movement_mod_uuid = add_modifier(speed, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                         name="Circus Training",
                         value=-5,
                         source_entity_uuid=self.target_entity_uuid,
                         target_entity_uuid=self.source_entity_uuid,
-                    )
-                )
+                    ))
                 outs.append((speed.uuid, movement_mod_uuid))
 
-            ac_mod_uuid = target_entity.equipment.ac_bonus.self_static.add_value_modifier(
-                NumericalModifier(
+            ac_mod_uuid = add_modifier(target_entity.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name="Circus Training",
                     value=1,
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                )
-            )
+                ))
             outs.append((target_entity.equipment.ac_bonus.uuid, ac_mod_uuid))
 
-            unarmed_mod_uuid = target_entity.equipment.unarmed_damage_bonus.self_static.add_value_modifier(
-                NumericalModifier(
+            unarmed_mod_uuid = add_modifier(target_entity.equipment.unarmed_damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name="Circus Training",
                     value=1,
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                )
-            )
+                ))
             outs.append((target_entity.equipment.unarmed_damage_bonus.uuid, unarmed_mod_uuid))
 
-            proficiency_mod_uuid = target_entity.proficiency_bonus.self_static.add_value_modifier(
-                NumericalModifier(
+            proficiency_mod_uuid = add_modifier(target_entity.proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name="Circus Training",
                     value=-1,
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                )
-            )
+                ))
             outs.append((target_entity.proficiency_bonus.uuid, proficiency_mod_uuid))
 
             effect_event = declaration_event.phase_to(
@@ -493,46 +472,38 @@ class Tired(BaseCondition):
             outs = []
 
             for speed in target_entity.action_economy.speed_values:
-                movement_mod_uuid = speed.self_static.add_value_modifier(
-                    NumericalModifier(
+                movement_mod_uuid = add_modifier(speed, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                         name="Tired",
                         value=-10,
                         source_entity_uuid=self.target_entity_uuid,
                         target_entity_uuid=self.source_entity_uuid,
-                    )
-                )
+                    ))
                 outs.append((speed.uuid, movement_mod_uuid))
 
-            reactions_mod_uuid = target_entity.action_economy.reactions.self_static.add_value_modifier(
-                NumericalModifier(
+            reactions_mod_uuid = add_modifier(target_entity.action_economy.reactions, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     name="Tired",
                     value=-1,
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                )
-            )
+                ))
             outs.append((target_entity.action_economy.reactions.uuid, reactions_mod_uuid))
 
             strength_save = target_entity.saving_throws.get_saving_throw("strength")
-            strength_advantage_uuid = strength_save.bonus.self_static.add_advantage_modifier(
-                AdvantageModifier(
+            strength_advantage_uuid = add_modifier(strength_save.bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                     name="Tired",
                     value=AdvantageStatus.DISADVANTAGE,
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                )
-            )
+                ))
             outs.append((strength_save.bonus.uuid, strength_advantage_uuid))
 
             dexterity_save = target_entity.saving_throws.get_saving_throw("dexterity")
-            dexterity_advantage_uuid = dexterity_save.bonus.self_static.add_advantage_modifier(
-                AdvantageModifier(
+            dexterity_advantage_uuid = add_modifier(dexterity_save.bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                     name="Tired",
                     value=AdvantageStatus.DISADVANTAGE,
                     source_entity_uuid=self.target_entity_uuid,
                     target_entity_uuid=self.source_entity_uuid,
-                )
-            )
+                ))
             outs.append((dexterity_save.bonus.uuid, dexterity_advantage_uuid))
 
             effect_event = declaration_event.phase_to(

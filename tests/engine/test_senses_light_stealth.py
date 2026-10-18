@@ -29,7 +29,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.game import Game
@@ -127,13 +127,11 @@ class PerceptionModifierCondition(BaseCondition):
             return [], [], [], [], None
 
         perception = target.skill_set.get_skill("perception")
-        modifier_uuid = perception.skill_bonus.self_static.add_value_modifier(
-            NumericalModifier.create(
+        modifier_uuid = add_modifier(perception.skill_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid,
                 name="Perception Payload Modifier",
                 value=self.modifier_amount,
-            )
-        )
+            ))
         effect_event = declaration_event.phase_to(EventPhase.EFFECT)
         return [(perception.skill_bonus.uuid, modifier_uuid)], [], [], [], effect_event
 
@@ -170,7 +168,7 @@ def reset_senses_state(
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Encounter.clear_registry()
     grid = get_map()
     grid.create_rectangle(

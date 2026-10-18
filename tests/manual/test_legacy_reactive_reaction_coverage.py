@@ -62,6 +62,7 @@ from tests.engine.support import (
     remove_attack_modifier,
     reset_combat_state,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 CoverageStatus = Literal["active", "strengthened", "retired", "stale", "unresolved"]
@@ -598,13 +599,11 @@ def test_effect_phase_speed_reduction_limits_the_remaining_path() -> None:
     """A speed change during a committed step constrains subsequent steps."""
     reset_arena(width=10, height=1)
     mover = create_skeleton(name="Mover", position=(0, 0), faction="heroes")
-    mover.action_economy.walking_speed.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(mover.action_economy.walking_speed, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=mover.uuid,
             name="Initial Speed Boost",
             value=20,
-        )
-    )
+        ))
     applied = False
 
     def slow_on_entry(
@@ -614,13 +613,11 @@ def test_effect_phase_speed_reduction_limits_the_remaining_path() -> None:
         nonlocal applied
         assert isinstance(event, StepMovementEvent)
         if event.to_position == (3, 0) and not applied:
-            mover.action_economy.walking_speed.self_static.add_value_modifier(
-                NumericalModifier.create(
+            add_modifier(mover.action_economy.walking_speed, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                     source_entity_uuid=handler_source_uuid,
                     name="Mid-path Slow",
                     value=-20,
-                )
-            )
+                ))
             applied = True
         return event
 
@@ -808,14 +805,12 @@ def test_prepare_intercept_rejects_unaffordable_distance_before_effects() -> Non
     reset_arena()
     fighter = create_melee_fighter("Tired Fighter", (2, 2), "heroes")
     Entity.update_all_entities_senses(max_distance=20)
-    fighter.action_economy.walking_speed.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(fighter.action_economy.walking_speed, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=fighter.uuid,
             target_entity_uuid=fighter.uuid,
             name="Only ten feet remain",
             value=-20,
-        )
-    )
+        ))
     action_before = fighter.action_economy.actions.normalized_score
     prepare = PrepareIntercept(source_entity_uuid=fighter.uuid)
     prepare.set_target_position((5, 2))
@@ -888,13 +883,11 @@ def test_intercept_and_opportunity_attack_share_an_explicit_two_reaction_budget(
     reset_arena()
     interceptor = create_melee_fighter("Interceptor", (2, 2), "heroes")
     enemy = create_melee_fighter("Enemy", (8, 2), "monsters")
-    interceptor.action_economy.reactions.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(interceptor.action_economy.reactions, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=interceptor.uuid,
             name="Second Reaction",
             value=1,
-        )
-    )
+        ))
     add_opportunity_attack_handler(interceptor)
     arm_intercept(interceptor, (5, 2))
     Entity.update_all_entities_senses(max_distance=20)

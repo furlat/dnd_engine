@@ -3,7 +3,7 @@
 from typing import Any, cast
 from uuid import uuid4
 
-from dnd.core.values import ValueRead, read_value
+from dnd.core.values import ValueRead, read_value, parts
 from dnd.controller import Controller
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import SpellProtectionRegistry
@@ -16,7 +16,7 @@ from dnd.core.content.runtime import (
 from dnd.core.events import EventPhase, EventQueue, EventType, SpatialChangeEvent
 from dnd.core.gridmap import get_map
 from dnd.core.dice import Dice, DiceRoll
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import ModifiableValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -25,7 +25,7 @@ from dnd.runtime_reset import reset_engine_runtime
 
 def reading(value, target_uuid=None):
     """The value read by its owner against an optional target."""
-    return read_value(value, ValueRead(value.source_entity_uuid, target_uuid))
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
 
 
 def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -> None:
@@ -46,7 +46,7 @@ def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -
     marker = cast(Any, object())
     BaseObject._registry[marker_uuid] = marker
     BaseBlock._registry[marker_uuid] = marker
-    BaseValue._registry[marker_uuid] = marker
+    ModifiableValue._registry[marker_uuid] = marker
     Controller._controller_registry[marker_uuid] = marker
     Encounter._encounter_registry[marker_uuid] = marker
     Encounter._active_encounter = marker
@@ -64,7 +64,7 @@ def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -
     # modifiers; the pre-reset marker must not survive that reconstruction.
     assert marker_uuid not in BaseObject._registry
     assert marker_uuid not in BaseBlock._registry
-    assert marker_uuid not in BaseValue._registry
+    assert marker_uuid not in ModifiableValue._registry
     assert Entity._entity_registry == {}
     assert new_grid.get_entities_at((3, 2)) == set()
     assert Controller._controller_registry == {}
@@ -92,7 +92,7 @@ def test_reset_engine_runtime_can_leave_the_new_grid_empty() -> None:
     assert grid.get_all_tiles() == {}
     assert BaseObject._registry == {}
     assert BaseBlock._registry == {}
-    assert BaseValue._registry == {}
+    assert ModifiableValue._registry == {}
 
 
 def test_reset_engine_runtime_clears_active_behavior_provider_fact() -> None:
@@ -135,7 +135,7 @@ def test_reset_engine_runtime_invalidates_nested_behavior_provider_scopes() -> N
 
 def test_retired_world_dice_cannot_be_looked_up_in_the_next_world():
     die = Dice(count=1, value=20, bonus=reading(ModifiableValue(
-        source_entity_uuid=uuid4(), base_value=0)))
+        source_entity_uuid=uuid4(), base=0)))
     roll = die.roll
     assert Dice.get(die.uuid) is die and DiceRoll.get(roll.roll_uuid) is roll
     reset_engine_runtime()
