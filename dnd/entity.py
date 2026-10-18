@@ -68,7 +68,7 @@ from dnd.core.equipment_types import (
     WeaponSlot,
 )
 from dnd.core.base_block import BaseBlock, MovementMode, PreparedConditionApplication, PreparedInitialConditions, PreparedConditionRemovals
-from dnd.types.world import OccupancyLayer, SpatialChannel
+from dnd.types.world import OccupancyLayer
 from dnd.types.physical_access import PhysicalAccess
 from dnd.core.events import RangeType
 from dnd.types.actor import EntityStatsState, PendingSpatialReturn, SpatialDisposition

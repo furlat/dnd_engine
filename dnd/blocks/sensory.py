@@ -28,10 +28,10 @@ from dnd.core.gridmap import GridMap, SpatialConditionOwner, get_map
 from dnd.core.geometry import ROUTE_STEP_SHIFT, supercover_line, supercover_route_table
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.values import ModifiableValue
-from dnd.core.view import (CENTER, FRAME_DISTANCE_FEET, MAGICAL_DARKNESS_BIT, NO_CELLS, OFF, PLAIN, R,
+from dnd.core.view import (FRAME_DISTANCE_FEET, MAGICAL_DARKNESS_BIT, NO_CELLS, OFF, PLAIN, R,
     SIDE, SPECIAL, SURVIVORS, Box, CellLayer, OpticalView, PerceivedCells, Position, RouteRows, RouteSight,
     boxes_intersect, cell_visible, embed, frame_box, frame_index, frame_of, frame_rows, lit_view,
-    range_bits, reach_mask, route_rows, route_sight, rows_positions, sense_radius_cells, union_box, window_of)
+    range_bits, route_rows, route_sight, rows_positions, sense_radius_cells, union_box, window_of)
 from dnd.core.events import (
     Event, EventType, EventPhase, SpatialChangeEvent,
     SpatialEffectChangeEvent, DeathEvent, EventQueue, OpenGroup, SensoryUpdateEvent,
@@ -43,7 +43,7 @@ from dnd.types.senses import (
     PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesType, VolumeSurfaceSight,
     SensesSnapshot as SensesSnapshot,
 )
-from dnd.types.world import CardinalDirection, LightLevel, WorldEdgeChannel, cell_key
+from dnd.types.world import CardinalDirection, LightLevel, WorldEdgeChannel
 
 
 # Contact sense masks: one bit per SensesType, in enum order.
@@ -1606,7 +1606,6 @@ class SpatialSensesSystem:
         """Contacts, hazards, volume sight and fixtures of one view; publish them on its Senses."""
         diagnostic = action_timing_enabled()
         started = time.perf_counter() if diagnostic else 0.0
-        grid = get_map()
         owner, senses, origin = view.owner, view.senses, view.origin
         observer_uuid = owner.uuid
         field = view.field
