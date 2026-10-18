@@ -416,9 +416,11 @@ class Tile(BaseBlock):
         return self.blocks_propagation_field
 
     def _add_illumination(self, source_uuid: UUID, level: LightLevel) -> bool:
-        """Install one GridMap-owned objective illumination contribution."""
-        old = self.resolved_light_level
+        """Install one GridMap-owned objective illumination contribution; an identical one changes nothing."""
         light = self._light
+        if light.illuminations.get(source_uuid) is level:
+            return False
+        old = self.resolved_light_level
         light.illuminations[source_uuid] = level
         return self.resolved_light_level != old
 
