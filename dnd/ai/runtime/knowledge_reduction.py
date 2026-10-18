@@ -203,12 +203,11 @@ class AIKnowledge:
                 self.dirty_observers.add(event.entity_uuid)
 
         owner = actor_fact_owner(event)
-        known_owner = owner is not None and owner in self.actors
         # The AI folds its own record: its condition fact carries the version's source cursor.
-        if (change := actor_fact_change(event, condition)) is not None:
-            apply_actor_fact_change(self.actors, change)
+        change = actor_fact_change(event, condition)
+        written = apply_actor_fact_change(self.actors, change) if change is not None else ()
         if owner is not None:
-            if known_owner:
+            if owner in written:
                 self._refresh_entity(owner)
             elif condition is not None and condition.resulting_stats is not None:
                 pending = self.pending_conditions.setdefault(owner, {})

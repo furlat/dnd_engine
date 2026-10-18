@@ -147,11 +147,12 @@ class AdmissionEvidence:
     `observer` is the tracked observer of a completed sensory delta (else
     None), `observed` its changed contacts plus itself and `acquired` the
     contacts it did not hold before. `candidates` are the participants and
-    the fact owner. For each of these identities: its actor (before this
-    version's fold), the tracked observers holding it as a contact, and its
-    own last sensory position. `actor_fact_change` is the actor change the
-    shared fold applied at this version (plan §4): the one record of it, which
-    every seat's fold applies.
+    the fact owner. For each of these identities: its actor (before a
+    completed version's fold; after an arrival's or departure's fold at its
+    effect), the tracked observers holding it as a contact, and its own last
+    sensory position. `actor_fact_change` is the actor change the shared fold
+    applied at this version (plan §4): the one record of it, which every
+    seat's fold applies.
     """
 
     observer: UUID | None
@@ -877,8 +878,7 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
             if change is not None:
                 # TODO(E3-bodies): E2 keeps today's shared fold, where a condition's item after-value does not
                 # reach the actors holding the item; every seat's fold applies it.
-                apply_presented_change(actors, change if change.replaced_item is None
-                                       else replace(change, replaced_item=None))
+                apply_presented_change(actors, replace(change, replaced_item=None))
             if (isinstance(event, SpatialChangeEvent) and event.terminal_release is not None
                     and event.entity_uuid is not None):
                 actors.pop(event.entity_uuid, None)

@@ -10,7 +10,7 @@ from dnd.blocks.equipment import EquipmentEvent
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.creature_types import Size
 from dnd.core.events import DamageAppliedEvent, EntityCreatedEvent, EntityFactionChangedEvent, Event, EventType, HealEvent, LifeStateChangeEvent, SpatialChangeEvent, SpatialChangeType, TemporaryHitPointsChangedEvent
-from dnd.core.item_types import ItemLocation
+from dnd.core.item_types import ItemLocation, ItemPresentationState
 from dnd.core.life_types import LifeState
 from dnd.types.actor_facts import ActorFactChange, ActorFieldValues, ActorState, ConditionFact, HeldItem, ItemResources
 from dnd.types.actor import EntityStatsState, SpatialDisposition
@@ -160,9 +160,11 @@ def actor_fact_change(event: Event, condition: ConditionFact | None = None) -> A
     return None
 
 
-def _without_items(actor: ActorState, identities: tuple[UUID, ...]) -> ActorState:
-    return replace(actor, items=tuple(item for item in actor.items if item.item_uuid not in identities),
-                   equipment=tuple((slot, item) for slot, item in actor.equipment if item not in identities))
+def _without_item(items: tuple[ItemPresentationState, ...], equipment: tuple[tuple[str, UUID], ...], identity: UUID
+                  ) -> tuple[tuple[ItemPresentationState, ...], tuple[tuple[str, UUID], ...]]:
+    """Holdings with one item out of the inventory and every layer."""
+    return (tuple(item for item in items if item.item_uuid != identity),
+            tuple((slot, worn) for slot, worn in equipment if worn != identity))
 
 
 def _owner_after(actor: ActorState, change: ActorFactChange) -> ActorState:
@@ -175,15 +177,14 @@ def _owner_after(actor: ActorState, change: ActorFactChange) -> ActorState:
             members[member.condition_uuid] = member
         conditions = tuple(members.values())
     items, equipment = actor.items, actor.equipment
-    if (dropped := change.dropped_item) is not None:
-        items = tuple(item for item in items if item.item_uuid != dropped)
-        equipment = tuple((slot, identity) for slot, identity in equipment if identity != dropped)
+    if change.dropped_item is not None:
+        items, equipment = _without_item(items, equipment, change.dropped_item)
     if (used := change.used_item) is not None:
-        items = tuple(item.model_copy(update={"charges": used.charges, "stack_count": used.stack_count})
-                      if item.item_uuid == used.item_uuid else item for item in items
-                      if not (used.destroyed and item.item_uuid == used.item_uuid))
-        equipment = tuple((slot, identity) for slot, identity in equipment
-                          if not (used.destroyed and identity == used.item_uuid))
+        if used.destroyed:
+            items, equipment = _without_item(items, equipment, used.item_uuid)
+        else:
+            items = tuple(item.model_copy(update={"charges": used.charges, "stack_count": used.stack_count})
+                          if item.item_uuid == used.item_uuid else item for item in items)
     if (held := change.held_item) is not None:
         identity = held.item.item_uuid
         by_uuid = {item.item_uuid: item for item in items}
@@ -206,7 +207,8 @@ def apply_actor_fact_change(actors: dict[UUID, ActorState], change: ActorFactCha
     if (released := change.released_item) is not None:
         for identity, actor in tuple(actors.items()):
             if identity != change.owner_uuid and any(item.item_uuid == released for item in actor.items):
-                actors[identity] = _without_items(actor, (released,))
+                items, equipment = _without_item(actor.items, actor.equipment, released)
+                actors[identity] = replace(actor, items=items, equipment=equipment)
                 written.append(identity)
     if change.owner_uuid is not None and (owner := actors.get(change.owner_uuid)) is not None:
         actors[change.owner_uuid] = _owner_after(owner, change)
