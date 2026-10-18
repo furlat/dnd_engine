@@ -13,19 +13,7 @@ from dnd.core.events import (
 from dnd.core.item_types import ItemLocation
 from dnd.types.world import CardinalDirection, LightLevel
 from dnd.types.actor_facts import ConditionFact
-from dnd.types.world_placement import WorldPlacementKind
-
-
-CARDINAL_DELTAS = {
-    CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
-    CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0),
-}
-OPPOSITE_DIRECTION = {
-    CardinalDirection.NORTH: CardinalDirection.SOUTH,
-    CardinalDirection.SOUTH: CardinalDirection.NORTH,
-    CardinalDirection.EAST: CardinalDirection.WEST,
-    CardinalDirection.WEST: CardinalDirection.EAST,
-}
+from dnd.types.world_placement import CARDINAL_DELTAS, WorldPlacementKind, placement_support_cells
 
 
 @dataclass(slots=True)
@@ -66,15 +54,11 @@ def world_objects_at(world: WorldFacts, positions: set[tuple[int, int]]) -> set[
 
 
 def _index_object(world: WorldFacts, identity: UUID, value: WorldObjectState, *, remove: bool) -> None:
-    positions = set(value.placement.positions)
     memberships = []
     if value.placement.kind is WorldPlacementKind.BOUNDARY:
         assert value.placement.boundary_direction is not None
-        dx, dy = CARDINAL_DELTAS[value.placement.boundary_direction]
-        x, y = value.placement.position
-        positions.add((x + dx, y + dy))
         memberships.append((world.boundaries, ((value.placement.position, value.placement.boundary_direction),)))
-    memberships.append((world.objects_by_position, positions))
+    memberships.append((world.objects_by_position, placement_support_cells(value.placement)))
     memberships.append((world.containers_by_item, tuple(item.item_uuid for item in value.contained_items or ())))
     memberships.append((world.remnants_by_item, value.item.remnant_state.intact_supported_items
         if value.item.remnant_state is not None else ()))
