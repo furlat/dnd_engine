@@ -5540,7 +5540,8 @@
           "positive_damage_applied",
           "shake_awake",
           "ally_help",
-          "wet_application"
+          "wet_application",
+          "encounter_end"
         ],
         "title": "ConditionRemovalTrigger",
         "type": "string"

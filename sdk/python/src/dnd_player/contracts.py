@@ -335,7 +335,11 @@ type ConditionCategory = Literal['condition', 'status', 'internal']
 
 
 type ConditionRemovalTrigger = Literal[
-    'positive_damage_applied', 'shake_awake', 'ally_help', 'wet_application'
+    'positive_damage_applied',
+    'shake_awake',
+    'ally_help',
+    'wet_application',
+    'encounter_end',
 ]
 
 

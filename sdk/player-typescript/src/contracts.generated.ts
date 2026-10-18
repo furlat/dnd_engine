@@ -690,7 +690,8 @@ export type Tags1 = ConditionTag[];
 /**
  * Observable state transition that removes a condition.
  */
-export type ConditionRemovalTrigger = "positive_damage_applied" | "shake_awake" | "ally_help" | "wet_application";
+export type ConditionRemovalTrigger =
+  "positive_damage_applied" | "shake_awake" | "ally_help" | "wet_application" | "encounter_end";
 export type RemovalTriggers = ConditionRemovalTrigger[];
 /**
  * Degree of turn agency denied while a condition remains active.
