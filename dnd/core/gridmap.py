@@ -4674,19 +4674,27 @@ class GridMap:
         # A global crossing owner may block any edge; otherwise only structured edges can.
         structured = (np.full(transit.shape, EDGES_SETTLED, dtype=np.uint16) if self._global_crossing_owners
                       else (transit >> EDGE_STRUCTURED_SHIFT) & EDGES_SETTLED)
-        settled = 0
-        # A route from this origin steps away from it: settle the structured edges that leave a
-        # target in such a direction (east from its column on, west up to it, ...).
+        opaque = (transit & CENTER_BLOCKS) != 0
+        # A route from this origin steps away from it (east from its column on, west up to it,
+        # ...), between targets, and stops at an opaque cell it leaves: only such structured
+        # edges can decide one, so only their unsettled answers are settled.
+        leaving = targets & ~opaque
         oi, oj = origin[0] - min_x, origin[1] - min_y
+        leaving[oi, oj] = True
+        settled = 0
         outward = ((oi, 0, slice(oi, None), slice(None)), (0, 0, slice(0, oi + 1), slice(None)),
                    (0, oj, slice(None), slice(oj, None)), (0, 0, slice(None), slice(0, oj + 1)))
         for direction, (i0, j0, xs, ys) in enumerate(outward):
-            unsettled = targets[xs, ys] & ((structured[xs, ys] & ~transit[xs, ys] & (1 << direction)) != 0)
+            unsettled = leaving[xs, ys] & ((structured[xs, ys] & ~transit[xs, ys] & (1 << direction)) != 0)
+            step_x, step_y = CARDINAL_STEPS[direction]
             for i, j in zip(*np.nonzero(unsettled)):
-                self._settled_edge(channel, (min_x + i0 + int(i), min_y + j0 + int(j)), direction)
-                settled += 1
-        blocked = (transit >> EDGE_BLOCKED_SHIFT) & structured
-        rows_x, rows_y = wall_visibility(origin, window, exists, (transit & CENTER_BLOCKS) != 0, blocked, targets)
+                i, j = i0 + int(i), j0 + int(j)
+                if 0 <= i + step_x < targets.shape[0] and 0 <= j + step_y < targets.shape[1] \
+                        and targets[i + step_x, j + step_y]:
+                    self._settled_edge(channel, (min_x + i, min_y + j), direction)
+                    settled += 1
+        blocked = (transit >> EDGE_BLOCKED_SHIFT) & structured & (transit & EDGES_SETTLED)
+        rows_x, rows_y = wall_visibility(origin, window, exists, opaque, blocked, targets)
         if timing:
             record_action_count("grid.directional_fov.targets", int(np.count_nonzero(targets)))
             record_action_count("grid.directional_fov.settled_predicates", settled)
