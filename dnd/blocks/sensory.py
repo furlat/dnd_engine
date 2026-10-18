@@ -735,8 +735,9 @@ NO_UUIDS = np.zeros(0, dtype=object)
 class GrantTable:
     """The cells whose facts each settled observer is granted (its routes, felt cells and volume
     routes), owned by the system and their only holder: a settlement replaces its observers' rows,
-    register and unregister drop a row, reset and a replaced map empty it. Each row is a bool layer
-    over the observer's window; the rows are read together through one flat array."""
+    register and unregister drop a row, reset and a replaced map empty it (no rows is no table, the
+    system's cold state). Each row is a bool layer over the observer's window; the rows are read
+    together through one flat array."""
 
     observers: Tuple[UUID, ...]
     x0: np.ndarray                   # each row's window origin, width and height
@@ -747,8 +748,10 @@ class GrantTable:
     flat: np.ndarray                 # every row's values, x-major, concatenated
 
 
-def _grant_table(rows: Sequence[Tuple[UUID, CellLayer]]) -> GrantTable:
-    """The table of these rows (observer, granted cells over its window)."""
+def _grant_table(rows: Sequence[Tuple[UUID, CellLayer]]) -> Optional[GrantTable]:
+    """The table of these rows (observer, granted cells over its window); none without rows."""
+    if not rows:
+        return None
     layers = [layer for _, layer in rows]
     sizes = np.array([layer.values.size for layer in layers], dtype=np.int64)
     return GrantTable(tuple(identity for identity, _ in rows),
@@ -756,21 +759,18 @@ def _grant_table(rows: Sequence[Tuple[UUID, CellLayer]]) -> GrantTable:
                       np.array([layer.y0 for layer in layers], dtype=np.int64),
                       np.array([layer.values.shape[0] for layer in layers], dtype=np.int64),
                       np.array([layer.values.shape[1] for layer in layers], dtype=np.int64),
-                      np.concatenate(([0], np.cumsum(sizes)[:-1])).astype(np.int64) if layers else sizes,
-                      np.concatenate([layer.values.reshape(-1) for layer in layers]) if layers
-                      else np.zeros(0, dtype=bool))
+                      np.concatenate(([0], np.cumsum(sizes)[:-1])).astype(np.int64),
+                      np.concatenate([layer.values.reshape(-1) for layer in layers]))
 
 
-NO_GRANTS = _grant_table(())
-
-
-def _replace_grants(table: GrantTable, rows: Mapping[UUID, Optional[CellLayer]]) -> GrantTable:
+def _replace_grants(table: Optional[GrantTable], rows: Mapping[UUID, Optional[CellLayer]]) -> Optional[GrantTable]:
     """The table with these observers' rows replaced (None drops a row)."""
-    kept = [(identity, CellLayer(int(x0), int(y0), table.flat[offset:offset + width * height].reshape(width, height)))
-            for identity, x0, y0, width, height, offset in zip(table.observers, table.x0.tolist(), table.y0.tolist(),
-                                                               table.width.tolist(), table.height.tolist(),
-                                                               table.offset.tolist())
-            if identity not in rows]
+    kept = [] if table is None else [
+        (identity, CellLayer(int(x0), int(y0), table.flat[offset:offset + width * height].reshape(width, height)))
+        for identity, x0, y0, width, height, offset in zip(table.observers, table.x0.tolist(), table.y0.tolist(),
+                                                           table.width.tolist(), table.height.tolist(),
+                                                           table.offset.tolist())
+        if identity not in rows]
     return _grant_table(kept + [(identity, layer) for identity, layer in rows.items() if layer is not None])
 
 
@@ -814,17 +814,17 @@ def _visible_stack(before: Sequence[CellLayer], after: Sequence[CellLayer]) -> V
     return VisibleStack(box, stacks[0], stacks[1])
 
 
-def _granted_at(table: GrantTable, positions: Iterable[Position]) -> np.ndarray:
-    """The indices of the table's observers granted any of these cells."""
+def _granted_at(table: Optional[GrantTable], positions: Iterable[Position]) -> Set[UUID]:
+    """The table's observers granted any of these cells."""
     cells = np.array(list(positions), dtype=np.int64).reshape(-1, 2)
-    if not cells.size or not table.observers:
-        return np.zeros(0, dtype=np.int64)
+    if table is None or not cells.size:
+        return set()
     i = cells[None, :, 0] - table.x0[:, None]
     j = cells[None, :, 1] - table.y0[:, None]
     inside = (i >= 0) & (i < table.width[:, None]) & (j >= 0) & (j < table.height[:, None])
     granted = np.zeros(inside.shape, dtype=bool)
     granted[inside] = table.flat[(table.offset[:, None] + i * table.height[:, None] + j)[inside]]
-    return np.flatnonzero(granted.any(axis=1))
+    return {table.observers[index] for index in np.flatnonzero(granted.any(axis=1)).tolist()}
 
 
 @dataclass(frozen=True)
@@ -1039,7 +1039,7 @@ class SpatialSensesSystem:
         self._absorbing_light = False
         self._settled_with_light = False
         # The settled observers' grants (written by each settlement, dropped with their fields).
-        self._grants: GrantTable = NO_GRANTS
+        self._grants: Optional[GrantTable] = None
         # Contact targets' ids (each target once, in first-seen order): their keys compare by value
         # across settlements. Append-only; reset clears it with every field that holds a key.
         self._target_ids: Dict[UUID, int] = {}
@@ -1077,7 +1077,7 @@ class SpatialSensesSystem:
         self._settling = False
         self._absorbing_light = False
         self._settled_with_light = False
-        self._grants = NO_GRANTS
+        self._grants = None
         self._target_ids.clear()
         self._light_table = None
         self._table = None
@@ -1169,8 +1169,7 @@ class SpatialSensesSystem:
 
     def observers_granted(self, positions: Iterable[Position]) -> Set[UUID]:
         """Observers whose last view grants any of these cells (wall field, felt cells, volume routes)."""
-        table = self._grants
-        return {table.observers[index] for index in _granted_at(table, positions).tolist()}
+        return _granted_at(self._grants, positions)
 
     def _observers_reaching(self, box: Box) -> Set[UUID]:
         """Observers with a settled view whose selection box intersects a change box."""
@@ -1187,9 +1186,7 @@ class SpatialSensesSystem:
         Every holder is a registered Entity: only entities register as
         observers, and an entity leaves the registry after it unregisters here.
         """
-        table = self._grants
-        holders = self.contact_holders(subject_uuid, {table.observers[index]
-                                                      for index in _granted_at(table, (position,)).tolist()})
+        holders = self.contact_holders(subject_uuid, _granted_at(self._grants, (position,)))
         holders.add(subject_uuid)
         return holders
 
@@ -1439,7 +1436,7 @@ class SpatialSensesSystem:
         if grid is not self._map:
             # A replaced map: every field and table read the old one.
             self.fields.clear()
-            self._grants = NO_GRANTS
+            self._grants = None
             self._light_table = None
             self._table = None
             self._map = grid
