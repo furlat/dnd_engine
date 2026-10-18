@@ -297,12 +297,14 @@ def _admitted(
             or event.location is ItemLocation.DESTROYED
         )
     if type(event) is SpatialChangeEvent:
-        # Initialization may include ordinary placements after the cold map was
-        # published. Their recorded after-values are needed before observer
-        # disclosure, just like later changes to an already placed object.
+        # Initialization may include ordinary placements, lights (authored
+        # torches are lit only after the cold map is published) and tile rows
+        # recorded after the cold map. Their after-values are needed before
+        # observer disclosure, just like later changes to the same records.
         return event.change_type in (
             SpatialChangeType.OBJECT_PLACED, SpatialChangeType.OBJECT_CHANGED,
-            SpatialChangeType.OBJECT_REMOVED,
+            SpatialChangeType.OBJECT_REMOVED, SpatialChangeType.LIGHT_CHANGED,
+            SpatialChangeType.TILES_CHANGED,
         )
     if type(event) is SensoryUpdateEvent:
         return event.observer_uuid == observer_uuid

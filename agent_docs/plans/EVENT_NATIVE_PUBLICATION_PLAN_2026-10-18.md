@@ -100,7 +100,7 @@ All of these are data plus system functions: no behaviour on records, no manager
 
 ## 5. Phases
 
-Dependencies: E0 → E1 → E2 → E3a → (E3-world ∥ E3-bodies ∥ E3-sensory) → E6. Each is a lane in its own worktree, merged into `codex/event-native-deltas` after its gates. A plan-adherence tracker runs throughout.
+Dependencies (revision 3, see §5b): E0 → E1 → E2 → E3-world (absorbs E3a) → E3-bodies → E3-sensory → E6; the bodies and sensory types and client folds are prepared in parallel. Each is a lane in its own worktree, merged into `codex/event-native-deltas` after its gates. A plan-adherence tracker runs throughout.
 
 - **E0: harness and baselines** (after Q3).
   - **Seat layouts:** G1 one seat per faction (today), G2 one seat per character (the capacity worst case), G3 blue batched into seats of 5. The harness's `seat == 'blue'` checks (gallery_crowd.py ~866, ~913) become per-layout.
@@ -149,6 +149,32 @@ Dependencies: E0 → E1 → E2 → E3a → (E3-world ∥ E3-bodies ∥ E3-sensor
   - **Size:** ≈+350/−200 lines, ~12 files.
   - **Against the rule, stated honestly:** the comparison base is the engine's own last sheet event, one per actor, not a per-seat client copy. For computed values it is the only exact alternative to whole sheets every op.
 - **E6: exit.** Re-time every case on G1, G2 and G3, quiet machine, 3 runs. Every row over 100 ms or 100 KB is listed with what dominates it, and the human decides the next owner.
+
+## 5b. Revision 3 (2026-10-18, integrator): E3a dissolved; E3 gates corrected
+
+**Why.** The E3a lane stopped at design time, with both reviewers agreeing (scratchpad `e3a/design.md`). A byte-identical E3a is impossible:
+- Today's wire is a diff against the value each seat holds: bodies, items, tiles, objects (including a per-face merge), and spatial content. That held value is the fold of everything sent; the session fold holds only current values. On Daylight, for example, the `{normal_hp: 6}` patch exists only because the seat holds 44.
+- Sharing one fold and walking event-major can't stay byte-identical without a second, projection-only fold, which antiOOP r1 rejects.
+- One composition per settlement changes per-member world updates, which are wire bytes.
+
+The held values therefore go with each family's wire change.
+
+**The new order:**
+- **E3-world** takes E3a's items 2 and 4: one shared session fold for the world, the event-major walk, and E3a's byte-identical clean-ups and knowledge moves (control, HUD field, log inputs with a birth-name table that is never popped, startup content). Then the world wire change. Gated by O1–O3, not bytes.
+- **E3-bodies** deletes the actor and item held values. The per-seat actor fold stays until this lane; it is the existing mirror shrinking, not a new field.
+- **E3-sensory** adds the native settlement marker and E3a's item 3 (one composed change per settlement). The reducer-import architecture test lands with it.
+- All three share player schema 16 with E5 (one unreleased bump).
+
+**The E3 gate, corrected:**
+- "Log appends byte-identical" becomes **log entries identical**. Occurrence renumbering changes `CombatLogAppend.operation_end_cursor`, so the appends can't stay byte-identical.
+- "No regression in bytes on any row" excludes the **re-entry rows**: the full room is delta (Sleet drop, Daylight, room_reentry, SG steps if they regress). Each is listed with measured bytes, and ≤100 KB is checked at E6.
+
+**Per-lane decisions** are in the briefs (scratchpad `e3design/{world,bodies,sensory}_brief.md`, the "Coordinator decisions" sections). They include:
+- E3-world sends exact object bits whenever a row is sent;
+- found traps are kept through retired cells (as today);
+- the client clears ghost bodies on visible cells (makes E1's ghost-layer xfail pass);
+- initialization replays the same walk, and the startup-damage grant bug is fixed at its source;
+- engine-free replay records seat-independent actor values per sensory version.
 
 **Expected test changes (to list per lane):** about 70 test files reference fields this plan reshapes, so "0 new failures" means "0 unexpected". Each lane lists the tests whose expected outputs change, with the reason, before merging.
 
