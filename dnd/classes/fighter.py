@@ -23,6 +23,7 @@ from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.base_actions import (
     BaseAction, ActionEvent, Cost, TargetType, BaseCost
 )
+from dnd.types.physical_access import ObjectContact
 from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
 from dnd.core.events import (
     Event, EventPhase, EventType,
@@ -1187,12 +1188,12 @@ class ExtraAttack(Attack):
             overrides["weapon_slot"] = WeaponSlot(selection_facet(selection, "form"))
         return overrides
 
-    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+    def rule_admission(self, scan: ActorScan, selection: ActionSelection) -> Tuple[Optional[str], Optional[ObjectContact]]:
         """Require a committed ordinary Attack before exposing the earned batch."""
         entity = Entity.get(self.source_entity_uuid)
         if entity is None or "ExtraAttacksGranted" not in entity.active_conditions:
-            return "Must attack first before using Extra Attack"
-        return Attack.rule_error(self, scan, selection)
+            return "Must attack first before using Extra Attack", None
+        return Attack.rule_admission(self, scan, selection)
 
 
 class ExtraAttackFeature(BaseCondition):

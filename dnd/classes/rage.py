@@ -17,6 +17,7 @@ from dnd.core.base_object import BaseObject, empty_list
 from dnd.core.base_actions import (
     BaseAction, ActionEvent, Cost, TargetType, BaseCost
 )
+from dnd.types.physical_access import ObjectContact
 from dnd.core.events import (
     Event, EventPhase, EventType,
     Trigger, EventHandler,
@@ -927,16 +928,16 @@ class FrenziedStrike(Attack):
         ),
     ], description="Bonus-action cost, independent of ordinary attack credits.")
 
-    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+    def rule_admission(self, scan: ActorScan, selection: ActionSelection) -> Tuple[Optional[str], Optional[ObjectContact]]:
         entity = Entity.get(self.source_entity_uuid)
         if entity is None or "Frenzied" not in entity.active_conditions:
-            return "Must be in a frenzy"
+            return "Must be in a frenzy", None
         if (
             self.weapon_slot not in (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF)
             or entity.equipment.get_weapon(self.weapon_slot) is None
         ):
-            return "Frenzied Strike requires a melee weapon"
-        return Attack.rule_error(self, scan, selection)
+            return "Frenzied Strike requires a melee weapon", None
+        return Attack.rule_admission(self, scan, selection)
 
 # Frenzied (defined above) creates FrenziedStrike.
 Frenzied.creates = (*Frenzied.creates, FrenziedStrike)

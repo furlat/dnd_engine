@@ -1,7 +1,8 @@
 """Architecture: one legality path (plan §14.3b).
 
 The shared admission checks live once on BaseAction. An action adds its own
-rule through `rule_error`; it never replaces the shared checks, so a forgotten
+rule through `rule_error` (or `rule_admission`, the same rule with the object
+contact it traced); it never replaces the shared checks, so a forgotten
 `super()` cannot skip them.
 """
 
@@ -11,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-SHARED_ADMISSION = {"_admission_error", "_physical_access_contact", "_requirements_contact", "requirements_error",
+SHARED_ADMISSION = {"_admission", "_physical_access_contact", "_requirements_contact", "requirements_error",
                     "discovery_admission", "discovery_error"}
 
 
@@ -23,6 +24,24 @@ def test_no_action_overrides_the_shared_admission_checks() -> None:
                 overrides.extend(f"{path.relative_to(ROOT)}:{item.lineno} {node.name}" for item in node.body
                                  if isinstance(item, ast.FunctionDef) and item.name in SHARED_ADMISSION)
     assert overrides == []
+
+
+def test_no_attack_form_states_its_rule_in_rule_error() -> None:
+    """An attack form states its rule in `rule_admission`, which carries the object contact its reach traced;
+    `Attack.rule_error` is that rule's error, so an attack form's own `rule_error` would never run."""
+    classes = []
+    for path in sorted((ROOT / "dnd").rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ClassDef):
+                classes.append((node.name, {base.id for base in node.bases if isinstance(base, ast.Name)},
+                                any(isinstance(item, ast.FunctionDef) and item.name == "rule_error" for item in node.body),
+                                f"{path.relative_to(ROOT)}:{node.lineno} {node.name}"))
+    attacks = {"Attack"}
+    while (grown := attacks | {name for name, bases, _, _ in classes if bases & attacks}) != attacks:
+        attacks = grown
+    assert [where for name, _, states_rule, where in classes
+            if name in attacks and name != "Attack" and states_rule] == []
+    assert len(attacks) > 1  # the walk found the attack forms
 
 
 FAMILY_BASES = {"BaseAction", "SpellAction"}
