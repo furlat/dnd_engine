@@ -16,8 +16,7 @@ hand from the client's rules, never dumped from the fold:
 The files are what Godot folds too (`sdk/protocol/fold-vectors/sensory/*.json`); `tests/player/test_client_fold_vectors.py`
 folds them with the reference fold (`dnd.player.reduction.fold_composed_sensory`).
 
-    PYTHONPATH=. python devtools/fold_vectors_sensory.py          # write the files
-    PYTHONPATH=. python devtools/fold_vectors_sensory.py --check  # exit 1 when a file differs from this source
+    PYTHONPATH=. python devtools/fold_vectors_sensory.py   # write the files (the vector test checks they are current)
 """
 
 import argparse
@@ -25,7 +24,6 @@ from dataclasses import dataclass, field
 from typing import Any
 import json
 from pathlib import Path
-import sys
 from uuid import UUID
 
 from pydantic import TypeAdapter
@@ -381,13 +379,8 @@ def documents() -> dict[str, str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--check", action="store_true")
-    args = parser.parse_args()
+    argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter).parse_args()
     wanted = documents()
-    if args.check:
-        held = {path.name: path.read_text() for path in DIRECTORY.glob("*.json")} if DIRECTORY.exists() else {}
-        sys.exit(0 if held == wanted else 1)
     DIRECTORY.mkdir(parents=True, exist_ok=True)
     for path in DIRECTORY.glob("*.json"):
         if path.name not in wanted:

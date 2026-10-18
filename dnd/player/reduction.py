@@ -838,9 +838,9 @@ def fold_composed_sensory(target: PlayerState, fact: ComposedSensoryFact, values
 
     It updates what the seat perceives now (`senses`: cells, contacts, effects and the anchor's scalars), the
     members perceiving each contact and effect, the light sources perceived now, and the client's memory: seen
-    cells are every cell seen visible; effects keep their remembered cells (`_remember_effects`). Visual
-    contacts place the bodies the seat holds. A list naming a record the seat does not hold (or, for an entering
-    record, does hold) raises ValueError.
+    cells are every cell seen visible; effects keep their remembered cells (`_remember_effects`). The anchor's
+    changed position places the stream observer's body, and visual contacts the bodies the seat holds. A list
+    naming a record the seat does not hold (or, for an entering record, does hold) raises ValueError.
     """
     rows = values.rows
     uuids = rows.uuids
@@ -943,6 +943,9 @@ def fold_composed_sensory(target: PlayerState, fact: ComposedSensoryFact, values
         sense_modes_hash=sense_modes_hash(modes) if modes is not None else held.sense_modes_hash,
         visual_access=(fact.visual_access if fact.visual_access_changed
             and fact.visual_access is not None else held.visual_access))
+    if fact.observer_position is not None and target.observer_uuid in target.actors:
+        target.actors[target.observer_uuid] = replace(target.actors[target.observer_uuid],
+            last_visual_position=fact.observer_position)
     for index in fact.entity_contacts_changed:
         identity, contact = uuids[rows.contact_uuid_index[index]], values.contacts[index]
         if contact.visual and identity in target.actors and target.actors[identity].present:
