@@ -23,7 +23,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.base_tiles import Tile
-from dnd.core.gridmap import GridMap, SpatialConditionOwner, get_map
+from dnd.core.gridmap import CellBox, GridMap, SpatialConditionOwner, get_map
 from dnd.core.navigation import NO_CELLS_LAYER, NO_ROUTES, NO_SIDES_LAYER, Routes, has_route
 from dnd.core.geometry import ROUTE_STEP_SHIFT, supercover_line, supercover_route_table
 from dnd.core.presentation_geometry import SpherePresentationGeometry
@@ -1003,6 +1003,15 @@ def _perception_inert(event: Event) -> bool:
             and event.senses_hint == _INERT_SENSES_HINT)
 
 
+@dataclass(frozen=True)
+class NavigationRead:
+    """The cells one observer's last navigation materialization read and their traversal stamp then
+    (`GridMap.traversal_stamp`): its paths are current while the stamp of those cells is unchanged."""
+
+    box: CellBox
+    traversal_stamp: int
+
+
 @dataclass
 class _GroupSettlement:
     """Facts recorded for one observer while a simultaneous group is open."""
@@ -1068,6 +1077,8 @@ class SpatialSensesSystem:
         # completion reads settled senses); those observers already settled it.
         self._covered_facts: FrozenSet[UUID] = frozenset()
         self._covered_observers: FrozenSet[UUID] = frozenset()
+        # Each observer's last navigation read, replaced by its next materialization; reset clears it.
+        self._navigation_reads: Dict[UUID, NavigationRead] = {}
 
     def attach(self) -> None:
         """Attach the reducer to the existing pre-completion event boundary."""
@@ -1096,6 +1107,7 @@ class SpatialSensesSystem:
         self._table_version = 0
         self._table_changes = None
         self._map = None
+        self._navigation_reads.clear()
 
     def _recording(self) -> bool:
         """Whether facts are recorded for the open group instead of settled now.
@@ -1173,6 +1185,15 @@ class SpatialSensesSystem:
         if self.fields.pop(observer_uuid, None) is not None:
             self._grants = _replace_grants(self._grants, {observer_uuid: None})
         self._identity_grants.clear()
+
+    def record_navigation_read(self, observer_uuid: UUID, box: CellBox, traversal_stamp: int) -> None:
+        """Keep the cells a written navigation materialization read, with their traversal stamp when read."""
+        self._navigation_reads[observer_uuid] = NavigationRead(box, traversal_stamp)
+
+    def navigation_current(self, observer_uuid: UUID, grid: GridMap) -> bool:
+        """Whether no traversal write touched a cell the observer's last navigation materialization read."""
+        read = self._navigation_reads.get(observer_uuid)
+        return read is not None and grid.traversal_stamp(read.box) == read.traversal_stamp
 
     def unregister_observer(self, observer_uuid: UUID) -> None:
         """Remove an observer and its field."""
