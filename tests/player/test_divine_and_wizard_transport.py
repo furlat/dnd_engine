@@ -34,9 +34,8 @@ from tests.progression.prepared_class_support import prepared_build, prepared_le
 
 
 def seat_sheet(runtime, seat, actor_uuid):
-    """The sheet in the seat's display: its HUD travels as patches, folded by the seat's
-    projection the way its client folds them (see test_emitted_update_replica)."""
-    return next(row for row in runtime.audiences[seat].projection.remembered.hud_snapshot.sheets
+    """The sheet in the seat's display: the last display the seat was sent."""
+    return next(row for row in runtime.audiences[seat].projection.hud_sent.sheets
         if row.actor_uuid == actor_uuid)
 
 

@@ -762,6 +762,14 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
         visual_access=anchor.visual_access, paths_dirty=bool(current.dirty_members))
 
 
+def depart_contact(current: AudienceComposition, identity: UUID) -> None:
+    """A witnessed terminal departure ends the view's contact; the next fold recomposes that identity."""
+    if current.view is None:
+        return
+    current.view.entities.pop(identity, None)
+    current.contact_overrides.add(identity)
+
+
 @dataclass(frozen=True, slots=True)
 class SeatAssignment:
     """Private assignment using existing authored roster/member addresses."""

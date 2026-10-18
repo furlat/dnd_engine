@@ -13,6 +13,7 @@ from dnd.player.audience import PlayerAudience
 from dnd.player.content import UIContentManifest
 from dnd.player.content_composition import admitted_content, ui_content_manifest
 from dnd.player.facts import PlayerInitialization, PlayerState, PlayerUpdate
+from dnd.player.projection import ProjectionState
 from dnd.player.reduction import reduce_initialization, reduce_operation
 from dnd.player.session import (
     Operation, Session, advance_controller, close_session, create_session, discover_player_actions,
@@ -65,6 +66,11 @@ def after_values(state: PlayerState) -> tuple:
     return state.content, state.hud_snapshot
 
 
+def sent_values(projection: ProjectionState) -> tuple:
+    """What the seat was sent, in the client's terms: its content and its last display."""
+    return projection.remembered.content, projection.hud_sent
+
+
 def client_operation(started: Started, state: PlayerState, operation: Operation) -> PlayerState:
     """Capture one committed operation and reduce its detached update for this seat."""
     update = capture_application_operation(started.audiences, operation, started.catalog)[started.seat]
@@ -74,7 +80,7 @@ def client_operation(started: Started, state: PlayerState, operation: Operation)
 def test_published_initialization_has_only_admitted_descriptors_and_replays_exactly(started):
     assert all(row.visibility in (ContentVisibility.PUBLIC, ContentVisibility.OBSERVED)
         for row in started.runtime.projection.remembered.content)
-    assert after_values(client_initialization(started)) == after_values(started.runtime.projection.remembered)
+    assert after_values(client_initialization(started)) == sent_values(started.runtime.projection)
 
 
 def test_common_operation_replays_eventless_handler_after_values(started):
@@ -82,7 +88,7 @@ def test_common_operation_replays_eventless_handler_after_values(started):
     advanced = advance_controller(started.session)
     assert advanced.boundary is not None and advanced.boundary.status == "waiting_for_human"
     state = client_operation(started, state, advanced)
-    assert after_values(state) == after_values(started.runtime.projection.remembered)
+    assert after_values(state) == sent_values(started.runtime.projection)
     actor = state.current_actor_uuid
     assert actor is not None and state.hud_snapshot is not None
     sheet = next(row for row in state.hud_snapshot.sheets if row.actor_uuid == actor)
@@ -90,7 +96,7 @@ def test_common_operation_replays_eventless_handler_after_values(started):
     discover_player_actions(started.session, actor)
     changed = toggle_player_handler(started.session, actor, handler.uuid, not handler.enabled)
     state = client_operation(started, state, changed)
-    assert after_values(state) == after_values(started.runtime.projection.remembered)
+    assert after_values(state) == sent_values(started.runtime.projection)
     updated = next(row for row in state.hud_snapshot.sheets if row.actor_uuid == actor)
     assert next(row for row in updated.handler_details if row.uuid == handler.uuid).enabled != handler.enabled
 

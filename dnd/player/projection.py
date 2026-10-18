@@ -42,7 +42,7 @@ from dnd.types.event_facts import WorldTileChanges, WorldTileState
 from dnd.types.class_features import FontConversion
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult, ObjectResidueState
 from dnd.types.summoning import SummonDepartureCause
-from dnd.player.audience import AudienceComposition, PlayerAudience, resolve_audience
+from dnd.player.audience import AudienceComposition, PlayerAudience, depart_contact, resolve_audience
 
 from dnd.player.actor_facts import ActorState, ConditionFact, PresentationTarget
 from dnd.player.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact
@@ -58,7 +58,7 @@ from dnd.player.facts import (
 )
 from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
-from dnd.player.reduction import (apply_record_fact, apply_hud, apply_sensed_fact, apply_world_update, change_membership,
+from dnd.player.reduction import (apply_record_fact, apply_world_update, change_membership,
     commit_current, fold_senses, observe_body, observed_actor, occurrence_order)
 from dnd.player.compatibility import legacy_damage_reference
 from dnd.world_facts import world_event_objects, world_event_footprints, world_objects_at
@@ -1459,10 +1459,6 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...]
                         changed_objects.update(world_event_objects(private_world.recorded_world, source))
                         changed_objects.update(world_objects_at(private_world.recorded_world, source_object_positions))
                         apply_world_fact(private_world, source)
-                # Observer after-values are later than their causal source snapshot.
-                # In particular initialization can add carried lights after the
-                # actor-free WorldInitializedEvent was recorded.
-                world_changed = apply_world_fact(private_world, event)
                 added = mask_positions(event.visible_cells_added)
                 positions.update(added)
                 object_positions.update(added)
@@ -1520,8 +1516,8 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...]
             change_membership(held_conditions(fact.target_entity_uuid), fact)
         if isinstance(fact, SpatialFact) and not event.canceled:
             if commit_current(remembered, fact, source_cursor=indexes[event.uuid], occurrences=occurrences):
-                apply_sensed_fact(remembered, fact, known, source_cursor=indexes[event.uuid],
-                    audience_composition=audience_composition)
+                if fact.terminal_departure and fact.entity_uuid is not None and fact.entity_uuid in known:
+                    depart_contact(audience_composition, fact.entity_uuid)
             else:
                 superseded.add(indexes[event.uuid])
         if isinstance(fact, FactionFact):
@@ -1924,6 +1920,8 @@ class ProjectionState:
     spatial_revisions: dict[UUID, int] = field(default_factory=dict)
     next_occurrence: int = 0
     next_log_append: int = 0
+    # The last display sent to the seat (E5 replaces it with the engine's sheet publisher).
+    hud_sent: PlayerHUDSnapshot | None = None
     world_index: WorldProjectionIndex = field(default_factory=WorldProjectionIndex)
     audience_composition: AudienceComposition = field(default_factory=AudienceComposition)
 
@@ -2146,8 +2144,8 @@ def project_after_values(state: ProjectionState, hud: PlayerHUDSnapshot | None,
                          ) -> tuple[PlayerHUDPatch | None, tuple[CombatLogAppend, ...]]:
     """Map already-admitted native after-values into this audience's ordering.
 
-    The display travels as the patch against the seat's last one, folded into
-    `remembered` by the client's reducer; an unchanged display sends nothing.
+    The display travels as the patch against the seat's last display (`hud_sent`,
+    which the patch turns into this one); an unchanged display sends nothing.
     """
     def boundary(native_cursor: int) -> int:
         # Public occurrences increase in insertion order, including late
@@ -2164,10 +2162,10 @@ def project_after_values(state: ProjectionState, hud: PlayerHUDSnapshot | None,
     public_logs = tuple(replace(row, encounter_log_index=state.next_log_append + index,
         operation_end_cursor=boundary(row.operation_end_cursor)) for index, row in enumerate(appends))
     state.next_log_append += len(public_logs)
-    if public_hud is None or public_hud == state.remembered.hud_snapshot:
+    if public_hud is None or public_hud == state.hud_sent:
         return None, public_logs
-    patch = hud_patch(state.remembered.hud_snapshot, public_hud)
-    apply_hud(state.remembered, patch, end_cursor=state.next_occurrence)
+    patch = hud_patch(state.hud_sent, public_hud)
+    state.hud_sent = public_hud
     return patch, public_logs
 
 

@@ -68,7 +68,7 @@ def operation_since(session: Session, start: int) -> Operation:
 
 
 def what_capture_reads(state: PlayerState) -> tuple:
-    return (state.actors, state.items, state.spatial_content, state.connectors, state.content, state.hud_snapshot,
+    return (state.actors, state.items, state.spatial_content, state.connectors, state.content,
         state.tiles, state.objects)
 
 
@@ -82,6 +82,7 @@ def check_replica(session: Session, steps: tuple[Step, ...]) -> dict[str, Player
     def check(name: str, seat: str, client: PlayerState, runtime: AudienceRuntime) -> None:
         case = f'{name} / {seat}'
         assert what_capture_reads(client) == what_capture_reads(runtime.projection.remembered), case
+        assert client.hud_snapshot == runtime.projection.hud_sent, case
         assert (client.reducer_cursor, len(client.combat_log_appends)) == (
             runtime.projection.next_occurrence, runtime.projection.next_log_append), case
         assert client.senses == begin_audience_composition(client.perception, client.observer_uuid).view, case
