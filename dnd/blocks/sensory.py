@@ -1102,6 +1102,10 @@ class SpatialSensesSystem:
         # Advances with every clear of the identity grants (and starts again at 0 when the system resets):
         # a grant read at one epoch holds while it does.
         self.identity_epoch = 0
+        # Each registered observer's id as text (written with `senses_by_observer`): the identity
+        # grants share these strings instead of formatting an id per grant. The Encounter keeps its own
+        # such table for its event computers (`dnd.encounter._ID_STRINGS`); this module cannot import it.
+        self._id_texts: Dict[UUID, str] = {}
         # Contact targets' ids (each target once, in first-seen order): their keys compare by value
         # across settlements. Append-only; reset clears it with every field that holds a key.
         self._target_ids: Dict[UUID, int] = {}
@@ -1133,6 +1137,7 @@ class SpatialSensesSystem:
     def reset(self) -> None:
         """Clear observers and their fields."""
         self.senses_by_observer.clear()
+        self._id_texts.clear()
         self.published_observers.clear()
         self.fields.clear()
         self._covered_facts = frozenset()
@@ -1228,6 +1233,7 @@ class SpatialSensesSystem:
     def register_observer(self, observer_uuid: UUID, senses: Senses) -> None:
         """Register an observer without independently materializing its world view."""
         self.senses_by_observer[observer_uuid] = senses
+        self._id_texts[observer_uuid] = str(observer_uuid)
         if self.fields.pop(observer_uuid, None) is not None:
             self._grants = _replace_grants(self._grants, {observer_uuid: None})
         self._drop_identity_grants()
@@ -1244,6 +1250,7 @@ class SpatialSensesSystem:
     def unregister_observer(self, observer_uuid: UUID) -> None:
         """Remove an observer and its field."""
         self.senses_by_observer.pop(observer_uuid, None)
+        self._id_texts.pop(observer_uuid, None)
         self.published_observers.discard(observer_uuid)
         if self.fields.pop(observer_uuid, None) is not None:
             self._grants = _replace_grants(self._grants, {observer_uuid: None})
@@ -1274,8 +1281,10 @@ class SpatialSensesSystem:
         if grants is None:
             holders = self.contact_holders(subject_uuid, _granted_at(self._grants, (position,)))
             holders.add(subject_uuid)
+            id_texts = self._id_texts
+            # In the holders' own order, as before: a frozenset's iteration order follows its insertions.
             grants = self._identity_grants[(subject_uuid, position)] = frozenset(
-                str(holder) for holder in holders)
+                id_texts.get(holder) or str(holder) for holder in holders)
         return grants
 
     def _drop_identity_grants(self) -> None:

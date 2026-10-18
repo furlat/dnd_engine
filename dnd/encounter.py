@@ -77,7 +77,9 @@ def _compute_revealed_entities(event: Event, child_logs: List[CombatLogEntry]) -
 # Owned by the Encounter system, whose event computers are this module's functions: one string per
 # entity id (observers and participants), so event-time grants and log perceivers share their
 # strings instead of stringifying an id per version. Cleared whenever the encounter installs or
-# removes its computers; bounded by the encounter's entities. A pure UUID-to-text table.
+# removes its computers; bounded by the encounter's entities. A pure UUID-to-text table. The
+# SpatialSensesSystem keeps the same text for its registered observers (`_id_texts`), for the identity
+# grants it builds.
 _ID_STRINGS: Dict[UUID, str] = {}
 
 
