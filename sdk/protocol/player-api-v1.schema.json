@@ -2939,6 +2939,31 @@
       "type": "object",
       "additionalProperties": false
     },
+    "Column_ConstructionGeometry_": {
+      "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
+      "properties": {
+        "rows": {
+          "$ref": "#/$defs/RowBits",
+          "default": {
+            "start": 0,
+            "bits": ""
+          }
+        },
+        "values": {
+          "items": {
+            "$ref": "#/$defs/ConstructionGeometry"
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "values"
+      ],
+      "title": "Column",
+      "type": "object",
+      "additionalProperties": false
+    },
     "Column_ItemIntegrity_": {
       "description": "One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects\nevery row; a column with no value is left out of its group, and each row it skips holds the field's default.",
       "properties": {
@@ -4416,6 +4441,43 @@
       ],
       "title": "ConnectorTraversalDiscovery",
       "type": "object"
+    },
+    "ConstructionGeometry": {
+      "discriminator": {
+        "mapping": {
+          "cone": "#/$defs/ConePresentationGeometry",
+          "cube": "#/$defs/CubePresentationGeometry",
+          "cylinder": "#/$defs/CylinderPresentationGeometry",
+          "line": "#/$defs/LinePresentationGeometry",
+          "sphere": "#/$defs/SpherePresentationGeometry",
+          "wall": "#/$defs/WallPresentationGeometry",
+          "wall_assembly": "#/$defs/WallAssemblyPresentationGeometry"
+        },
+        "propertyName": "shape"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SpherePresentationGeometry"
+        },
+        {
+          "$ref": "#/$defs/ConePresentationGeometry"
+        },
+        {
+          "$ref": "#/$defs/LinePresentationGeometry"
+        },
+        {
+          "$ref": "#/$defs/CubePresentationGeometry"
+        },
+        {
+          "$ref": "#/$defs/CylinderPresentationGeometry"
+        },
+        {
+          "$ref": "#/$defs/WallPresentationGeometry"
+        },
+        {
+          "$ref": "#/$defs/WallAssemblyPresentationGeometry"
+        }
+      ]
     },
     "ContactPassage": {
       "enum": [
@@ -11856,6 +11918,17 @@
           ],
           "default": null
         },
+        "construction_geometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Column_ConstructionGeometry_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "construction_suppressions": {
           "anyOf": [
             {
@@ -12040,7 +12113,7 @@
       "additionalProperties": false
     },
     "ObjectLook": {
-      "description": "A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid (a census of\nevery gallery case's world fold; a broken object's visual name changes, so it is state).",
+      "description": "A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid\n(`test_object_look_static` and a census of every gallery case's world fold; a broken object's visual name and a\ncut construction's geometry change, so they are state).",
       "properties": {
         "item_uuid": {
           "format": "uuid",
@@ -12135,52 +12208,6 @@
           ],
           "default": null,
           "title": "Construction Owner Uuid"
-        },
-        "construction_geometry": {
-          "anyOf": [
-            {
-              "discriminator": {
-                "mapping": {
-                  "cone": "#/$defs/ConePresentationGeometry",
-                  "cube": "#/$defs/CubePresentationGeometry",
-                  "cylinder": "#/$defs/CylinderPresentationGeometry",
-                  "line": "#/$defs/LinePresentationGeometry",
-                  "sphere": "#/$defs/SpherePresentationGeometry",
-                  "wall": "#/$defs/WallPresentationGeometry",
-                  "wall_assembly": "#/$defs/WallAssemblyPresentationGeometry"
-                },
-                "propertyName": "shape"
-              },
-              "oneOf": [
-                {
-                  "$ref": "#/$defs/SpherePresentationGeometry"
-                },
-                {
-                  "$ref": "#/$defs/ConePresentationGeometry"
-                },
-                {
-                  "$ref": "#/$defs/LinePresentationGeometry"
-                },
-                {
-                  "$ref": "#/$defs/CubePresentationGeometry"
-                },
-                {
-                  "$ref": "#/$defs/CylinderPresentationGeometry"
-                },
-                {
-                  "$ref": "#/$defs/WallPresentationGeometry"
-                },
-                {
-                  "$ref": "#/$defs/WallAssemblyPresentationGeometry"
-                }
-              ]
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Construction Geometry"
         },
         "known_to_creator": {
           "default": false,
@@ -12460,6 +12487,52 @@
           ],
           "default": null,
           "title": "Destruction Outcome"
+        },
+        "construction_geometry": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "cone": "#/$defs/ConePresentationGeometry",
+                  "cube": "#/$defs/CubePresentationGeometry",
+                  "cylinder": "#/$defs/CylinderPresentationGeometry",
+                  "line": "#/$defs/LinePresentationGeometry",
+                  "sphere": "#/$defs/SpherePresentationGeometry",
+                  "wall": "#/$defs/WallPresentationGeometry",
+                  "wall_assembly": "#/$defs/WallAssemblyPresentationGeometry"
+                },
+                "propertyName": "shape"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SpherePresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/ConePresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/LinePresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/CubePresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/CylinderPresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/WallPresentationGeometry"
+                },
+                {
+                  "$ref": "#/$defs/WallAssemblyPresentationGeometry"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Construction Geometry"
         },
         "construction_suppressions": {
           "default": [],

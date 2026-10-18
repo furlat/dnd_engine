@@ -100,8 +100,7 @@ def split_floor_item(item: FloorItem) -> tuple[ObjectLook, ObjectState]:
     return (ObjectLook(item_uuid=item.item_uuid, item_id=item.item_id, visual_variant_id=item.visual_variant_id, contact_passage=item.contact_passage,
             supported_by_uuid=item.supported_by_uuid, door_mechanism=item.door_mechanism, door_swing=item.door_swing,
             maximum_hit_points=item.maximum_hit_points, concentration_capacity=item.concentration_capacity,
-            construction_owner_uuid=item.construction_owner_uuid, construction_geometry=item.construction_geometry,
-            known_to_creator=item.known_to_creator),
+            construction_owner_uuid=item.construction_owner_uuid, known_to_creator=item.known_to_creator),
         ObjectState(name=item.name,
             visual_item_name=item.visual_item_name if item.visual_item_name != item.name else None,
             map_char=item.map_char,
@@ -113,7 +112,7 @@ def split_floor_item(item: FloorItem) -> tuple[ObjectLook, ObjectState]:
             surface_residues=item.surface_residues, current_hit_points=item.current_hit_points,
             concentration_slots=item.concentration_slots, remnant_state=item.remnant_state,
             integrity=item.integrity, destruction_outcome=item.destruction_outcome,
-            construction_suppressions=item.construction_suppressions))
+            construction_geometry=item.construction_geometry, construction_suppressions=item.construction_suppressions))
 
 
 def join_floor_item(look: ObjectLook, state: ObjectState, structures: Mapping[str, BoundaryStructure]) -> FloorItem:
@@ -135,7 +134,7 @@ def join_floor_item(look: ObjectLook, state: ObjectState, structures: Mapping[st
         maximum_hit_points=look.maximum_hit_points, concentration_capacity=look.concentration_capacity,
         concentration_slots=state.concentration_slots, door_mechanism=look.door_mechanism, door_swing=look.door_swing,
         remnant_state=state.remnant_state, integrity=state.integrity, destruction_outcome=state.destruction_outcome,
-        construction_owner_uuid=look.construction_owner_uuid, construction_geometry=look.construction_geometry,
+        construction_owner_uuid=look.construction_owner_uuid, construction_geometry=state.construction_geometry,
         construction_suppressions=state.construction_suppressions, known_to_creator=look.known_to_creator)
 
 
@@ -253,6 +252,8 @@ def pack_object_rows(rows: Sequence[ObjectRow]) -> ObjectColumns | None:
             if state.integrity is not ItemIntegrity.INTACT], count),
         destruction_outcome=_column([(i, state.destruction_outcome) for i, state in enumerate(states)
             if state.destruction_outcome is not None], count),
+        construction_geometry=_column([(i, state.construction_geometry) for i, state in enumerate(states)
+            if state.construction_geometry is not None], count),
         construction_suppressions=_column([(i, state.construction_suppressions) for i, state in enumerate(states)
             if state.construction_suppressions], count),
         placements=placements)
@@ -293,8 +294,8 @@ def unpack_object_rows(columns: ObjectColumns | None) -> tuple[ObjectRow, ...]:
                                       _held(columns.surface_residues, count))
     hit_points, slots, remnant = (_held(columns.current_hit_points, count), _held(columns.concentration_slots, count),
                                   _held(columns.remnant_state, count))
-    integrity, outcome, suppressions = (_held(columns.integrity, count), _held(columns.destruction_outcome, count),
-                                        _held(columns.construction_suppressions, count))
+    integrity, outcome = _held(columns.integrity, count), _held(columns.destruction_outcome, count)
+    geometry, suppressions = _held(columns.construction_geometry, count), _held(columns.construction_suppressions, count)
     return tuple(ObjectRow(item_uuid=identity, members=members.get(index), observed_faces=faces.get(index, ()),
         placement=placed.get(index), state=ObjectState(name=columns.name[index], visual_item_name=visual.get(index),
             map_char=columns.map_char[index], boundary_structure=structure.get(index), is_open=is_open.get(index),
@@ -305,5 +306,5 @@ def unpack_object_rows(columns: ObjectColumns | None) -> tuple[ObjectRow, ...]:
             surface_residues=residues.get(index, ()), current_hit_points=hit_points.get(index),
             concentration_slots=slots.get(index, ()), remnant_state=remnant.get(index),
             integrity=integrity.get(index, ItemIntegrity.INTACT), destruction_outcome=outcome.get(index),
-            construction_suppressions=suppressions.get(index, ())))
+            construction_geometry=geometry.get(index), construction_suppressions=suppressions.get(index, ())))
         for index, identity in enumerate(columns.item_uuids))

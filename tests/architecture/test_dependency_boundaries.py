@@ -1553,3 +1553,22 @@ def test_weapon_attack_events_have_one_metadata_snapshot_boundary() -> None:
         "through create_weapon_attack_declaration_event.\n"
         + "\n".join(details)
     )
+
+
+# The modules that publish, fold or check a seat's world; the AI's movement edges and the fold's changed-cell
+# neighbours iterate the direction tables for adjacency, which is not a boundary's incident cells.
+BOUNDARY_READERS = ("dnd/player", "dnd/world_facts.py", "devtools/performance/seat_oracle.py")
+
+
+def test_a_boundarys_incident_cells_have_one_definition() -> None:
+    """No module that publishes, folds or checks a seat's world indexes the direction tables: a boundary's faces
+    and the cells it touches are `world_placement.boundary_sides` (and `placement_support_cells`)."""
+    violations = []
+    for root in BOUNDARY_READERS:
+        path = REPOSITORY_ROOT / root
+        for source in ([path] if path.is_file() else sorted(path.rglob("*.py"))):
+            tree = ast.parse(source.read_text(encoding="utf-8"))
+            violations += [f"{source.relative_to(REPOSITORY_ROOT)}:{node.lineno}" for node in ast.walk(tree)
+                if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name)
+                and node.value.id in {"CARDINAL_DELTAS", "OPPOSITE_DIRECTION"}]
+    assert not violations, violations

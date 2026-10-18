@@ -2367,17 +2367,6 @@ export type SupportedByUuid3 = string | null;
 export type MaximumHitPoints3 = number | null;
 export type ConcentrationCapacity3 = number;
 export type ConstructionOwnerUuid3 = string | null;
-export type ConstructionGeometry3 =
-  | (
-      | SpherePresentationGeometry
-      | ConePresentationGeometry
-      | LinePresentationGeometry
-      | CubePresentationGeometry
-      | CylinderPresentationGeometry
-      | WallPresentationGeometry
-      | WallAssemblyPresentationGeometry
-    )
-  | null;
 export type KnownToCreator3 = boolean;
 export type ObjectLooks = ObjectLook[];
 export type ItemUuids = string[];
@@ -2392,13 +2381,22 @@ export type Values6 = ObjectResidueState[][];
 export type Values7 = ItemConcentrationSlot[][];
 export type Values8 = ItemRemnantState[];
 export type Values9 = ItemIntegrity1[];
-export type Values10 = SpellSuppression[][];
+export type ConstructionGeometry3 =
+  | SpherePresentationGeometry
+  | ConePresentationGeometry
+  | LinePresentationGeometry
+  | CubePresentationGeometry
+  | CylinderPresentationGeometry
+  | WallPresentationGeometry
+  | WallAssemblyPresentationGeometry;
+export type Values10 = ConstructionGeometry3[];
+export type Values11 = SpellSuppression[][];
 export type Position14 = [number, number][];
 export type TopHeightSteps1 = number[];
-export type Values11 = CardinalDirection[];
-export type Values12 = string[];
-export type Values13 = WorldObjectSupport[][];
-export type Values14 = [number, number, number][][];
+export type Values12 = CardinalDirection[];
+export type Values13 = string[];
+export type Values14 = WorldObjectSupport[][];
+export type Values15 = [number, number, number][][];
 export type ObjectsRemoved = string[];
 export type ContainerUuid = string;
 export type ItemUuid7 = string;
@@ -2424,6 +2422,17 @@ export type ConcentrationSlots4 = ItemConcentrationSlot[];
  */
 export type ItemIntegrity3 = "intact" | "destroyed";
 export type DestructionOutcome4 = string | null;
+export type ConstructionGeometry4 =
+  | (
+      | SpherePresentationGeometry
+      | ConePresentationGeometry
+      | LinePresentationGeometry
+      | CubePresentationGeometry
+      | CylinderPresentationGeometry
+      | WallPresentationGeometry
+      | WallAssemblyPresentationGeometry
+    )
+  | null;
 export type ConstructionSuppressions3 = SpellSuppression[];
 export type Items2 = ContainedItem[];
 export type Contents = ContainerContents[];
@@ -2487,7 +2496,7 @@ export type FlexibleAbilityBonuses = [
   number
 ][];
 export type ChoiceId = string;
-export type Values15 = string[];
+export type Values16 = string[];
 export type Choices = OriginChoiceSelection[];
 export type StepId = string;
 export type CharacterLevel = number;
@@ -2502,7 +2511,7 @@ export type CharacterSubclass =
   | "subclass.paladin.oath_of_devotion"
   | "subclass.wizard.school_of_evocation";
 export type ChoiceId1 = string;
-export type Values16 = string[];
+export type Values17 = string[];
 export type Choices1 = ClassChoiceSelection[];
 export type ClassLevels = AppliedClassLevel[];
 export type Abilities = ["strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma", number][];
@@ -5674,8 +5683,9 @@ export interface ResidueKey {
   residue_id: ResidueId4;
 }
 /**
- * A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid (a census of
- * every gallery case's world fold; a broken object's visual name changes, so it is state).
+ * A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid
+ * (`test_object_look_static` and a census of every gallery case's world fold; a broken object's visual name and a
+ * cut construction's geometry change, so they are state).
  */
 export interface ObjectLook {
   item_uuid: ItemUuid6;
@@ -5688,7 +5698,6 @@ export interface ObjectLook {
   maximum_hit_points?: MaximumHitPoints3;
   concentration_capacity?: ConcentrationCapacity3;
   construction_owner_uuid?: ConstructionOwnerUuid3;
-  construction_geometry?: ConstructionGeometry3;
   known_to_creator?: KnownToCreator3;
 }
 /**
@@ -5720,7 +5729,8 @@ export interface ObjectColumns {
   remnant_state?: Column7 | null;
   integrity?: Column8 | null;
   destruction_outcome?: Column2 | null;
-  construction_suppressions?: Column9 | null;
+  construction_geometry?: Column9 | null;
+  construction_suppressions?: Column10 | null;
   placements?: PlacementColumns | null;
 }
 /**
@@ -5894,20 +5904,12 @@ export interface RowBits14 {
   bits?: Bits;
 }
 /**
- * The `ObjectPlacement`s of an update's object rows, as columns over the rows `rows` selects (left out:
- * every row).
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
  */
-export interface PlacementColumns {
+export interface Column10 {
   rows?: RowBits15;
-  position: Position14;
-  top_height_steps: TopHeightSteps1;
-  boundary_direction?: Column10 | null;
-  tile_uuid?: Column11 | null;
-  covered_supports?: Column12 | null;
-  occupies_bands?: Column3 | null;
-  base_height_steps?: Column | null;
-  orientation?: Column10 | null;
-  removed_bands?: Column13 | null;
+  values: Values11;
 }
 /**
  * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
@@ -5919,12 +5921,20 @@ export interface RowBits15 {
   bits?: Bits;
 }
 /**
- * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
- * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ * The `ObjectPlacement`s of an update's object rows, as columns over the rows `rows` selects (left out:
+ * every row).
  */
-export interface Column10 {
+export interface PlacementColumns {
   rows?: RowBits16;
-  values: Values11;
+  position: Position14;
+  top_height_steps: TopHeightSteps1;
+  boundary_direction?: Column11 | null;
+  tile_uuid?: Column12 | null;
+  covered_supports?: Column13 | null;
+  occupies_bands?: Column3 | null;
+  base_height_steps?: Column | null;
+  orientation?: Column11 | null;
+  removed_bands?: Column14 | null;
 }
 /**
  * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
@@ -5987,6 +5997,23 @@ export interface RowBits19 {
   bits?: Bits;
 }
 /**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column14 {
+  rows?: RowBits20;
+  values: Values15;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits20 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
  * A container's whole contents, on gaining sight of them (looks once, through `object_looks`).
  */
 export interface ContainerContents {
@@ -6023,6 +6050,7 @@ export interface ObjectState {
   remnant_state?: ItemRemnantState | null;
   integrity?: ItemIntegrity3;
   destruction_outcome?: DestructionOutcome4;
+  construction_geometry?: ConstructionGeometry4;
   construction_suppressions?: ConstructionSuppressions3;
 }
 /**
@@ -6108,7 +6136,7 @@ export interface AppliedOriginState {
  */
 export interface OriginChoiceSelection {
   choice_id: ChoiceId;
-  values: Values15;
+  values: Values16;
 }
 /**
  * One ordered class-level step installed on an Entity.
@@ -6126,7 +6154,7 @@ export interface AppliedClassLevel {
  */
 export interface ClassChoiceSelection {
   choice_id: ChoiceId1;
-  values: Values16;
+  values: Values17;
 }
 /**
  * One spendable channel or resource row of a sheet; its label is fixed by its key.
@@ -6187,7 +6215,7 @@ export interface SensoryRows {
   uuids?: Uuids;
   contact_uuid_index?: ContactUuidIndex;
   contact_positions?: ContactPositions;
-  contact_visual?: RowBits20;
+  contact_visual?: RowBits21;
   contact_special_senses?: ContactSpecialSenses;
   sighting_uuid_index?: SightingUuidIndex;
   sightings?: Sightings;
@@ -6203,7 +6231,7 @@ export interface SensoryRows {
  * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
  * nonzero byte, and the empty subset is start 0, no bits.
  */
-export interface RowBits20 {
+export interface RowBits21 {
   start?: Start1;
   bits?: Bits;
 }
@@ -6970,7 +6998,7 @@ export interface SensoryRows1 {
   uuids?: Uuids;
   contact_uuid_index?: ContactUuidIndex;
   contact_positions?: ContactPositions;
-  contact_visual?: RowBits20;
+  contact_visual?: RowBits21;
   contact_special_senses?: ContactSpecialSenses;
   sighting_uuid_index?: SightingUuidIndex;
   sightings?: Sightings;

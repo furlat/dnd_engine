@@ -38,7 +38,7 @@ from dnd.types.event_facts import (AppliedWorldFact, WorldConnectorState, WorldT
 from dnd.types.residues import ObjectResidueState, TileResidueState
 from dnd.types.senses import SensesSnapshot
 from dnd.types.world import CardinalDirection
-from dnd.types.world_placement import CARDINAL_DELTAS, OPPOSITE_DIRECTION, WorldObjectPlacement, placement_support_cells
+from dnd.types.world_placement import WorldObjectPlacement, boundary_sides, placement_support_cells
 from dnd.world_facts import WorldFacts, world_objects_at
 
 Position = tuple[int, int]
@@ -52,24 +52,15 @@ def object_observed(world: WorldFacts, view: SensesSnapshot | None, identity: UU
     if identity in view.objects:
         return True
     obj = world.objects[identity]
-    direction = obj.placement.boundary_direction
-    if obj.item.supported_by_uuid is not None or direction is None or obj.item.boundary_structure is None:
+    if obj.item.supported_by_uuid is not None or obj.item.boundary_structure is None:
         return False
-    x, y = obj.placement.position
-    dx, dy = CARDINAL_DELTAS[direction]
-    return cell_in(view.visible, (x, y)) or cell_in(view.visible, (x + dx, y + dy))
+    return any(cell_in(view.visible, cell) for _, cell in boundary_sides(obj.placement))
 
 
 def observed_faces(placement: WorldObjectPlacement, visible: CellMask) -> tuple[CardinalDirection, ...]:
     """A boundary's faces whose viewing cell is visible, by value; a center object has none."""
-    direction = placement.boundary_direction
-    if direction is None:
-        return ()
-    x, y = placement.position
-    dx, dy = CARDINAL_DELTAS[direction]
-    faces = [face for face, cell in ((OPPOSITE_DIRECTION[direction], (x, y)), (direction, (x + dx, y + dy)))
-             if cell_in(visible, cell)]
-    return tuple(sorted(faces, key=lambda face: face.value))
+    return tuple(sorted((face for face, cell in boundary_sides(placement) if cell_in(visible, cell)),
+                        key=lambda face: face.value))
 
 
 def observed_remnant(state: ItemRemnantState | None, known: Collection[UUID]) -> ItemRemnantState | None:

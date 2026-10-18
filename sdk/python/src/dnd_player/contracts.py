@@ -1217,6 +1217,20 @@ class ObjectDamageFact(TypedDict):
     damage_type: DamageType | None
 
 
+class ObjectLook(TypedDict):
+    item_uuid: str
+    item_id: str
+    visual_variant_id: NotRequired[str | None]
+    contact_passage: NotRequired[ContactPassage]
+    supported_by_uuid: NotRequired[str | None]
+    door_mechanism: NotRequired[DoorMechanism | None]
+    door_swing: NotRequired[DoorSwing | None]
+    maximum_hit_points: NotRequired[int | None]
+    concentration_capacity: NotRequired[int]
+    construction_owner_uuid: NotRequired[str | None]
+    known_to_creator: NotRequired[bool]
+
+
 class ObjectResidueState(TypedDict):
     condition_uuid: str
     residue_id: str
@@ -2964,6 +2978,9 @@ class ColumnTupleItemEffectPresentationState(TypedDict):
     values: list[list[ItemEffectPresentationState]]
 
 
+type ConstructionGeometry = SpherePresentationGeometry | ConePresentationGeometry | LinePresentationGeometry | CubePresentationGeometry | CylinderPresentationGeometry | WallPresentationGeometry | WallAssemblyPresentationGeometry
+
+
 class ContentPresentation(TypedDict):
     icon_key: NotRequired[str | None]
     portrait_key: NotRequired[str | None]
@@ -2984,30 +3001,6 @@ class ContributionRow(TypedDict):
 class EquipIntent(TypedDict):
     kind: NotRequired[Literal['equip']]
     item: EquipItem
-
-
-class ObjectLook(TypedDict):
-    item_uuid: str
-    item_id: str
-    visual_variant_id: NotRequired[str | None]
-    contact_passage: NotRequired[ContactPassage]
-    supported_by_uuid: NotRequired[str | None]
-    door_mechanism: NotRequired[DoorMechanism | None]
-    door_swing: NotRequired[DoorSwing | None]
-    maximum_hit_points: NotRequired[int | None]
-    concentration_capacity: NotRequired[int]
-    construction_owner_uuid: NotRequired[str | None]
-    construction_geometry: NotRequired[
-        SpherePresentationGeometry
-        | ConePresentationGeometry
-        | LinePresentationGeometry
-        | CubePresentationGeometry
-        | CylinderPresentationGeometry
-        | WallPresentationGeometry
-        | WallAssemblyPresentationGeometry
-        | None
-    ]
-    known_to_creator: NotRequired[bool]
 
 
 class PlayerAction(TypedDict):
@@ -3233,6 +3226,11 @@ class ChoicesResponse(TypedDict):
     choices: PlayerChoices
 
 
+class ColumnConstructionGeometry(TypedDict):
+    rows: NotRequired[RowBits]
+    values: list[ConstructionGeometry]
+
+
 class ColumnTupleSpellSuppression(TypedDict):
     rows: NotRequired[RowBits]
     values: list[list[SpellSuppression]]
@@ -3452,6 +3450,7 @@ class ObjectColumns(TypedDict):
     remnant_state: NotRequired[ColumnItemRemnantState | None]
     integrity: NotRequired[ColumnItemIntegrity | None]
     destruction_outcome: NotRequired[ColumnStr | None]
+    construction_geometry: NotRequired[ColumnConstructionGeometry | None]
     construction_suppressions: NotRequired[ColumnTupleSpellSuppression | None]
     placements: NotRequired[PlacementColumns | None]
 
@@ -3491,6 +3490,16 @@ class ObjectState(TypedDict):
     remnant_state: NotRequired[ItemRemnantState | None]
     integrity: NotRequired[ItemIntegrity]
     destruction_outcome: NotRequired[str | None]
+    construction_geometry: NotRequired[
+        SpherePresentationGeometry
+        | ConePresentationGeometry
+        | LinePresentationGeometry
+        | CubePresentationGeometry
+        | CylinderPresentationGeometry
+        | WallPresentationGeometry
+        | WallAssemblyPresentationGeometry
+        | None
+    ]
     construction_suppressions: NotRequired[list[SpellSuppression]]
 
 

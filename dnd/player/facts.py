@@ -1176,8 +1176,9 @@ class ResidueKey:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ObjectLook:
-    """A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid (a census of
-    every gallery case's world fold; a broken object's visual name changes, so it is state)."""
+    """A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid
+    (`test_object_look_static` and a census of every gallery case's world fold; a broken object's visual name and a
+    cut construction's geometry change, so they are state)."""
 
     item_uuid: UUID
     item_id: str
@@ -1189,7 +1190,6 @@ class ObjectLook:
     maximum_hit_points: Annotated[int | None, Field(exclude_if=_unset)] = None
     concentration_capacity: Annotated[int, Field(exclude_if=_zero)] = 0
     construction_owner_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
-    construction_geometry: Annotated[AoEPresentationGeometry | None, Field(exclude_if=_unset)] = None
     known_to_creator: Annotated[bool, Field(exclude_if=_unflagged)] = False
 
 
@@ -1240,6 +1240,7 @@ class ObjectState:
     remnant_state: Annotated[ItemRemnantState | None, Field(exclude_if=_unset)] = None
     integrity: Annotated[ItemIntegrity, Field(exclude_if=_intact)] = ItemIntegrity.INTACT
     destruction_outcome: Annotated[str | None, Field(exclude_if=_unset)] = None
+    construction_geometry: Annotated[AoEPresentationGeometry | None, Field(exclude_if=_unset)] = None
     construction_suppressions: Annotated[tuple[SpellSuppression, ...], Field(exclude_if=_no_rows)] = ()
 
 
@@ -1300,6 +1301,8 @@ class Column(Generic[Value]):
 
 # A column of non-default values, left out when no row holds one.
 Sparse = Annotated[Column[Value] | None, Field(exclude_if=_unset)]
+# The geometry union under one name, so the schema names its column.
+type ConstructionGeometry = AoEPresentationGeometry
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -1348,6 +1351,7 @@ class ObjectColumns:
     remnant_state: Sparse[ItemRemnantState] = None
     integrity: Sparse[ItemIntegrity] = None
     destruction_outcome: Sparse[str] = None
+    construction_geometry: Sparse[ConstructionGeometry] = None
     construction_suppressions: Sparse[tuple[SpellSuppression, ...]] = None
     placements: Annotated[PlacementColumns | None, Field(exclude_if=_unset)] = None
 
