@@ -57,7 +57,8 @@ from dnd.player.facts import (
     PlayerWorld, PlayerResolution, LightRow, SensoryFact, SensoryRows, ShoveFact, SpellApplication, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
     VersionRows, VisualItem, VisualLoadout, WorldUpdate, ItemLook, ItemPatch, ItemProfile, ItemState, PlayerItem, TileFieldUpdate, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
 )
-from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
+from dnd.player.capture import (ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact,
+    recorded_actor_change)
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
 from dnd.player.reduction import (apply_record_fact, apply_hud, apply_sensed_fact, apply_world_update, change_membership,
     commit_current, fold_senses, observe_body, observed_actor, occurrence_order)
@@ -1421,7 +1422,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[ObjectiveRow, ...]
         if not event.canceled:
             if isinstance(event, EntityCreatedEvent):
                 private_actors[event.entity_uuid] = actor_from_birth(event)
-            if (change := actor_fact_changes.get(event.uuid)) is not None:
+            if (change := recorded_actor_change(actor_fact_changes, event)) is not None:
                 for identity in apply_presented_change(private_actors, change):
                     if identity == change.owner_uuid:
                         continue

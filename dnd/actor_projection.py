@@ -12,7 +12,7 @@ from dnd.core.creature_types import Size
 from dnd.core.events import DamageAppliedEvent, EntityCreatedEvent, EntityFactionChangedEvent, Event, EventType, HealEvent, LifeStateChangeEvent, SpatialChangeEvent, SpatialChangeType, TemporaryHitPointsChangedEvent
 from dnd.core.item_types import ItemLocation
 from dnd.core.life_types import LifeState
-from dnd.types.actor_facts import ActorFactChange, ActorFieldValues, ActorState, ConditionFact, ItemResources
+from dnd.types.actor_facts import ActorFactChange, ActorFieldValues, ActorState, ConditionFact, HeldItem, ItemResources
 from dnd.types.actor import EntityStatsState, SpatialDisposition
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent, ConditionStateChangedEvent
 
@@ -94,20 +94,19 @@ def actor_fact_change(event: Event, condition: ConditionFact | None = None) -> A
         case EntityFactionChangedEvent():
             return ActorFactChange(owner, {"faction": event.faction_after})
         case ItemHoldingsReleasedEvent():
-            return ActorFactChange(owner, items_removed=(event.item_uuid,))
+            return ActorFactChange(owner, dropped_item=event.item_uuid)
         case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT):
-            item = event.item_state
-            layers: tuple[tuple[str, UUID], ...] = ()
+            slot: str | None = None
             if event.location is ItemLocation.EQUIPMENT:
                 if event.equipment_slot is None:
                     raise ValueError("equipped item fact requires its committed slot")
-                layers = ((event.equipment_slot.value, item.item_uuid),)
+                slot = event.equipment_slot.value
             values: ActorFieldValues = {}
             if event.entity_armor_class_after is not None:
                 values["armor_class"] = event.entity_armor_class_after
             # One location has one holder: the item leaves every other holder.
-            return ActorFactChange(owner, values, items_set=(item,), layers_removed=(item.item_uuid,),
-                                   layers_set=layers, released_item=item.item_uuid)
+            return ActorFactChange(owner, values, held_item=HeldItem(event.item_state, slot),
+                                   released_item=event.item_state.item_uuid)
         case ItemLocationStateEvent():
             return ActorFactChange(None, released_item=event.item_state.item_uuid)
         case SpatialChangeEvent(change_type=SpatialChangeType.ENTITY_ENTERED | SpatialChangeType.ENTITY_LEFT):
@@ -118,7 +117,7 @@ def actor_fact_change(event: Event, condition: ConditionFact | None = None) -> A
                 values["occupancy_layer"] = event.occupancy_layer
             return ActorFactChange(owner, values)
         case ItemResourceChangeEvent():
-            return ActorFactChange(owner, item_resources=ItemResources(event.item_uuid, event.charges_after,
+            return ActorFactChange(owner, used_item=ItemResources(event.item_uuid, event.charges_after,
                 event.stack_count_after, event.item_destroyed))
         case AttackEvent() if event.attack_outcome is not None:
             selected = (WeaponSet.NONE if event.attack_source_kind != "equipped" else
@@ -176,24 +175,23 @@ def _owner_after(actor: ActorState, change: ActorFactChange) -> ActorState:
             members[member.condition_uuid] = member
         conditions = tuple(members.values())
     items, equipment = actor.items, actor.equipment
-    if change.items_removed:
-        removed = change.items_removed
-        items = tuple(item for item in items if item.item_uuid not in removed)
-        equipment = tuple((slot, identity) for slot, identity in equipment if identity not in removed)
-    if (resources := change.item_resources) is not None:
-        used = resources.item_uuid
-        items = tuple(item.model_copy(update={"charges": resources.charges, "stack_count": resources.stack_count})
-                      if item.item_uuid == used else item for item in items
-                      if not (resources.destroyed and item.item_uuid == used))
+    if (dropped := change.dropped_item) is not None:
+        items = tuple(item for item in items if item.item_uuid != dropped)
+        equipment = tuple((slot, identity) for slot, identity in equipment if identity != dropped)
+    if (used := change.used_item) is not None:
+        items = tuple(item.model_copy(update={"charges": used.charges, "stack_count": used.stack_count})
+                      if item.item_uuid == used.item_uuid else item for item in items
+                      if not (used.destroyed and item.item_uuid == used.item_uuid))
         equipment = tuple((slot, identity) for slot, identity in equipment
-                          if not (resources.destroyed and identity == used))
-    if change.items_set:
-        held = {item.item_uuid: item for item in items}
-        held.update((item.item_uuid, item) for item in change.items_set)
-        items = tuple(held.values())
-    if change.layers_removed or change.layers_set:
-        slots = {slot: identity for slot, identity in equipment if identity not in change.layers_removed}
-        slots.update(change.layers_set)
+                          if not (used.destroyed and identity == used.item_uuid))
+    if (held := change.held_item) is not None:
+        identity = held.item.item_uuid
+        by_uuid = {item.item_uuid: item for item in items}
+        by_uuid[identity] = held.item
+        items = tuple(by_uuid.values())
+        slots = {slot: worn for slot, worn in equipment if worn != identity}
+        if held.slot is not None:
+            slots[held.slot] = identity
         equipment = tuple(slots.items())
     return replace(actor, **change.values, conditions=conditions, items=items, equipment=equipment)
 

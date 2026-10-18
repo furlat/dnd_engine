@@ -441,7 +441,7 @@ def reduce_interval(
             _admit_actor(target, row)
         if event.canceled:
             continue
-        if (change := envelope.actor_fact_changes.get(event.uuid)) is not None:
+        if (change := recorded_actor_change(envelope.actor_fact_changes, event)) is not None:
             apply_presented_change(target.actors, change)
         condition = condition_facts.get(event.uuid)
         if condition is not None and (condition.resulting_tile is not None or condition.resulting_item is not None):
@@ -783,6 +783,14 @@ def _condition_fact(event: Event) -> ConditionFact | None:
     )
 
 
+def recorded_actor_change(changes: Mapping[UUID, ActorFactChange], event: Event) -> ActorFactChange | None:
+    """A retained event's actor change; every fact with an owner was recorded one by the shared fold."""
+    change = changes.get(event.uuid)
+    if change is None and actor_fact_owner(event) is not None:
+        raise ValueError(f"actor fact {event.uuid} lacks its recorded actor change")
+    return change
+
+
 def _actor_fact_changes(evidence: Mapping[UUID, AdmissionEvidence], events: Iterable[Event]
                         ) -> dict[UUID, ActorFactChange]:
     """These retained events' actor changes, read from the one record of each: its version's evidence row."""
@@ -851,8 +859,8 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
                 pending.setdefault(root, {})[event.uuid] = row
         if completed:
             if change is not None:
-                # E2 keeps today's shared fold: a condition's item after-value does not yet reach the
-                # actors holding the item here (deferred to E3-bodies); every seat's fold applies it.
+                # TODO(E3-bodies): E2 keeps today's shared fold, where a condition's item after-value does not
+                # reach the actors holding the item; every seat's fold applies it.
                 apply_presented_change(actors, change if change.replaced_item is None
                                        else replace(change, replaced_item=None))
             if (isinstance(event, SpatialChangeEvent) and event.terminal_release is not None
@@ -1202,7 +1210,7 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
             admission = next(admissions, None)
         if event.canceled or event.uuid in unsupported:
             continue
-        if (change := lineage.actor_fact_changes.get(event.uuid)) is not None:
+        if (change := recorded_actor_change(lineage.actor_fact_changes, event)) is not None:
             apply_presented_change(result.actors, change)
         condition = condition_facts.get(event.uuid)
         if condition is not None and (condition.resulting_tile is not None or condition.resulting_item is not None):
