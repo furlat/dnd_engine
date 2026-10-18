@@ -1,0 +1,368 @@
+{
+ "name": "w8_residues_are_keyed_by_cell_and_material",
+ "rule": "A new material arrives whole; a known one changes its amount and the contributions it set or appended; a removal takes it and its name away.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "update": {
+    "occurrence": 0,
+    "entered": {
+     "x0": 0,
+     "y0": 0,
+     "width": 4,
+     "height": 1,
+     "bits": "Dw=="
+    },
+    "tile_statics": [
+     {
+      "position": [
+       0,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100000000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       1,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100001000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       2,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100002000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       3,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100003000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     }
+    ],
+    "tile_columns": {
+     "cells": {
+      "x0": 0,
+      "y0": 0,
+      "width": 4,
+      "height": 1,
+      "bits": "Dw=="
+     },
+     "walking_cost": "AQEBAQ==",
+     "flying_cost": "AQEBAQ==",
+     "swimming_cost": "AAAAAA==",
+     "burrowing_cost": "AAAAAA==",
+     "flags": "AAAAAA==",
+     "default_light": "AwMDAw==",
+     "resolved_light": "AwMDAw=="
+    }
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {},
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 1,
+    "residue_materials": [
+     {
+      "residue_id": "residue.blood",
+      "name": "Blood",
+      "description": "A pool of blood.",
+      "max_amount": 3
+     }
+    ],
+    "residues": [
+     {
+      "position": [
+       1,
+       0
+      ],
+      "residue_id": "residue.blood",
+      "condition_uuid": "00000000-0000-4000-8000-000000005101",
+      "amount": 1,
+      "contributions": [
+       {
+        "index": 0,
+        "contribution": {
+         "ellipses": [
+          {
+           "center": [
+            1.5,
+            0.5
+           ],
+           "radius_x": 0.4,
+           "radius_y": 0.3,
+           "angle": 0.0
+          }
+         ],
+         "amount": 1,
+         "deposit_source": null
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [
+       "Blood"
+      ],
+      "residues": {
+       "residue.blood": {
+        "amount": 1,
+        "contributions": 1
+       }
+      }
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {},
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 2,
+    "residues": [
+     {
+      "position": [
+       1,
+       0
+      ],
+      "residue_id": "residue.blood",
+      "amount": 3,
+      "contributions": [
+       {
+        "index": 0,
+        "contribution": {
+         "ellipses": [
+          {
+           "center": [
+            1.5,
+            0.5
+           ],
+           "radius_x": 0.4,
+           "radius_y": 0.3,
+           "angle": 0.0
+          }
+         ],
+         "amount": 2,
+         "deposit_source": null
+        }
+       },
+       {
+        "index": 1,
+        "contribution": {
+         "ellipses": [
+          {
+           "center": [
+            1.2,
+            0.8
+           ],
+           "radius_x": 0.2,
+           "radius_y": 0.2,
+           "angle": 0.0
+          }
+         ],
+         "amount": 1,
+         "deposit_source": null
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [
+       "Blood"
+      ],
+      "residues": {
+       "residue.blood": {
+        "amount": 3,
+        "contributions": 2
+       }
+      }
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {},
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 3,
+    "residues_removed": [
+     {
+      "position": [
+       1,
+       0
+      ],
+      "residue_id": "residue.blood"
+     }
+    ]
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {},
+    "connectors": []
+   }
+  }
+ ]
+}

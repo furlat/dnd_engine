@@ -1,0 +1,384 @@
+{
+ "name": "w5_suppressed_cells_retire_where_they_enter_view",
+ "rule": "A construction's suppressed cells entering view without it are retired; its provider's row replaces its own when perceived.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "update": {
+    "occurrence": 0,
+    "entered": {
+     "x0": 0,
+     "y0": 0,
+     "width": 4,
+     "height": 1,
+     "bits": "Dw=="
+    },
+    "tile_statics": [
+     {
+      "position": [
+       0,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100000000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       1,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100001000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       2,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100002000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       3,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100003000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     }
+    ],
+    "tile_columns": {
+     "cells": {
+      "x0": 0,
+      "y0": 0,
+      "width": 4,
+      "height": 1,
+      "bits": "Dw=="
+     },
+     "walking_cost": "AQEBAQ==",
+     "flying_cost": "AQEBAQ==",
+     "swimming_cost": "AAAAAA==",
+     "burrowing_cost": "AAAAAA==",
+     "flags": "AAAAAA==",
+     "default_light": "AwMDAw==",
+     "resolved_light": "AwMDAw=="
+    },
+    "object_looks": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000003003",
+      "item_id": "item.fold_vectors.stone_wall",
+      "visual_item_name": "stone wall",
+      "contact_passage": "structural"
+     }
+    ],
+    "objects": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000003003",
+      "state": {
+       "name": "Stone wall",
+       "map_char": "S",
+       "construction_suppressions": [
+        {
+         "provider_uuid": "00000000-0000-4000-8000-000000006001",
+         "positions": [
+          [
+           2,
+           0
+          ],
+          [
+           3,
+           0
+          ]
+         ],
+         "provider_content_ref": null,
+         "area_geometry": null,
+         "anchor_elevation_steps": null
+        }
+       ]
+      },
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000003003",
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          0,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100000000"
+        }
+       ],
+       "removed_bands": []
+      }
+     }
+    ]
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000003003": {
+      "position": [
+       0,
+       0
+      ],
+      "members": 1,
+      "name": "Stone wall",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {
+       "00000000-0000-4000-8000-000000006001": [
+        [
+         2,
+         0
+        ],
+        [
+         3,
+         0
+        ]
+       ]
+      },
+      "contents": null
+     }
+    },
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 1,
+    "entered": {
+     "x0": 3,
+     "y0": 0,
+     "width": 1,
+     "height": 1,
+     "bits": "AQ=="
+    },
+    "tile_columns": {
+     "cells": {
+      "x0": 3,
+      "y0": 0,
+      "width": 1,
+      "height": 1,
+      "bits": "AQ=="
+     },
+     "walking_cost": "AQ==",
+     "flying_cost": "AQ==",
+     "swimming_cost": "AA==",
+     "burrowing_cost": "AA==",
+     "flags": "AA==",
+     "default_light": "Aw==",
+     "resolved_light": "Aw=="
+    }
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000003003": {
+      "position": [
+       0,
+       0
+      ],
+      "members": 1,
+      "name": "Stone wall",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {
+       "00000000-0000-4000-8000-000000006001": [
+        [
+         2,
+         0
+        ]
+       ]
+      },
+      "contents": null
+     }
+    },
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 2,
+    "objects": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000003003",
+      "state": {
+       "name": "Stone wall",
+       "map_char": "S",
+       "construction_suppressions": [
+        {
+         "provider_uuid": "00000000-0000-4000-8000-000000006001",
+         "positions": [
+          [
+           1,
+           0
+          ]
+         ],
+         "provider_content_ref": null,
+         "area_geometry": null,
+         "anchor_elevation_steps": null
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000003003": {
+      "position": [
+       0,
+       0
+      ],
+      "members": 1,
+      "name": "Stone wall",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {
+       "00000000-0000-4000-8000-000000006001": [
+        [
+         1,
+         0
+        ]
+       ]
+      },
+      "contents": null
+     }
+    },
+    "connectors": []
+   }
+  }
+ ]
+}

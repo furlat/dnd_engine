@@ -1020,6 +1020,20 @@ def test_seat_publication_does_not_import_the_client_fold() -> None:
     )
 
 
+# The schema-16 world wire stages beside the projector until the switch moves its types into facts.py: only the
+# client fold and its codec import it (and its vector tooling, outside production).
+WORLD_WIRE_STAGING = "dnd.player.world_wire"
+WORLD_WIRE_STAGING_READERS = frozenset({"dnd.player.world_reduction", "dnd.player.world_columns"})
+
+
+def test_staged_world_wire_is_read_only_by_the_client_fold() -> None:
+    violations = [reference for reference in _import_references()
+        if reference.target == WORLD_WIRE_STAGING and reference.importer not in WORLD_WIRE_STAGING_READERS]
+    assert not violations, (
+        "Only the client world fold reads the staged world wire:\n" + _format_import_references(violations)
+    )
+
+
 def test_game_import_does_not_load_ai_or_server_packages() -> None:
     """Importing the active client must not load AI or the retired server."""
     marker = "__DND_ARCH_AI_MODULES__="

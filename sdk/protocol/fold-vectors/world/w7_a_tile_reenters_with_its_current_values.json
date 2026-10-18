@@ -1,0 +1,355 @@
+{
+ "name": "w7_a_tile_reenters_with_its_current_values",
+ "rule": "A re-entering tile carries its current values without its static row; a tile replaced in view enters with its new static row.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "update": {
+    "occurrence": 0,
+    "entered": {
+     "x0": 0,
+     "y0": 0,
+     "width": 4,
+     "height": 1,
+     "bits": "Dw=="
+    },
+    "tile_statics": [
+     {
+      "position": [
+       0,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100000000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       1,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100001000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       2,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100002000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       3,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100003000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     }
+    ],
+    "tile_columns": {
+     "cells": {
+      "x0": 0,
+      "y0": 0,
+      "width": 4,
+      "height": 1,
+      "bits": "Dw=="
+     },
+     "walking_cost": "AQEBAQ==",
+     "flying_cost": "AQEBAQ==",
+     "swimming_cost": "AAAAAA==",
+     "burrowing_cost": "AAAAAA==",
+     "flags": "AAAAAA==",
+     "default_light": "AwMDAw==",
+     "resolved_light": "AwMDAw=="
+    }
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {},
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 1,
+    "entered": {
+     "x0": 1,
+     "y0": 0,
+     "width": 1,
+     "height": 1,
+     "bits": "AQ=="
+    },
+    "tile_columns": {
+     "cells": {
+      "x0": 1,
+      "y0": 0,
+      "width": 1,
+      "height": 1,
+      "bits": "AQ=="
+     },
+     "walking_cost": "AQ==",
+     "flying_cost": "AQ==",
+     "swimming_cost": "AA==",
+     "burrowing_cost": "AA==",
+     "flags": "AA==",
+     "default_light": "Ag==",
+     "resolved_light": "Ag=="
+    },
+    "tile_conditions": [
+     {
+      "position": [
+       1,
+       0
+      ],
+      "names": [
+       "Difficult terrain"
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 2,
+      "conditions": [
+       "Difficult terrain"
+      ],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {},
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 2,
+    "tile_changes": [
+     {
+      "position": [
+       1,
+       0
+      ],
+      "changes": {
+       "walking_cost": 2
+      }
+     }
+    ],
+    "resolved_light": {
+     "cells": {
+      "x0": 1,
+      "y0": 0,
+      "width": 1,
+      "height": 1,
+      "bits": "AQ=="
+     },
+     "values": "Aw=="
+    }
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 2,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [
+       "Difficult terrain"
+      ],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {},
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 3,
+    "entered": {
+     "x0": 1,
+     "y0": 0,
+     "width": 1,
+     "height": 1,
+     "bits": "AQ=="
+    },
+    "tile_statics": [
+     {
+      "position": [
+       1,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000101001000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     }
+    ],
+    "tile_columns": {
+     "cells": {
+      "x0": 1,
+      "y0": 0,
+      "width": 1,
+      "height": 1,
+      "bits": "AQ=="
+     },
+     "walking_cost": "Ag==",
+     "flying_cost": "AQ==",
+     "swimming_cost": "AA==",
+     "burrowing_cost": "AA==",
+     "flags": "AA==",
+     "default_light": "Aw==",
+     "resolved_light": "Aw=="
+    }
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000101001000",
+      "walking_cost": 2,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {},
+    "connectors": []
+   }
+  }
+ ]
+}

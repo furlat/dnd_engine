@@ -1,0 +1,309 @@
+{
+ "name": "w10_object_rows_name_their_members",
+ "rule": "A seat with several observers names the members observing each object; a row without a state changes only them.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a",
+  "00000000-0000-4000-8000-00000000000b"
+ ],
+ "steps": [
+  {
+   "update": {
+    "occurrence": 0,
+    "entered": {
+     "x0": 0,
+     "y0": 0,
+     "width": 4,
+     "height": 1,
+     "bits": "Dw=="
+    },
+    "tile_statics": [
+     {
+      "position": [
+       0,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100000000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       1,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100001000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       2,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100002000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       3,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100003000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     }
+    ],
+    "tile_columns": {
+     "cells": {
+      "x0": 0,
+      "y0": 0,
+      "width": 4,
+      "height": 1,
+      "bits": "Dw=="
+     },
+     "walking_cost": "AQEBAQ==",
+     "flying_cost": "AQEBAQ==",
+     "swimming_cost": "AAAAAA==",
+     "burrowing_cost": "AAAAAA==",
+     "flags": "AAAAAA==",
+     "default_light": "AwMDAw==",
+     "resolved_light": "AwMDAw=="
+    },
+    "object_looks": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000002001",
+      "item_id": "item.fold_vectors.box",
+      "visual_item_name": "box",
+      "contact_passage": "structural"
+     }
+    ],
+    "objects": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000002001",
+      "members": 1,
+      "state": {
+       "name": "Box",
+       "map_char": "B"
+      },
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002001",
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          1,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100001000"
+        }
+       ],
+       "removed_bands": []
+      }
+     }
+    ]
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000002001": {
+      "position": [
+       1,
+       0
+      ],
+      "members": 1,
+      "name": "Box",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {},
+      "contents": null
+     }
+    },
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 1,
+    "objects": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000002001",
+      "members": 3
+     }
+    ]
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000002001": {
+      "position": [
+       1,
+       0
+      ],
+      "members": 3,
+      "name": "Box",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {},
+      "contents": null
+     }
+    },
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 2,
+    "objects": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000002001",
+      "members": 2
+     }
+    ]
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": "00000000-0000-4000-8000-000100001000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": "00000000-0000-4000-8000-000100002000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": "00000000-0000-4000-8000-000100003000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000002001": {
+      "position": [
+       1,
+       0
+      ],
+      "members": 2,
+      "name": "Box",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {},
+      "contents": null
+     }
+    },
+    "connectors": []
+   }
+  }
+ ]
+}
