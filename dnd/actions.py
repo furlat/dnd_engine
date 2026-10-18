@@ -50,6 +50,7 @@ from dnd.spells.content_metadata import get_spell_catalog_metadata
 from dnd.types.summoning import SummonApplication
 from dnd.types.discovery import ActorScan
 from dnd.core.elevation import support_distance_feet
+from dnd.core.navigation import has_route, remember_blocked_cell, remember_blocked_sides, route
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.action_types import ActionAffordance, ActionSelection, ActionVariantFacet, CostSource, RestrictedActionKind
@@ -631,16 +632,14 @@ class Move(BaseAction):
         mover = Entity.get(self.source_entity_uuid)
         if mover is None:
             return None
-        safe = mover.senses.safe_paths.get(end_position) if self.movement_mode is MovementMode.WALKING else None
-        if (prefer_safe and safe is not None and mover.movement_path_cost_feet(list(safe), MovementMode.WALKING)
+        safe = route(mover.senses.safe_paths, end_position) if self.movement_mode is MovementMode.WALKING else None
+        if (prefer_safe and safe is not None and mover.movement_path_cost_feet(safe, MovementMode.WALKING)
                 <= mover.action_economy.movement_remaining()):
-            return list(safe)
+            return safe
         if self.movement_mode is MovementMode.WALKING:
-            known = mover.senses.paths.get(end_position)
-            return list(known) if known is not None else None
-        _, paths = get_map().compute_paths(mover.position, requesting_entity_uuid=mover.uuid,
-            movement_mode=self.movement_mode, subjective=True)
-        return paths.get(end_position)
+            return route(mover.senses.paths, end_position)
+        return route(get_map().compute_paths(mover.position, requesting_entity_uuid=mover.uuid,
+            movement_mode=self.movement_mode, subjective=True), end_position)
 
     def _setup_costs_from_path(self) -> None:
         """Rebuild the movement cost from the resolved path and terrain."""
@@ -719,17 +718,16 @@ class Move(BaseAction):
         source_entity = Entity.get(self.source_entity_uuid)
         if source_entity is None:
             return None
-        if self.movement_mode == MovementMode.WALKING and self.prefer_safe and end_position in source_entity.senses.safe_paths:
-            return source_entity.senses.safe_paths[end_position]
+        if self.movement_mode == MovementMode.WALKING and self.prefer_safe and has_route(source_entity.senses.safe_paths, end_position):
+            return route(source_entity.senses.safe_paths, end_position)
         if self.movement_mode == MovementMode.WALKING:
-            return source_entity.senses.paths.get(end_position)
-        _, paths = get_map().compute_paths(
+            return route(source_entity.senses.paths, end_position)
+        return route(get_map().compute_paths(
             source_entity.position,
             requesting_entity_uuid=source_entity.uuid,
             movement_mode=self.movement_mode,
             subjective=True,
-        )
-        return paths.get(end_position)
+        ), end_position)
 
     def set_target_position(self, position: Tuple[int, int]) -> None:
         """Set target position and compute path/costs for validation.
@@ -823,17 +821,16 @@ class Move(BaseAction):
         end_position: Tuple[int, int] = self.end_position
 
         path = self.path
-        if path is None and self.movement_mode == MovementMode.WALKING and end_position in source_entity.senses.paths:
-            path = source_entity.senses.paths[end_position]
+        if path is None and self.movement_mode == MovementMode.WALKING and has_route(source_entity.senses.paths, end_position):
+            path = route(source_entity.senses.paths, end_position)
         elif path is None and self.movement_mode != MovementMode.WALKING:
             grid = get_map()
-            _, paths = grid.compute_paths(
+            path = route(grid.compute_paths(
                 source_entity.position,
                 requesting_entity_uuid=source_entity.uuid,
                 movement_mode=self.movement_mode,
                 subjective=True,
-            )
-            path = paths.get(end_position)
+            ), end_position)
 
         costs = list(self.costs)
         if path is not None and self.use_movement_cost:
@@ -951,11 +948,12 @@ class Move(BaseAction):
                         from_tile = grid.get_tile(*from_pos)
                         if from_tile:
                             directions = list(from_tile.directions_toward(to_pos))
+                        senses = source_entity.senses
                         if cell_blocked:
-                            source_entity.senses.collision_blocked.add(to_pos)
-                        else:
-                            for direction in directions:
-                                source_entity.senses.directional_collision_blocked.add((from_pos, direction))
+                            senses.collision_blocked = remember_blocked_cell(senses.collision_blocked, to_pos)
+                        elif directions:
+                            senses.directional_collision_blocked = remember_blocked_sides(
+                                senses.directional_collision_blocked, from_pos, directions)
                         collision_event = SpatialChangeEvent.movement_collision(
                             position=to_pos, mover_uuid=source_entity.uuid,
                             parent_event=effect_event.uuid,

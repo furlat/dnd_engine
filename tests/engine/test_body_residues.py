@@ -17,6 +17,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.events import Damage, DamageAppliedEvent, EventPhase, EventQueue, EventType, SpatialChangeEvent, SpatialChangeType
 from dnd.core.gridmap import get_map
+from dnd.core.navigation import has_route
 from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity, EntityConfig
 from dnd.items.environment import DirectionalDoor
@@ -268,13 +269,13 @@ def test_deposition_is_inert_until_entry_and_removal_restores_safe_route(world: 
     assert creature.get_hp() == hp - 6
     Entity.update_entity_position(creature, (1, 1))
     grid = get_map()
-    _, unsafe_paths = grid.compute_paths(creature.position, requesting_entity_uuid=creature.uuid,
-                                          walk_in_danger=False)
-    assert tile.position not in unsafe_paths
-    assert remove_tile_residue(tile, residue.residue_id)
-    _, safe_paths = grid.compute_paths(creature.position, requesting_entity_uuid=creature.uuid,
+    unsafe_paths = grid.compute_paths(creature.position, requesting_entity_uuid=creature.uuid,
                                       walk_in_danger=False)
-    assert tile.position in safe_paths
+    assert not has_route(unsafe_paths, tile.position)
+    assert remove_tile_residue(tile, residue.residue_id)
+    safe_paths = grid.compute_paths(creature.position, requesting_entity_uuid=creature.uuid,
+                                    walk_in_danger=False)
+    assert has_route(safe_paths, tile.position)
     Entity.update_entity_position(creature, tile.position)
     assert creature.get_hp() == hp - 6
     assert tile.to_world_tile_state().residues == ()

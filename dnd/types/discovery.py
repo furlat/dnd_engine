@@ -77,7 +77,7 @@ class ActorScan:
     `subjective` is the knowledge every check reads the world with: discovery
     and preview see what the actor perceives, execution sees the world.
 
-    `reachable_costs`, `reach_cells` and `threat_domains` are navigation: only a
+    `reach_cells` and `threat_domains` are navigation: only a
     discovery scan carries them; an executed action's scan leaves them empty.
     """
 
@@ -88,7 +88,6 @@ class ActorScan:
     creatures: Mapping[UUID, ScanRecord]
     objects: Mapping[UUID, ObjectRecord]
     carried_items: FrozenSet[UUID]
-    reachable_costs: Mapping[Position, int]
     reach_cells: FrozenSet[Position]
     threat_domains: Mapping[UUID, FrozenSet[Position]]
     slot_capacity: Mapping[int, int]

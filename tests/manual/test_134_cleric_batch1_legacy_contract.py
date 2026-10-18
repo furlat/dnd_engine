@@ -63,6 +63,7 @@ from tests.manual.spell_regression_support import (
     reset_spell_regression_arena,
 )
 from dnd.core.values import Channel, Kind, add_modifier
+from tests.engine.support import route_paths
 
 
 def _dark_arena(width: int = 24, height: int = 15) -> None:
@@ -539,7 +540,7 @@ def test_command_flee_uses_voluntary_movement_and_provokes_reactions() -> None:
         cost_name="Prior turn movement",
     )
     target.update_entity_senses(max_distance=20, path_max_distance=1)
-    assert max(len(path) for path in target.senses.paths.values()) <= 2
+    assert max(len(path) for path in route_paths(target.senses.paths).values()) <= 2
     reaction_before = watcher.action_economy.reactions.normalized_score
     hit_modifier = force_attack_hit(watcher)
 

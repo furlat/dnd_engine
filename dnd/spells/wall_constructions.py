@@ -20,6 +20,7 @@ from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.events import Event, EventHandler, EventType, Trigger, PortalTransferEvent, EventPhase, EventQueue, ForcedMovementEvent, ItemDestructionEvent, Range, RangeType, SpatialChangeEvent
 from dnd.core.gridmap import CrossingChannel, get_map
+from dnd.core.navigation import route, route_costs
 from dnd.core.item_types import ItemPresentationState
 from dnd.core.life_types import RemainsDisposition
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
@@ -546,15 +547,16 @@ def stone_enclosure_escapes(caster: Entity, geometry: WallAssemblyPresentationGe
         if not success:
             continue
         speed = entity.action_economy.current_speed()
-        costs, paths = grid.compute_paths(entity.position, requesting_entity_uuid=entity.uuid,
+        reached = grid.compute_paths(entity.position, requesting_entity_uuid=entity.uuid,
             max_distance=ceil(speed / 5), subjective=True)
-        exits = [p for p in paths if (p[0] < min_x or p[0] > max_x or p[1] < min_y or p[1] > max_y)
-                 and costs[p] * 5 <= speed]
+        costs = dict(route_costs(reached))
+        exits = [p for p in costs if (p[0] < min_x or p[0] > max_x or p[1] < min_y or p[1] > max_y)
+                 and costs[p] <= speed]
         if not exits:
             continue
         destination = min(exits, key=lambda p: (costs[p], p))
         escape = Move(name="Escape forming wall", source_entity_uuid=entity.uuid, end_position=destination,
-            path=paths[destination], use_movement_cost=False, movement_allowance_feet=speed,
+            path=route(reached, destination), use_movement_cost=False, movement_allowance_feet=speed,
             costs=[Cost(name="Wall enclosure escape", cost_type="reactions", cost=1,
                         evaluator=entity_action_economy_cost_evaluator)])
         entity.perform(escape, escape.current_selection(), parent_event=parent_event)

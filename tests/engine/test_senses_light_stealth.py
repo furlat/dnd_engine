@@ -28,6 +28,8 @@ from dnd.core.events import (
     SpatialChangeEvent,
 )
 from dnd.core.gridmap import get_map
+from dnd.core.navigation import has_route, remember_blocked_cell, route, side_bit
+from dnd.core.view import layer_positions, layer_value
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.encounter import Encounter
@@ -535,8 +537,8 @@ def test_eb_12_007_subjective_paths_do_not_leak_imperceivable_blockers() -> None
     Entity.update_all_entities_senses(max_distance=5)
 
     assert invisible.uuid not in observer.senses.entities
-    assert (2, 0) in observer.senses.paths
-    assert (4, 0) in observer.senses.paths
+    assert has_route(observer.senses.paths, (2, 0))
+    assert has_route(observer.senses.paths, (4, 0))
 
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=60)
@@ -544,8 +546,8 @@ def test_eb_12_007_subjective_paths_do_not_leak_imperceivable_blockers() -> None
     Entity.update_all_entities_senses(max_distance=5)
 
     assert invisible.uuid in observer.senses.entities
-    assert (2, 0) not in observer.senses.paths
-    assert (4, 0) not in observer.senses.paths
+    assert not has_route(observer.senses.paths, (2, 0))
+    assert not has_route(observer.senses.paths, (4, 0))
 
 
 def test_eb_12_008_self_movement_updates_visibility_and_marks_paths_dirty() -> None:
@@ -771,7 +773,7 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
     )
     Entity.update_all_entities_senses(max_distance=5)
 
-    assert (1, 0) in mover.senses.paths
+    assert has_route(mover.senses.paths, (1, 0))
     assert grid.can_transition((0, 0), (1, 0), mover.uuid, subjective=True)
     assert not grid.can_transition((0, 0), (1, 0), mover.uuid)
 
@@ -779,11 +781,11 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
 
     assert result is not None
     assert mover.position == (0, 0)
-    assert mover.senses.collision_blocked == set()
-    assert ((0, 0), "east") in mover.senses.directional_collision_blocked
+    assert layer_positions(mover.senses.collision_blocked) == []
+    assert layer_value(mover.senses.directional_collision_blocked, (0, 0)) == side_bit(CardinalDirection.EAST)
 
     mover.update_entity_senses(max_distance=5)
-    remembered_path = mover.senses.paths[(1, 0)]
+    remembered_path = route(mover.senses.paths, (1, 0))
     assert remembered_path != [(0, 0), (1, 0)]
     assert grid.can_transition(
         (1, 1),
@@ -793,7 +795,7 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
         directional_collision_blocked=mover.senses.directional_collision_blocked,
     )
 
-    mover.senses.collision_blocked.add((2, 0))
+    mover.senses.collision_blocked = remember_blocked_cell(mover.senses.collision_blocked, (2, 0))
     encounter = Encounter(name="Collision Cleanup", source_entity_uuid=uuid4())
     encounter.add_combatant(mover, PassController(source_entity_uuid=mover.uuid))
     encounter.add_combatant(other, PassController(source_entity_uuid=other.uuid))
@@ -801,9 +803,9 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
     encounter.start_encounter()
     encounter.start_turn()
 
-    assert mover.senses.collision_blocked == set()
-    assert mover.senses.directional_collision_blocked == set()
-    assert mover.senses.paths[(1, 0)] == [(0, 0), (1, 0)]
+    assert layer_positions(mover.senses.collision_blocked) == []
+    assert layer_positions(mover.senses.directional_collision_blocked) == []
+    assert route(mover.senses.paths, (1, 0)) == [(0, 0), (1, 0)]
 
 
 def test_eb_12_014_plain_invisible_and_spell_invisibility_have_different_reveal_contracts() -> None:
@@ -869,7 +871,7 @@ def test_eb_12_015_hidden_cell_blocker_reveals_on_movement_collision() -> None:
     Entity.update_all_entities_senses(max_distance=5)
 
     assert hidden_blocker.uuid not in mover.senses.entities
-    assert (1, 0) in mover.senses.paths
+    assert has_route(mover.senses.paths, (1, 0))
     assert get_map().can_transition((0, 0), (1, 0), mover.uuid, subjective=True)
     assert not get_map().can_transition((0, 0), (1, 0), mover.uuid)
 
@@ -877,7 +879,7 @@ def test_eb_12_015_hidden_cell_blocker_reveals_on_movement_collision() -> None:
 
     assert result is not None and result.canceled
     assert mover.position == (0, 0)
-    assert mover.senses.collision_blocked == {(1, 0)}
+    assert layer_positions(mover.senses.collision_blocked) == [(1, 0)]
     assert "Hidden" not in hidden_blocker.active_conditions
     assert hidden_blocker.stealth_dc is None
     assert hidden_blocker.uuid in mover.senses.entities
@@ -1585,7 +1587,7 @@ def test_eb_12_029_invisible_collision_stops_repaths_and_preserves_invisibility(
     Entity.update_all_entities_senses(max_distance=10)
 
     assert invisible.uuid not in mover.senses.entities
-    assert mover.senses.paths[(4, 1)] == [
+    assert route(mover.senses.paths, (4, 1)) == [
         (0, 1),
         (1, 1),
         (2, 1),
@@ -1603,7 +1605,7 @@ def test_eb_12_029_invisible_collision_stops_repaths_and_preserves_invisibility(
     assert not result.canceled
     assert result.status_message == "Partial movement for Move, stopped at (1, 1)"
     assert mover.position == (1, 1)
-    assert mover.senses.collision_blocked == {(2, 1)}
+    assert layer_positions(mover.senses.collision_blocked) == [(2, 1)]
     assert invisible.is_invisible is True
     assert "Invisible" in invisible.active_conditions
     collision_completions = [
@@ -1618,7 +1620,8 @@ def test_eb_12_029_invisible_collision_stops_repaths_and_preserves_invisibility(
 
     mover.update_entity_senses(max_distance=10)
 
-    corrected_path = mover.senses.paths[(4, 1)]
+    corrected_path = route(mover.senses.paths, (4, 1))
+    assert corrected_path is not None
     assert corrected_path[0] == mover.position
     assert corrected_path[-1] == (4, 1)
     assert (2, 1) not in corrected_path
@@ -1828,8 +1831,8 @@ def test_eb_12_031_perception_thresholds_refilter_contacts_and_hazards() -> None
 
     assert easy_hidden.uuid in observer.senses.entities
     assert hard_hidden.uuid not in observer.senses.entities
-    assert easy_hidden.position not in observer.senses.paths
-    assert hard_hidden.position in observer.senses.paths
+    assert not has_route(observer.senses.paths, easy_hidden.position)
+    assert has_route(observer.senses.paths, hard_hidden.position)
     assert grid.is_position_hazardous_for(4, 0, observer.uuid)
     assert not grid.is_position_hazardous_for(4, 2, observer.uuid)
 
@@ -1922,7 +1925,7 @@ def test_eb_12_032_hidden_transition_invalidates_subjective_occupancy_paths() ->
     Entity.update_all_entities_senses(max_distance=5)
 
     assert target.uuid in observer.senses.entities
-    assert target.position not in observer.senses.paths
+    assert not has_route(observer.senses.paths, target.position)
 
     target.add_condition(
         Hidden(
@@ -1934,13 +1937,13 @@ def test_eb_12_032_hidden_transition_invalidates_subjective_occupancy_paths() ->
     observer.update_entity_senses(max_distance=5)
 
     assert target.uuid not in observer.senses.entities
-    assert target.position in observer.senses.paths
+    assert has_route(observer.senses.paths, target.position)
 
     target.remove_condition("Hidden")
     observer.update_entity_senses(max_distance=5)
 
     assert target.uuid in observer.senses.entities
-    assert target.position not in observer.senses.paths
+    assert not has_route(observer.senses.paths, target.position)
 
 
 if __name__ == "__main__":

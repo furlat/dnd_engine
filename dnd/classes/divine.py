@@ -14,6 +14,7 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.gridmap import get_map
+from dnd.core.navigation import route_items
 from dnd.core.creature_types import CreatureType
 from dnd.entity import Entity
 from dnd.spells.spell_utils import target_turn_expiry_handler
@@ -174,7 +175,7 @@ class Turned(BaseCondition):
         )
         grid = get_map()
         candidates = []
-        for destination, path in target.senses.paths.items():
+        for destination, path in route_items(target.senses.paths):
             if len(path) < 2 or grid_distance_feet(
                 destination, source.position
             ) <= grid_distance_feet(target.position, source.position):

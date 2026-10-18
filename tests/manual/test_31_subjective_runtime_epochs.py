@@ -54,6 +54,7 @@ from dnd.spells.necromancy import BestowCurse, EyebiteStrike
 from tests.manual.test_53_srd_monster_traits import _materialize_srd_fixture, reset_srd_trait_state
 from tests.content_identity import synthetic_action_identity
 from dnd.core.cells import mask_positions
+from dnd.core.navigation import has_route, route_count
 
 
 @pytest.fixture(autouse=True)
@@ -1352,7 +1353,7 @@ def test_move_discovery_reuses_subjective_path_projection(monkeypatch) -> None:
         if action.template_name == "Move"
     )
     assert first_move.valid_targets == second_move.valid_targets
-    assert archmage.senses.path_costs
+    assert route_count(archmage.senses.paths)
 
     remaining_movement = archmage.action_economy.movement_remaining()
     archmage._collect_path_actions(remaining_movement - 5)
@@ -1455,7 +1456,7 @@ def test_visible_position_spell_targets_are_not_limited_to_walkable_paths() -> N
     occupied_positions = {contact.position for contact in mage.senses.entities.values()}
 
     assert occupied_positions
-    assert all(position not in mage.senses.paths for position in occupied_positions)
+    assert all(not has_route(mage.senses.paths, position) for position in occupied_positions)
     actions = mage.get_available_actions()
     web = next(
         row

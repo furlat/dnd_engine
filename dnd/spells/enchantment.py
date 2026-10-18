@@ -55,6 +55,7 @@ from dnd.core.modifiers import (
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.core.aoe import AoEShape, Sphere, objective_footprint
 from dnd.core.gridmap import get_map
+from dnd.core.navigation import route_items
 
 from dnd.entity import Entity
 from dnd.encounter import Encounter
@@ -1804,9 +1805,10 @@ class CommandFleeEffect(CommandNextTurnEffect):
                 abs(target.position[0] - caster_pos[0])
                 + abs(target.position[1] - caster_pos[1])
             )
+            known_paths = dict(route_items(target.senses.paths))
             farther_positions = [
                 position
-                for position, path in target.senses.paths.items()
+                for position, path in known_paths.items()
                 if (
                     len(path) > 1
                     and (
@@ -1826,7 +1828,7 @@ class CommandFleeEffect(CommandNextTurnEffect):
                         position[1],
                     ),
                 )
-                path = list(target.senses.paths[best_position])
+                path = known_paths[best_position]
                 flight = Move(source_entity_uuid=target.uuid, end_position=best_position, path=path)
                 target.perform(flight, flight.current_selection(), parent_event=event)
 
