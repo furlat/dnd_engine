@@ -597,3 +597,12 @@ Hard rules:
   - Magic Missile settlement 30 → 3 observers, native 22 → 17 ms. Other rows are within noise.
   - Dead code noted: `GridMap.publish_tile_state_changed` (the cleanup lane deletes it).
 - 2026-10-18: **Test memory re-measured:** the former 15–20 GB spell tests peak at 0.23 GB, and a 25-file sweep chunk at 0.29 GB. Parallel test lanes are fine; the caps stay as a safety net.
+- 2026-10-18: **Correction to the PT-navigation entry ("`AreaCondition.crossing_channels` defaults to None"):** stale.
+  - `AreaCondition` declares `frozenset()` (area_conditions.py:1061), and so do the trap and mechanism families. Only the base `SpatialCondition` keeps `None`, restored in b98543e50 because the contract test `test_undeclared_custom_rule_still_blocks_outside_registered_footprint` requires undeclared rules to stay global.
+  - Crossing oracle (enp-crossing lane):
+    - 66 zone classes;
+    - gallery, 9 cases: 46,272 crossing queries, 0 with a global owner;
+    - tests: 1,575,580 queries, global owners only the contract test's remote rule and bare test conditions;
+    - 0 unconsulted zones that would block.
+  - Decision (integrator): no change; the gain is zero.
+  - Open: whatever made navigation take Python per-step checks in Gust is something else (to look at in the native study).
