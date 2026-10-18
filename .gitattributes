@@ -1,3 +1,4 @@
 # Keep imported authoring bytes intact and generated JSON stable on checkout.
 /game/data/neuroclient/source/** -text
 /game/data/neuroclient/*.json text eol=lf
+/sdk/protocol/fold-vectors/** text eol=lf
