@@ -397,53 +397,79 @@ def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
     )
 
 
-def _seen_added(before: CellLayer, after: CellLayer, initial: bool) -> CellMask:
-    if initial or not before.values.size:
-        return pack_mask(after.x0, after.y0, after.values.astype(bool))
-    if not after.values.size:
-        return EMPTY_CELLS
-    box = union_box(before.box, after.box)
-    return pack_mask(box[0], box[1], embed(after, box, np.dtype(bool)) & ~embed(before, box, np.dtype(bool)))
+@dataclass(frozen=True)
+class CellChange:
+    """One observer's published-cell change: the packed cells its sensory event carries (an initial
+    observer's against no cells) and whether its visible, seen and hazard cells differ from before."""
+
+    visible_added: CellMask
+    visible_removed: CellMask
+    seen_added: CellMask
+    light_changed: CellValues        # the after light where a cell was added or its light changed
+    hazards_changed: CellValues      # the after hazard where a cell was added or its hazard changed
+    visible_differs: bool
+    seen_differs: bool
+    hazard_differs: bool
 
 
-def _cell_delta(before: PublishedSenses, after: PublishedSenses, initial: bool,
-                ) -> Tuple[CellMask, CellMask, CellMask, CellValues, CellValues]:
-    """Visible cells added and removed, seen cells added, and changed light / hazard after-values.
+NO_CELL_CHANGE = CellChange(EMPTY_CELLS, EMPTY_CELLS, EMPTY_CELLS, EMPTY_VALUES, EMPTY_VALUES, False, False, False)
 
-    Each is one mask difference over the union of the two windows, so the cost
-    follows the changed cells; published cells that did not change are the same
-    object. Each is packed straight from the arrays.
+
+def _cell_change(before: PublishedSenses, after: PublishedSenses, initial: bool) -> CellChange:
+    """Visible cells added and removed, seen cells added, and changed light / hazard after-values,
+    with whether the visible, seen and hazard cells differ at all.
+
+    Each is one mask difference over the union of the two windows, so the cost follows the window,
+    not the changed cells; published cells that did not change are the same object. Each is packed
+    straight from the arrays. An initial observer's delta is against no cells; its flags compare
+    with what it held before.
     """
     if not initial and before.cells is after.cells and before.seen is after.seen:
-        return EMPTY_CELLS, EMPTY_CELLS, EMPTY_CELLS, EMPTY_VALUES, EMPTY_VALUES
-    seen_added = EMPTY_CELLS if not initial and before.seen is after.seen else _seen_added(before.seen, after.seen, initial)
+        return NO_CELL_CHANGE
+    seen_added, seen_differs = EMPTY_CELLS, False
+    if initial or before.seen is not after.seen:
+        if not before.seen.values.size or not after.seen.values.size:
+            seen_differs = bool(before.seen.values.any() or after.seen.values.any())
+            seen_added = pack_mask(after.seen.x0, after.seen.y0, after.seen.values.astype(bool))
+        else:
+            seen_box = union_box(before.seen.box, after.seen.box)
+            seen_before = embed(before.seen, seen_box, np.dtype(bool))
+            seen_after = embed(after.seen, seen_box, np.dtype(bool))
+            # The seen cells only grow (each recompute ORs its visible cells in).
+            seen_added = pack_mask(seen_box[0], seen_box[1], seen_after if initial else seen_after & ~seen_before)
+            seen_differs = bool((seen_after != seen_before).any())
     b, a = before.cells, after.cells
     if not a.visible.values.size and not b.visible.values.size:
-        return EMPTY_CELLS, EMPTY_CELLS, seen_added, EMPTY_VALUES, EMPTY_VALUES
+        return CellChange(EMPTY_CELLS, EMPTY_CELLS, seen_added, EMPTY_VALUES, EMPTY_VALUES, False, seen_differs, False)
     if not initial and b.visible is a.visible and b.light is a.light:
         # Only hazards can differ, on the visible cells.
         if b.hazard is a.hazard:
-            return EMPTY_CELLS, EMPTY_CELLS, seen_added, EMPTY_VALUES, EMPTY_VALUES
+            return CellChange(EMPTY_CELLS, EMPTY_CELLS, seen_added, EMPTY_VALUES, EMPTY_VALUES, False, seen_differs,
+                              False)
         box = a.visible.box
-        changed = a.visible.values.astype(bool) & (embed(b.hazard, box, np.dtype(bool)) != a.hazard.values)
-        return (EMPTY_CELLS, EMPTY_CELLS, seen_added, EMPTY_VALUES,
-                pack_values(box[0], box[1], changed, a.hazard.values.astype(np.uint8)))
+        moved = embed(b.hazard, box, np.dtype(bool)) != a.hazard.values
+        return CellChange(EMPTY_CELLS, EMPTY_CELLS, seen_added, EMPTY_VALUES,
+                          pack_values(box[0], box[1], a.visible.values.astype(bool) & moved,
+                                      a.hazard.values.astype(np.uint8)), False, seen_differs, bool(moved.any()))
     box = (a.visible.box if not b.visible.values.size else b.visible.box if not a.visible.values.size
            else union_box(b.visible.box, a.visible.box))
     after_visible = embed(a.visible, box, np.dtype(bool))
     after_light = embed(a.light, box, np.dtype(np.uint8))
     after_hazard = embed(a.hazard, box, np.dtype(bool))
+    before_visible = embed(b.visible, box, np.dtype(bool))
+    hazard_moved = embed(b.hazard, box, np.dtype(bool)) != after_hazard
+    visible_differs = bool((before_visible != after_visible).any())
     if initial:
         added, removed = after_visible, np.zeros_like(after_visible)
         light_changed = hazard_changed = after_visible
     else:
-        before_visible = embed(b.visible, box, np.dtype(bool))
         added, removed = after_visible & ~before_visible, before_visible & ~after_visible
         light_changed = after_visible & (~before_visible | (embed(b.light, box, np.dtype(np.uint8)) != after_light))
-        hazard_changed = after_visible & (~before_visible | (embed(b.hazard, box, np.dtype(bool)) != after_hazard))
-    return (pack_mask(box[0], box[1], added), pack_mask(box[0], box[1], removed), seen_added,
-            pack_values(box[0], box[1], light_changed, after_light),
-            pack_values(box[0], box[1], hazard_changed, after_hazard.astype(np.uint8)))
+        hazard_changed = after_visible & (~before_visible | hazard_moved)
+    return CellChange(pack_mask(box[0], box[1], added), pack_mask(box[0], box[1], removed), seen_added,
+                      pack_values(box[0], box[1], light_changed, after_light),
+                      pack_values(box[0], box[1], hazard_changed, after_hazard.astype(np.uint8)),
+                      visible_differs, seen_differs, bool(hazard_moved.any()))
 
 
 def _contact_delta(before: Dict[UUID, PerceivedContact], after: Dict[UUID, PerceivedContact], initial: bool,
@@ -472,6 +498,7 @@ def emit_sensory_update_delta(
     *,
     register_event: bool = True,
     initial: bool = False,
+    cells: CellChange,
     contact_changes: Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]] = None,
     shared: Optional[SharedValues] = None,
     contact_deltas: Optional[Tuple[Tuple[Dict[UUID, PerceivedContact], Set[UUID]],
@@ -487,6 +514,7 @@ def emit_sensory_update_delta(
         reason: Typed reason for the sensory transition.
         register_event: Whether to register the completed event immediately.
         initial: Publish the complete after-state without an unrecorded seed.
+        cells: The observer's cell change (`_cell_change`), against no cells when initial.
         contact_changes: The entities and objects whose contacts can differ, when known.
         shared: The settlement's shared values: equal change references are built once.
         contact_deltas: The entity and object contact deltas, when the caller computed them.
@@ -497,7 +525,8 @@ def emit_sensory_update_delta(
     timing = action_timing_enabled()
     total_started = time.perf_counter() if timing else 0.0
     started = time.perf_counter() if timing else 0.0
-    visible_added, visible_removed, seen_added, light_changed, hazards_changed = _cell_delta(before, after, initial)
+    visible_added, visible_removed, seen_added = cells.visible_added, cells.visible_removed, cells.seen_added
+    light_changed, hazards_changed = cells.light_changed, cells.hazards_changed
 
     if contact_deltas is None:
         contact_deltas = (
@@ -1103,17 +1132,9 @@ class SpatialSensesSystem:
                 if settlement.max_distance is not None:
                     self.senses_by_observer[observer_uuid]._perception_max_distance = settlement.max_distance
             shared: SharedValues = {}
-            settled = self._settle(observers, {identity: pending[identity].events for identity in observers},
-                                   shared=shared)
-            for observer_uuid in observers:
-                if not pending[observer_uuid].events:
-                    before, _ = settled[observer_uuid]
-                    self.publish_observer_refresh(observer_uuid, before)
-                    continue
-                sensory_event = self._emit_settled(observer_uuid, settled[observer_uuid],
-                                                   pending[observer_uuid].events, root, shared)
-                if sensory_event is not None:
-                    sensory_events.append(sensory_event)
+            events = {identity: pending[identity].events for identity in observers}
+            settled = self._settle(observers, events, shared=shared)
+            sensory_events = self._emit_settlement(observers, settled, events, root, shared)
         finally:
             self._settling = False
         if sensory_events:
@@ -1257,10 +1278,9 @@ class SpatialSensesSystem:
         if not observers:
             return
         shared: SharedValues = {}
-        settled = self._settle(observers, {identity: [event] for identity in observers}, shared=shared)
-        sensory_events = [sensory_event for observer_uuid in observers
-                          if (sensory_event := self._emit_settled(observer_uuid, settled[observer_uuid], [event],
-                                                                  event, shared)) is not None]
+        events = {identity: [event] for identity in observers}
+        settled = self._settle(observers, events, shared=shared)
+        sensory_events = self._emit_settlement(observers, settled, events, event, shared)
         if sensory_events:
             EventQueue.register_completion_sequence(sensory_events)
             self.published_observers.update(event.observer_uuid for event in sensory_events)
@@ -1283,15 +1303,40 @@ class SpatialSensesSystem:
         touched = self._recompute(observers, affected, shared, table_cells)
         return {identity: (befores[identity], touched[identity]) for identity in observers}
 
+    def _emit_settlement(self, observers: Sequence[UUID],
+                         settled: Mapping[UUID, Tuple[PublishedSenses, Dict[UUID, Optional[PerceivedSpatialEffect]]]],
+                         events: Mapping[UUID, Sequence[Event]], cause: Optional[Event],
+                         shared: SharedValues) -> List[SensoryUpdateEvent]:
+        """Every settled observer's sensory event; an observer settled without facts publishes a
+        refresh, registered at once. Returns the settled events (registered by the caller as one
+        completion sequence)."""
+        diagnostic = action_timing_enabled()
+        started = time.perf_counter() if diagnostic else 0.0
+        afters = [published_senses(self.senses_by_observer[identity]) for identity in observers]
+        initials = [identity not in self.published_observers for identity in observers]
+        changes = [_cell_change(settled[identity][0], after, initial)
+                   for identity, after, initial in zip(observers, afters, initials)]
+        if diagnostic:
+            record_action_timing("sensory.settlement.cell_changes_ms", started)
+        sensory_events: List[SensoryUpdateEvent] = []
+        for observer_uuid, after, initial, change in zip(observers, afters, initials, changes):
+            if not events[observer_uuid]:
+                self._emit_refresh(observer_uuid, settled[observer_uuid][0], after, initial, change)
+                continue
+            sensory_event = self._emit_settled(observer_uuid, settled[observer_uuid], after, initial, change,
+                                               events[observer_uuid], cause, shared)
+            if sensory_event is not None:
+                sensory_events.append(sensory_event)
+        return sensory_events
+
     def _emit_settled(self, observer_uuid: UUID,
                       settled: Tuple[PublishedSenses, Dict[UUID, Optional[PerceivedSpatialEffect]]],
+                      after: PublishedSenses, initial: bool, change: CellChange,
                       events: Sequence[Event], cause: Optional[Event],
                       shared: SharedValues) -> Optional[SensoryUpdateEvent]:
-        """Refresh the observer's light sources and emit the difference of its published perception."""
+        """Emit the difference of one observer's published perception."""
         senses = self.senses_by_observer[observer_uuid]
-        initial = observer_uuid not in self.published_observers
         before, effect_before = settled
-        after = published_senses(senses)
         contact_changes = self.fields[observer_uuid].contact_changes
         entity_delta = _contact_delta(before.entities, after.entities, initial,
                                       contact_changes[0] if contact_changes is not None else None)
@@ -1305,12 +1350,12 @@ class SpatialSensesSystem:
                                              for identity in set(effect_before) if identity in senses.spatial_effects})
         projection_changed = any((
             before.position != after.position,
-            not _same_cells(before.cells.visible, after.cells.visible),
-            not _same_cells(before.seen, after.seen),
+            change.visible_differs,
+            change.seen_differs,
             bool(entity_delta[0] or entity_delta[1]) if not initial else before.entities != after.entities,
             bool(object_delta[0] or object_delta[1]) if not initial else before.objects != after.objects,
             before.passive_perception != after.passive_perception,
-            not _same_cells(before.cells.hazard, after.cells.hazard),
+            change.hazard_differs,
             before.spatial_effects != after.spatial_effects,
         ))
         visible_topology_changed = any(self._changes_visible_topology(event, senses) for event in events)
@@ -1327,6 +1372,7 @@ class SpatialSensesSystem:
             self._reason_for(events[-1], observer_uuid),
             register_event=False,
             initial=initial,
+            cells=change,
             shared=shared,
             contact_deltas=(entity_delta, object_delta),
         )
@@ -1355,11 +1401,14 @@ class SpatialSensesSystem:
         senses = self.senses_by_observer.get(observer_uuid)
         if senses is None:
             return None
-        event = emit_sensory_update_delta(
-            observer_uuid, None, before, published_senses(senses),
-            SensoryUpdateReason.UNKNOWN,
-            initial=observer_uuid not in self.published_observers,
-        )
+        after = published_senses(senses)
+        initial = observer_uuid not in self.published_observers
+        return self._emit_refresh(observer_uuid, before, after, initial, _cell_change(before, after, initial))
+
+    def _emit_refresh(self, observer_uuid: UUID, before: PublishedSenses, after: PublishedSenses, initial: bool,
+                      change: CellChange) -> Optional[SensoryUpdateEvent]:
+        event = emit_sensory_update_delta(observer_uuid, None, before, after, SensoryUpdateReason.UNKNOWN,
+                                          initial=initial, cells=change)
         if event is not None:
             self.published_observers.add(observer_uuid)
         return event
@@ -2694,16 +2743,6 @@ def _window_values(layer: CellLayer, window: Box) -> np.ndarray:
     """A copy of a cell grid's values over a window inside its box (kept to compare by value)."""
     return layer.values[window[0] - layer.x0:window[2] - layer.x0 + 1,
                         window[1] - layer.y0:window[3] - layer.y0 + 1].copy()
-
-
-def _same_cells(first: CellLayer, second: CellLayer) -> bool:
-    """Whether two layers hold the same nonzero cells with the same values."""
-    if first is second:
-        return True
-    if not first.values.size or not second.values.size:
-        return not first.values.any() and not second.values.any()
-    box = union_box(first.box, second.box)
-    return bool(np.array_equal(embed(first, box, first.values.dtype), embed(second, box, second.values.dtype)))
 
 
 def _replace_effects(value: PublishedSenses, effects: Dict[UUID, PerceivedSpatialEffect]) -> PublishedSenses:
