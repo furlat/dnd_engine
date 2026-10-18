@@ -15,7 +15,7 @@ from dnd.core.item_types import (
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.player.capture import CompletedLineage, IntervalEnvelope, ObjectiveRow
-from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.recorded import RecordedSequence, project_sequence
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.types.materials import Material, TileSurface
@@ -85,10 +85,11 @@ def check(initialization, events):
         for index, event in enumerate(events))
     saved = RecordedSequence(initialization=initialization, lineages=lineages).model_dump_json()
     restored = RecordedSequence.model_validate_json(saved, context=PASSIVE_EVENT_REPLAY)
-    projection, public = begin_projection(restored.initialization)
+    session = SessionProjection()
+    projection, public = begin_projection(session, restored.initialization)
     states = [reduce_initialization(public)]
     for lineage in restored.lineages:
-        update = project_lineage(projection, lineage)
+        update = project_lineage(session, projection, lineage)
         states.append(states[-1] if update is None else reduce_lineage(states[-1], update))
     replay = project_sequence(restored)
     latest = reduce_initialization(replay.initialization)

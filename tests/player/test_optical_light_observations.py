@@ -19,7 +19,7 @@ from dnd.items.environment import DirectionalWall
 from dnd.player.audience import (AudiencePerception, PlayerAudience, audience_view,
     observe_audience, begin_audience_composition, apply_current_audience)
 from dnd.player.capture import capture_interval, capture_lineages
-from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.player.recorded import RecordedSequence, project_sequence
 from dnd.runtime_reset import reset_engine_runtime
@@ -54,15 +54,17 @@ def start(built, witness, max_distance=8):
     initial = capture_interval(name='optical observations', start_cursor=0,
         end_cursor=EventQueue.event_cursor(), observer_uuid=witness.uuid,
         battlefield_id=built.definition.battlefield_id)
-    projection, public = begin_projection(initial)
-    return initial, projection, reduce_initialization(public)
+    session = SessionProjection()
+    projection, public = begin_projection(session, initial)
+    return initial, (session, projection), reduce_initialization(public)
 
 
-def advance(projection, state, roots, witness):
+def advance(seat, state, roots, witness):
+    session, projection = seat
     natives, packets = [], []
     for native in capture_lineages(roots, observer_uuid=witness.uuid,
             known_actor_uuids=frozenset(state.actors)):
-        packet = project_lineage(projection, native)
+        packet = project_lineage(session, projection, native)
         natives.append(native)
         if packet is not None:
             packets.append(packet)
@@ -84,7 +86,7 @@ def test_live_carried_torch_private_identity_and_current_tiles_survive_cold_repl
     built, (owner, witness), game = room
     torch = build_torch(owner.uuid)
     assert owner.loot_item(torch)
-    initial, projection, state = start(built, witness)
+    initial, seat, state = start(built, witness)
     assert not state.senses.light_sources
     assert_objective(state)
     assert state.tiles[(5, 5)].resolved_light is LightLevel.DARKNESS
@@ -95,7 +97,7 @@ def test_live_carried_torch_private_identity_and_current_tiles_survive_cold_repl
         before = state
         root = execute_use_action(owner, torch.uuid, 'Ignite Torch' if lit else 'Extinguish Torch')
         assert root is not None and not root.canceled
-        state, rows, projected = advance(projection, state, (root,), witness)
+        state, rows, projected = advance(seat, state, (root,), witness)
         natives.extend(rows); packets.extend(projected)
         retained.append((before, replace(before, tiles=dict(before.tiles))))
         assert_objective(state)
@@ -150,11 +152,11 @@ def test_unseen_offscreen_emitter_exposes_optics_without_actor_or_inventory_iden
     torch = build_torch(owner.uuid)
     assert owner.loot_item(torch)
     owner.add_condition(Invisible(source_entity_uuid=owner.uuid, target_entity_uuid=owner.uuid))
-    initial, projection, state = start(built, witness)
+    initial, seat, state = start(built, witness)
     assert owner.uuid not in state.senses.entities
     root = execute_use_action(owner, torch.uuid, 'Ignite Torch')
     assert root is not None and not root.canceled
-    state, _, _ = advance(projection, state, (root,), witness)
+    state, _, _ = advance(seat, state, (root,), witness)
     source, = state.senses.light_sources.values()
     assert source.position == owner.position
     assert source.anchor_entity_uuid is None and source.anchor_item_uuid is None
@@ -164,11 +166,11 @@ def test_unseen_offscreen_emitter_exposes_optics_without_actor_or_inventory_iden
     # Offscreen origin is allowed while its current footprint is visible.
     witness.senses.sense_modes = []
     witness.update_entity_senses(max_distance=1)
-    _, projection, state = start(built, witness)
+    _, seat, state = start(built, witness)
     witness.update_entity_senses(max_distance=1)
     cursor = EventQueue.event_cursor()
     Entity.update_entity_position(owner, (3, 5))
-    state, _, _ = advance(projection, state, roots_since(cursor), witness)
+    state, _, _ = advance(seat, state, roots_since(cursor), witness)
     source, = state.senses.light_sources.values()
     assert source.position == (3, 5) and not cell_visible(witness.senses.cells, source.position)
     assert source.affected_tiles == {} and source.anchor_entity_uuid is None
@@ -181,7 +183,7 @@ def test_observer_movement_keeps_stationary_descriptor_until_no_contribution_is_
     built, (_, witness), _ = room
     source_id = get_map().add_light_source((5, 5), 5, 5)
     witness.senses.sense_modes = []
-    _, projection, state = start(built, witness, max_distance=1)
+    _, seat, state = start(built, witness, max_distance=1)
     source = state.senses.light_sources[source_id]
     assert source.position == (5, 5) and source.affected_tiles == {}
     for position in ((6, 6), (7, 5)):
@@ -193,12 +195,12 @@ def test_observer_movement_keeps_stationary_descriptor_until_no_contribution_is_
         assert updates
         assert all(not event.light_sources_changed and not event.light_sources_removed
             for event in updates)
-        state, _, _ = advance(projection, state, roots_since(cursor), witness)
+        state, _, _ = advance(seat, state, roots_since(cursor), witness)
         assert state.senses.visible != previous_visible
         assert state.senses.light_sources == {source_id: source}
     cursor = EventQueue.event_cursor()
     Entity.update_entity_position(witness, (10, 5))
-    state, _, _ = advance(projection, state, roots_since(cursor), witness)
+    state, _, _ = advance(seat, state, roots_since(cursor), witness)
     assert not state.senses.light_sources
     assert source_id in state.senses.light_source_removals
     assert all(source_id not in tile_light_contributions(get_map().get_tile(*position))[0]
@@ -233,7 +235,7 @@ def test_constant_max_source_movement_extinction_and_rediscovery_are_not_light_r
         grid.set_tile_base_light(position, LightLevel.VERY_BRIGHT)
     torch = build_torch(owner.uuid)
     assert owner.loot_item(torch)
-    _, projection, state = start(built, witness)
+    _, seat, state = start(built, witness)
     sources = []
     for command in ('Ignite Torch', 'Extinguish Torch'):
         cursor = EventQueue.event_cursor()
@@ -242,7 +244,7 @@ def test_constant_max_source_movement_extinction_and_rediscovery_are_not_light_r
         events = tuple(event for _, event in EventQueue.iter_events_since(cursor))
         assert not any(event.event_type is EventType.SPATIAL_LIGHT_CHANGED for event in events)
         assert any(event.event_type is EventType.SPATIAL_LIGHT_SOURCES_CHANGED for event in events)
-        state, _, _ = advance(projection, state, (root,), witness)
+        state, _, _ = advance(seat, state, (root,), witness)
         assert all(grid.get_tile(*position).resolved_light_level is LightLevel.VERY_BRIGHT
             for position in mask_positions(state.senses.visible))
         assert all(source.affected_tiles == {} for source in state.senses.light_sources.values())
@@ -306,7 +308,7 @@ def test_compact_descriptors_preserve_native_occlusion_caps_and_ambient_light(ro
     built, (owner, witness), _ = room
     grid = get_map()
     source_id = grid.add_light_source((5, 5), 15, 15)
-    _, projection, state = start(built, witness)
+    _, seat, state = start(built, witness)
     target = (6, 5)
     source = state.senses.light_sources[source_id]
     assert source.affected_tiles == {}
@@ -314,7 +316,7 @@ def test_compact_descriptors_preserve_native_occlusion_caps_and_ambient_light(ro
     cap_id = uuid4()
     cursor = EventQueue.event_cursor()
     grid.apply_light_modifier(cap_id, {target}, LightLevel.DIM_LIGHT, cap=True)
-    state, _, _ = advance(projection, state, roots_since(cursor), witness)
+    state, _, _ = advance(seat, state, roots_since(cursor), witness)
     assert state.tiles[target].resolved_light is LightLevel.DIM_LIGHT
     assert state.senses.light_sources[source_id].affected_tiles == {}
     illuminations, caps = tile_light_contributions(grid.get_tile(*target))
@@ -323,19 +325,19 @@ def test_compact_descriptors_preserve_native_occlusion_caps_and_ambient_light(ro
     # A baseline change hidden under the cap still changes native physics.
     cursor = EventQueue.event_cursor()
     grid.set_tile_base_light(target, LightLevel.BRIGHT_LIGHT)
-    state, _, _ = advance(projection, state, roots_since(cursor), witness)
+    state, _, _ = advance(seat, state, roots_since(cursor), witness)
     assert grid.get_tile(*target).default_light is LightLevel.BRIGHT_LIGHT
     assert grid.get_tile(*target).resolved_light_level is LightLevel.DIM_LIGHT
     assert not any(event.event_type is EventType.SPATIAL_LIGHT_CHANGED
         for _, event in EventQueue.iter_events_since(cursor))
     cursor = EventQueue.event_cursor()
     grid.remove_light_modifier(cap_id, {target})
-    state, _, _ = advance(projection, state, roots_since(cursor), witness)
+    state, _, _ = advance(seat, state, roots_since(cursor), witness)
     assert state.tiles[target].resolved_light is LightLevel.BRIGHT_LIGHT
     wall = DirectionalWall(source_entity_uuid=witness.uuid, item_id='test.optical.obstruction')
     cursor = EventQueue.event_cursor()
     wall.place_on_grid((5, 5), boundary_direction=CardinalDirection.EAST)
-    state, _, _ = advance(projection, state, roots_since(cursor), witness)
+    state, _, _ = advance(seat, state, roots_since(cursor), witness)
     changed = state.senses.light_sources[source_id]
     assert changed.revision > source.revision
     assert changed.affected_tiles == {}
@@ -343,7 +345,7 @@ def test_compact_descriptors_preserve_native_occlusion_caps_and_ambient_light(ro
     assert state.tiles[target].resolved_light is LightLevel.BRIGHT_LIGHT  # actual ambient, not leaking emitter
     cursor = EventQueue.event_cursor()
     assert grid.remove_object(wall.uuid)
-    state, _, _ = advance(projection, state, roots_since(cursor), witness)
+    state, _, _ = advance(seat, state, roots_since(cursor), witness)
     assert state.senses.light_sources[source_id].affected_tiles == {}
     assert tile_light_contributions(grid.get_tile(*target))[0][source_id] is LightLevel.BRIGHT_LIGHT
 

@@ -20,7 +20,7 @@ from dnd.core.traversal_connectors import TraversalConnectorDefinition
 from dnd.player.audience import PlayerAudience
 from dnd.player.capture import capture_interval, capture_lineages
 from dnd.player.facts import PlayerInitialization, PlayerLineage, PlayerState
-from dnd.player.projection import ProjectionState, begin_projection, project_lineage
+from dnd.player.projection import ProjectionState, SessionProjection, begin_projection, project_lineage
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.player.session import Session, close_session, create_session
 from dnd.runtime_reset import reset_engine_runtime
@@ -40,6 +40,7 @@ class Seat:
     """One seat's projection and the client fold of everything it was sent."""
 
     audience: PlayerAudience
+    session: SessionProjection
     projection: ProjectionState
     client: PlayerState
 
@@ -50,8 +51,9 @@ def initialize(session: Session) -> Seat:
     startup = capture_interval(name='startup', start_cursor=0, end_cursor=EventQueue.event_cursor(),
         observer_uuid=audience.observers[0], audience=audience,
         battlefield_id=session.battlefield.definition.battlefield_id)
-    projection, initial = begin_projection(startup)
-    return Seat(audience, projection, reduce_initialization(INITIALIZATION.validate_json(
+    projected = SessionProjection()
+    projection, initial = begin_projection(projected, startup)
+    return Seat(audience, projected, projection, reduce_initialization(INITIALIZATION.validate_json(
         INITIALIZATION.dump_json(initial))))
 
 
@@ -63,7 +65,7 @@ def advance(seat: Seat, act: Callable[[], object]) -> None:
         if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
     for native in capture_lineages(roots, observer_uuid=seat.audience.observers[0], audience=seat.audience,
             known_actor_uuids=frozenset(seat.client.actors)):
-        packet = project_lineage(seat.projection, native)
+        packet = project_lineage(seat.session, seat.projection, native)
         if packet is not None:
             seat.client = reduce_lineage(seat.client, LINEAGE.validate_json(LINEAGE.dump_json(packet)))
 

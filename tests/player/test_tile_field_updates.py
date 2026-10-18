@@ -13,7 +13,7 @@ from dnd.core.events import EventPhase, EventType, SpatialChangeEvent, SpatialCh
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.player.capture import CompletedLineage
 from dnd.player.facts import PlayerLineage, PlayerSequence, PlayerUpdate, TileFieldUpdate
-from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.reduction import (decode_player_sequence, encode_player_sequence, reduce_initialization,
     reduce_lineage, reduce_operation, stage_lineage)
 from dnd.types.materials import Material, TileSurface
@@ -30,18 +30,19 @@ def light_change(observer, light):
         light_level_map={"1,0": light.value}), context=PASSIVE_EVENT_REPLAY)
 
 
-def project_event(projection, event, index, *, disclosed=True):
+def project_event(session, projection, event, index, *, disclosed=True):
     native = CompletedLineage(generation=projection.remembered.generation,
         observer_uuid=projection.remembered.observer_uuid, root=event, events=(event,),
         objective_rows=(objective(index, event),), start_cursor=index, end_cursor=index+1)
-    packet = project_lineage(projection, native)
+    packet = project_lineage(session, projection, native)
     assert (packet is not None) is disclosed
     return packet
 
 
 def test_known_tile_light_updates_carry_only_changed_fields_at_each_event():
     start = initial((), ((1, 0), (2, 0)), {})
-    projection, public = begin_projection(start)
+    session = SessionProjection()
+    projection, public = begin_projection(session, start)
     before = reduce_initialization(public)
     state = before
     retained = []
@@ -49,7 +50,7 @@ def test_known_tile_light_updates_carry_only_changed_fields_at_each_event():
     for index, light in enumerate((LightLevel.DIM_LIGHT, LightLevel.DARKNESS,
                                    LightLevel.BRIGHT_LIGHT), start.end_cursor):
         event = light_change(start.observer_uuid, light)
-        packet = project_event(projection, event, index)
+        packet = project_event(session, projection, event, index)
         packets.append(packet)
         update, = packet.world_updates
         assert update.occurrence == projection.public_cursors[index]
@@ -79,7 +80,8 @@ def tile_change(observer, tile):
 
 def test_tile_field_updates_preserve_clears_and_replace_nested_values():
     start = initial((), ((1, 0),), {})
-    projection, public = begin_projection(start)
+    session = SessionProjection()
+    projection, public = begin_projection(session, start)
     before = reduce_initialization(public)
     original = before.tiles[(1, 0)]
     changes = dict(name='Ramp', surface=TileSurface(base_material=Material.WOOD),
@@ -90,7 +92,7 @@ def test_tile_field_updates_preserve_clears_and_replace_nested_values():
         condition_names=('Ash',), residues=(TileResidueState(condition_uuid=uuid4(),
             residue_id='test.ash', description='Ash'),))
     enriched = original.model_copy(update=changes)
-    packet = project_event(projection, tile_change(start.observer_uuid, enriched), start.end_cursor)
+    packet = project_event(session, projection, tile_change(start.observer_uuid, enriched), start.end_cursor)
     delta, = packet.world_updates[0].tile_changes
     assert delta.changes == {key: value for key, value in changes.items() if key != 'resolved_light'}
     assert packet.world_updates[0].resolved_light == values_from_items({(1, 0): LightLevel.DIM_LIGHT.value})
@@ -100,7 +102,7 @@ def test_tile_field_updates_preserve_clears_and_replace_nested_values():
         surface_kind=ElevationSurfaceKind.ORDINARY, slope_axis=None,
         default_light=LightLevel(0), resolved_light=LightLevel(0), condition_names=(), residues=())
     cleared = enriched.model_copy(update=clears)
-    packet = project_event(projection, tile_change(start.observer_uuid, cleared), start.end_cursor+1)
+    packet = project_event(session, projection, tile_change(start.observer_uuid, cleared), start.end_cursor+1)
     wire = TypeAdapter(PlayerLineage).dump_json(packet)
     parsed = TypeAdapter(PlayerLineage).validate_json(wire)
     raw = json.loads(wire)['world_updates'][0]['tile_changes'][0]['changes']
@@ -118,21 +120,22 @@ def test_tile_field_updates_preserve_clears_and_replace_nested_values():
 
 def test_hidden_tile_changes_remain_private_until_discovery_and_identity_replacement_is_full():
     start = initial((), ((1, 0),), {})
-    projection, public = begin_projection(start)
+    session = SessionProjection()
+    projection, public = begin_projection(session, start)
     state = reduce_initialization(public)
-    hide = project_event(projection, sensory(start.observer_uuid, visible_cells_removed=[(1, 0)]), 2)
+    hide = project_event(session, projection, sensory(start.observer_uuid, visible_cells_removed=[(1, 0)]), 2)
     state = reduce_lineage(state, hide)
-    assert project_event(projection, light_change(start.observer_uuid, LightLevel.DIM_LIGHT),
+    assert project_event(session, projection, light_change(start.observer_uuid, LightLevel.DIM_LIGHT),
                          3, disclosed=False) is None
     assert state.tiles[(1, 0)].resolved_light is LightLevel.BRIGHT_LIGHT
-    reveal = project_event(projection, sensory(start.observer_uuid, visible_cells_added=[(1, 0), (2, 0)]), 4)
+    reveal = project_event(session, projection, sensory(start.observer_uuid, visible_cells_added=[(1, 0), (2, 0)]), 4)
     assert [tile.position for update in reveal.world_updates for tile in update.tiles] == [(2, 0)]
     # The hidden light change reaches the seat when the tile comes back into view.
     assert [position for update in reveal.world_updates for position, _ in values_items(update.resolved_light)] == [(1, 0)]
     state = reduce_lineage(state, reveal)
     old = state.tiles[(1, 0)]
     replacement = old.model_copy(update={'tile_uuid': uuid4(), 'name': 'Replacement'})
-    replaced = project_event(projection, tile_change(start.observer_uuid, replacement), 5)
+    replaced = project_event(session, projection, tile_change(start.observer_uuid, replacement), 5)
     assert replaced.world_updates[0].tiles == (replacement,)
     assert not replaced.world_updates[0].tile_changes
     after = reduce_lineage(state, replaced)
@@ -141,9 +144,10 @@ def test_hidden_tile_changes_remain_private_until_discovery_and_identity_replace
 
 def test_client_fold_checks_tile_bases_in_event_order_without_staging_future_values():
     start = initial((), ((1, 0),), {})
-    projection, public = begin_projection(start)
+    session = SessionProjection()
+    projection, public = begin_projection(session, start)
     before = reduce_initialization(public)
-    packet = project_event(projection, light_change(start.observer_uuid, LightLevel.DIM_LIGHT), 2)
+    packet = project_event(session, projection, light_change(start.observer_uuid, LightLevel.DIM_LIGHT), 2)
     assert stage_lineage(before, packet).tiles[(1, 0)] == before.tiles[(1, 0)]
     update = PlayerUpdate(audience=before.viewing_audience, lineages=(packet,), hud=None,
                           combat_log_appends=(), content_additions=())
@@ -158,7 +162,7 @@ def test_client_fold_checks_tile_bases_in_event_order_without_staging_future_val
     # An introduction earlier in this operation is valid, even when the node
     # carrying it has no ordinary fact. A future introduction cannot repair a gap.
     tile = before.tiles[(1, 0)].model_copy(update={'position': (99, 99), 'tile_uuid': uuid4()})
-    later = project_event(projection, light_change(start.observer_uuid, LightLevel.DARKNESS), 3)
+    later = project_event(session, projection, light_change(start.observer_uuid, LightLevel.DARKNESS), 3)
     introduction = replace(packet, events=(replace(packet.events[0], fact=None),),
         world_updates=(replace(packet.world_updates[0], tiles=(tile,), tile_changes=()),))
     patch = replace(later, world_updates=(replace(later.world_updates[0], tiles=(), tile_changes=(missing,)),))

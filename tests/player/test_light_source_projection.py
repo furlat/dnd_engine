@@ -15,7 +15,7 @@ from dnd.game import Game
 from dnd.items.torches import build_torch
 from dnd.player.capture import CompletedLineage, ObjectiveRow, capture_interval, capture_lineages
 from dnd.player.audience import PlayerAudience
-from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.event_record import RecordedEvent, encode_event
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.player.recorded import RecordedSequence, project_sequence
@@ -59,7 +59,8 @@ def test_fixed_source_overrides_and_native_activation_survive_reduction(world):
     torch.dim_radius_feet = 23
     torch.place_on_grid((5, 6))
     owner.update_entity_senses(max_distance=8)
-    projection, initial = begin_projection(capture(built, owner))
+    session = SessionProjection()
+    projection, initial = begin_projection(session, capture(built, owner))
     state = reduce_initialization(initial)
     assert state.objects[torch.uuid].item.is_lit is False
     for lit in (True, False, True):
@@ -70,7 +71,7 @@ def test_fixed_source_overrides_and_native_activation_survive_reduction(world):
         for native in capture_lineages((root,), observer_uuid=owner.uuid,
                 known_actor_uuids=frozenset(state.actors)):
             assert not native.dispositions
-            packet = project_lineage(projection, native)
+            packet = project_lineage(session, projection, native)
             if packet is not None:
                 state = reduce_lineage(state, packet)
         item = state.objects[torch.uuid].item
@@ -87,7 +88,8 @@ def test_carried_source_keeps_inventory_private_to_controller(world):
     views = {}
     for observer in (owner, witness):
         observer.update_entity_senses(max_distance=8)
-        projection, initial = begin_projection(capture(built, observer))
+        session = SessionProjection()
+        projection, initial = begin_projection(session, capture(built, observer))
         views[observer.uuid] = projection, reduce_initialization(initial)
     for lit in (True, False, True):
         root = execute_use_action(owner, torch.uuid, "Ignite Torch" if lit else "Extinguish Torch")
@@ -100,7 +102,7 @@ def test_carried_source_keeps_inventory_private_to_controller(world):
                 codec = TypeAdapter(tuple[RecordedEvent, ...])
                 restored = codec.validate_json(codec.dump_json(native.events))
                 assert tuple(type(row) for row in restored) == tuple(type(row) for row in native.events)
-                packet = project_lineage(projection, native)
+                packet = project_lineage(session, projection, native)
                 if packet is not None:
                     state = reduce_lineage(state, packet)
             views[observer.uuid] = projection, state
@@ -136,7 +138,7 @@ def test_disclosed_equipment_source_after_values_preserve_activation(world, lit)
             row = replace(row, actor=replace(row.actor, items=(item,),
                 equipment=(("weapon_melee_off", torch.uuid),)))
         admitted.append(row)
-    _, initial = begin_projection(replace(captured, admissions=tuple(admitted)))
+    _, initial = begin_projection(SessionProjection(), replace(captured, admissions=tuple(admitted)))
     state = reduce_initialization(initial)
     actor = state.actors[owner.uuid]
     source, = actor.visual_loadout.layers
@@ -188,8 +190,9 @@ def test_recorded_content_attribution_uses_foreign_equipment_grants(world, equip
         canceled=False, modified=False)
     lineage = CompletedLineage(generation=initial.generation, observer_uuid=witness.uuid,
         root=event, events=(event,), objective_rows=(row,), start_cursor=index, end_cursor=index+1)
-    projection, _ = begin_projection(initial)
-    packet = project_lineage(projection, lineage)
+    session = SessionProjection()
+    projection, _ = begin_projection(session, initial)
+    packet = project_lineage(session, projection, lineage)
     assert packet is not None
     assert packet.root is not None
     node = packet.events[packet.root]
@@ -213,7 +216,8 @@ def test_shared_light_tile_after_values_precede_parent_completion_and_survive_co
     initial = capture_interval(name="shared light", start_cursor=0,
         end_cursor=EventQueue.event_cursor(), observer_uuid=first.uuid, audience=audience,
         battlefield_id=built.definition.battlefield_id)
-    projection, public = begin_projection(initial)
+    session = SessionProjection()
+    projection, public = begin_projection(session, initial)
     state = reduce_initialization(public)
     position, neighbor = (5, 6), (5, 7)
     unchanged = state.tiles[neighbor]
@@ -231,7 +235,7 @@ def test_shared_light_tile_after_values_precede_parent_completion_and_survive_co
         assert {event.observer_uuid for event in children} == {first.uuid, second.uuid}
         for native in captured:
             assert not native.dispositions
-            packet = project_lineage(projection, native)
+            packet = project_lineage(session, projection, native)
             assert packet is not None
             packets.append(packet)
             lineages.append(native)

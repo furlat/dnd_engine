@@ -15,7 +15,7 @@ from dnd.player.audience import resolve_audience
 from dnd.player.capture import capture_interval, capture_lineages
 from dnd.player.actor_facts import PresentationTarget
 from dnd.player.facts import CombatLogAppend, ConditionChangeFact, PlayerLogEntry, PlayerState, PlayerWorld
-from dnd.player.projection import ProjectionState, begin_projection, project_lineage, project_log_appends
+from dnd.player.projection import SessionProjection, ProjectionState, begin_projection, project_lineage, project_log_appends
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
@@ -64,15 +64,16 @@ def world():
         reset_engine_runtime()
 
 
-def start_view(built, actor):
-    return begin_projection(capture_interval(name='recorded boundary', start_cursor=0,
+def start_view(session, built, actor):
+    return begin_projection(session, capture_interval(name='recorded boundary', start_cursor=0,
         end_cursor=EventQueue.event_cursor(), observer_uuid=actor.uuid,
         battlefield_id=built.definition.battlefield_id))
 
 
 def test_condition_remaining_duration_is_recorded_under_turn_and_private_to_owner(world):
     _, built, (owner, witness) = world
-    projections = {actor.uuid: start_view(built, actor) for actor in (owner, witness)}
+    session = SessionProjection()
+    projections = {actor.uuid: start_view(session, built, actor) for actor in (owner, witness)}
     condition = Blinded(source_entity_uuid=owner.uuid, target_entity_uuid=owner.uuid,
         duration=Duration(duration=3, duration_type=DurationType.ROUNDS))
     applied = owner.add_condition(condition, check_save_throw=False)
@@ -88,7 +89,7 @@ def test_condition_remaining_duration_is_recorded_under_turn_and_private_to_owne
         state = reduce_initialization(initial)
         delivered = []
         for native in capture_lineages(roots, observer_uuid=actor.uuid, known_actor_uuids=frozenset(state.actors)):
-            public = project_lineage(projection, native)
+            public = project_lineage(session, projection, native)
             if public is None:
                 assert actor is witness
                 continue
@@ -111,9 +112,10 @@ def test_condition_remaining_duration_is_recorded_under_turn_and_private_to_owne
 
 def test_wholly_unseen_area_expansion_has_no_public_operation(world):
     _, built, (owner, _) = world
-    projection, initial = start_view(built, owner)
+    session = SessionProjection()
+    projection, initial = start_view(session, built, owner)
     hidden = AreaReachEvent(source_entity_uuid=uuid4(), phase=EventPhase.COMPLETION,
         newly_reached_positions=((99, 99),), stage_index=7)
     native, = capture_lineages((hidden,), observer_uuid=owner.uuid)
-    assert project_lineage(projection, native) is None
+    assert project_lineage(session, projection, native) is None
     assert projection.next_occurrence == initial.end_cursor

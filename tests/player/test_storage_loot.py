@@ -18,7 +18,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.items.environment_interactables import StorageChest
 from dnd.player.capture import capture_interval, capture_lineages
-from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.recorded import RecordedSequence, project_sequence
 from dnd.player.reduction import (
     decode_player_sequence, encode_player_sequence, reduce_initialization, reduce_lineage,
@@ -68,7 +68,8 @@ def test_one_all_close_reopen_survive_cold_serialization(cache_world):
     original = {item.uuid: item.item_id for item in chest.chest_inventory.items.values()}
     assert len(original) == 5 and len(set(original.values())) == 5
     initial = initialization(built, actor)
-    projection, public = begin_projection(initial)
+    session = SessionProjection()
+    projection, public = begin_projection(session, initial)
     state = reduce_initialization(public)
     assert state.objects[chest.uuid].contained_items is None
     assert rows(actor, chest) == []
@@ -83,7 +84,7 @@ def test_one_all_close_reopen_survive_cold_serialization(cache_world):
         assert native and not any(row.dispositions for row in native)
         recorded.extend(native)
         for lineage in native:
-            packet = project_lineage(projection, lineage)
+            packet = project_lineage(session, projection, lineage)
             assert packet is not None
             state = reduce_lineage(state, packet)
             observed = state.objects[chest.uuid].contained_items
@@ -167,7 +168,8 @@ def test_full_stack_merge_removes_source_child_in_cold_view(cache_world):
     place_world_item(chest, (4, 8), author_uuid=actor.uuid)
     actor.update_entity_senses(max_distance=12)
     use(actor, chest, "Open Chest")
-    projection, public = begin_projection(initialization(built, actor))
+    session = SessionProjection()
+    projection, public = begin_projection(session, initialization(built, actor))
     state = reduce_initialization(public)
     assert {row.item_uuid for row in state.objects[chest.uuid].contained_items} == {incoming.uuid}
     chosen = next(row for row in rows(actor, chest) if row.loot_item_uuid == incoming.uuid)
@@ -175,7 +177,7 @@ def test_full_stack_merge_removes_source_child_in_cold_view(cache_world):
     assert root is not None and not root.canceled
     for native in capture_lineages((root,), observer_uuid=actor.uuid,
             known_actor_uuids=frozenset(state.actors)):
-        packet = project_lineage(projection, native)
+        packet = project_lineage(session, projection, native)
         assert packet is not None
         state = reduce_lineage(state, packet)
     assert incoming.uuid not in chest.chest_inventory.items
@@ -188,7 +190,8 @@ def test_full_stack_merge_removes_source_child_in_cold_view(cache_world):
 def test_losing_sight_clears_contents_and_does_not_discover_private_items(cache_world):
     _, built, actor, chest = cache_world
     use(actor, chest, "Open Chest")
-    projection, public = begin_projection(initialization(built, actor))
+    session = SessionProjection()
+    projection, public = begin_projection(session, initialization(built, actor))
     state = reduce_initialization(public)
     assert len(state.objects[chest.uuid].contained_items) == 5
     blinded = actor.add_condition(Blinded(source_entity_uuid=actor.uuid,
@@ -198,7 +201,7 @@ def test_losing_sight_clears_contents_and_does_not_discover_private_items(cache_
     assert rows(actor, chest) == []
     for native in capture_lineages((blinded,), observer_uuid=actor.uuid,
             known_actor_uuids=frozenset(state.actors)):
-        packet = project_lineage(projection, native)
+        packet = project_lineage(session, projection, native)
         assert packet is not None
         state = reduce_lineage(state, packet)
     assert chest.uuid not in state.objects or state.objects[chest.uuid].contained_items is None
@@ -208,13 +211,14 @@ def test_partial_loot_all_keeps_exact_remaining_contents_visible(cache_world):
     _, built, actor, chest = cache_world
     use(actor, chest, "Open Chest")
     actor.inventory.max_slots = 1
-    projection, public = begin_projection(initialization(built, actor))
+    session = SessionProjection()
+    projection, public = begin_projection(session, initialization(built, actor))
     state = reduce_initialization(public)
     original = {row.item_uuid for row in state.objects[chest.uuid].contained_items}
     root = use(actor, chest, "Loot All")
     for native in capture_lineages((root,), observer_uuid=actor.uuid,
             known_actor_uuids=frozenset(state.actors)):
-        packet = project_lineage(projection, native)
+        packet = project_lineage(session, projection, native)
         assert packet is not None
         state = reduce_lineage(state, packet)
     remaining = {row.item_uuid for row in state.objects[chest.uuid].contained_items}
@@ -243,7 +247,7 @@ def test_broken_retained_storage_is_disclosed_but_floor_item_is_not_storage(cach
     actor.update_entity_senses(max_distance=12)
     assert chest.integrity is ItemIntegrity.DESTROYED and not chest.is_open
     assert set(chest.chest_inventory.items) == children
-    _, public = begin_projection(initialization(built, actor))
+    _, public = begin_projection(SessionProjection(), initialization(built, actor))
     state = reduce_initialization(public)
     assert state.objects[floor.uuid].contained_items is None
     assert {row.item_uuid for row in state.objects[chest.uuid].contained_items} == children

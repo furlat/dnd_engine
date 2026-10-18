@@ -328,8 +328,7 @@ def main():
         (reduction, 'copy_target', 'reduction.copy_target', reduction.copy_target, target_count),
         (reduction, 'reduce_nodes', 'reduction.nodes', reduction.reduce_nodes, None),
         (application, 'capture_lineages', 'capture.lineages', application.capture_lineages, None),
-        (application, 'project_lineage', 'projection.lineage', application.project_lineage, None),
-        (application, 'admitted_content', 'application.content', application.admitted_content, None),
+        (application, 'project_lineages', 'projection.lineage', application.project_lineages, None),
         (projection, '_world_update', 'projection.world_update', projection._world_update, world_count),
         (projection, '_observed_object', 'projection.observed_object', projection._observed_object, None),
         (projection, '_public_occurrences', 'projection.occurrences', projection._public_occurrences, None),
@@ -358,7 +357,7 @@ def main():
             (worker, 'capture_application_operation', 'worker.capture_application', worker.capture_application_operation, None),
             (sensory, 'emit_sensory_update_delta', 'sensory.delta', sensory.emit_sensory_update_delta, None),
             (application, 'capture_lineages', 'capture.lineages', application.capture_lineages, None),
-            (application, 'project_lineage', 'projection.lineage', application.project_lineage, None),
+            (application, 'project_lineages', 'projection.lineage', application.project_lineages, None),
         )
         methods = (
             (sensory.SpatialSensesSystem, 'recompute_observer', 'sensory.recompute_observer', sensory.SpatialSensesSystem.recompute_observer),
