@@ -629,7 +629,6 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 - Not met: the per-observer budget (0.33 ms) and area independence (emit scales with changed cells).
 - Open:
   - `Tile.resolved_light_level` is still computed from contributions (reading the GridMap grid from Tile would invert the DAG);
-  - the `_identity_grants` invalidation rule (keyed by `perception_revision`) is to be stated here;
   - ~179 test uses read `capture_senses_snapshot` set forms (PV1b).
 
 **PV1a-2 (next):**
@@ -638,6 +637,22 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 - the sphere-volume (~170 µs per observer) and spatial-effect (~200 µs per observer) loops vectorized;
 - emit independent of the changed area;
 - zone install (terrain written per tile, condition application models, item dousing; ~50–75 ms loaded, previously unowned).
+
+**PV1a-2 fan-out (codex/single-pass-fanout, 2026-10-18).**
+
+- Identity grants: the settled observers' granted cells are one frozen `GrantTable` owned by
+  SpatialSensesSystem and their only holder (`ObserverField.grants` is gone; no table while no observer holds a
+  row). Invalidation: each settlement replaces its observers' rows after it publishes; register and unregister
+  drop the observer's row with its field; reset and a replaced map empty it. `observers_granted` reads it with
+  one gather. The `_identity_grants` (subject, cell) memo stays and is cleared with every table write and on
+  register: Fireball asks `identifying_observers` 1,577 times for 30 keys (without the memo, +17 ms native);
+  its misses read the table.
+- A settlement publishes stage by stage over every view; the fixture (spatial-effect) and emitter stages are
+  each one array pass over the stacked views, with per-view rule calls and dict writes only.
+- Measured and not done: a stacked per-cell delta (2.1 ms per 30-observer settlement against 1.3 ms per
+  observer loop: data-bound); the sphere-volume loop (0 iterations on Darkness, Cloudkill, Sleet, Fireball);
+  zone install (Wall of Stone: `recompute_lights_at_positions`, light work, not sensory). The emit still scales
+  with the changed contacts (observed-change references and contact order), which the event payload lists.
 
 **PV1 is split so that it doesn't collide with P7.**
 
