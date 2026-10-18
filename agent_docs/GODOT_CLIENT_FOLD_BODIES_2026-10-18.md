@@ -30,8 +30,8 @@ occurrence (as observations were).
   body the client does not hold is an error.
 - `body` (`BodyState`): every changeable field, current. Replace them all: `visual_loadout`, `normal_hp`,
   `maximum_hp`, `temporary_hp`, `temporary_hp_grant` (absent: none), `life_state`, `armor_class`, `conditions`
-  (absent: none), `controlled_items` (the controller's inventory; absent: not controlled), `occupancy_layer`,
-  `resolved_size`, `faction` (absent: none), `remains_disposition` (absent: intact), `spatial_disposition`
+  (absent: none), `controlled_items` (the controller's inventory; absent: not controlled), `occupancy_layer`
+  (absent: none; sent to the controller or a visual contact), `resolved_size` (absent: none), `faction` (absent: none), `remains_disposition` (absent: intact), `spatial_disposition`
   (absent: present).
 - Keep `last_visual_position` (contacts set it) and `present`. A body whose lifetime ended (`present` false)
   ignores every later record and row.
@@ -62,6 +62,13 @@ in order. Rows are tagged by `field`:
 
 The order matters: re-wearing an item in its own slot is a slot removal then a set, which moves the slot last.
 Durations travel only to the controller; other seats receive memberships and effects without them.
+
+Edge cases (as `apply_actor_change_fact` does them):
+- an `actors` entry for a body the client does not hold is an error;
+- an `inventory` row on a body without `controlled_items` is an error;
+- an item row (`item_effects`, `item_effect_duration`, `item_state`) for an item record the client lacks, an effect
+  it lacks or a record without `state` does nothing;
+- a `condition_duration` row for a membership the body does not hold does nothing.
 
 ## 4. Items
 

@@ -3,10 +3,9 @@
 Each case appends one recorded native fact to a live-recorded startup and
 compares the body fields both folds hold: the client's, from the projected
 packets, and the engine's, `dnd.actor_projection.apply_actor_fact_change` of the
-same recording's actor change. Before E3-bodies (EVENT_NATIVE_PUBLICATION_PLAN_2026-10-18)
-three cases failed: a condition's temporary hit points, an INTERNAL condition's
-stats and a seen enemy's destroyed equipped layer; each now reaches the seat as
-its own change row.
+same recording's actor change: a condition's temporary hit points, an INTERNAL
+condition's stats and a seen enemy's destroyed equipped layer each reach the seat
+as their own change rows.
 """
 
 from dataclasses import dataclass, replace
