@@ -20,7 +20,8 @@ class RecordedSequence(BaseModel):
     """Private native event inputs, including local objective diagnostics.
 
     Version 6: the startup world interval carries the actor change record of each of its versions, which the
-    session's actor fold reads (engine-free replay builds bodies from births and records).
+    session's actor fold reads (engine-free replay builds bodies from births and records), and each lineage the
+    native combat log of its retained events (`CompletedLineage.native_logs`), which each seat's walk projects.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -88,7 +89,7 @@ def capture_history(
             raise ValueError(f"{observer.role} has no native actor at its initialization boundary")
         retained = capture_lineages(tuple(root for index, root in roots
                                          if observer.start_cursor <= index < end_cursor),
-            observer_uuid=observer.entity_uuid, known_actor_uuids=frozenset(latest.actors))
+            observer_uuid=observer.entity_uuid)
         views[observer.role] = RecordedSequence(initialization=startup, lineages=retained)
     return CapturedHistory(initialization, before, lineages, views)
 

@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections import ChainMap
-from collections.abc import Collection, Iterable
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Mapping
@@ -62,7 +61,7 @@ from dnd.types.senses import PerceivedContact
 from dnd.world_facts import copy_world_facts, apply_world_fact as apply_recorded_world_fact
 from dnd.player.audience import PlayerAudience, resolve_audience
 
-from dnd.player.event_record import RecordedEvent
+from dnd.player.event_record import RecordedCombatLog, RecordedEvent
 from dnd.player.sheet_facts import sheet_fact
 from dnd.types.actor_sheet import ActorSheetChange
 from dnd.player.facts import PlayerLogEntry
@@ -163,8 +162,7 @@ class AdmissionEvidence:
     """One version's seat-independent capture evidence, read at that version.
 
     `observer` is the tracked observer of a completed sensory delta (else
-    None), `observed` its changed contacts plus itself and `acquired` the
-    contacts it did not hold before. `candidates` are the participants and
+    None), `observed` its changed contacts plus itself. `candidates` are the participants and
     the fact owner. For each of these identities: its actor (before a
     completed version's fold; after an arrival's or departure's fold at its
     effect), the tracked observers holding it as a contact, and its own last
@@ -175,7 +173,6 @@ class AdmissionEvidence:
 
     observer: UUID | None
     observed: frozenset[UUID]
-    acquired: frozenset[UUID]
     candidates: frozenset[UUID]
     actors: Mapping[UUID, ActorState]
     holders: Mapping[UUID, Mapping[UUID, PerceivedContact]]
@@ -192,7 +189,6 @@ class CaptureCheckpoint:
     each still-open root; `pending` keeps the evidence of that root's folded
     versions until it completes, so a root's capture never folds history again.
     `initiative` is the encounter's order (its start, then each join or leave); a session has one encounter.
-    `names` keeps every born actor's name, never popped: the names a seat's combat log may show.
     """
 
     generation: UUID
@@ -205,7 +201,6 @@ class CaptureCheckpoint:
     trees: dict[UUID, list[UUID]] = field(default_factory=dict)
     pending: dict[UUID, dict[UUID, AdmissionEvidence]] = field(default_factory=dict)
     initiative: tuple[UUID, ...] = ()
-    names: dict[UUID, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,12 +220,12 @@ class CompletedLineage:
     end_cursor: int
     conditions: tuple[ConditionFact, ...] = ()
     dispositions: tuple[tuple[UUID, Disposition], ...] = ()
-    admissions: tuple[ActorAdmission, ...] = ()
     audience: PlayerAudience | None = None
     # Exact already-recorded versions that caused an observation before completion.
     observed_sources: tuple[RecordedEvent, ...] = ()
-    # The audience's combat-log entry of each retained event that has one.
-    logs: dict[UUID, PlayerLogEntry] = field(default_factory=dict)
+    # The native combat log of each retained event that has one, by event uuid: seat-independent (the retained
+    # bodies carry none); each seat's walk projects its own entry from it (RecordedSequence 6).
+    native_logs: Mapping[UUID, RecordedCombatLog] = field(default_factory=dict)
     # The shared fold's actor change of each retained event that has one, by event uuid.
     actor_fact_changes: Mapping[UUID, ActorFactChange] = field(default_factory=dict)
 
@@ -418,8 +413,7 @@ def capture_interval(
         admitted=tuple(admitted),
         dispositions=tuple(dispositions),
         conditions=tuple(fact for _, event in admitted_original if (fact := _condition_fact(event)) is not None),
-        admissions=(_derive_admissions(tuple(admitted_original), audience, evidence, frozenset())
-                    if admitted_original else ()),
+        admissions=_derive_admissions(tuple(admitted_original), audience, evidence) if admitted_original else (),
         logs=logs,
         actor_fact_changes=_actor_fact_changes(evidence, (event for _, event in admitted_original)),
         world_interval=WorldInterval(events=tuple((index, _cached_body(event, None, True, bodies))
@@ -857,8 +851,6 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
         completed = event.phase is EventPhase.COMPLETION and not event.canceled
         if completed:
             fold_birth(actors, event)
-        if completed and isinstance(event, EntityCreatedEvent):
-            checkpoint.names[event.entity_uuid] = actors[event.entity_uuid].name
         if (not event.canceled and event.phase is EventPhase.EFFECT
                 and isinstance(event, SpatialChangeEvent)
                 and event.change_type in (SpatialChangeType.ENTITY_LEFT, SpatialChangeType.ENTITY_ENTERED)
@@ -869,11 +861,9 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
             apply_presented_change(actors, arrival)
         observer: UUID | None = None
         observed: frozenset[UUID] = frozenset()
-        acquired: frozenset[UUID] = frozenset()
         if completed and isinstance(event, SensoryUpdateEvent) and event.observer_uuid in observers:
             observer = event.observer_uuid
             member = contacts.setdefault(observer, {})
-            acquired = frozenset(event.entity_contacts_changed.keys() - member.keys())
             positions[observer] = event.observer_position
             for identity in event.entity_contacts_removed:
                 member.pop(identity, None)
@@ -893,8 +883,8 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
             owner = actor_fact_owner(event)
             if owner is not None:
                 candidates.add(owner)
-            identities = candidates | observed | acquired
-            row = AdmissionEvidence(observer, observed, acquired, frozenset(candidates),
+            identities = candidates | observed
+            row = AdmissionEvidence(observer, observed, frozenset(candidates),
                 {identity: actors[identity] for identity in identities if identity in actors},
                 {identity: {member: held[identity] for member, held in contacts.items() if identity in held}
                  for identity in identities},
@@ -924,11 +914,11 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
 
 
 def _derive_admissions(
-    indexed: tuple[tuple[int, Event], ...], audience: PlayerAudience,
-    evidence: Mapping[UUID, AdmissionEvidence], known_actor_uuids: Collection[UUID],
-    newly_known_actor_uuids: Collection[UUID] = (),
+    indexed: tuple[tuple[int, Event], ...], audience: PlayerAudience, evidence: Mapping[UUID, AdmissionEvidence],
 ) -> tuple[ActorAdmission, ...]:
-    """One audience's admissions over these versions, read from their recorded evidence."""
+    """One audience's admissions over a recorded interval, read from its versions' evidence: the actors a
+    presentation target (`reduce_interval`) holds, each from its first observation. Publication does not read
+    them."""
     admitted: set[UUID] = set()
     result: list[ActorAdmission] = []
     for index, event in indexed:
@@ -939,10 +929,8 @@ def _derive_admissions(
             raise ValueError(f"Version {index} precedes the capture checkpoint and was not retained")
         sensory = row.observer is not None and audience.observes(row.observer)
         observed = row.observed if sensory else frozenset()
-        acquired = row.acquired if sensory else frozenset()
-        for identity in sorted({identity for identity in row.candidates | observed
-                if identity not in known_actor_uuids and identity not in newly_known_actor_uuids
-                and identity not in admitted} | acquired, key=str):
+        for identity in sorted({identity for identity in row.candidates | observed if identity not in admitted},
+                               key=str):
             actor = row.actors.get(identity)
             if actor is None:
                 continue
@@ -964,10 +952,7 @@ def _derive_admissions(
     return tuple(result)
 
 
-def capture_lineage(
-    root: Event, *, observer_uuid: UUID, known_actor_uuids: Collection[UUID] = frozenset(),
-    audience: PlayerAudience | None = None,
-) -> CompletedLineage:
+def capture_lineage(root: Event, *, observer_uuid: UUID, audience: PlayerAudience | None = None) -> CompletedLineage:
     """Retain a closed native lineage privately after its public operation.
 
     Follow existing child lineages. Operation cursor ranges and callback batches
@@ -975,8 +960,7 @@ def capture_lineage(
     private record; the outgoing projection decides which payloads and geometry
     an observer receives. Unknown participants must not erase observed children.
     """
-    return capture_lineages((root,), observer_uuid=observer_uuid,
-                            known_actor_uuids=known_actor_uuids, audience=audience)[0]
+    return capture_lineages((root,), observer_uuid=observer_uuid, audience=audience)[0]
 
 
 @dataclass(frozen=True, slots=True)
@@ -986,7 +970,7 @@ class CaptureContext:
     `roots` are the roots it captures (by uuid, as given), `groups` their walk groups, each named by its root,
     in the roots' order, and `graphs` each group's lineage graph by that root. `evidence` holds each
     version's admission evidence from the shared fold and `bodies` each retained event's detached body:
-    every seat shares them and adds only its own admissions and combat log.
+    every seat shares them; a seat's capture adds only its redactions.
     """
 
     generation: UUID
@@ -1006,6 +990,8 @@ class LineageGraph:
     indexed: tuple[tuple[int, Event], ...]
     conditions: tuple[ConditionFact, ...]
     objective_rows: tuple[ObjectiveRow, ...]
+    # Each node's native combat log, by its uuid (`CompletedLineage.native_logs`).
+    native_logs: Mapping[UUID, CombatLogEntry]
 
 
 def capture_context(checkpoint: CaptureCheckpoint, roots: tuple[Event, ...] = (), *,
@@ -1047,6 +1033,11 @@ def capture_context(checkpoint: CaptureCheckpoint, roots: tuple[Event, ...] = ()
     end = end_cursor if end_cursor is not None else max(
         (graph.indexed[-1][0] + 1 for graph in context.graphs.values()), default=checkpoint.cursor)
     context.evidence.update(advance_capture(checkpoint, end))
+    for graph in context.graphs.values():
+        # Each version is captured from its own evidence: the shared fold never folds history again.
+        for index, event in graph.indexed:
+            if not event.canceled and event.uuid not in context.evidence:
+                raise ValueError(f"Version {index} precedes the capture checkpoint and was not retained")
     return context
 
 
@@ -1056,11 +1047,8 @@ def _lineage_versions(context: CaptureContext, identity: UUID) -> tuple[tuple[in
 
 
 def capture_lineages(
-    roots: tuple[Event, ...], *, observer_uuid: UUID,
-    known_actor_uuids: Collection[UUID] = frozenset(), audience: PlayerAudience | None = None,
-    context: CaptureContext | None = None, known_entity_names: Mapping[str, str] | None = None,
-    known_connector_uuids: frozenset[str] = frozenset(), known_content_ids: frozenset[str] = frozenset(),
-    omit_foreign_sensory_payloads: bool = False,
+    roots: tuple[Event, ...], *, observer_uuid: UUID, audience: PlayerAudience | None = None,
+    context: CaptureContext | None = None, omit_foreign_sensory_payloads: bool = False,
 ) -> tuple[CompletedLineage, ...]:
     """Project each audience from the same original operation evidence.
 
@@ -1071,19 +1059,8 @@ def capture_lineages(
         context = capture_context(CaptureCheckpoint(EventQueue.generation_id(), frozenset(audience.observers)), roots)
     elif tuple(dict.fromkeys(root.uuid for root in roots)) != context.roots:
         raise ValueError("A capture context captures the roots it was built from")
-    known: set[UUID] = set()
-    names = ChainMap({}, known_entity_names or {})
-    retained: list[CompletedLineage] = []
-    for root in context.groups:
-        lineage = _capture_lineage(root, observer_uuid=observer_uuid, audience=audience,
-            known_actor_uuids=known_actor_uuids, newly_known_actor_uuids=known,
-            context=context, known_entity_names=names,
-            known_connector_uuids=known_connector_uuids, known_content_ids=known_content_ids,
-            omit_foreign_sensory_payloads=omit_foreign_sensory_payloads)
-        retained.append(lineage)
-        known.update(admission.actor.uuid for admission in lineage.admissions)
-        names.update((str(admission.actor.uuid), admission.actor.name) for admission in lineage.admissions)
-    return tuple(retained)
+    return tuple(_capture_lineage(root, observer_uuid=observer_uuid, audience=audience, context=context,
+        omit_foreign_sensory_payloads=omit_foreign_sensory_payloads) for root in context.groups)
 
 
 def _lineage_graph(root: Event, context: CaptureContext) -> LineageGraph:
@@ -1137,7 +1114,8 @@ def _graph(nodes: dict[UUID, Event], indexed: tuple[tuple[int, Event], ...]) -> 
                        if event.uuid == nodes[event.lineage_uuid].uuid
                        and (fact := _condition_fact(event)) is not None)
     return LineageGraph(nodes, indexed, conditions,
-                        tuple(_objective_row(index, event) for index, event in indexed))
+                        tuple(_objective_row(index, event) for index, event in indexed),
+                        {event.uuid: event.combat_log for event in nodes.values() if event.combat_log is not None})
 
 
 def _merged_graph(graphs: tuple[LineageGraph, ...]) -> LineageGraph:
@@ -1151,10 +1129,7 @@ def _merged_graph(graphs: tuple[LineageGraph, ...]) -> LineageGraph:
 
 
 def _capture_lineage(
-    root: Event, *, observer_uuid: UUID, audience: PlayerAudience, known_actor_uuids: Collection[UUID],
-    context: CaptureContext, known_entity_names: Mapping[str, str],
-    known_connector_uuids: frozenset[str], known_content_ids: frozenset[str],
-    newly_known_actor_uuids: Collection[UUID] = (),
+    root: Event, *, observer_uuid: UUID, audience: PlayerAudience, context: CaptureContext,
     omit_foreign_sensory_payloads: bool = False,
 ) -> CompletedLineage:
     generation = context.generation
@@ -1162,12 +1137,6 @@ def _capture_lineage(
         raise RuntimeError("EventQueue generation changed during lineage capture")
     graph = context.graphs[root.uuid]
     nodes, indexed, conditions = graph.nodes, graph.indexed, graph.conditions
-    admissions = _derive_admissions(indexed, audience, context.evidence, known_actor_uuids, newly_known_actor_uuids)
-    names = ChainMap({}, known_entity_names)
-    retained_logs: dict[int, CombatLogEntry | None] = {}
-    admissions_at: dict[UUID, list[ActorAdmission]] = {}
-    for admission in admissions:
-        admissions_at.setdefault(admission.event_uuid, []).append(admission)
     # Source versions are selected from original evidence before admission.
     # Even a foreign observer's reference retains its exact source payload.
     observed_source_ids = {
@@ -1180,21 +1149,9 @@ def _capture_lineage(
         and not audience.observes(event.observer_uuid) and _safe_to_detach(event)
         and event.uuid not in observed_source_ids
     }
-    retained_values = []
-    logs: dict[UUID, PlayerLogEntry] = {}
-    for _, event in indexed:
-        for admission in admissions_at.get(event.uuid, ()):
-            names[str(admission.actor.uuid)] = admission.actor.name
-        if event.uuid == nodes[event.lineage_uuid].uuid:
-            node = nodes[event.lineage_uuid]
-            retained_values.append(_retained_event(node, audience,
-                omit_sensory_payload=event.uuid in omitted_sensory, bodies=context.bodies))
-            entry = seat_log_entry(node.combat_log, audience,
-                known_entity_names=names, known_connector_uuids=known_connector_uuids,
-                known_content_ids=known_content_ids, retained_entries=retained_logs)
-            if entry is not None:
-                logs[node.uuid] = entry
-    retained = tuple(retained_values)
+    retained = tuple(_retained_event(nodes[event.lineage_uuid], audience,
+        omit_sensory_payload=event.uuid in omitted_sensory, bodies=context.bodies)
+        for _, event in indexed if event.uuid == nodes[event.lineage_uuid].uuid)
     retained_root = next(event for event in retained if event.uuid == root.uuid)
     condition_ids = {fact.event_uuid for fact in conditions}
     dispositions = tuple(
@@ -1216,11 +1173,10 @@ def _capture_lineage(
         end_cursor=indexed[-1][0] + 1,
         conditions=conditions,
         dispositions=dispositions,
-        admissions=admissions,
         observed_sources=tuple(_retained_event(event, audience, bodies=context.bodies)
             for _, event in indexed
             if event.uuid in observed_source_ids and event.uuid not in retained_ids),
-        logs=logs,
+        native_logs=graph.native_logs,
         actor_fact_changes=_actor_fact_changes(context.evidence, retained),
     )
 
@@ -1239,13 +1195,12 @@ def lineage_branch(lineage: CompletedLineage, root: Event) -> CompletedLineage:
     events = tuple(event for event in lineage.events if event.lineage_uuid in selected)
     identities = {event.uuid for event in events}
     rows = tuple(row for row in lineage.objective_rows if row.lineage_uuid in selected)
-    version_ids = {row.event_uuid for row in rows}
     return replace(lineage, root=root, events=events, objective_rows=rows,
                    start_cursor=rows[0].source_index, end_cursor=rows[-1].source_index + 1,
                    conditions=tuple(row for row in lineage.conditions if row.event_uuid in identities),
                    dispositions=tuple(row for row in lineage.dispositions if row[0] in identities),
-                   admissions=tuple(row for row in lineage.admissions if row.event_uuid in version_ids),
-                   logs={identity: entry for identity, entry in lineage.logs.items() if identity in identities},
+                   native_logs={identity: entry for identity, entry in lineage.native_logs.items()
+                                if identity in identities},
                    actor_fact_changes={identity: change for identity, change in lineage.actor_fact_changes.items()
                                        if identity in identities})
 
@@ -1255,26 +1210,6 @@ def _admit_actor(target: PresentationTarget, admission: ActorAdmission) -> None:
     target.actors[admission.actor.uuid] = admission.actor
     if admission.contact is not None and target.senses is not None:
         target.senses.entities[admission.actor.uuid] = admission.contact
-
-
-def stage_actors(target: PresentationTarget, admissions: tuple[ActorAdmission, ...]) -> PresentationTarget:
-    """Add the specified observed actors to a fresh presentation value."""
-    result = copy_target(target)
-    for admission in admissions:
-        if admission.actor.uuid not in result.actors:
-            _admit_actor(result, admission)
-    return result
-
-
-def stage_lineage(target: PresentationTarget, lineage: CompletedLineage) -> PresentationTarget:
-    """Prepare newly admitted actors for binding without changing history's owner.
-
-    The display still admits contacts at their recorded event. This preparation
-    supplies the bodies and entry contacts needed to compile that first lineage.
-    """
-    if target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid:
-        raise ValueError("lineage belongs to a different presentation baseline")
-    return stage_actors(target, lineage.admissions)
 
 
 def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> PresentationTarget:
@@ -1291,13 +1226,7 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                    if disposition is Disposition.UNSUPPORTED}
     not_disclosed = {identity for identity, disposition in lineage.dispositions
                      if disposition is Disposition.NOT_DISCLOSED}
-    source_indexes = {row.event_uuid: row.source_index for row in lineage.objective_rows}
-    admissions = iter(sorted(lineage.admissions, key=lambda row: source_indexes[row.event_uuid]))
-    admission = next(admissions, None)
     for event in lineage.events:
-        while admission is not None and source_indexes[admission.event_uuid] <= source_indexes[event.uuid]:
-            _admit_actor(result, admission)
-            admission = next(admissions, None)
         if event.canceled or event.uuid in unsupported:
             continue
         if (change := recorded_actor_change(lineage.actor_fact_changes, event)) is not None:
@@ -1364,7 +1293,5 @@ __all__ = [
     "reduce_lineage",
     "seat_log_entry",
     "seed_actors",
-    "stage_actors",
-    "stage_lineage",
     "settle_dispositions",
 ]

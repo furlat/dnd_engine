@@ -51,7 +51,7 @@ def test_real_harm_cast_and_reduction_admission_capture_project_and_replay(world
     force_save_result(target, "constitution", succeeds=False)
     with fixed_dice_faces(*([2] * 40)):
         result = cast(Harm, caster, target)
-    captured, = capture_lineages((result,),observer_uuid=caster.uuid,known_actor_uuids=frozenset(state.actors),audience=audience)
+    captured, = capture_lineages((result,),observer_uuid=caster.uuid,audience=audience)
     _, (restored,) = decode_sequence(encode_sequence(native_initial,(captured,)))
     public = project_lineage(session, projection, restored)
     assert public is not None
