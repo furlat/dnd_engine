@@ -450,3 +450,24 @@ Hard rules:
     - free-aim's `get_valid_positions` contract;
     - the union fields in events and AC.
   - The Godot client must follow schema 14: agent_docs/GODOT_CLIENT_FOLD_SCHEMA_14_2026-10-18.md.
+- 2026-10-18: **Next wave, after the stop-hook review: "the plan's Exit is not met".** The closed lanes stay closed. Four plan items that need no human decision were started from d6a5ba8e7. Each comes back to the single integration worktree.
+  - **S: PV1a-2's remaining items** (codex/single-pass-fanout): shared changes per settlement as arrays over observers, identity grants per settlement, volume and effect loops vectorized, area-independent emit.
+  - **W: the rest of PV2 plus the publication of drops and light changes** (codex/single-pass-wire2), schema 15: cells once per seat with per-observer bit lists, Fireball/CoD world_updates and combat log, `_world_update` once per group, the cell fold over arrays.
+  - **D: PD1b/PD2 and PV1a-4 leftovers** (codex/single-pass-leftovers): duplicate weapon-reach contacts, skipping an unchanged light contribution, discovery HP reads, a hoisted wall predicate set, and AoE footprints if exact.
+  - **N: PT navigation as a cost grid with a predecessor array** (codex/single-pass-nav): the same chosen paths, costs and safe sets, by oracle.
+  - Still parked on the human: free-aim's contract, light arrays (DAG), the union fields, and the Godot client (PC).
+- 2026-10-18: **Leftovers merged (a59707d29 … 60ff97d6a).**
+  - The admitted physical-access contact is carried from admission to the target list: `BaseAction._physical_access_contact`, `@final`, listed in the admission architecture test. `attack_object_contact` calls: fighter menu / AI decision 819 → 650, caster menu 851 → 774. An oracle found 0 mismatches over 15,551 listed targets.
+  - Object HP is read once per check, and `Health.get_max_hit_dices_points` skips the count read when the modifier is 0.
+  - `Tile._add_illumination` skips an identical installed level.
+  - `SolidWallZone.blocks_crossing_between` builds its admitted cells once per call. Forcecage (wall_constructions.py:831) still rebuilds them per section.
+  - Gates (agent, vs d6a5ba8e7):
+    - discovery dumps and agreement counts identical;
+    - transcripts byte-identical on 6 cases;
+    - sweep = r21; pyright 0 new.
+  - Time (5 interleaved runs, base → new):
+    - caster menu 138 → 130; fighter menu 72 → 58;
+    - AI decisions 1 / 2 / 3: 138 → 113, 91 → 76, 80 → 66;
+    - Wall of Stone 172 → 161; Daylight 205 → 196.
+  - Assumption recorded: the carried contact traces `template.source_entity_uuid` where the deleted call traced `self.uuid`. They were equal at every sampled site, but nothing enforces it.
+  - Left: the AoE aim footprints (~16 ms) need a new kept per-cell PROPAGATION grid. The other single-origin callers feed a rule's own subjective contact, so they still repeat the admission check (169 per fighter menu).
