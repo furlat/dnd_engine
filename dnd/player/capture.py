@@ -873,7 +873,8 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
             if change is not None:
                 # TODO(E3-bodies): E2 keeps today's shared fold, where a condition's item after-value does not
                 # reach the actors holding the item; every seat's fold applies it.
-                apply_presented_change(actors, replace(change, replaced_item=None))
+                apply_presented_change(actors, change if change.replaced_item is None
+                                       else replace(change, replaced_item=None))
             if (isinstance(event, SpatialChangeEvent) and event.terminal_release is not None
                     and event.entity_uuid is not None):
                 actors.pop(event.entity_uuid, None)
