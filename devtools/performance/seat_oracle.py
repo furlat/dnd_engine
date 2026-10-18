@@ -26,11 +26,19 @@ Fields left out of both sides, none of them a current perceived value:
 - an effect's `owner_revision`: the seat's own numbering of the effect's changes (`_observe_spatial_revisions`);
 - a non-visual contact's `last_visual_position`: the last sighting.
 
-O3: the client side of O1, written per operation and seat, is the perceived-state baseline (`views.jsonl.gz`);
-`python seat_oracle.py compare <base> <new>` compares two runs' views, both recorded through gallery_transcript.py
-so that their identities repeat (the views are keyed by them). O2's live side: `state_digest` of each seat's
-whole client state (memory included) after each record, and the spool of its records written through
-`server.recording`; `spool_replay.py` replays it in a fresh process.
+O3: the client side of O1, written per operation and seat, is the perceived-state baseline (`views.jsonl.gz`).
+
+O4, the disclosure boundary: a seat's knowledge is the union over operations of the flat (category, key, field
+path, value) leaves of everything its client holds, memory included (`held_view`, O1's shapes and excluded
+fields); each operation's new leaves are written per seat (`held.jsonl.gz`). Against a base run, every leaf the
+new run's seat holds at operation k that the base run's did not hold by k is a leak: knowledge too early or
+extra. An empty O4 report means no seat ever learned anything the base did not tell it; a change of wire shape
+shows as leaks too and is listed by the lane that makes it.
+
+`python seat_oracle.py compare <base> <new>` runs O3 and O4 on two runs recorded through gallery_transcript.py
+(seeded identities: the views and leaves are keyed by them). O2's live side: `state_digest` of each seat's
+whole client state after each record, and the spool of its records written through `server.recording`;
+`spool_replay.py` replays it in a fresh process.
 """
 
 import argparse
@@ -57,7 +65,8 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.player.actor_facts import ActorState, PresentationTarget
 from dnd.player.audience import AudiencePerception, PlayerAudience, audience_view
-from dnd.player.facts import PlayerActor, PlayerItem, PlayerObject, PlayerState
+from dnd.player.facts import (PlayerActor, PlayerCharacterSheet, PlayerItem, PlayerObject, PlayerState,
+    SpatialEffectContent)
 from dnd.player.projection import (_item_records, _object_observed, _observed_object, _public_actor,
     _public_condition, _public_items)
 from dnd.player.session import Session
@@ -86,6 +95,8 @@ CONDITION = TypeAdapter(ConditionFact)
 CONTACT = TypeAdapter(PerceivedContact)
 EFFECT = TypeAdapter(PerceivedSpatialEffect)
 LIGHT = TypeAdapter(PerceivedLightSource)
+SPATIAL_CONTENT = TypeAdapter(SpatialEffectContent)
+SHEET = TypeAdapter(PlayerCharacterSheet)
 
 # Categories of a view, in report order.
 CATEGORIES = ('cells', 'member_cells', 'entities', 'object_contacts', 'effects', 'lights', 'tiles', 'objects',
@@ -152,13 +163,15 @@ def _effect(effect: PerceivedSpatialEffect, positions: set[Position]) -> dict[st
 
 
 def _effects(composed: Mapping[UUID, PerceivedSpatialEffect], members: Mapping[UUID, SensesSnapshot],
-             visible: set[Position]) -> dict[str, Any]:
-    """The visible part of each composed effect: its cells each member sees now (plan §3.2), and the members."""
+             visible: set[Position] | None) -> dict[str, Any]:
+    """The visible part of each composed effect: its cells each member sees now (plan §3.2), and the members.
+    With `visible` None (O4), every held cell."""
     result = {}
     for identity, effect in composed.items():
-        seen_by = {str(member): sorted(key(position) for position in held.positions if cell_in(senses.visible, position))
+        seen_by = {str(member): sorted(key(position) for position in held.positions
+                                       if visible is None or cell_in(senses.visible, position))
             for member, senses in members.items() if (held := senses.spatial_effects.get(identity)) is not None}
-        positions = {position for position in effect.positions if position in visible}
+        positions = {position for position in effect.positions if visible is None or position in visible}
         if positions:
             result[str(identity)] = {**_effect(effect, positions), 'members': {
                 member: cells for member, cells in seen_by.items() if cells}}
@@ -166,13 +179,14 @@ def _effects(composed: Mapping[UUID, PerceivedSpatialEffect], members: Mapping[U
 
 
 def _lights(composed: Mapping[UUID, PerceivedLightSource], members: Mapping[UUID, SensesSnapshot],
-            visible: set[Position]) -> dict[str, Any]:
-    """Each composed light source with its footprint on visible cells, and the members holding it."""
-    names = {key(position) for position in visible}
+            visible: set[Position] | None) -> dict[str, Any]:
+    """Each composed light source with its footprint on visible cells, and the members holding it. With
+    `visible` None (O4), every held source with its whole footprint."""
+    names = {key(position) for position in visible} if visible is not None else None
     result = {}
     for identity, source in composed.items():
-        footprint = {cell: level for cell, level in source.affected_tiles.items() if cell in names}
-        if footprint or tuple(source.position) in visible:
+        footprint = {cell: level for cell, level in source.affected_tiles.items() if names is None or cell in names}
+        if visible is None or footprint or tuple(source.position) in visible:
             data = LIGHT.dump_python(source, mode='json')
             data['affected_tiles'] = dict(sorted(footprint.items()))
             data['members'] = sorted(str(member) for member, senses in members.items() if identity in senses.light_sources)
@@ -294,6 +308,66 @@ def client_view(state: PlayerState) -> View:
                        if all(tuple(point) in visible for point in row.endpoints)},
         'actors': actors,
     }
+
+
+def held_view(state: PlayerState) -> View:
+    """O4: everything the client holds, memory included, in O1's shapes and without O1's excluded fields: the
+    current cells and contacts, every seen cell, every held effect, light, tile, object, connector, body (with its
+    last sighting), item record, effect content, admitted content identity, the HUD and the turn. Left out as
+    bookkeeping, not knowledge: the fold's cursors and arbitration provenance (`reducer_cursor`,
+    `spatial_commit_cursors`, the perception's cursors and absences) and the combat log (plan Q2, gated apart)."""
+    senses = state.senses
+    members = state.perception.members or ({state.observer_uuid: senses} if senses is not None else {})
+    hud = state.hud_snapshot
+    return {
+        'cells': _cells(senses, _visible(senses)) if senses is not None else {},
+        'seen': {key(position): True for position in mask_positions(senses.seen)} if senses is not None else {},
+        'member_cells': {str(member): sorted(key(position) for position in mask_positions(held.visible))
+                         for member, held in members.items()},
+        'entities': _contacts(senses.entities, members, objects=False) if senses is not None else {},
+        'object_contacts': _contacts(senses.objects, members, objects=True) if senses is not None else {},
+        'effects': _effects(senses.spatial_effects, members, None) if senses is not None else {},
+        'lights': _lights(senses.light_sources, members, None) if senses is not None else {},
+        'tiles': {key(position): TILE.dump_python(tile, mode='json') for position, tile in state.tiles.items()},
+        'objects': {str(identity): OBJECT.dump_python(obj, mode='json') for identity, obj in state.objects.items()},
+        'connectors': {str(row.connector_uuid): CONNECTOR.dump_python(row, mode='json') for row in state.connectors},
+        'actors': {str(identity): {'body': _body(actor, True)} for identity, actor in state.actors.items()},
+        'items': _items({str(identity): ITEM.dump_python(item, mode='json') for identity, item in state.items.items()}),
+        'spatial_content': {str(identity): SPATIAL_CONTENT.dump_python(content, mode='json')
+                            for identity, content in state.spatial_content.items()},
+        'content': {row.ref.identity_key: True for row in state.content},
+        'hud': {str(sheet.actor_uuid): SHEET.dump_python(sheet, mode='json') for sheet in hud.sheets}
+               | {'initiative': {'order': ','.join(map(str, hud.initiative))}}
+               if hud is not None else {},
+        'turn': {'current': {'actor': str(state.current_actor_uuid), 'round': state.round_number}},
+    }
+
+
+Leaf = tuple[str, str, str, str]  # category, record key, field path, canonical value
+
+
+def _flatten(category: str, name: str, path: str, value: Any, found: set[Leaf]) -> None:
+    if isinstance(value, dict):
+        if not value:
+            found.add((category, name, path, '{}'))
+        for field_name, item in value.items():
+            _flatten(category, name, f'{path}.{field_name}' if path else field_name, item, found)
+    elif isinstance(value, list):
+        if not value:
+            found.add((category, name, path, '[]'))
+        for item in value:  # a list is a set of facts: one leaf per element
+            found.add((category, name, f'{path}[]', canonical(item)))
+    else:
+        found.add((category, name, path, canonical(value)))
+
+
+def leaves(view: View) -> set[Leaf]:
+    """A view as its flat (category, key, field path, value) leaves."""
+    found: set[Leaf] = set()
+    for category, records in view.items():
+        for name, value in records.items():
+            _flatten(category, name, '', value, found)
+    return found
 
 
 @dataclass(slots=True)
@@ -453,12 +527,15 @@ def summarize(rows: Iterable[Mapping[str, Any]]) -> dict[str, int]:
 @dataclass(slots=True)
 class Oracle:
     """One oracle run's outputs under `directory`: the seats' spool (`server.recording`), the O3 views
-    (`views.jsonl.gz`), and per seat the digest of its client state after each received record."""
+    (`views.jsonl.gz`), the O4 knowledge each operation added (`held.jsonl.gz`, with `known` the union so far
+    per seat), and per seat the digest of its client state after each received record."""
 
     directory: Path
     recording: Recording
     views: IO[str]
+    held: IO[str]
     digests: dict[str, list[str]]
+    known: dict[str, set[Leaf]]
     report: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -466,7 +543,8 @@ def open_oracle(directory: Path, seats: Iterable[str]) -> Oracle:
     seats = tuple(seats)
     directory.mkdir(parents=True, exist_ok=False)
     return Oracle(directory, open_recording(directory / 'spool', seats, SPOOL_QUOTA),
-                  gzip.open(directory / 'views.jsonl.gz', 'wt'), {seat: [] for seat in seats})
+                  gzip.open(directory / 'views.jsonl.gz', 'wt'), gzip.open(directory / 'held.jsonl.gz', 'wt'),
+                  {seat: [] for seat in seats}, {seat: set() for seat in seats})
 
 
 def receive(oracle: Oracle, seat: str, sequence: int, payload: bytes, state: PlayerState) -> None:
@@ -476,14 +554,20 @@ def receive(oracle: Oracle, seat: str, sequence: int, payload: bytes, state: Pla
 
 
 def check(oracle: Oracle, operation: int, kind: str, session: Session, states: Mapping[str, PlayerState]) -> dict[str, Any]:
-    """O1 for every seat at one operation's end; the client views are written as O3 rows."""
+    """O1 for every seat at one operation's end; the client views are written as O3 rows, and the leaves of its
+    whole held state that it did not hold before as O4 rows."""
     world = live_world(session)
     seats = {}
     for seat, state in states.items():
         held = client_view(state)
         rows = differences(live_view(world, session.seats[seat], state), held)
+        sequence = len(oracle.digests[seat]) - 1
         oracle.views.write(canonical({'operation': operation, 'kind': kind, 'seat': seat,
-                                      'sequence': len(oracle.digests[seat]) - 1, 'view': held}) + '\n')
+                                      'sequence': sequence, 'view': held}) + '\n')
+        added = leaves(held_view(state)) - oracle.known[seat]
+        oracle.known[seat] |= added
+        oracle.held.write(canonical({'operation': operation, 'kind': kind, 'seat': seat, 'sequence': sequence,
+                                     'added': sorted(added)}) + '\n')
         seats[seat] = {'differences': len(rows), 'classes': summarize(rows), 'examples': examples(rows)}
     result = {'operation': operation, 'kind': kind, 'differences': sum(row['differences'] for row in seats.values()),
               'seats': seats}
@@ -495,6 +579,7 @@ def close_oracle(oracle: Oracle, manifest: dict[str, Any], states: Mapping[str, 
     """The replay manifest (identities, final publications, digests), each seat's final client state, the O1 report."""
     close_recording(oracle.recording)
     oracle.views.close()
+    oracle.held.close()
     with gzip.open(oracle.directory / 'final_states.json.gz', 'wt') as out:
         out.write(canonical({seat: state_data(state) for seat, state in states.items()}))
     classes: dict[str, dict[str, int]] = {}
@@ -512,6 +597,42 @@ def _view_rows(directory: Path) -> dict[tuple[int, str, str], View]:
         return {(row['operation'], row['kind'], row['seat']): row['view'] for row in map(json.loads, rows)}
 
 
+def _held_rows(directory: Path) -> dict[str, list[tuple[int, str, list[Leaf]]]]:
+    rows: dict[str, list[tuple[int, str, list[Leaf]]]] = {}
+    with gzip.open(directory / 'held.jsonl.gz', 'rt') as source:
+        for row in map(json.loads, source):
+            rows.setdefault(row['seat'], []).append((row['operation'], row['kind'], [tuple(leaf) for leaf in row['added']]))
+    return rows
+
+
+def knowledge_leaks(base: Iterable[Leaf], new: Iterable[Leaf]) -> list[Leaf]:
+    """O4 at one operation: what the new run's seat holds that the base run's did not hold by then."""
+    return sorted(set(new) - set(base))
+
+
+def compare_knowledge(base: Path, new: Path) -> dict[str, list[dict[str, Any]]]:
+    """O4 between two oracle runs: per seat, each leaf of the new run's knowledge union at operation k that is
+    absent from the base run's union at k, reported at the first such operation (learned earlier, or extra)."""
+    before, after = _held_rows(base), _held_rows(new)
+    report: dict[str, list[dict[str, Any]]] = {}
+    for seat in sorted(before.keys() | after.keys()):
+        base_known: set[Leaf] = set()
+        new_known: set[Leaf] = set()
+        reported: set[Leaf] = set()
+        base_rows, new_rows = before.get(seat, []), after.get(seat, [])
+        for index in range(max(len(base_rows), len(new_rows))):
+            if index < len(base_rows):
+                base_known.update(base_rows[index][2])
+            if index < len(new_rows):
+                operation, kind, added = new_rows[index]
+                new_known.update(added)
+                for leaf in knowledge_leaks(base_known, new_known - reported):
+                    reported.add(leaf)
+                    report.setdefault(seat, []).append({'operation': operation, 'kind': kind, 'category': leaf[0],
+                        'key': leaf[1], 'field': leaf[2], 'value': leaf[3]})
+    return report
+
+
 def compare_views(base: Path, new: Path) -> dict[str, Any]:
     """O3: two oracle runs' perceived client states, operation by operation and seat by seat (the base's view
     in the reference role of `differences`). Views are keyed by identities, so both runs must have been recorded
@@ -527,19 +648,29 @@ def compare_views(base: Path, new: Path) -> dict[str, Any]:
         elif canonical(before[name]) != canonical(after[name]):
             found = differences(before[name], after[name])
             rows[f'{name[0]}:{name[1]}:{name[2]}'] = {'classes': summarize(found), 'examples': examples(found)}
-    return {'equal': not rows, 'compared': len(before.keys() & after.keys()), 'differing': rows}
+    leaks = compare_knowledge(base, new)
+    return {'equal': not rows, 'compared': len(before.keys() & after.keys()), 'differing': rows,
+            'knowledge_bounded': not leaks, 'leaks': leaks}
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description='O3: compare the perceived client states of two oracle runs.')
+    parser = argparse.ArgumentParser(description='O3 and O4: compare the perceived client states of two oracle runs, '
+                                     'and report what the new run\'s seats knew that the base run\'s did not.')
     parser.add_argument('command', choices=('compare',))
     parser.add_argument('base', type=Path)
     parser.add_argument('new', type=Path)
     args = parser.parse_args()
     result = compare_views(args.base, args.new)
+    leak_classes: dict[str, int] = {}
+    for rows in result['leaks'].values():
+        for row in rows:
+            name = f"{row['category']}:{row['field']}"
+            leak_classes[name] = leak_classes.get(name, 0) + 1
     print(json.dumps({'equal': result['equal'], 'compared': result['compared'],
-                      'differing': {name: row.get('classes', row) for name, row in result['differing'].items()}}, indent=1))
-    sys.exit(0 if result['equal'] else 1)
+                      'differing': {name: row.get('classes', row) for name, row in result['differing'].items()},
+                      'knowledge_bounded': result['knowledge_bounded'], 'leak_classes': leak_classes,
+                      'leaks': {seat: rows[:20] for seat, rows in result['leaks'].items()}}, indent=1))
+    sys.exit(0 if result['equal'] and result['knowledge_bounded'] else 1)
 
 
 if __name__ == '__main__':

@@ -155,3 +155,22 @@ def test_o1_names_a_fault_planted_in_the_client_fold(session, fault):
     assert {seat_oracle.signature(row) for row in before} <= {'tiles:field:resolved_light'}, fault.name
     planted = fault.plant(client)
     assert planted in {(row['category'], row['key'], row.get('field')) for row in o1(client)}, fault.name
+
+
+def test_o4_names_knowledge_the_seat_was_never_given(session):
+    """O4 bounds a seat's whole held state, memory included: a body the seat never perceived, carrying a value
+    no record sent, is a leak O4 names, although O1 (current perception only) cannot see it."""
+    runtimes, initializations = initialize_audiences(session, ui_content_manifest())
+    seat, initial = next(iter(initializations.items()))
+    client = reduce_initialization(initial, content_additions=runtimes[seat].projection.remembered.content)
+    base = seat_oracle.leaves(seat_oracle.held_view(client))
+    assert seat_oracle.knowledge_leaks(base, seat_oracle.leaves(seat_oracle.held_view(client))) == []
+
+    body = enemy(client)
+    identity = uuid4()
+    client.actors[identity] = replace(body, uuid=identity, last_visual_position=None, temporary_hp=body.temporary_hp + 7)
+    leaked = seat_oracle.knowledge_leaks(base, seat_oracle.leaves(seat_oracle.held_view(client)))
+    assert ('actors', str(identity), 'body.temporary_hp', str(body.temporary_hp + 7)) in leaked
+    current = seat_oracle.differences(seat_oracle.live_view(seat_oracle.live_world(session), session.seats[seat], client),
+                                      seat_oracle.client_view(client))
+    assert all(row['key'] != str(identity) for row in current)
