@@ -27,7 +27,7 @@ from dnd.core.values import ValueRead, read_value, parts
 from dnd.types.event_facts import GroupEntryKind
 from dnd.core.events import (
     Event, EventPhase, EventQueue,
-    EncounterStartEvent, EncounterEndEvent,
+    EncounterStartEvent, EncounterEndEvent, InitiativeOrderChangedEvent,
     RoundStartEvent, RoundEndEvent,
     TurnStartEvent, TurnEndEvent,
     DeathEvent,
@@ -441,6 +441,7 @@ class Encounter(BaseObject):
             raise ValueError("Live combatant must have committed birth and presence")
         active_uuid = (self.initiative_order[self.current_turn_index]
                        if self.initiative_order else None)
+        previous_order = tuple(self.initiative_order)
         if prepared.after_uuid is None:
             incoming_order = (prepared.combatant.initiative_total, prepared.combatant.initiative_bonus)
             index = next((index for index, identity in enumerate(self.initiative_order)
@@ -459,6 +460,7 @@ class Encounter(BaseObject):
         if active_uuid is not None:
             self.current_turn_index = self.initiative_order.index(active_uuid)
         prepared.committed = True
+        publish_initiative_order(self, previous_order)
 
     def cancel_combatant_join(self, prepared: PreparedCombatantJoin) -> None:
         if prepared.encounter is not self or prepared.committed:
@@ -472,7 +474,9 @@ class Encounter(BaseObject):
         combatant = self.combatants.pop(entity_uuid, None)
         if combatant is not None:
             combatant.remove_from_register()
-        self.initiative_order = [identity for identity in self.initiative_order if identity != entity_uuid]
+        previous_order = tuple(self.initiative_order)
+        self.initiative_order = [identity for identity in previous_order if identity != entity_uuid]
+        publish_initiative_order(self, previous_order)
 
     def request_combatant_leave(self, entity_uuid: UUID, *, parent_event: Event | None = None) -> None:
         """Revoke departing agency now; edit initiative at the next native boundary."""
@@ -525,6 +529,7 @@ class Encounter(BaseObject):
             if combatant is not None:
                 combatant.remove_from_register()
         self.initiative_order = [uuid for uuid in previous_order if uuid not in pending]
+        publish_initiative_order(self, previous_order)
         if active_uuid is not None and active_uuid in self.initiative_order:
             self.current_turn_index = self.initiative_order.index(active_uuid)
         elif active_uuid is not None:
@@ -1685,3 +1690,14 @@ class Encounter(BaseObject):
             _ = self.check_deaths()
 
         return event
+
+
+def publish_initiative_order(encounter: Encounter, previous: tuple[UUID, ...]) -> None:
+    """The order's one publication after a join or a leave: its after-value, when it changed.
+
+    The start order travels in `EncounterStartEvent`; this is the order's only other writer-side fact.
+    """
+    order = tuple(encounter.initiative_order)
+    if order != previous:
+        InitiativeOrderChangedEvent(source_entity_uuid=encounter.uuid, encounter_uuid=encounter.uuid,
+                                    initiative_order=order, phase=EventPhase.COMPLETION)

@@ -1,6 +1,6 @@
 """Recorded native initialization and complete lineages for passive replay."""
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Literal
 from uuid import UUID
 
@@ -12,19 +12,18 @@ from dnd.player.capture import (
     CompletedLineage, IntervalEnvelope, PresentationTarget, capture_interval, capture_lineages,
     reduce_interval,
 )
-from dnd.player.facts import CombatLogAppend, PlayerHUDSnapshot, PlayerSequence
-from dnd.player.projection import begin_projection, project_lineage, project_after_values
+from dnd.player.facts import CombatLogAppend, PlayerSequence
+from dnd.player.projection import begin_projection, project_lineage, project_log_appends
 
 
 class RecordedSequence(BaseModel):
     """Private native event inputs, including local objective diagnostics."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     initialization: IntervalEnvelope
     lineages: tuple[CompletedLineage, ...]
     combat_log_appends: tuple[CombatLogAppend, ...] = ()
-    hud_snapshots: tuple[PlayerHUDSnapshot, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,10 +90,9 @@ def capture_history(
 
 
 def encode_sequence(initialization: IntervalEnvelope, lineages: tuple[CompletedLineage, ...],
-                    *, combat_log_appends: tuple[CombatLogAppend, ...] = (),
-                    hud_snapshots: tuple[PlayerHUDSnapshot, ...] = ()) -> bytes:
+                    *, combat_log_appends: tuple[CombatLogAppend, ...] = ()) -> bytes:
     """Encode original initialization facts and retained causal roots."""
-    return RecordedSequence(initialization=initialization, lineages=lineages, combat_log_appends=combat_log_appends, hud_snapshots=hud_snapshots).model_dump_json(
+    return RecordedSequence(initialization=initialization, lineages=lineages, combat_log_appends=combat_log_appends).model_dump_json(
         warnings="error",
     ).encode("utf-8")
 
@@ -107,19 +105,15 @@ def decode_sequence(payload: bytes) -> tuple[PresentationTarget, tuple[Completed
 
 
 def project_sequence(native: RecordedSequence) -> PlayerSequence:
-    """Produce one observer's packet entirely from their private saved capture."""
+    """Produce one observer's packet entirely from their private saved capture.
+
+    A recorded experiment has no session, so no sheet publication and no HUD.
+    """
     state, initial = begin_projection(native.initialization)
     if any(row.generation != initial.generation or row.observer_uuid != initial.observer_uuid
            for row in native.combat_log_appends):
         raise ValueError("Combat log append belongs to a different observer or generation")
-    if any(row.generation != initial.generation or row.observer_uuid != initial.observer_uuid
-           for row in native.hud_snapshots):
-        raise ValueError("HUD snapshot belongs to a different observer or generation")
-    starting = next((row for row in native.hud_snapshots if row.revision == native.initialization.end_cursor), None)
-    initial = replace(initial, hud=project_after_values(state, starting, ())[0])
     lineages = tuple(projected for row in native.lineages if (projected := project_lineage(state, row)) is not None)
-    huds = tuple(project_after_values(state, row, ())[0] for row in native.hud_snapshots if row is not starting)
     return PlayerSequence(initialization=initial, lineages=lineages,
-        combat_log_appends=project_after_values(state, None, native.combat_log_appends)[1],
-        huds=tuple(row for row in huds if row is not None))
+        combat_log_appends=project_log_appends(state, native.combat_log_appends))
 
