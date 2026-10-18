@@ -11,9 +11,9 @@ from uuid import UUID
 import pytest
 from pydantic import TypeAdapter
 
-from devtools.fold_vectors_world import DIRECTORY, documents
+from devtools.fold_vectors_world import DIRECTORY, PLACEMENT, documents
 from dnd.player.audience import PlayerAudience
-from dnd.player.facts import ObjectRow, PlayerState, PlayerWorld, TileFieldUpdate, WorldUpdate
+from dnd.player.facts import PlayerState, PlayerWorld, TileFieldUpdate, WorldUpdate
 from dnd.player.world_reduction import fold_world_update
 
 UPDATE = TypeAdapter(WorldUpdate)
@@ -43,15 +43,17 @@ def client_world_view(memory: PlayerState) -> dict:
                                                              "contributions": len(row.contributions)}
                                             for row in tile.residues}}
                   for (x, y), tile in memory.tiles.items()},
-        "objects": {str(identity): {"position": list(obj.placement.position),
+        "objects": {str(identity): {"placement": PLACEMENT.dump_python(obj.placement, mode="json"),
                                     "members": memory.object_members[identity], "name": obj.item.name,
-                                    "is_open": obj.item.is_open,
+                                    "visual_item_name": obj.item.visual_item_name, "is_open": obj.item.is_open,
                                     "faces": {str(row.condition_uuid): [face.value for face in row.faces]
                                               for row in obj.item.surface_residues},
                                     "suppressions": {str(row.provider_uuid): [list(cell) for cell in row.positions]
                                                      for row in obj.item.construction_suppressions},
                                     "contents": [str(item.item_uuid) for item in obj.contained_items]
-                                        if obj.contained_items is not None else None}
+                                        if obj.contained_items is not None else None,
+                                    "structure": obj.item.boundary_structure.model_dump(mode="json")
+                                        if obj.item.boundary_structure is not None else None}
                     for identity, obj in memory.objects.items()},
         "connectors": sorted(str(identity) for identity in memory.connectors),
     }
@@ -91,8 +93,8 @@ def test_keyed_rows_require_what_they_change():
         fold_world_update(seat(ONE), WorldUpdate(occurrence=0, tile_changes=(
             TileFieldUpdate(position=(9, 9), changes={"walking_cost": 2}),)))
     with pytest.raises(ValueError, match="names an object the client holds"):
-        fold_world_update(seat(ONE), WorldUpdate(occurrence=0, objects=(
-            ObjectRow(item_uuid=UPDATE.validate_json(json.dumps(first["update"])).objects[0].item_uuid, members=1),)))
+        fold_world_update(seat(ONE), WorldUpdate(occurrence=0, objects_removed=(
+            UPDATE.validate_json(json.dumps(first["update"])).objects[0].item_uuid,)))
     without_look = {**first["update"], "object_looks": []}
     with pytest.raises(ValueError, match="first row requires its look"):
         _fold(seat(ONE), {"update": without_look})

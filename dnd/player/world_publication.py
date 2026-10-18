@@ -25,11 +25,11 @@ from dnd.core.cells import mask_difference, mask_from_positions, mask_intersecti
     values_from_items
 from dnd.core.item_types import ItemIntegrity, ItemPresentationState, ItemRemnantState
 from dnd.player.audience import AudiencePerception, PlayerAudience
-from dnd.player.facts import (ContainedItem, ContainerContents, ContentsChange, ContributionRow, FloorItem,
-    ObjectLook, ObjectRow, PlayerObject, ResidueKey, ResidueMaterial, ResidueRow, TileConditions, TileFieldUpdate,
-    TileStatic, WorldUpdate)
+from dnd.player.facts import (BoundaryStructureStatic, ContainedItem, ContainerContents, ContentsChange,
+    ContributionRow, FloorItem, ObjectLook, ObjectRow, ObjectState, PlayerObject, ResidueKey, ResidueMaterial,
+    ResidueRow, TileConditions, TileFieldUpdate, TileStatic, WorldUpdate)
 from dnd.player.static_sent import StaticSent
-from dnd.player.world_columns import pack_tile_columns, split_floor_item
+from dnd.player.world_columns import pack_placement, pack_tile_columns, split_floor_item
 from dnd.types.cells import EMPTY_CELLS, CellMask, cell_in
 from dnd.types.event_facts import AppliedWorldFact, WorldConnectorState, WorldTileChanges, WorldTileState
 from dnd.types.residues import ObjectResidueState, TileResidueState
@@ -75,15 +75,6 @@ def observed_remnant(state: ItemRemnantState | None, known: Collection[UUID]) ->
         return None
     return state.model_copy(update={"intact_supported_items": tuple(
         identity for identity in state.intact_supported_items if identity in known)})
-
-
-def object_look(item: ItemPresentationState) -> ObjectLook:
-    """An object's look: the fields no writer changes for its uuid (`split_floor_item`'s look)."""
-    return ObjectLook(item_uuid=item.item_uuid, item_id=item.item_id, visual_variant_id=item.visual_variant_id,
-        contact_passage=item.contact_passage, supported_by_uuid=item.supported_by_uuid,
-        door_mechanism=item.door_mechanism, door_swing=item.door_swing, maximum_hit_points=item.maximum_hit_points,
-        concentration_capacity=item.concentration_capacity, construction_owner_uuid=item.construction_owner_uuid,
-        construction_geometry=item.construction_geometry, known_to_creator=item.known_to_creator)
 
 
 def floor_item(item: ItemPresentationState, residues: tuple[ObjectResidueState, ...]) -> FloorItem:
@@ -186,6 +177,7 @@ class _Rows:
     tile_statics: list[TileStatic]
     residue_materials: list[ResidueMaterial]
     object_looks: list[ObjectLook]
+    boundary_structures: list[BoundaryStructureStatic]
 
 
 def _material(rows: _Rows, tile: WorldTileState, residue_id: str, sent: StaticSent, pending: StaticSent) -> None:
@@ -208,13 +200,23 @@ def _look(rows: _Rows, look: ObjectLook, sent: StaticSent, pending: StaticSent) 
         pending.object_looks.add(look.item_uuid)
 
 
+def _split(rows: _Rows, item: FloorItem, sent: StaticSent, pending: StaticSent) -> ObjectState:
+    """A floor item's state; its look and its boundary structure travel as static rows, once per seat."""
+    look, state = split_floor_item(item)
+    _look(rows, look, sent, pending)
+    identity = state.boundary_structure
+    if (item.boundary_structure is not None and identity is not None and identity not in sent.boundary_structures
+            and identity not in pending.boundary_structures):
+        rows.boundary_structures.append(BoundaryStructureStatic(structure_id=identity, structure=item.boundary_structure))
+        pending.boundary_structures.add(identity)
+    return state
+
+
 def _contained(rows: _Rows, items: Iterable[ItemPresentationState], sent: StaticSent,
                pending: StaticSent) -> tuple[ContainedItem, ...]:
     result = []
     for child in items:
-        look, state = split_floor_item(floor_item(child, ()))
-        _look(rows, look, sent, pending)
-        result.append(ContainedItem(item_uuid=child.item_uuid, state=state))
+        result.append(ContainedItem(item_uuid=child.item_uuid, state=_split(rows, floor_item(child, ()), sent, pending)))
     return tuple(result)
 
 
@@ -269,7 +271,23 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
         entered_cells = mask_union(entered_cells, mask_difference(visible, before))
         left.update(mask_positions(mask_difference(before, visible)))
     entered = set(mask_positions(entered_cells))
-    rows = _Rows([], [], [])
+    rows = _Rows([], [], [], [])
+
+    # Tiles: the entered cells whole (their static rows first: a placement's anchor tile is derived from them).
+    tiles = {position: world.tiles[position] for position in sorted(entered) if position in world.tiles}
+    tile_conditions: dict[Position, tuple[str, ...]] = {}
+    residues: dict[tuple[Position, str], ResidueRow] = {}
+    residues_removed: dict[tuple[Position, str], ResidueKey] = {}
+    for position, tile in tiles.items():
+        if tile.tile_uuid not in sent.tiles and tile.tile_uuid not in pending.tiles:
+            rows.tile_statics.append(TileStatic(position=position, tile_uuid=tile.tile_uuid, surface=tile.surface,
+                name=tile.name))
+            pending.tiles.add(tile.tile_uuid)
+        if _tile_part(tile):
+            tile_conditions[position] = _tile_part(tile)
+        for residue in tile.residues:
+            _material(rows, tile, residue.residue_id, sent, pending)
+            residues[(position, residue.residue_id)] = _whole_residue(position, residue)
 
     # Objects: which the occurrence can change the seat's observation of, and which it observes after.
     written = set().union(*(row.objects for row in applied))
@@ -288,7 +306,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
     before_observed = observed & candidates
     whole = (after - observed) | (after & (touching | providers))
     for identity in sorted(whole, key=str):
-        _look(rows, object_look(world.objects[identity].item), sent, pending)
+        _look(rows, split_floor_item(floor_item(world.objects[identity].item, ()))[0], sent, pending)
     known = sent.object_looks | pending.object_looks
     # A composite names an attachment once its look is sent: its row is sent again with the new name.
     remnants = {remnant for identity in whole for remnant in world.remnants_by_item.get(identity, ())}
@@ -296,11 +314,15 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
                 if identity in after or identity not in candidates and identity in observed}
     changed = ((after & before_observed & written) | remnants) - whole
     object_rows = []
+    held_tiles = sent.tiles | pending.tiles
     for identity in sorted(whole | changed, key=str):
         placement = world.objects[identity].placement
-        state = split_floor_item(disclosed_floor_item(world, view, identity, known))[1]
+        anchor = world.tiles.get(placement.position)
+        state = _split(rows, disclosed_floor_item(world, view, identity, known), sent, pending)
         object_rows.append(ObjectRow(item_uuid=identity, members=object_members(world, perception, audience, identity),
-            state=state, placement=placement if identity in whole or identity in moved else None,
+            state=state, placement=pack_placement(placement, anchor.tile_uuid
+                if anchor is not None and anchor.tile_uuid in held_tiles else None)
+                if identity in whole or identity in moved else None,
             observed_faces=observed_faces(placement, visible)))
     removed = sorted((identity for identity in before_observed - after
         if identity in written or identity not in world.objects
@@ -350,21 +372,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
                 connectors.pop(identity, None)
                 connectors_removed.append(identity)
 
-    # Tiles: the entered cells whole, then the keyed changes of the perceived ones.
-    tiles = {position: world.tiles[position] for position in sorted(entered) if position in world.tiles}
-    tile_conditions: dict[Position, tuple[str, ...]] = {}
-    residues: dict[tuple[Position, str], ResidueRow] = {}
-    residues_removed: dict[tuple[Position, str], ResidueKey] = {}
-    for position, tile in tiles.items():
-        if tile.tile_uuid not in sent.tiles and tile.tile_uuid not in pending.tiles:
-            rows.tile_statics.append(TileStatic(position=position, tile_uuid=tile.tile_uuid, surface=tile.surface,
-                name=tile.name))
-            pending.tiles.add(tile.tile_uuid)
-        if _tile_part(tile):
-            tile_conditions[position] = _tile_part(tile)
-        for residue in tile.residues:
-            _material(rows, tile, residue.residue_id, sent, pending)
-            residues[(position, residue.residue_id)] = _whole_residue(position, residue)
+    # Keyed tile changes of the perceived tiles.
     tile_changes: dict[Position, WorldTileChanges] = {}
     light: dict[Position, int] = {}
 
@@ -416,6 +424,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
         tile_changes=tuple(TileFieldUpdate(position=position, changes=changes)
             for position, changes in sorted(tile_changes.items())),
         resolved_light=values_from_items(light), residue_materials=tuple(rows.residue_materials),
+        boundary_structures=tuple(rows.boundary_structures),
         residues=tuple(residues[key] for key in sorted(residues)),
         residues_removed=tuple(residues_removed[key] for key in sorted(residues_removed)),
         object_looks=tuple(rows.object_looks), objects=tuple(object_rows), objects_removed=tuple(removed),

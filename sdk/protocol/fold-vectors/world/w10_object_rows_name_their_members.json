@@ -1,6 +1,6 @@
 {
  "name": "w10_object_rows_name_their_members",
- "rule": "A seat with several observers names the members observing each object; a row without a state changes only them.",
+ "rule": "A seat with several observers names the members observing each object in each of its rows, as of that row.",
  "observers": [
   "00000000-0000-4000-8000-00000000000a",
   "00000000-0000-4000-8000-00000000000b"
@@ -103,28 +103,11 @@
        "map_char": "B"
       },
       "placement": {
-       "object_uuid": "00000000-0000-4000-8000-000000002001",
-       "tile_uuid": "00000000-0000-4000-8000-000100001000",
        "position": [
         1,
         0
        ],
-       "kind": "center",
-       "occupies_bands": true,
-       "boundary_direction": null,
-       "base_height_steps": 0,
-       "top_height_steps": 2,
-       "orientation": null,
-       "covered_supports": [
-        {
-         "position": [
-          1,
-          0
-         ],
-         "tile_uuid": "00000000-0000-4000-8000-000100001000"
-        }
-       ],
-       "removed_bands": []
+       "top_height_steps": 2
       }
      }
     ]
@@ -166,16 +149,38 @@
     },
     "objects": {
      "00000000-0000-4000-8000-000000002001": {
-      "position": [
-       1,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002001",
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          1,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100001000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 1,
       "name": "Box",
+      "visual_item_name": "box",
       "is_open": null,
       "faces": {},
       "suppressions": {},
-      "contents": null
+      "contents": null,
+      "structure": null
      }
     },
     "connectors": []
@@ -187,7 +192,12 @@
     "objects": [
      {
       "item_uuid": "00000000-0000-4000-8000-000000002001",
-      "members": 3
+      "members": 3,
+      "state": {
+       "name": "Box",
+       "visual_item_name": "box",
+       "map_char": "B"
+      }
      }
     ]
    },
@@ -228,16 +238,38 @@
     },
     "objects": {
      "00000000-0000-4000-8000-000000002001": {
-      "position": [
-       1,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002001",
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          1,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100001000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 3,
       "name": "Box",
+      "visual_item_name": "box",
       "is_open": null,
       "faces": {},
       "suppressions": {},
-      "contents": null
+      "contents": null,
+      "structure": null
      }
     },
     "connectors": []
@@ -249,7 +281,12 @@
     "objects": [
      {
       "item_uuid": "00000000-0000-4000-8000-000000002001",
-      "members": 2
+      "members": 2,
+      "state": {
+       "name": "Box",
+       "visual_item_name": "box",
+       "map_char": "B"
+      }
      }
     ]
    },
@@ -290,16 +327,38 @@
     },
     "objects": {
      "00000000-0000-4000-8000-000000002001": {
-      "position": [
-       1,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002001",
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          1,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100001000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 2,
       "name": "Box",
+      "visual_item_name": "box",
       "is_open": null,
       "faces": {},
       "suppressions": {},
-      "contents": null
+      "contents": null,
+      "structure": null
      }
     },
     "connectors": []

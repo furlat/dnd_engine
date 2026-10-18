@@ -17,14 +17,13 @@ from dnd.world_facts import WorldFacts, apply_world_fact
 from tests.player.test_projection_local_world import initial, item, placed
 
 
-def folded(*objects) -> tuple[WorldFacts, object]:
-    """A world folded from a nine-cell row's initialization, and its world event."""
+def folded(*objects) -> WorldFacts:
+    """A world folded from a nine-cell row's initialization."""
     start = initial(objects, ((0, 0),), {})
-    world_event = start.admitted[0][1]
     world = WorldFacts()
-    applied = apply_world_fact(world, world_event)
+    applied = apply_world_fact(world, start.admitted[0][1])
     assert applied is not None and applied.replaced == frozenset((x, 0) for x in range(9))
-    return world, world_event
+    return world
 
 
 def spatial(**fields) -> SpatialChangeEvent:
@@ -33,7 +32,7 @@ def spatial(**fields) -> SpatialChangeEvent:
 
 
 def test_a_light_fact_records_every_after_value_it_carries_on_a_tile():
-    world, _ = folded()
+    world = folded()
     light = spatial(change_type=SpatialChangeType.LIGHT_CHANGED, position=(99, 0),
         light_level_map={"1,0": LightLevel.DIM_LIGHT.value, "2,0": LightLevel.BRIGHT_LIGHT.value,
                          "99,0": LightLevel.DIM_LIGHT.value})
@@ -44,7 +43,7 @@ def test_a_light_fact_records_every_after_value_it_carries_on_a_tile():
 
 
 def test_tile_scalars_replacements_and_their_static_part():
-    world, _ = folded()
+    world = folded()
     cost = spatial(event_type=EventType.SPATIAL_TILE_CHANGED, change_type=SpatialChangeType.TILE_CHANGED,
         position=(1, 0), tile_walking_cost=3)
     assert apply_world_fact(world, cost) == AppliedWorldFact(tile_fields=(((1, 0), {"walking_cost": 3}),))
@@ -61,7 +60,7 @@ def test_tile_scalars_replacements_and_their_static_part():
 
 def test_objects_written_and_placed_and_connectors_with_their_own_values():
     box = placed(item("Box"), (1, 0))
-    world, world_event = folded(box)
+    world = folded(box)
     identity = box.item.item_uuid
     moved = box.model_copy(update={"placement": box.placement.model_copy(update={"position": (3, 0),
         "covered_supports": ()})})
@@ -76,7 +75,7 @@ def test_objects_written_and_placed_and_connectors_with_their_own_values():
 
 
 def test_canceled_and_foreign_facts_apply_nothing():
-    world, _ = folded()
+    world = folded()
     light = spatial(change_type=SpatialChangeType.LIGHT_CHANGED, position=(1, 0),
         light_level_map={"1,0": LightLevel.DIM_LIGHT.value})
     assert apply_world_fact(world, light.model_copy(update={"canceled": True})) is None

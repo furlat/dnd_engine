@@ -74,6 +74,34 @@
        "current_hit_points": 30
       },
       "placement": {
+       "position": [
+        0,
+        0
+       ],
+       "top_height_steps": 2,
+       "boundary_direction": "north",
+       "occupies_bands": false
+      },
+      "observed_faces": [
+       "south"
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": "00000000-0000-4000-8000-000100000000",
+      "walking_cost": 1,
+      "blocks_optics": false,
+      "resolved_light": 3,
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000002003": {
+      "placement": {
        "object_uuid": "00000000-0000-4000-8000-000000002003",
        "tile_uuid": "00000000-0000-4000-8000-000100000000",
        "position": [
@@ -97,31 +125,9 @@
        ],
        "removed_bands": []
       },
-      "observed_faces": [
-       "south"
-      ]
-     }
-    ]
-   },
-   "expected": {
-    "tiles": {
-     "0,0": {
-      "tile": "00000000-0000-4000-8000-000100000000",
-      "walking_cost": 1,
-      "blocks_optics": false,
-      "resolved_light": 3,
-      "conditions": [],
-      "residues": {}
-     }
-    },
-    "objects": {
-     "00000000-0000-4000-8000-000000002003": {
-      "position": [
-       0,
-       0
-      ],
       "members": 1,
       "name": "Wall",
+      "visual_item_name": "wall",
       "is_open": null,
       "faces": {
        "00000000-0000-4000-8000-000000005001": [
@@ -129,7 +135,8 @@
        ]
       },
       "suppressions": {},
-      "contents": null
+      "contents": null,
+      "structure": null
      }
     },
     "connectors": []
@@ -222,12 +229,33 @@
     },
     "objects": {
      "00000000-0000-4000-8000-000000002003": {
-      "position": [
-       0,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002003",
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "kind": "boundary",
+       "occupies_bands": false,
+       "boundary_direction": "north",
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          0,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100000000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 1,
       "name": "Wall",
+      "visual_item_name": "wall",
       "is_open": null,
       "faces": {
        "00000000-0000-4000-8000-000000005001": [
@@ -238,7 +266,8 @@
        ]
       },
       "suppressions": {},
-      "contents": null
+      "contents": null,
+      "structure": null
      }
     },
     "connectors": []
@@ -294,12 +323,33 @@
     },
     "objects": {
      "00000000-0000-4000-8000-000000002003": {
-      "position": [
-       0,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002003",
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "kind": "boundary",
+       "occupies_bands": false,
+       "boundary_direction": "north",
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          0,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100000000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 1,
       "name": "Wall",
+      "visual_item_name": "wall",
       "is_open": null,
       "faces": {
        "00000000-0000-4000-8000-000000005002": [
@@ -307,7 +357,8 @@
        ]
       },
       "suppressions": {},
-      "contents": null
+      "contents": null,
+      "structure": null
      }
     },
     "connectors": []

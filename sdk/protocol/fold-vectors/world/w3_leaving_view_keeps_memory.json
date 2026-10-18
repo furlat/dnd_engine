@@ -107,28 +107,11 @@
        "is_open": true
       },
       "placement": {
-       "object_uuid": "00000000-0000-4000-8000-000000002004",
-       "tile_uuid": "00000000-0000-4000-8000-000100003000",
        "position": [
         3,
         0
        ],
-       "kind": "center",
-       "occupies_bands": true,
-       "boundary_direction": null,
-       "base_height_steps": 0,
-       "top_height_steps": 2,
-       "orientation": null,
-       "covered_supports": [
-        {
-         "position": [
-          3,
-          0
-         ],
-         "tile_uuid": "00000000-0000-4000-8000-000100003000"
-        }
-       ],
-       "removed_bands": []
+       "top_height_steps": 2
       }
      }
     ],
@@ -217,18 +200,40 @@
     },
     "objects": {
      "00000000-0000-4000-8000-000000002004": {
-      "position": [
-       3,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002004",
+       "tile_uuid": "00000000-0000-4000-8000-000100003000",
+       "position": [
+        3,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          3,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100003000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 1,
       "name": "Chest",
+      "visual_item_name": "chest",
       "is_open": true,
       "faces": {},
       "suppressions": {},
       "contents": [
        "00000000-0000-4000-8000-000000003001"
-      ]
+      ],
+      "structure": null
      }
     },
     "connectors": [
@@ -277,18 +282,40 @@
     },
     "objects": {
      "00000000-0000-4000-8000-000000002004": {
-      "position": [
-       3,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002004",
+       "tile_uuid": "00000000-0000-4000-8000-000100003000",
+       "position": [
+        3,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          3,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100003000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 1,
       "name": "Chest",
+      "visual_item_name": "chest",
       "is_open": true,
       "faces": {},
       "suppressions": {},
       "contents": [
        "00000000-0000-4000-8000-000000003001"
-      ]
+      ],
+      "structure": null
      }
     },
     "connectors": [

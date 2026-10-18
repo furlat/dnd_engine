@@ -20,6 +20,8 @@ class StaticSent:
     residues: set[str] = field(default_factory=set)
     # Objects whose look the seat was sent (floor objects and contained items), by item uuid.
     object_looks: set[UUID] = field(default_factory=set)
+    # Boundary structures the seat was sent, by content id.
+    boundary_structures: set[str] = field(default_factory=set)
 
 
 def merge_static_sent(sent: StaticSent, emitted: StaticSent) -> None:
@@ -29,3 +31,4 @@ def merge_static_sent(sent: StaticSent, emitted: StaticSent) -> None:
     sent.tiles.update(emitted.tiles)
     sent.residues.update(emitted.residues)
     sent.object_looks.update(emitted.object_looks)
+    sent.boundary_structures.update(emitted.boundary_structures)

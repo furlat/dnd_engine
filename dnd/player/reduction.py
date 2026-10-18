@@ -23,7 +23,7 @@ from dnd.player.facts import (
     PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialEffectSighting, SpatialFact, TurnFact,
     VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact, PlayerObject, StaticStore,
 )
-from dnd.player.world_columns import join_floor_item, unpack_tile_columns
+from dnd.player.world_columns import join_floor_item, unpack_placement, unpack_tile_columns
 from dnd.player.world_reduction import fold_world_update
 
 
@@ -77,7 +77,8 @@ def copy_target(target: PlayerState) -> PlayerState:
     return replace(target, tiles=dict(target.tiles), objects=dict(target.objects),
         object_members=dict(target.object_members), connectors=dict(target.connectors),
         static=StaticStore(tiles=dict(target.static.tiles), residues=dict(target.static.residues),
-            object_looks=dict(target.static.object_looks)), actors=dict(target.actors),
+            object_looks=dict(target.static.object_looks),
+            boundary_structures=dict(target.static.boundary_structures)), actors=dict(target.actors),
         items=dict(target.items), spatial_content=dict(target.spatial_content),
         spatial_commit_cursors=dict(target.spatial_commit_cursors),
         senses=None if senses is None else copy_senses_snapshot(senses),
@@ -147,6 +148,7 @@ def stage_static(target: PlayerState, updates: tuple[WorldUpdate, ...]) -> None:
         target.static.tiles.update((row.position, row) for row in update.tile_statics)
         target.static.residues.update((row.residue_id, row) for row in update.residue_materials)
         target.static.object_looks.update((row.item_uuid, row) for row in update.object_looks)
+        target.static.boundary_structures.update((row.structure_id, row.structure) for row in update.boundary_structures)
 
 
 def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
@@ -161,9 +163,11 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
             for position, tile in unpack_tile_columns(update.tile_columns, result.static.tiles).items():
                 result.tiles.setdefault(position, tile)
         for row in update.objects:
-            if row.state is not None and row.placement is not None and row.item_uuid not in result.objects:
-                result.objects[row.item_uuid] = PlayerObject(placement=row.placement,
-                    item=join_floor_item(result.static.object_looks[row.item_uuid], row.state))
+            if row.placement is not None and row.item_uuid not in result.objects:
+                result.objects[row.item_uuid] = PlayerObject(
+                    placement=unpack_placement(row.item_uuid, row.placement, result.static.tiles),
+                    item=join_floor_item(result.static.object_looks[row.item_uuid], row.state,
+                        result.static.boundary_structures))
         for connector in update.connectors:
             result.connectors.setdefault(connector.connector_uuid, connector)
     return result

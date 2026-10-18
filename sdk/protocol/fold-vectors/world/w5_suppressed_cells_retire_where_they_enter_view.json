@@ -119,28 +119,11 @@
        ]
       },
       "placement": {
-       "object_uuid": "00000000-0000-4000-8000-000000003003",
-       "tile_uuid": "00000000-0000-4000-8000-000100000000",
        "position": [
         0,
         0
        ],
-       "kind": "center",
-       "occupies_bands": true,
-       "boundary_direction": null,
-       "base_height_steps": 0,
-       "top_height_steps": 2,
-       "orientation": null,
-       "covered_supports": [
-        {
-         "position": [
-          0,
-          0
-         ],
-         "tile_uuid": "00000000-0000-4000-8000-000100000000"
-        }
-       ],
-       "removed_bands": []
+       "top_height_steps": 2
       }
      }
     ]
@@ -182,12 +165,33 @@
     },
     "objects": {
      "00000000-0000-4000-8000-000000003003": {
-      "position": [
-       0,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000003003",
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          0,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100000000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 1,
       "name": "Stone wall",
+      "visual_item_name": "stone wall",
       "is_open": null,
       "faces": {},
       "suppressions": {
@@ -202,7 +206,8 @@
         ]
        ]
       },
-      "contents": null
+      "contents": null,
+      "structure": null
      }
     },
     "connectors": []
@@ -272,12 +277,33 @@
     },
     "objects": {
      "00000000-0000-4000-8000-000000003003": {
-      "position": [
-       0,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000003003",
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          0,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100000000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 1,
       "name": "Stone wall",
+      "visual_item_name": "stone wall",
       "is_open": null,
       "faces": {},
       "suppressions": {
@@ -288,7 +314,8 @@
         ]
        ]
       },
-      "contents": null
+      "contents": null,
+      "structure": null
      }
     },
     "connectors": []
@@ -359,12 +386,33 @@
     },
     "objects": {
      "00000000-0000-4000-8000-000000003003": {
-      "position": [
-       0,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000003003",
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          0,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100000000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 1,
       "name": "Stone wall",
+      "visual_item_name": "stone wall",
       "is_open": null,
       "faces": {},
       "suppressions": {
@@ -375,7 +423,8 @@
         ]
        ]
       },
-      "contents": null
+      "contents": null,
+      "structure": null
      }
     },
     "connectors": []

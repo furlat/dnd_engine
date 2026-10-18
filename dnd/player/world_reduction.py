@@ -19,7 +19,7 @@ from uuid import UUID
 from dnd.core.cells import mask_positions, values_items
 from dnd.player.facts import (ContainedItem, FloorItem, ObjectRow, PlayerObject, PlayerState, StaticStore,
     WorldUpdate)
-from dnd.player.world_columns import join_floor_item, unpack_tile_columns
+from dnd.player.world_columns import join_floor_item, unpack_placement, unpack_tile_columns
 from dnd.types.event_facts import WorldTileState
 from dnd.types.residues import ObjectResidueState, TileResidueState
 from dnd.types.spell_suppression import SpellSuppression
@@ -45,6 +45,9 @@ def _static(static: StaticStore, update: WorldUpdate) -> None:
     for row in update.object_looks:
         if static.object_looks.setdefault(row.item_uuid, row) != row:
             raise ValueError("An object's look changed")
+    for row in update.boundary_structures:
+        if static.boundary_structures.setdefault(row.structure_id, row.structure) != row.structure:
+            raise ValueError("A boundary structure's content id names another value")
 
 
 def _reset_entered(memory: PlayerState, update: WorldUpdate, entered: frozenset[tuple[int, int]]) -> None:
@@ -105,18 +108,14 @@ def _object(memory: PlayerState, row: ObjectRow, observers: int) -> None:
     identity = row.item_uuid
     held = memory.objects.get(identity)
     members = _members(row, observers)
-    if row.state is None:
-        if held is None:
-            raise ValueError("A members-only object row names an object the client holds")
-        memory.object_members[identity] = members
-        return
     look = memory.static.object_looks.get(identity)
     if look is None:
         raise ValueError("An object's first row requires its look")
-    placement = row.placement if row.placement is not None else held.placement if held is not None else None
+    placement = (unpack_placement(identity, row.placement, memory.static.tiles) if row.placement is not None
+                 else held.placement if held is not None else None)
     if placement is None:
         raise ValueError("An object's first row requires its placement")
-    item = join_floor_item(look, row.state)
+    item = join_floor_item(look, row.state, memory.static.boundary_structures)
     item = replace(item, surface_residues=_merged_faces(held.item if held is not None else None,
             item.surface_residues, frozenset(row.observed_faces)),
         construction_suppressions=_merged_suppressions(held.item if held is not None else None,
@@ -130,7 +129,7 @@ def _contained(static: StaticStore, row: ContainedItem) -> FloorItem:
     look = static.object_looks.get(row.item_uuid)
     if look is None:
         raise ValueError("A contained item requires its look")
-    return join_floor_item(look, row.state)
+    return join_floor_item(look, row.state, static.boundary_structures)
 
 
 def _contents(memory: PlayerState, update: WorldUpdate) -> None:

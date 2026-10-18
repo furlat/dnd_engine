@@ -5,17 +5,32 @@ from uuid import uuid4
 
 from dnd.core.item_types import DoorMechanism, DoorSwing, ItemIntegrity, ItemRemnantState
 from dnd.player.facts import FloorItem
-from dnd.player.world_columns import join_floor_item, split_floor_item
+from dnd.player.world_columns import join_floor_item, split_floor_item, structure_id
 from dnd.player.facts import ObjectLook, ObjectState
 from dnd.types.physical_access import ContactPassage
 from dnd.types.residues import ObjectResidueState
 from dnd.types.spell_suppression import SpellSuppression
-from dnd.types.world import CardinalDirection
+from dnd.types.materials import Material
+from dnd.types.world import CardinalDirection, WorldEdgeChannel
+from dnd.types.world_placement import BoundaryStructure, BoundaryStructureKind
 
 
 def check(item: FloorItem) -> None:
     look, state = split_floor_item(item)
-    assert join_floor_item(look, state) == item
+    structures = ({structure_id(item.boundary_structure): item.boundary_structure}
+                  if item.boundary_structure is not None else {})
+    assert join_floor_item(look, state, structures) == item
+
+
+def test_a_named_visual_and_a_boundary_structure_round_trip():
+    door = BoundaryStructure(structure=BoundaryStructureKind.DOOR, material=Material.WOOD,
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,))
+    item = FloorItem(item_uuid=uuid4(), item_id="item.door", name="Door", visual_item_name="Door",
+        visual_variant_id=None, map_char="+", boundary_structure=door, is_open=False, is_lit=None)
+    state = split_floor_item(item)[1]
+    # The visual name equal to the name is left out; the structure travels by its content id.
+    assert state.visual_item_name is None and state.boundary_structure == structure_id(door)
+    check(item)
 
 
 def test_a_plain_item_round_trips():

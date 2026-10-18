@@ -2336,6 +2336,8 @@ export type Name13 = string;
 export type Description9 = string;
 export type MaxAmount1 = number;
 export type ResidueMaterials = ResidueMaterial[];
+export type StructureId = string;
+export type BoundaryStructures = BoundaryStructureStatic[];
 /**
  * @minItems 2
  * @maxItems 2
@@ -2378,8 +2380,9 @@ export type ObjectLooks = ObjectLook[];
 export type ItemUuid7 = string;
 export type Members = number | null;
 export type Name14 = string;
-export type VisualItemName3 = string;
+export type VisualItemName3 = string | null;
 export type MapChar3 = string;
+export type BoundaryStructure1 = string | null;
 export type IsOpen3 = boolean | null;
 export type IsLit4 = boolean | null;
 export type VeryBrightRadiusFeet3 = number | null;
@@ -2399,6 +2402,17 @@ export type ConcentrationSlots4 = ItemConcentrationSlot[];
 export type ItemIntegrity3 = "intact" | "destroyed";
 export type DestructionOutcome4 = string | null;
 export type ConstructionSuppressions3 = SpellSuppression[];
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position14 = [number, number];
+export type TopHeightSteps1 = number;
+export type TileUuid4 = string | null;
+export type CoveredSupports1 = WorldObjectSupport[];
+export type OccupiesBands1 = boolean;
+export type BaseHeightSteps6 = number;
+export type RemovedBands1 = [number, number, number][];
 export type ObservedFaces = CardinalDirection[];
 export type Objects = ObjectRow[];
 export type ObjectsRemoved = string[];
@@ -2567,7 +2581,7 @@ export type AreaPropagation1 = ("line_of_effect" | "connected" | "ignore_barrier
  * @minItems 2
  * @maxItems 2
  */
-export type Position14 = [number, number];
+export type Position15 = [number, number];
 /**
  * @minItems 1
  */
@@ -2581,8 +2595,8 @@ export type Revision1 = number;
  * @minItems 2
  * @maxItems 2
  */
-export type Position15 = [number, number];
-export type BaseHeightSteps6 = number;
+export type Position16 = [number, number];
+export type BaseHeightSteps7 = number;
 export type VeryBrightRadiusFeet4 = number;
 export type BrightRadiusFeet4 = number;
 export type DimRadiusFeet4 = number;
@@ -2632,7 +2646,7 @@ export type OpportunityAttackExposures = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures = ChoiceExposure[];
 export type Kind66 = "subject";
 export type Subject = number;
-export type Position16 = number | null;
+export type Position17 = number | null;
 export type Index3 = number;
 export type Distance1 = number | null;
 export type PathCost1 = number | null;
@@ -2645,7 +2659,7 @@ export type SafePath1 = number[] | null;
 export type OpportunityAttackExposures1 = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures1 = ChoiceExposure[];
 export type Kind67 = "position";
-export type Position17 = number;
+export type Position18 = number;
 export type Index4 = number;
 export type Distance2 = number | null;
 export type PathCost2 = number | null;
@@ -5507,6 +5521,7 @@ export interface WorldUpdate {
   tile_changes?: TileChanges;
   resolved_light?: CellValues;
   residue_materials?: ResidueMaterials;
+  boundary_structures?: BoundaryStructures;
   residues?: Residues1;
   residues_removed?: ResiduesRemoved;
   object_looks?: ObjectLooks;
@@ -5614,6 +5629,14 @@ export interface ResidueMaterial {
   max_amount: MaxAmount1;
 }
 /**
+ * A boundary structure's value, sent once per seat under its content id (a digest of the value, so a
+ * changed structure is another id).
+ */
+export interface BoundaryStructureStatic {
+  structure_id: StructureId;
+  structure: BoundaryStructure;
+}
+/**
  * One material on one tile: whole for a key the client does not hold (its condition uuid present), else the
  * occurrence's change (`amount` None: unchanged; the contributions it set).
  */
@@ -5654,28 +5677,30 @@ export interface ObjectLook {
   known_to_creator?: KnownToCreator3;
 }
 /**
- * A world object the seat observes.
+ * A world object the seat observes, at an occurrence.
  *
  * An entering row carries its state, placement and the faces its residues are authoritative for (those whose
- * viewing cell some member sees); a perceived object's change carries its state, and its placement when it moved.
- * A row without a state changes only which members observe the object. `members`: bit i is the audience's
- * `observers[i]`; a seat with one observer leaves it out.
+ * viewing cell some member sees); a perceived object's change carries its state, and its placement when the
+ * occurrence wrote one. `members`: bit i is the audience's `observers[i]`, exact as of this row; a seat with one
+ * observer leaves it out.
  */
 export interface ObjectRow {
   item_uuid: ItemUuid7;
   members?: Members;
-  state?: ObjectState | null;
-  placement?: WorldObjectPlacement | null;
+  state: ObjectState;
+  placement?: ObjectPlacement | null;
   observed_faces?: ObservedFaces;
 }
 /**
  * A floor item's changeable part, its value at the occurrence; a field holding its default is left out.
+ * `visual_item_name` is left out when it is the `name`; `boundary_structure` is a `BoundaryStructureStatic`'s
+ * id.
  */
 export interface ObjectState {
   name: Name14;
-  visual_item_name: VisualItemName3;
+  visual_item_name?: VisualItemName3;
   map_char: MapChar3;
-  boundary_structure?: BoundaryStructure | null;
+  boundary_structure?: BoundaryStructure1;
   is_open?: IsOpen3;
   is_lit?: IsLit4;
   very_bright_radius_feet?: VeryBrightRadiusFeet3;
@@ -5693,6 +5718,23 @@ export interface ObjectState {
   integrity?: ItemIntegrity3;
   destruction_outcome?: DestructionOutcome4;
   construction_suppressions?: ConstructionSuppressions3;
+}
+/**
+ * An object's placement on the wire: every field its `WorldObjectPlacement` holds that is neither derivable
+ * nor its default. The object is the row's `item_uuid`; its kind is a boundary exactly when it has a boundary
+ * direction; `tile_uuid`, left out, is the client's static tile row at `position`; `covered_supports`, left
+ * out, is that anchor support alone.
+ */
+export interface ObjectPlacement {
+  position: Position14;
+  top_height_steps: TopHeightSteps1;
+  boundary_direction?: CardinalDirection | null;
+  tile_uuid?: TileUuid4;
+  covered_supports?: CoveredSupports1;
+  occupies_bands?: OccupiesBands1;
+  base_height_steps?: BaseHeightSteps6;
+  orientation?: CardinalDirection | null;
+  removed_bands?: RemovedBands1;
 }
 /**
  * A container's whole contents, on gaining sight of them (looks once, through `object_looks`).
@@ -5938,7 +5980,7 @@ export interface CellMask2 {
  * satisfying one complete entry is sufficient; planes within it remain AND.
  */
 export interface VolumeSurfaceSight {
-  position: Position14;
+  position: Position15;
   lower_height_planes: LowerHeightPlanes;
 }
 /**
@@ -5950,8 +5992,8 @@ export interface VolumeSurfaceSight {
 export interface LightRow {
   source: Source1;
   revision: Revision1;
-  position: Position15;
-  base_height_steps?: BaseHeightSteps6;
+  position: Position16;
+  base_height_steps?: BaseHeightSteps7;
   very_bright_radius_feet: VeryBrightRadiusFeet4;
   bright_radius_feet: BrightRadiusFeet4;
   dim_radius_feet: DimRadiusFeet4;
@@ -6050,7 +6092,7 @@ export interface SubjectBinding {
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures;
   kind: Kind66;
   subject: Subject;
-  position?: Position16;
+  position?: Position17;
 }
 export interface ChoiceExposure {
   reactor_uuid: ReactorUuid;
@@ -6071,7 +6113,7 @@ export interface PositionBinding {
   opportunity_attack_exposures?: OpportunityAttackExposures1;
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures1;
   kind: Kind67;
-  position: Position17;
+  position: Position18;
 }
 export interface SelfBinding {
   index: Index4;

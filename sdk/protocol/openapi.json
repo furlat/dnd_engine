@@ -4356,6 +4356,25 @@
         "title": "BoundaryStructureKind",
         "type": "string"
       },
+      "BoundaryStructureStatic": {
+        "description": "A boundary structure's value, sent once per seat under its content id (a digest of the value, so a\nchanged structure is another id).",
+        "properties": {
+          "structure_id": {
+            "title": "Structure Id",
+            "type": "string"
+          },
+          "structure": {
+            "$ref": "#/components/schemas/BoundaryStructure"
+          }
+        },
+        "required": [
+          "structure_id",
+          "structure"
+        ],
+        "title": "BoundaryStructureStatic",
+        "type": "object",
+        "additionalProperties": false
+      },
       "CardinalDirection": {
         "description": "Cardinal grid direction used by authored structures.",
         "enum": [
@@ -13249,6 +13268,124 @@
         "type": "object",
         "additionalProperties": false
       },
+      "ObjectPlacement": {
+        "description": "An object's placement on the wire: every field its `WorldObjectPlacement` holds that is neither derivable\nnor its default. The object is the row's `item_uuid`; its kind is a boundary exactly when it has a boundary\ndirection; `tile_uuid`, left out, is the client's static tile row at `position`; `covered_supports`, left\nout, is that anchor support alone.",
+        "properties": {
+          "position": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "title": "Position",
+            "type": "array"
+          },
+          "top_height_steps": {
+            "title": "Top Height Steps",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "boundary_direction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardinalDirection"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "tile_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tile Uuid"
+          },
+          "covered_supports": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WorldObjectSupport"
+            },
+            "title": "Covered Supports",
+            "type": "array"
+          },
+          "occupies_bands": {
+            "default": true,
+            "title": "Occupies Bands",
+            "type": "boolean"
+          },
+          "base_height_steps": {
+            "default": 0,
+            "title": "Base Height Steps",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardinalDirection"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "removed_bands": {
+            "default": [],
+            "items": {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Removed Bands",
+            "type": "array"
+          }
+        },
+        "required": [
+          "position",
+          "top_height_steps"
+        ],
+        "title": "ObjectPlacement",
+        "type": "object",
+        "additionalProperties": false
+      },
       "ObjectResidueState": {
         "additionalProperties": false,
         "description": "One inert residue on the contacted world-facing sides of an object.",
@@ -13284,7 +13421,7 @@
         "type": "object"
       },
       "ObjectRow": {
-        "description": "A world object the seat observes.\n\nAn entering row carries its state, placement and the faces its residues are authoritative for (those whose\nviewing cell some member sees); a perceived object's change carries its state, and its placement when it moved.\nA row without a state changes only which members observe the object. `members`: bit i is the audience's\n`observers[i]`; a seat with one observer leaves it out.",
+        "description": "A world object the seat observes, at an occurrence.\n\nAn entering row carries its state, placement and the faces its residues are authoritative for (those whose\nviewing cell some member sees); a perceived object's change carries its state, and its placement when the\noccurrence wrote one. `members`: bit i is the audience's `observers[i]`, exact as of this row; a seat with one\nobserver leaves it out.",
         "properties": {
           "item_uuid": {
             "format": "uuid",
@@ -13306,20 +13443,12 @@
             "title": "Members"
           },
           "state": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ObjectState"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
+            "$ref": "#/components/schemas/ObjectState"
           },
           "placement": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/WorldObjectPlacement"
+                "$ref": "#/components/schemas/ObjectPlacement"
               },
               {
                 "type": "null"
@@ -13337,7 +13466,8 @@
           }
         },
         "required": [
-          "item_uuid"
+          "item_uuid",
+          "state"
         ],
         "title": "ObjectRow",
         "type": "object",
@@ -13380,15 +13510,23 @@
         "type": "object"
       },
       "ObjectState": {
-        "description": "A floor item's changeable part, its value at the occurrence; a field holding its default is left out.",
+        "description": "A floor item's changeable part, its value at the occurrence; a field holding its default is left out.\n`visual_item_name` is left out when it is the `name`; `boundary_structure` is a `BoundaryStructureStatic`'s\nid.",
         "properties": {
           "name": {
             "title": "Name",
             "type": "string"
           },
           "visual_item_name": {
-            "title": "Visual Item Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Visual Item Name"
           },
           "map_char": {
             "title": "Map Char",
@@ -13397,13 +13535,14 @@
           "boundary_structure": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/BoundaryStructure"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "title": "Boundary Structure"
           },
           "is_open": {
             "anyOf": [
@@ -13576,7 +13715,6 @@
         },
         "required": [
           "name",
-          "visual_item_name",
           "map_char"
         ],
         "title": "ObjectState",
@@ -22648,6 +22786,14 @@
               "$ref": "#/components/schemas/ResidueMaterial"
             },
             "title": "Residue Materials",
+            "type": "array"
+          },
+          "boundary_structures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BoundaryStructureStatic"
+            },
+            "title": "Boundary Structures",
             "type": "array"
           },
           "residues": {

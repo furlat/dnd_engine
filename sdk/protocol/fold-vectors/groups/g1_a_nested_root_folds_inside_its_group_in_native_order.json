@@ -141,28 +141,11 @@
        "map_char": "B"
       },
       "placement": {
-       "object_uuid": "00000000-0000-4000-8000-000000002001",
-       "tile_uuid": "00000000-0000-4000-8000-000100001000",
        "position": [
         1,
         0
        ],
-       "kind": "center",
-       "occupies_bands": true,
-       "boundary_direction": null,
-       "base_height_steps": 0,
-       "top_height_steps": 2,
-       "orientation": null,
-       "covered_supports": [
-        {
-         "position": [
-          1,
-          0
-         ],
-         "tile_uuid": "00000000-0000-4000-8000-000100001000"
-        }
-       ],
-       "removed_bands": []
+       "top_height_steps": 2
       }
      }
     ]

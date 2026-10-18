@@ -107,28 +107,11 @@
        "map_char": "B"
       },
       "placement": {
-       "object_uuid": "00000000-0000-4000-8000-000000002001",
-       "tile_uuid": "00000000-0000-4000-8000-000100001000",
        "position": [
         1,
         0
        ],
-       "kind": "center",
-       "occupies_bands": true,
-       "boundary_direction": null,
-       "base_height_steps": 0,
-       "top_height_steps": 2,
-       "orientation": null,
-       "covered_supports": [
-        {
-         "position": [
-          1,
-          0
-         ],
-         "tile_uuid": "00000000-0000-4000-8000-000100001000"
-        }
-       ],
-       "removed_bands": []
+       "top_height_steps": 2
       }
      },
      {
@@ -139,28 +122,11 @@
        "map_char": "T"
       },
       "placement": {
-       "object_uuid": "00000000-0000-4000-8000-000000002002",
-       "tile_uuid": "00000000-0000-4000-8000-000100002000",
        "position": [
         2,
         0
        ],
-       "kind": "center",
-       "occupies_bands": true,
-       "boundary_direction": null,
-       "base_height_steps": 0,
-       "top_height_steps": 2,
-       "orientation": null,
-       "covered_supports": [
-        {
-         "position": [
-          2,
-          0
-         ],
-         "tile_uuid": "00000000-0000-4000-8000-000100002000"
-        }
-       ],
-       "removed_bands": []
+       "top_height_steps": 2
       }
      }
     ]
@@ -202,28 +168,72 @@
     },
     "objects": {
      "00000000-0000-4000-8000-000000002001": {
-      "position": [
-       1,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002001",
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          1,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100001000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 1,
       "name": "Box",
+      "visual_item_name": "box",
       "is_open": null,
       "faces": {},
       "suppressions": {},
-      "contents": null
+      "contents": null,
+      "structure": null
      },
      "00000000-0000-4000-8000-000000002002": {
-      "position": [
-       2,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002002",
+       "tile_uuid": "00000000-0000-4000-8000-000100002000",
+       "position": [
+        2,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          2,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100002000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 1,
       "name": "Torch",
+      "visual_item_name": "torch",
       "is_open": null,
       "faces": {},
       "suppressions": {},
-      "contents": null
+      "contents": null,
+      "structure": null
      }
     },
     "connectors": []
@@ -273,16 +283,38 @@
     },
     "objects": {
      "00000000-0000-4000-8000-000000002001": {
-      "position": [
-       1,
-       0
-      ],
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002001",
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          1,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100001000"
+        }
+       ],
+       "removed_bands": []
+      },
       "members": 1,
       "name": "Box",
+      "visual_item_name": "box",
       "is_open": null,
       "faces": {},
       "suppressions": {},
-      "contents": null
+      "contents": null,
+      "structure": null
      }
     },
     "connectors": []

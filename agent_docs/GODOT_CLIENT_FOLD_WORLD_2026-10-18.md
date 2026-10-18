@@ -1,0 +1,124 @@
+# Godot client: folding the schema-16 world
+
+The world part of player schema 16 (E3-world). Reference fold: `dnd/player/world_reduction.py`
+(`fold_world_update`), called by `dnd/player/reduction.py` at each node's occurrence; codec
+`dnd/player/world_columns.py`. Golden vectors: `sdk/protocol/fold-vectors/world/*.json` (world updates)
+and `sdk/protocol/fold-vectors/groups/*.json` (a walk group). Godot must reproduce their expected values.
+
+The server keeps no copy of what a client holds. Each update says what the seat perceived change at one
+occurrence, so the client's memory follows from the rules below and nothing else.
+
+## 1. `WorldUpdate` (one per occurrence)
+
+| Field | Meaning |
+| --- | --- |
+| `entered` (`CellMask`) | the update's authoritative cells: cells entering the seat's view, and visible cells whose tile was written whole |
+| `tile_statics` | a tile's fixed part (`position`, `tile_uuid`, `surface`, `name`), once per tile uuid per seat |
+| `tile_columns` | the entered cells holding a tile: their changeable scalars as columns (§2) |
+| `tile_conditions` | a tile's own condition names (never its residues' names), whole list per cell |
+| `tile_changes` | a kept tile's changed scalars (`WorldTileChanges`: costs, optics, propagation, elevation, surface kind, slope axis, default light) |
+| `resolved_light` (`CellValues`) | a kept tile's objective light |
+| `residue_materials` | a residue material's fixed part (`residue_id`, `name`, `description`, `max_amount`), once per id per seat |
+| `residues` | one material on one cell: whole when it carries `condition_uuid` (replaces what is held), else keyed (`amount`, and `contributions` set by index; the index after the last appends) |
+| `residues_removed` | (cell, material) keys removed |
+| `boundary_structures` | a boundary structure's value under its content id (a digest of the value), once per id per seat |
+| `object_looks` | an object's fixed part (`ObjectLook`), once per item uuid per seat, floor objects and contained items alike |
+| `objects` (`ObjectRow`) | `item_uuid`, `members`, `state` (`ObjectState`), `placement`, `observed_faces` (§3) |
+| `objects_removed` | objects the seat saw go |
+| `contents` | a container's whole contents (`ContainedItem`: uuid and state; looks through `object_looks`) |
+| `contents_changed` | keyed contents of a container the seat sees into: `upserted`, `removed` |
+| `connectors` | connector upserts (whole rows) |
+| `connectors_removed` | connector uuids the seat saw removed |
+
+A field holding its default is left out.
+
+### `ObjectState`
+
+`visual_item_name` is left out when it equals `name`. `boundary_structure` is the content id of a
+`boundary_structures` row.
+
+### `ObjectPlacement` (an object row's placement)
+
+It carries what the full `WorldObjectPlacement` holds that is neither derivable nor a default. To decode it:
+
+| Field | When left out |
+| --- | --- |
+| `object_uuid` | always: it is the row's `item_uuid` |
+| `kind` | always: `boundary` when `boundary_direction` is present, else `center` |
+| `tile_uuid` | left out: it is the `tile_uuid` of the client's static tile row at `position` (an error if the client holds none) |
+| `covered_supports` | left out: the single anchor support (`position`, `tile_uuid`) |
+| `occupies_bands` | `true` |
+| `base_height_steps` | `0` |
+| `orientation` | `null` |
+| `removed_bands` | `[]` |
+
+`position` and `top_height_steps` are always present.
+
+## 2. Tile columns
+
+One byte per cell per column, in `cells` order (x, then y: the `CellValues` order):
+`walking_cost`, `flying_cost`, `swimming_cost`, `burrowing_cost` (0..255), `default_light`,
+`resolved_light` (`LightLevel`), and `flags`:
+
+| Bits | Value |
+| --- | --- |
+| 0 | `blocks_optics` |
+| 1 | `blocks_propagation` |
+| 2-3 | surface kind: 0 ordinary, 1 stairs, 2 ramp |
+| 4-5 | slope axis: 0 none, 1 north-south, 2 east-west |
+
+`elevation_steps` is a list of signed ints, one per cell, absent when every cell is at 0. A cell's
+tile is its static row (the latest one received for its position) joined with its column values.
+Its condition names start empty, and its rows in the same update fill them.
+
+## 3. Fold order of one update
+
+1. **Static rows.** Store `tile_statics` by position (the latest one wins), and `residue_materials` and `object_looks` by id. They are never pruned. A look or a material never changes for its id.
+2. **Removals.** Pop `objects_removed` (with their members) and `connectors_removed`. Each names something the client holds.
+3. **Reset `entered`.** For every entered cell:
+   - drop its tile and rebuild it from the columns;
+   - drop every held object that touches the cell (its supports and, for a boundary, the opposite incident cell) and is not in `objects`;
+   - remove the cell from every kept object's `construction_suppressions` positions;
+   - drop every connector with an endpoint there.
+4. **Object rows, in order.**
+   - A row without `state` must name a held object; it sets only `members`.
+   - Otherwise the item is the look joined with the state. The placement is the row's, or the held one.
+   - Residues: the row's residues lie on its `observed_faces`. Held faces outside `observed_faces` are kept, and residues are united by `condition_uuid`. Drop empty ones and sort by `condition_uuid` as a string.
+   - Suppressions: the row's providers replace the held rows of those providers, and the other held rows stay after them.
+   - Contained items stay as held.
+   - `members` is the row's bitset. A seat with one observer leaves it out, meaning 1.
+5. **Contents.** `contents` sets the contained items (sorted by uuid as a string). `contents_changed` removes and upserts by uuid; the container's contents must be held.
+6. **Kept tiles.**
+   - Apply `tile_changes`, then `resolved_light`.
+   - `tile_conditions` replaces the cell's own names.
+   - Apply `residues` (whole or keyed), then `residues_removed`.
+   - The cell's `condition_names` is its own names followed by its residues' material names, in `residue_id` order.
+   - A keyed row on a cell the client does not hold is an error.
+7. **Connector upserts**, by uuid.
+
+## 4. The memory rules
+
+| Rule | Where the wire is authoritative |
+| --- | --- |
+| Cells entering view (or a visible tile written whole) | `entered`: the client keeps only what the update carries there |
+| An object is forgotten when its support is seen without it | `entered` (step 3), plus `objects_removed` (the seat saw it go, or saw its support without it) |
+| A wall's unseen faces keep their last sight | each row's `observed_faces`, including faces now empty |
+| A construction's suppressed cells retire where they enter view | `entered` (step 3), plus each row's perceived providers |
+| Contents | kept when the seat stops seeing into the container; whole again when it sees in again |
+| Leaving view | sends nothing: tiles, objects, connectors and contents outside the scopes above stay as held |
+
+Display is the client's policy. For example, it may hide a held container's contents while the container is
+closed or out of visual contact, or hide suppressions of providers it does not perceive now.
+
+## 5. Object members (D2)
+
+`members` is exact whenever an object's row is sent (entering or keyed). Between rows the client holds the
+bits of the last row. The members holding a contact come from the sensory contact rows
+(`object_contact_members`).
+
+## 6. Walk groups
+
+Roots whose versions interleave arrive as one `PlayerLineage`. A root that completes inside another
+root's execution is a parentless lineage inside that root's interval, and the group's nodes are in native
+order. Fold a group's nodes in occurrence order (as for any lineage). A branch of the root keeps the
+parentless lineages inside its interval (`lineage_branch`). Vector: `groups/g1_*.json`.

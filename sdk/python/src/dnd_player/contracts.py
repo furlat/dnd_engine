@@ -1214,6 +1214,9 @@ class ObjectDamageFact(TypedDict):
     damage_type: DamageType | None
 
 
+type RemovedBand = int
+
+
 class ObjectResidueState(TypedDict):
     condition_uuid: str
     residue_id: str
@@ -2039,9 +2042,6 @@ class WorldConnectorState(TypedDict):
 type WorldEdgeChannel = Literal['movement', 'optical', 'propagation']
 
 
-type RemovedBand = int
-
-
 class WorldObjectSupport(TypedDict):
     position: list[PositionItem]
     tile_uuid: str
@@ -2235,6 +2235,11 @@ class BoundaryStructure(TypedDict):
     material: Material
     blocked_channels: list[WorldEdgeChannel]
     contact_passage: NotRequired[ContactPassage]
+
+
+class BoundaryStructureStatic(TypedDict):
+    structure_id: str
+    structure: BoundaryStructure
 
 
 class CommittedReceipt(TypedDict):
@@ -2530,6 +2535,18 @@ class MovementFact(TypedDict):
     start_layer: NotRequired[OccupancyLayer | None]
     end_layer: NotRequired[OccupancyLayer | None]
     connector_presentation_key: NotRequired[str | None]
+
+
+class ObjectPlacement(TypedDict):
+    position: list[PositionItem]
+    top_height_steps: int
+    boundary_direction: NotRequired[CardinalDirection | None]
+    tile_uuid: NotRequired[str | None]
+    covered_supports: NotRequired[list[WorldObjectSupport]]
+    occupies_bands: NotRequired[bool]
+    base_height_steps: NotRequired[int]
+    orientation: NotRequired[CardinalDirection | None]
+    removed_bands: NotRequired[list[list[RemovedBand]]]
 
 
 class PerceivedContact(TypedDict):
@@ -3348,9 +3365,9 @@ class ObjectDestroyedFact(TypedDict):
 
 class ObjectState(TypedDict):
     name: str
-    visual_item_name: str
+    visual_item_name: NotRequired[str | None]
     map_char: str
-    boundary_structure: NotRequired[BoundaryStructure | None]
+    boundary_structure: NotRequired[str | None]
     is_open: NotRequired[bool | None]
     is_lit: NotRequired[bool | None]
     very_bright_radius_feet: NotRequired[int | None]
@@ -3482,8 +3499,8 @@ class ItemPatch(TypedDict):
 class ObjectRow(TypedDict):
     item_uuid: str
     members: NotRequired[int | None]
-    state: NotRequired[ObjectState | None]
-    placement: NotRequired[WorldObjectPlacement | None]
+    state: ObjectState
+    placement: NotRequired[ObjectPlacement | None]
     observed_faces: NotRequired[list[CardinalDirection]]
 
 
@@ -3512,6 +3529,7 @@ class WorldUpdate(TypedDict):
     tile_changes: NotRequired[list[TileFieldUpdate]]
     resolved_light: NotRequired[CellValues]
     residue_materials: NotRequired[list[ResidueMaterial]]
+    boundary_structures: NotRequired[list[BoundaryStructureStatic]]
     residues: NotRequired[list[ResidueRow]]
     residues_removed: NotRequired[list[ResidueKey]]
     object_looks: NotRequired[list[ObjectLook]]

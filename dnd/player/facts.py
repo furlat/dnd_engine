@@ -41,7 +41,7 @@ from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.traps import TrapState
 from dnd.types.physical_access import ContactPassage
 from dnd.types.world import CardinalDirection, MovementMode, OccupancyLayer
-from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
+from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement, WorldObjectSupport
 from dnd.types.character_progression import PreparedSpellSelection
 from dnd.types.abilities import AbilityName
 from dnd.types.actor import TemporaryHitPointsGrant, SpatialDisposition
@@ -1198,13 +1198,24 @@ def _intact(integrity: ItemIntegrity) -> bool:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class BoundaryStructureStatic:
+    """A boundary structure's value, sent once per seat under its content id (a digest of the value, so a
+    changed structure is another id)."""
+
+    structure_id: str
+    structure: BoundaryStructure
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ObjectState:
-    """A floor item's changeable part, its value at the occurrence; a field holding its default is left out."""
+    """A floor item's changeable part, its value at the occurrence; a field holding its default is left out.
+    `visual_item_name` is left out when it is the `name`; `boundary_structure` is a `BoundaryStructureStatic`'s
+    id."""
 
     name: str
-    visual_item_name: str
+    visual_item_name: Annotated[str | None, Field(exclude_if=_unset)] = None
     map_char: str
-    boundary_structure: Annotated[BoundaryStructure | None, Field(exclude_if=_unset)] = None
+    boundary_structure: Annotated[str | None, Field(exclude_if=_unset)] = None
     is_open: Annotated[bool | None, Field(exclude_if=_unset)] = None
     is_lit: Annotated[bool | None, Field(exclude_if=_unset)] = None
     very_bright_radius_feet: Annotated[int | None, Field(exclude_if=_unset)] = None
@@ -1224,20 +1235,46 @@ class ObjectState:
     construction_suppressions: Annotated[tuple[SpellSuppression, ...], Field(exclude_if=_no_rows)] = ()
 
 
+def _single_anchor(supports: tuple[WorldObjectSupport, ...]) -> bool:
+    return not supports
+
+
+def _bands(occupies: bool) -> bool:
+    return occupies
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ObjectPlacement:
+    """An object's placement on the wire: every field its `WorldObjectPlacement` holds that is neither derivable
+    nor its default. The object is the row's `item_uuid`; its kind is a boundary exactly when it has a boundary
+    direction; `tile_uuid`, left out, is the client's static tile row at `position`; `covered_supports`, left
+    out, is that anchor support alone."""
+
+    position: tuple[int, int]
+    top_height_steps: int
+    boundary_direction: Annotated[CardinalDirection | None, Field(exclude_if=_unset)] = None
+    tile_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    covered_supports: Annotated[tuple[WorldObjectSupport, ...], Field(exclude_if=_single_anchor)] = ()
+    occupies_bands: Annotated[bool, Field(exclude_if=_bands)] = True
+    base_height_steps: Annotated[int, Field(exclude_if=_zero)] = 0
+    orientation: Annotated[CardinalDirection | None, Field(exclude_if=_unset)] = None
+    removed_bands: Annotated[tuple[tuple[int, int, int], ...], Field(exclude_if=_no_rows)] = ()
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ObjectRow:
-    """A world object the seat observes.
+    """A world object the seat observes, at an occurrence.
 
     An entering row carries its state, placement and the faces its residues are authoritative for (those whose
-    viewing cell some member sees); a perceived object's change carries its state, and its placement when it moved.
-    A row without a state changes only which members observe the object. `members`: bit i is the audience's
-    `observers[i]`; a seat with one observer leaves it out.
+    viewing cell some member sees); a perceived object's change carries its state, and its placement when the
+    occurrence wrote one. `members`: bit i is the audience's `observers[i]`, exact as of this row; a seat with one
+    observer leaves it out.
     """
 
     item_uuid: UUID
     members: Annotated[int | None, Field(ge=1, exclude_if=_unset)] = None
-    state: Annotated[ObjectState | None, Field(exclude_if=_unset)] = None
-    placement: Annotated[WorldObjectPlacement | None, Field(exclude_if=_unset)] = None
+    state: ObjectState
+    placement: Annotated[ObjectPlacement | None, Field(exclude_if=_unset)] = None
     observed_faces: Annotated[tuple[CardinalDirection, ...], Field(exclude_if=_no_rows)] = ()
 
 
@@ -1282,6 +1319,7 @@ class WorldUpdate:
     tile_changes: Rows[TileFieldUpdate] = ()
     resolved_light: CellValuesField = EMPTY_VALUES
     residue_materials: Rows[ResidueMaterial] = ()
+    boundary_structures: Rows[BoundaryStructureStatic] = ()
     residues: Rows[ResidueRow] = ()
     residues_removed: Rows[ResidueKey] = ()
     object_looks: Rows[ObjectLook] = ()
@@ -1296,11 +1334,12 @@ class WorldUpdate:
 @dataclass(slots=True, kw_only=True)
 class StaticStore:
     """The static rows the client was sent, never pruned: tiles by cell (the latest uuid there), residue
-    materials by id, object looks by item uuid."""
+    materials by id, object looks by item uuid, boundary structures by content id."""
 
     tiles: dict[tuple[int, int], TileStatic] = field(default_factory=dict)
     residues: dict[str, ResidueMaterial] = field(default_factory=dict)
     object_looks: dict[UUID, ObjectLook] = field(default_factory=dict)
+    boundary_structures: dict[str, BoundaryStructure] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
