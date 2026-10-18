@@ -7253,14 +7253,14 @@ class Entity(BaseBlock):
                 description=action.description or "",
                 template_name=f"{action.get_discovery_template_name()}__item_{identity}",
                 configured_action_ref=action.configured_action_ref, variant_facets=action.row_facets(),
-                contact_positions=tuple(sorted(position for position in candidates
-                    if grid.manual_object_contact(self.uuid, identity, subjective=scan.subjective, origin=position) is not None))))
+                contact_positions=grid.manual_object_contact_origins(self.uuid, identity, candidates,
+                    subjective=scan.subjective)))
         for identity in self.senses.objects:
             item = BaseBlock.get(identity)
             if isinstance(item, BaseItem) and item.is_pickable:
                 descriptors.append(AvailableWorldInteraction(subject_uuid=identity, behavior_id="action.pick_up",
-                    label="Pick up", contact_positions=tuple(sorted(position for position in candidates
-                        if grid.manual_object_contact(self.uuid, identity, subjective=scan.subjective, origin=position) is not None))))
+                    label="Pick up", contact_positions=grid.manual_object_contact_origins(self.uuid, identity,
+                        candidates, subjective=scan.subjective)))
         for connector in grid.get_all_connectors():
             if connector.aperture is None or connector.aperture.frame_uuid not in self.senses.objects:
                 continue
