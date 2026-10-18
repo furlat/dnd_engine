@@ -10,8 +10,7 @@ from uuid import UUID
 
 import numpy as np
 
-from dnd.core.cells import (Box, cell_layers, cells_within, mask_box, mask_difference, mask_positions, mask_union, pack_layers,
-    union_box)
+from dnd.core.cells import Box, cell_layers, mask_box, mask_positions, mask_union, pack_layers, union_box
 from dnd.core.sensory_fold import apply_current_senses, copy_senses_snapshot, prepare_sensory_delta, reduce_senses_snapshot
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues, cell_in
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SensoryDelta, SensesSnapshot
@@ -362,20 +361,6 @@ def _restack(current: "AudienceComposition") -> None:
         current.seen, current.lights, current.hazards)
 
 
-def _members_seeing(current: "AudienceComposition", positions: set[tuple[int, int]]) -> frozenset[UUID]:
-    """The members seeing any of the cells, read from the member layers (folded for the current delta)."""
-    window = current.window
-    if window is None or not positions:
-        return frozenset()
-    cells = np.array(tuple(positions), dtype=np.int64)
-    i, j = cells[:, 0] - window[0], cells[:, 1] - window[1]
-    inside = (i >= 0) & (j >= 0) & (i < current.seen.shape[1]) & (j < current.seen.shape[2])
-    if not inside.any():
-        return frozenset()
-    seen = current.seen[:, i[inside], j[inside]].any(axis=1)
-    return frozenset(current.order[index] for index in np.flatnonzero(seen).tolist())
-
-
 def _fold_view_cells(current: "AudienceComposition", observer: UUID, before: SensesSnapshot | None,
                      member: SensesSnapshot, box: Box | None, *, hazards_only: bool) -> None:
     """Fold one member's changed cells into its layer and the composed view.
@@ -600,11 +585,7 @@ def _keeps_composed_light(view: SensesSnapshot, identity: UUID, source: Perceive
 
 def apply_current_audience(current: AudienceComposition, audience: PlayerAudience, observer_uuid: UUID,
                            event: SensoryDelta, cursor: int) -> None:
-    """Apply local sensory changes to an exclusively owned audience composition.
-
-    The view's cells are folded before the effect index, which reads each
-    member's visible cells from the member layers.
-    """
+    """Apply local sensory changes to an exclusively owned audience composition."""
     if not audience.observes(event.observer_uuid):
         raise ValueError("Sensory observation does not belong to this audience")
     observer = event.observer_uuid
@@ -626,8 +607,9 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
         contacts.update(before.entities)
         contacts.update(before.objects)
         effects.update(before.spatial_effects)
-    # The observer's visible cells after this delta.
-    after = added if event.initial or before is None else mask_union(mask_difference(before.visible, removed), added)
+    def visible(position: tuple[int, int]) -> bool:
+        return cell_in(added, position) or (not event.initial and not cell_in(removed, position)
+            and before is not None and cell_in(before.visible, position))
     changed_effect_positions = {identity: set(effect.positions)
         for identity, effect in event.spatial_effects_changed.items()}
     def observed_positions(identity: UUID) -> set[tuple[int, int]]:
@@ -637,13 +619,13 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
             return set()
         return current.member_effect_positions.get((observer, identity), set())
     def visible_positions(positions: set[tuple[int, int]]) -> set[tuple[int, int]]:
-        return cells_within(after, positions)
+        return {position for position in positions if visible(position)}
 
     # Preserve empty-cell evidence even for an otherwise empty sensory delta.
     # Previous member rows must still be available here, before owned mutation.
     candidates = set(current.visible_effects.get(observer, ())) | effects
-    for position in current.effects_at.keys() & mask_positions(added):
-        candidates.update(current.effects_at[position])
+    for position in mask_positions(added):
+        candidates.update(current.effects_at.get(position, ()))
     absence_updates: dict[tuple[UUID, tuple[int, int]], int | None] = {}
     # Effects whose absent cells appear or retire.
     absence_changed: set[UUID] = set()
@@ -669,7 +651,8 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
                     absence_changed.add(identity)
     recompute_effects = effects | absence_changed
     effect_cursors = {identity: cursor for identity, effect in event.spatial_effects_changed.items()
-        if cells_within(after, effect.positions) or effect.visible_volume_positions or effect.upper_volume_surfaces}
+        if any(visible(position) for position in effect.positions)
+        or effect.visible_volume_positions or effect.upper_volume_surfaces}
     # The member's rows before this delta (its snapshot's containers are advanced in place below).
     prior_effects = ({identity: (before.spatial_effects.get(identity), perception.effect_cursors.get((observer, identity), -1))
                       for identity in event.spatial_effects_changed} if before is not None and not event.initial else {})
@@ -678,13 +661,6 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
 
     member = apply_current_senses(before, event, prepared)
     perception.members[observer] = member
-    # The view's cells first: the member layers then hold every member's visible cells,
-    # which the effect index below reads (the fold reads no effect index).
-    if current.view is None:
-        current.view = replace(member, visible=EMPTY_CELLS, seen=EMPTY_CELLS, entities={}, objects={},
-            effective_light_levels=EMPTY_VALUES, hazardous_cells=EMPTY_VALUES, spatial_effects={})
-    _fold_view_cells(current, observer, before, member, cells, hazards_only=not (event.initial or added.width
-        or removed.width or event.effective_light_levels_changed.cells.width))
     for identity in (*event.entity_contacts_changed, *event.object_contacts_changed):
         perception.contact_cursors[observer, identity] = cursor
     perception.effect_cursors.update(((observer, identity), value) for identity, value in effect_cursors.items())
@@ -710,18 +686,17 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
         touched = previous_positions | positions
         for position in touched:
             _membership(current.effects_at, position, identity, position in positions)
-        touching, seeing = _members_seeing(current, touched), _members_seeing(current, positions)
-        for owner in perception.members:
-            if owner != observer and owner not in touching:
+        for owner, senses in perception.members.items():
+            if owner != observer and not any(cell_in(senses.visible, position) for position in touched):
                 continue
             values = current.visible_effects.setdefault(owner, set())
-            if owner in seeing:
+            if any(cell_in(senses.visible, position) for position in positions):
                 values.add(identity)
             else:
                 values.discard(identity)
     active_effects = current.visible_effects.setdefault(observer, set())
     for identity in candidates:
-        if cells_within(member.visible, current.effect_positions.get(identity, ())):
+        if any(cell_in(member.visible, position) for position in current.effect_positions.get(identity, ())):
             active_effects.add(identity)
         else:
             active_effects.discard(identity)
@@ -729,6 +704,12 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
         current.dirty_members.add(observer)
     else:
         current.dirty_members.discard(observer)
+
+    if current.view is None:
+        current.view = replace(member, visible=EMPTY_CELLS, seen=EMPTY_CELLS, entities={}, objects={},
+            effective_light_levels=EMPTY_VALUES, hazardous_cells=EMPTY_VALUES, spatial_effects={})
+    _fold_view_cells(current, observer, before, member, cells, hazards_only=not (event.initial or added.width
+        or removed.width or event.effective_light_levels_changed.cells.width))
     view = current.view
     for identity in contacts:
         for objects, destination in ((False, view.entities), (True, view.objects)):
