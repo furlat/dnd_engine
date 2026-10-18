@@ -833,6 +833,7 @@ type EventType = Literal[
     'spell_mastery_studied',
     'spellbook_changed',
     'spell_preparation_changed',
+    'actor_sheet',
     'attack',
     'movement',
     'step_movement',
@@ -906,6 +907,7 @@ type EventType = Literal[
     'wind_exposure',
     'encounter_start',
     'encounter_end',
+    'initiative_order_changed',
     'round_start',
     'round_end',
     'turn_start',
@@ -1314,6 +1316,12 @@ class PlayerResource(TypedDict):
     maximum: int
 
 
+class PlayerResourceValue(TypedDict):
+    key: str
+    current: int
+    maximum: int
+
+
 type Bound = int
 
 
@@ -1383,7 +1391,7 @@ class PreviewRequest(TypedDict):
 
 class ProtocolIdentity(TypedDict):
     protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[15]]
+    player_schema_version: NotRequired[Literal[16]]
     schema_digest: str
 
 
@@ -2578,10 +2586,7 @@ class SheetChanges(TypedDict):
     saves: NotRequired[list[str]]
     proficiency_bonus: NotRequired[int]
     resources: NotRequired[list[PlayerResource]]
-    name: NotRequired[str]
-    portrait_key: NotRequired[str | None]
-    normal_hp: NotRequired[int]
-    maximum_hp: NotRequired[int]
+    resource_values: NotRequired[list[PlayerResourceValue]]
     compatible_item_slots: NotRequired[list[list[str | list[str]]]]
     handler_details: NotRequired[list[AvailableHandlerInfo]]
     scribed_spell_ids: NotRequired[list[str]]
@@ -2947,11 +2952,7 @@ class PlayerChoices(TypedDict):
 
 
 class PlayerHUDPatch(TypedDict):
-    generation: str
-    observer_uuid: str
-    revision: int
     initiative: NotRequired[list[str] | None]
-    sheet_order: NotRequired[list[str] | None]
     sheets: NotRequired[list[SheetPatch]]
 
 

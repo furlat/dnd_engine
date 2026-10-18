@@ -27,7 +27,7 @@ from dnd.player.audience import PlayerAudience, begin_audience_composition
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import PlayerInitialization, PlayerState, PlayerUpdate
 from dnd.player.reduction import reduce_initialization, reduce_operation
-from dnd.player.session import Operation, Session, close_session, create_session, snapshot_player_hud
+from dnd.player.session import Operation, Session, close_session, create_session, publish_sheets
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import Darkness
 from dnd.spells.evocation import Fireball
@@ -57,18 +57,18 @@ class Step:
 
 
 def operation_since(session: Session, start: int) -> Operation:
+    # As an operation ends: the sheet publication, then the interval.
+    publish_sheets(session)
     originals = tuple(session.logs.log_appends)
     session.logs.log_appends.clear()
     return Operation(start_cursor=start, end_cursor=EventQueue.event_cursor(),
         roots=tuple(event for _, event in EventQueue.iter_events_since(start)
             if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)),
-        original_logs=originals,
-        hud_by_seat=tuple((seat, snapshot_player_hud(session, audience=audience))
-            for seat, audience in session.seats.items()))
+        original_logs=originals)
 
 
 def what_capture_reads(state: PlayerState) -> tuple:
-    return (state.actors, state.items, state.spatial_content, state.connectors, state.content, state.hud_snapshot,
+    return (state.actors, state.items, state.spatial_content, state.connectors, state.content,
         state.tiles, state.objects)
 
 

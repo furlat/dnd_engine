@@ -17,7 +17,7 @@ from dnd.types.event_facts import EventType, SpatialChangeType
 from dnd.types.world import LightLevel
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensoryDelta
 from dnd.player.audience import (AudienceComposition, apply_current_audience, audience_view,
-    begin_audience_composition, observe_audience, resolve_audience)
+    begin_audience_composition, observe_audience, perceived_entities, resolve_audience)
 from dnd.player.facts import (
     AttackFact, ConditionChangeFact, ConditionFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
     ActorChanges, PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
@@ -558,31 +558,52 @@ def reduce_initialization(initialization: PlayerInitialization, *,
                      initialization.observations, initialization.world_updates, initialization.sensory_rows)
     target.reducer_cursor = initialization.end_cursor
     if initialization.hud is not None:
-        apply_hud(target, initialization.hud, end_cursor=initialization.end_cursor)
+        apply_hud(target, initialization.hud)
     target.content = tuple(sorted(content_additions, key=lambda row: row.ref.identity_key))
     return target
 
 
-def apply_hud(target: PlayerState, patch: PlayerHUDPatch, *, end_cursor: int) -> None:
-    """Fold a HUD patch into the seat's last display; against no display it is complete."""
+WHOLE_SHEET = SheetChanges.__optional_keys__ - {"resource_values"}
+
+
+def _sheet_fields(changes: SheetChanges) -> dict:
+    return {field: value for field, value in changes.items() if field != "resource_values"}
+
+
+def changed_sheet(before: PlayerCharacterSheet, changes: SheetChanges) -> PlayerCharacterSheet:
+    """A held sheet with a patch's fields; `resource_values` replace the values of rows the sheet holds."""
+    values = {row.key: row for row in changes.get("resource_values", ())}
+    sheet = replace(before, **_sheet_fields(changes))
+    if not values:
+        return sheet
+    if not values.keys() <= {row.key for row in sheet.resources}:
+        raise ValueError("Resource values name a row the sheet does not hold")
+    return replace(sheet, resources=tuple(replace(row, current=value.current, maximum=value.maximum)
+        if (value := values.get(row.key)) is not None else row for row in sheet.resources))
+
+
+def apply_hud(target: PlayerState, patch: PlayerHUDPatch) -> None:
+    """Fold a HUD patch into the seat's display; a sheet it does not hold arrives whole and is appended."""
     previous = target.hud_snapshot
-    if (patch.generation != target.generation or patch.observer_uuid != target.observer_uuid
-            or patch.revision > end_cursor or previous is not None and patch.revision < previous.revision):
-        raise ValueError("HUD belongs to a different or future operation")
     sheets = {row.actor_uuid: row for row in previous.sheets} if previous is not None else {}
     for row in patch.sheets:
         before = sheets.get(row.actor_uuid)
-        if before is None and row.changes.keys() != SheetChanges.__optional_keys__:
+        if before is None and row.changes.keys() != WHOLE_SHEET:
             raise ValueError("A first sheet must carry every field")
-        sheets[row.actor_uuid] = (PlayerCharacterSheet(actor_uuid=row.actor_uuid, **row.changes) if before is None
-            else replace(before, **row.changes))
+        sheets[row.actor_uuid] = (PlayerCharacterSheet(actor_uuid=row.actor_uuid, **_sheet_fields(row.changes))
+            if before is None else changed_sheet(before, row.changes))
     initiative = patch.initiative if patch.initiative is not None else previous.initiative if previous is not None else None
-    order = (patch.sheet_order if patch.sheet_order is not None
-        else tuple(row.actor_uuid for row in previous.sheets) if previous is not None else None)
-    if initiative is None or order is None:
-        raise ValueError("A first HUD requires its initiative and sheet order")
-    target.hud_snapshot = PlayerHUDSnapshot(generation=patch.generation, observer_uuid=patch.observer_uuid,
-        revision=patch.revision, initiative=initiative, sheets=tuple(sheets[identity] for identity in order))
+    if initiative is None:
+        raise ValueError("A first HUD requires its initiative")
+    target.hud_snapshot = PlayerHUDSnapshot(initiative=initiative, sheets=tuple(sheets.values()))
+
+
+def displayed_initiative(target: PlayerState) -> tuple[UUID, ...]:
+    """The initiative the seat shows: the received order's part it perceives now."""
+    if target.hud_snapshot is None:
+        return ()
+    perceived = perceived_entities(target.viewing_audience, target.perception)
+    return tuple(identity for identity in target.hud_snapshot.initiative if identity in perceived)
 
 
 def reduce_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
@@ -673,7 +694,7 @@ def reduce_operation(target: PlayerState, update: PlayerUpdate) -> PlayerState:
             composition = begin_audience_composition(result.perception, result.observer_uuid)
         _apply_lineage(result, lineage, audience_composition=composition)
     if update.hud is not None:
-        apply_hud(result, update.hud, end_cursor=result.reducer_cursor)
+        apply_hud(result, update.hud)
     for index, row in enumerate(update.combat_log_appends, len(result.combat_log_appends)):
         if (row.generation != result.generation or row.observer_uuid != result.observer_uuid
                 or row.operation_end_cursor > result.reducer_cursor or row.encounter_log_index != index):

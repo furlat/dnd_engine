@@ -13,7 +13,7 @@ from dnd.player.application import capture_application_operation, initialize_aud
 from dnd.player.content_composition import admitted_content, ui_content_manifest
 from dnd.player.facts import PlayerUpdate
 from dnd.player.reduction import reduce_initialization, reduce_operation
-from dnd.player.session import Operation, close_session, create_session, snapshot_player_hud
+from dnd.player.session import Operation, close_session, create_session
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import build_guardian_of_faith_object
 
@@ -46,9 +46,7 @@ def catalog_with(*values):
 def operation_since(session, start):
     return Operation(start_cursor=start, end_cursor=EventQueue.event_cursor(),
         roots=tuple(event for _, event in EventQueue.iter_events_since(start)
-            if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)),
-        hud_by_seat=tuple((seat, snapshot_player_hud(session, audience=audience))
-            for seat, audience in session.seats.items()))
+            if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)))
 
 
 def transient_guardian(session):

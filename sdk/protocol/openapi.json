@@ -8757,6 +8757,7 @@
           "spell_mastery_studied",
           "spellbook_changed",
           "spell_preparation_changed",
+          "actor_sheet",
           "attack",
           "movement",
           "step_movement",
@@ -8830,6 +8831,7 @@
           "wind_exposure",
           "encounter_start",
           "encounter_end",
+          "initiative_order_changed",
           "round_start",
           "round_end",
           "turn_start",
@@ -14317,24 +14319,8 @@
         "type": "object"
       },
       "PlayerHUDPatch": {
-        "description": "The seat's operation-end display as a patch against its last one.\n\nIt always carries the revision; the initiative and the sheet order only\nwhen they changed, and the sheets that changed. Against no display it\ncarries all of them.",
+        "description": "The projection of a group's sheet and initiative facts for the seat's controlled actors.\n\n`sheets`: one patch per changed sheet; a sheet the seat does not hold arrives whole, in the\npublication order. `initiative`: the order's part the seat perceives at the end of the group,\nsent at initialization, when an order change shows under its current perception, or when\nanything entered its perception; leaving perception sends nothing.",
         "properties": {
-          "generation": {
-            "format": "uuid",
-            "title": "Generation",
-            "type": "string"
-          },
-          "observer_uuid": {
-            "format": "uuid",
-            "title": "Observer Uuid",
-            "type": "string"
-          },
-          "revision": {
-            "title": "Revision",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
           "initiative": {
             "anyOf": [
               {
@@ -14351,22 +14337,6 @@
             "default": null,
             "title": "Initiative"
           },
-          "sheet_order": {
-            "anyOf": [
-              {
-                "items": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Sheet Order"
-          },
           "sheets": {
             "default": [],
             "items": {
@@ -14376,11 +14346,6 @@
             "type": "array"
           }
         },
-        "required": [
-          "generation",
-          "observer_uuid",
-          "revision"
-        ],
         "title": "PlayerHUDPatch",
         "type": "object",
         "additionalProperties": false
@@ -15313,6 +15278,7 @@
         "additionalProperties": false
       },
       "PlayerResource": {
+        "description": "One spendable channel or resource row of a sheet; its label is fixed by its key.",
         "properties": {
           "key": {
             "title": "Key",
@@ -15342,6 +15308,35 @@
           "maximum"
         ],
         "title": "PlayerResource",
+        "type": "object",
+        "additionalProperties": false
+      },
+      "PlayerResourceValue": {
+        "description": "A resource row's new values, by its key.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "current": {
+            "title": "Current",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maximum": {
+            "title": "Maximum",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "key",
+          "current",
+          "maximum"
+        ],
+        "title": "PlayerResourceValue",
         "type": "object",
         "additionalProperties": false
       },
@@ -16105,8 +16100,8 @@
             "maximum": 9007199254740991
           },
           "player_schema_version": {
-            "const": 15,
-            "default": 15,
+            "const": 16,
+            "default": 16,
             "title": "Player Schema Version",
             "type": "integer",
             "minimum": -9007199254740991,
@@ -17310,7 +17305,7 @@
       },
       "SheetChanges": {
         "additionalProperties": false,
-        "description": "Present fields replace the seat's sheet values; against no sheet every field is present.",
+        "description": "Present fields replace the seat's sheet values; against no sheet every field but `resource_values` is present.\n\n`resources` is whole when its key sequence changed; otherwise `resource_values` gives the changed rows by key.",
         "properties": {
           "species": {
             "anyOf": [
@@ -17420,32 +17415,12 @@
             "title": "Resources",
             "type": "array"
           },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "portrait_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Portrait Key"
-          },
-          "normal_hp": {
-            "title": "Normal Hp",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "maximum_hp": {
-            "title": "Maximum Hp",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+          "resource_values": {
+            "items": {
+              "$ref": "#/components/schemas/PlayerResourceValue"
+            },
+            "title": "Resource Values",
+            "type": "array"
           },
           "compatible_item_slots": {
             "items": {

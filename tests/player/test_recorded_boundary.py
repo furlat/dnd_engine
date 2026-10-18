@@ -6,14 +6,15 @@ import pytest
 
 from dnd.conditions import Blinded
 from dnd.core.base_conditions import Duration
+from dnd.core.combat_log import CombatLogEntryType, EmptyLogData
 from dnd.core.condition_types import DurationType
 from dnd.core.events import AreaReachEvent, EventPhase, EventQueue
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.player.capture import capture_interval, capture_lineages
 from dnd.player.actor_facts import PresentationTarget
-from dnd.player.facts import ConditionChangeFact, PlayerHUDSnapshot, PlayerState, PlayerWorld
-from dnd.player.projection import ProjectionState, begin_projection, project_after_values, project_lineage
+from dnd.player.facts import CombatLogAppend, ConditionChangeFact, PlayerLogEntry, PlayerState, PlayerWorld
+from dnd.player.projection import ProjectionState, begin_projection, project_lineage, project_log_appends
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
@@ -34,16 +35,13 @@ def test_after_values_wait_for_all_disclosed_occurrences(native_order, expected)
         world=PresentationTarget(generation=generation, observer_uuid=observer), actors={},
         remembered=PlayerState(generation=generation, observer_uuid=observer, world=world),
         public_cursors={native: local for local, native in enumerate(native_order)}, next_occurrence=len(native_order))
+    entry = PlayerLogEntry(entry_type=CombatLogEntryType.ACTION, source_name="", source_uuid="", target_name=None,
+        target_uuid=None, compact="", verbose="", detailed="", data=EmptyLogData(), success=None)
     revisions = []
     for native_cursor in (0, 2, 3, 5, 8, 9):
-        before = projection.remembered.hud_snapshot
-        hud, logs = project_after_values(projection, PlayerHUDSnapshot(
-            generation=generation, observer_uuid=observer, revision=native_cursor,
-            initiative=(), sheets=()), ())
-        assert logs == ()
-        # An unchanged display is not sent again.
-        assert (hud is None) == (before is not None and before.revision == projection.remembered.hud_snapshot.revision)
-        revisions.append(projection.remembered.hud_snapshot.revision)
+        (append,) = project_log_appends(projection, (CombatLogAppend(generation=generation, observer_uuid=observer,
+            encounter_log_index=0, operation_end_cursor=native_cursor, entry=entry),))
+        revisions.append(append.operation_end_cursor)
     assert tuple(revisions) == expected
 
 

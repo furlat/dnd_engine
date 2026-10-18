@@ -47,7 +47,8 @@ def test_a_sighting_and_its_content_are_every_perceived_effect_field():
 
 
 def test_sheet_changes_cover_every_sheet_field():
-    assert set(get_type_hints(SheetChanges)) == {row.name for row in fields(PlayerCharacterSheet)} - {"actor_uuid"}
+    # `resource_values` changes rows of `resources` by key.
+    assert set(get_type_hints(SheetChanges)) - {"resource_values"} == {row.name for row in fields(PlayerCharacterSheet)} - {"actor_uuid"}
 
 
 def test_a_sighting_split_and_joined_back_passes_every_field():

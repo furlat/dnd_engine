@@ -62,7 +62,8 @@ def client_initialization(started: Started) -> PlayerState:
 
 
 def after_values(state: PlayerState) -> tuple:
-    return state.content, state.hud_snapshot
+    # The server keeps no HUD: the client folds the sheet and initiative facts alone.
+    return (state.content,)
 
 
 def client_operation(started: Started, state: PlayerState, operation: Operation) -> PlayerState:

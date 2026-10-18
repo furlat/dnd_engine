@@ -43,6 +43,7 @@ from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
 from dnd.types.character_progression import PreparedSpellSelection
 from dnd.types.abilities import AbilityName
 from dnd.types.actor import TemporaryHitPointsGrant, SpatialDisposition
+from dnd.types.actor_sheet import PlayerResource, PlayerResourceValue
 from dnd.types.class_features import FontConversion, IndomitableReroll, RelentlessRageIntervention
 from dnd.types.actor_facts import ConditionFact
 from dnd.types.summoning import SummonManifestation, SummonDepartureCause
@@ -80,16 +81,11 @@ SensoryNumber = Annotated[int | None, Field(exclude_if=_unset)]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PlayerResource:
-    key: str
-    label: str
-    current: int
-    maximum: int
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class PlayerCharacterSheet:
-    """Evaluated controlled-character data, without executable owners."""
+    """Evaluated controlled-character data, without executable owners.
+
+    The character's name, portrait and HP are its body's (`PlayerState.actors`), not restated here.
+    """
 
     actor_uuid: UUID
     species: Species | None
@@ -103,10 +99,6 @@ class PlayerCharacterSheet:
     saves: tuple[str, ...]
     proficiency_bonus: int
     resources: tuple[PlayerResource, ...]
-    name: str = ''
-    portrait_key: str | None = None
-    normal_hp: int = 0
-    maximum_hp: int = 0
     compatible_item_slots: tuple[tuple[UUID, tuple[str, ...]], ...] = ()
     handler_details: tuple[AvailableHandlerInfo, ...] = ()
     scribed_spell_ids: tuple[str, ...] = ()
@@ -116,17 +108,20 @@ class PlayerCharacterSheet:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlayerHUDSnapshot:
-    """Authorized operation-end display; its revision is a conservative gate."""
+    """The client's folded display: its controlled sheets and the initiative it last received.
 
-    generation: UUID
-    observer_uuid: UUID
-    revision: int
+    The initiative it shows is that order's perceived part (`reduction.displayed_initiative`).
+    """
+
     initiative: tuple[UUID, ...]
     sheets: tuple[PlayerCharacterSheet, ...]
 
 
 class SheetChanges(TypedDict, total=False):
-    """Present fields replace the seat's sheet values; against no sheet every field is present."""
+    """Present fields replace the seat's sheet values; against no sheet every field but `resource_values` is present.
+
+    `resources` is whole when its key sequence changed; otherwise `resource_values` gives the changed rows by key.
+    """
 
     __pydantic_config__ = ConfigDict(extra="forbid")
 
@@ -141,10 +136,7 @@ class SheetChanges(TypedDict, total=False):
     saves: tuple[str, ...]
     proficiency_bonus: int
     resources: tuple[PlayerResource, ...]
-    name: str
-    portrait_key: str | None
-    normal_hp: int
-    maximum_hp: int
+    resource_values: tuple[PlayerResourceValue, ...]
     compatible_item_slots: tuple[tuple[UUID, tuple[str, ...]], ...]
     handler_details: tuple[AvailableHandlerInfo, ...]
     scribed_spell_ids: tuple[str, ...]
@@ -160,19 +152,16 @@ class SheetPatch:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlayerHUDPatch:
-    """The seat's operation-end display as a patch against its last one.
+    """The projection of a group's sheet and initiative facts for the seat's controlled actors.
 
-    It always carries the revision; the initiative and the sheet order only
-    when they changed, and the sheets that changed. Against no display it
-    carries all of them.
+    `sheets`: one patch per changed sheet; a sheet the seat does not hold arrives whole, in the
+    publication order. `initiative`: the order's part the seat perceives at the end of the group,
+    sent at initialization, when an order change shows under its current perception, or when
+    anything entered its perception; leaving perception sends nothing.
     """
 
-    generation: UUID
-    observer_uuid: UUID
-    revision: int
-    initiative: tuple[UUID, ...] | None = None
-    sheet_order: tuple[UUID, ...] | None = None
-    sheets: tuple[SheetPatch, ...] = ()
+    initiative: Annotated[tuple[UUID, ...] | None, Field(exclude_if=_unset)] = None
+    sheets: Annotated[tuple[SheetPatch, ...], Field(exclude_if=_no_rows)] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -1160,11 +1149,10 @@ class PlayerInitialization:
 
 class PlayerSequence(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schema_version: Literal[8] = 8
+    schema_version: Literal[9] = 9
     initialization: PlayerInitialization
     lineages: tuple[PlayerLineage, ...]
     combat_log_appends: tuple[CombatLogAppend, ...] = ()
-    huds: tuple[PlayerHUDPatch, ...] = ()
 
 
 class PlayerUpdate(BaseModel):

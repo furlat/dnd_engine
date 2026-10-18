@@ -28,14 +28,13 @@ from dnd.controller import HumanController
 from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, AvailableTarget, TargetType
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.blocks.equipment import EquippableItem
-from dnd.player.facts import PlayerCharacterSheet, PlayerHUDSnapshot, PlayerResource
+from dnd.actor_sheets import PublishedSheets, publish_actor_sheets
 from dnd.player.audience import PlayerAudience, SeatAssignment
 from dnd.player.commands import CommandRejected
 from dnd.player.choices import PlayerChoices, PlayerSelectionPreview
 from dnd.player.choice_projection import project_choices, project_selection_preview
 from dnd.core.combat_log import CombatLogEntry
 from typing import Callable
-from dnd.core.base_actions import CostType, spell_slot_cost_type
 from dnd.core.content.encounters import EncounterRecipe, RosterControllerKind
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
 from dnd.core.events import EntityCreatedEvent, Event, EventPhase, EventQueue
@@ -93,6 +92,8 @@ class Session:
     births: tuple[EntityCreatedEvent, ...]
     ai_knowledge: AIKnowledgeSystem
     summoning: SummoningSystem | None = None
+    # The sheet publisher's record (dnd/actor_sheets.py), published by `publish_sheets` only.
+    sheets: PublishedSheets = field(default_factory=PublishedSheets)
     discovery: DiscoveryCache = field(default_factory=DiscoveryCache)
     seats: dict[str, PlayerAudience] = field(default_factory=dict)
     logs: LogCapture = field(default_factory=LogCapture)
@@ -111,74 +112,22 @@ class Operation:
     roots: tuple[Event, ...]
     boundary: AdvanceResult | None = None
     original_logs: tuple[tuple[int, CombatLogEntry], ...] = ()
-    hud_by_seat: tuple[tuple[str, PlayerHUDSnapshot], ...] = ()
 
 
-def player_audience(session: Session) -> PlayerAudience:
-    return next(iter(session.seats.values()))
+def publish_sheets(session: Session) -> None:
+    """The player actors' sheet publication: at the end of session composition and of every operation."""
+    publish_actor_sheets(session.sheets, session.game, session.player_uuids)
 
 
-def snapshot_player_hud(session: Session, observer_uuid: UUID | None = None, *,
-                        audience: PlayerAudience | None = None,
-                        evaluated_sheets: tuple[PlayerCharacterSheet, ...] | None = None) -> PlayerHUDSnapshot:
-    """Evaluate permitted party facts once at a native committed boundary."""
-    audience = audience or (PlayerAudience((observer_uuid,), (observer_uuid,))
-        if observer_uuid is not None else player_audience(session))
-    seen = set(audience.controlled)
-    for identity in audience.observers:
-        actor = session.game.entities.get(identity)
-        if actor is not None:
-            seen.update(actor.senses.entities)
-    sheets = evaluated_sheets if evaluated_sheets is not None else _snapshot_sheets(session, audience.controlled)
-    return PlayerHUDSnapshot(generation=EventQueue.generation_id(), observer_uuid=audience.observers[0],
-        revision=EventQueue.event_cursor(), initiative=tuple(identity for identity in session.encounter.initiative_order if identity in seen),
-        sheets=tuple(row for row in sheets if row.actor_uuid in audience.controlled))
-
-
-def _snapshot_sheets(session: Session, identities: tuple[UUID, ...]) -> tuple[PlayerCharacterSheet, ...]:
-    sheets = []
-    for identity in identities:
-        actor = session.game.entities.get(identity)
-        if actor is None:
-            continue
-        economy = actor.action_economy
-        channels: tuple[CostType, ...] = ("actions", "bonus_actions", "reactions")
-        resources = [PlayerResource(key=key, label=label, current=value.normalized_score,
-                                    maximum=economy.channel_capacity(key))
-                     for key, label, value in zip(channels, ("Actions", "Bonus", "Reaction"),
-                         (economy.actions, economy.bonus_actions, economy.reactions))]
-        resources.append(PlayerResource(key="movement", label="Movement (ft)",
-                         current=economy.movement_remaining(), maximum=economy.channel_capacity("movement")))
-        resources.extend(PlayerResource(key=f"spell_slot_{rank}", label=f"Spell rank {rank}",
-            current=economy.spell_slot_value(rank).normalized_score, maximum=economy.channel_capacity(spell_slot_cost_type(rank)))
-            for rank, capacity in economy.get_normal_spell_slot_capacities().items() if capacity)
-        resources.extend(PlayerResource(key=f"resource:{name}", label=name.replace('_', ' ').title(),
-            current=resource.current, maximum=resource.maximum) for name, resource in economy.resources.items())
-        sheets.append(PlayerCharacterSheet(actor_uuid=identity, name=actor.name,
-            handler_details=tuple(actor.get_player_toggleable_handler_infos()),
-            portrait_key=actor.appearance.portrait_key, normal_hp=actor.get_normal_hp(),
-            maximum_hp=actor.get_max_hp(), species=actor.character_species,
-            species_variant=actor.character_species_variant, background=actor.character_background,
-            origin=actor.applied_origin_state, class_levels=actor.applied_class_levels,
-            scribed_spell_ids=actor.scribed_spell_ids, permanent_feature_uses=actor.permanent_feature_uses,
-            prepared_spell_selections=actor.prepared_spell_selections,
-            abilities=tuple((ability.name, ability.ability_score.score) for ability in actor.ability_scores.abilities_list),
-            skills=tuple(skill.name for skill in actor.skill_set.proficiencies),
-            expertise=tuple(skill.name for skill in actor.skill_set.expertise),
-            saves=tuple(save.name for save in actor.saving_throws.proficiencies),
-            proficiency_bonus=actor.proficiency_bonus.normalized_score, resources=tuple(resources),
-            compatible_item_slots=tuple((item.uuid, tuple(slot.value for slot in actor.equipment.compatible_slots_for_actor(item)))
-                for item in actor.inventory.items.values() if isinstance(item, EquippableItem))))
-    return tuple(sheets)
-
-
-def _bind_log_capture(session: Session) -> Session:
+def _start_session(session: Session) -> Session:
+    """Bind the session's log capture and publish its first sheets."""
     def capture(encounter: Encounter, index: int, entry: CombatLogEntry, event: Event) -> None:
         if encounter is not session.encounter or (event.context or {}).get("combat_log_origin") != "standalone":
             return
         session.logs.log_appends.append((index, entry.model_copy(deep=True)))
     session.logs.log_listener = capture
     Encounter.add_combat_log_listener(capture)
+    publish_sheets(session)
     return session
 
 
@@ -243,7 +192,7 @@ def create_session(
     encounter.start_encounter()
     births = tuple(event for _, event in EventQueue.iter_events_since(0)
                    if isinstance(event, EntityCreatedEvent) and event.entity_uuid in game.entities)
-    return _bind_log_capture(Session(game, encounter, battlefield, tuple(player.uuid for player in players), (enemy_controller,), births,
+    return _start_session(Session(game, encounter, battlefield, tuple(player.uuid for player in players), (enemy_controller,), births,
                    ai_knowledge, bind_summoning(game, encounter, ai_knowledge), seats={"party": PlayerAudience(
                        tuple(player.uuid for player in players), tuple(player.uuid for player in players))}))
 
@@ -316,7 +265,7 @@ def create_authored_session(recipe: EncounterRecipe, *,
     encounter.start_encounter()
     births = tuple(event for _, event in EventQueue.iter_events_since(0)
         if isinstance(event, EntityCreatedEvent) and event.entity_uuid in game.entities)
-    return _bind_log_capture(Session(game, encounter, assembled.battlefield,
+    return _start_session(Session(game, encounter, assembled.battlefield,
         tuple(actor.uuid for actor in external.values()), tuple(controllers), births,
         ai_knowledge, bind_summoning(game, encounter, ai_knowledge), seats=seats))
 
@@ -471,6 +420,7 @@ def _operation(session: Session, start_cursor: int, boundary: AdvanceResult | No
             actor = session.game.entities.get(identity)
             if actor is not None:
                 actor.action_economy.reset_all_costs()
+    publish_sheets(session)
     end_cursor = EventQueue.event_cursor()
     session.discovery.revision += 1
     session.discovery.previews.clear()
@@ -479,10 +429,7 @@ def _operation(session: Session, start_cursor: int, boundary: AdvanceResult | No
                   and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
     originals = tuple(session.logs.log_appends)
     session.logs.log_appends.clear()
-    sheets = _snapshot_sheets(session, session.player_uuids)
-    hud = tuple((key, snapshot_player_hud(session, audience=value, evaluated_sheets=sheets))
-                for key, value in session.seats.items())
-    return Operation(start_cursor, end_cursor, roots, boundary, originals, hud)
+    return Operation(start_cursor, end_cursor, roots, boundary, originals)
 
 
 def execute_player_action(

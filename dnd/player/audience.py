@@ -73,6 +73,11 @@ class AudiencePerception:
     effect_absences: dict[tuple[UUID, tuple[int, int]], int] = field(default_factory=dict)
 
 
+def perceived_entities(audience: PlayerAudience, perception: AudiencePerception) -> frozenset[UUID]:
+    """The entities a seat perceives now: its controlled actors and every member's entity contacts."""
+    return frozenset(audience.controlled).union(*(snapshot.entities for snapshot in perception.members.values()))
+
+
 def observe_audience(previous: AudiencePerception, audience: PlayerAudience,
                      event: SensoryDelta, cursor: int) -> AudiencePerception:
     if not audience.observes(event.observer_uuid):
