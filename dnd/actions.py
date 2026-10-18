@@ -1960,6 +1960,11 @@ def weapon_slot_is_eligible(source: Entity, weapon_slot: WeaponSlot, target_uuid
     return weapon is None or weapon_slot in source.equipment.compatible_slots_for_actor(weapon)
 
 
+def weapon_attack_range(source: Entity, weapon_slot: WeaponSlot, natural: Optional[NaturalWeaponSpec]) -> Range:
+    """The range one weapon attack is measured against: the natural weapon's, else the slot's weapon or unarmed reach."""
+    return natural.range if natural is not None else source.get_weapon_range(weapon_slot)
+
+
 def weapon_reach(
     source: Entity, weapon_slot: WeaponSlot, natural: Optional[NaturalWeaponSpec],
     target_uuid: Optional[UUID], name: str,
@@ -1972,7 +1977,7 @@ def weapon_reach(
     """
     creature = Entity.get(target_uuid) if target_uuid is not None else None
     target = BaseBlock.get(target_uuid) if target_uuid is not None else None
-    weapon_range = natural.range if natural is not None else source.get_weapon_range(weapon_slot)
+    weapon_range = weapon_attack_range(source, weapon_slot, natural)
     if weapon_range is None:
         return f"Weapon range not found for {name}", None, None, False
     if creature is not None:
@@ -2094,6 +2099,14 @@ class Attack(BaseAction):
     def get_range(self) -> Optional[Range]:
         source = Entity.get(self.source_entity_uuid)
         return source.get_weapon_range(self.weapon_slot) if source is not None else None
+
+    def target_reach_feet(self) -> Optional[int]:
+        """The larger of the weapon range's normal and long distances: `weapon_reach` admits no target beyond it."""
+        source = Entity.get(self.source_entity_uuid)
+        if source is None:
+            return None
+        weapon_range = weapon_attack_range(source, self.weapon_slot, self.get_natural_weapon())
+        return max(weapon_range.normal, weapon_range.long or 0)
 
     def get_physical_access(self) -> Optional[PhysicalAccess]:
         source = Entity.get(self.source_entity_uuid)

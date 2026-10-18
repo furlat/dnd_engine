@@ -5754,14 +5754,21 @@ class Entity(BaseBlock):
     def _with_object_targets(
         self, template: BaseAction, pool: Dict[UUID, Tuple[int, int]],
     ) -> Dict[UUID, Tuple[int, int]]:
-        """Merge perceived attackable items without changing cached creature pools."""
+        """Merge perceived attackable items without changing cached creature pools.
+
+        An item whose contact surface lies wholly beyond the action's reach
+        (`target_reach_feet`) is one its admission rejects, and is left out
+        before any admission.
+        """
         if (template.effective_target_type is not TargetType.CREATURE_OR_OBJECT
                 and not (template.effective_target_type is TargetType.MULTI_ENTITY and template.multi_target_objects)):
             return pool
+        reach, origin, grid = template.target_reach_feet(), template.get_target_origin(), get_map()
         result = dict(pool)
         result.update({identity: contact.position
             for identity, contact in self.senses.objects.items()
             if isinstance(item := BaseBlock.get(identity), BaseItem)
+            and (reach is None or origin is None or not grid.object_contact_beyond(identity, origin, reach))
             and (item.is_active if template.object_target_policy == "active" else item.is_breakable())})
         return result
 
