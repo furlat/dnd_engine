@@ -536,3 +536,43 @@ Hard rules:
     - the sphere-volume loop (never runs in these cases);
     - zone install (it is light work in `recompute_lights_at_positions`, ~63 ms profiled on Wall of Stone).
   - Remaining on SG moves: publication ~40, the contact fan-out ~10, view ~7.
+- 2026-10-18: **Wave close: final re-gate and re-time at 094b528f7.**
+  - Re-gate: events/logs identical to d6a5ba8e7 on 9 cases (published bytes differ by schema 15, whose folded states were proven equal by the wire lane); navigation oracle equal on 9; FOV oracle 0 mismatches on 4; sweep = r21.
+  - Re-time: 29 cases × 3, load 10–12 from read-only study agents, so provisional. Table: scratchpad `logs/exitG_table.md`. Before → after this wave:
+
+    | Op | ms | KB |
+    | --- | --- | --- |
+    | Daylight | 220 → 142 | 203 → 83 |
+    | Sleet drop | 213 → 141 | 179 → 85 |
+    | Cloudkill drop | 191 → 116 | 139 → 74 |
+    | Fireball | 176 → 147 | 247 → 201 |
+    | CoD | 166 → 140 | 262 → 220 |
+    | Sleet cast | 164 → 142 | 142 → 96 |
+    | Wall of Stone | 159 → 138 | — |
+    | SG moves | 133–151 → 117–137 | — |
+    | AI decisions | 116 / 78 / 67 / 210 → 88 / 71 / 61 / 194 | — |
+    | caster Choices miss / command | 154 / 176 → 136 / 155 | — |
+    | fighter Choices miss | 70 → 57 | — |
+    | Ice Storm | 106 → 81 | — |
+    | Cloudkill cast | 114 → 91 | — |
+    | Darkness | 102 → 82 | — |
+    | Gust moves | ~63 → ~55 | — |
+
+  - 0 in-op GC passes. The caster menu's post-reply collection went 68 → 10 ms.
+  - Over 100 KB: Fireball and CoD only.
+  - Over 100 ms: Fireball, Sleet cast and drop, round Sleet, Daylight, CoD, Wall of Stone, caster Choices and command, SG moves, Cloudkill drop, AI decision 4.
+- 2026-10-18: **Event-native delta study (read-only; scratchpad `delta/`).** Human: deltas come from the game-state change at event arrival, with no per-seat copy of client values, complete across the board; the combat log and memory are out of scope.
+  - Findings: most of the wire is already event-native. Whole sends remain for light rows, sightings, residue lists, equipment/loadout, item records, the HUD, and collection fields. The per-seat copies (`remembered` world/actors/items, `spatial_values`, `observed_values`) exist only to produce diffs. Restatements inside one update: audience/envelope per lineage, N² spell declarations, double tree edges.
+  - Latent bugs:
+    1. connectors are read from init only, so changes never reach seats;
+    2. the client and engine folds disagree on temp HP in a condition's `resulting_stats` and on INTERNAL conditions, and the replica test can't see it;
+    3. re-acquisition is counted per observer, not per seat;
+    4. entered cells are taken from member events (wrong for multi-observer seats);
+    5. server and client seat composition fold different values (possible divergence).
+  - Proposed rule: one objective fold per session plus per-seat knowledge only. Each item is (a) the event's keyed change, disclosed; (b) an entering snapshot from the session fold; or (c) a key-only removal or lapse. Static content goes once per content id; nothing is restated.
+  - Open decisions for the human:
+    - D1: re-entry by full resend, or by revision stamps;
+    - D2: fog of war kept client-side;
+    - D3: per-member deltas, or a server-composed seat view;
+    - D4: HUD event-native, or a per-actor previous sheet;
+    - D5: is objective resolved light needed on the wire.
