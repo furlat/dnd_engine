@@ -103,7 +103,8 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
     discovered = next(record for record in entered if record.actor_uuid == unseen.uuid)
     assert discovered.birth is not None
     assert discovered.body.normal_hp == 33, 'Discovery must precede the later damage in the same operation'
-    assert {layer.slot: layer.item_uuid for layer in discovered.body.visual_loadout.layers}[
+    assert discovered.loadout is not None
+    assert {layer.slot: layer.item_uuid for layer in discovered.loadout.layers}[
         WeaponSlot.MELEE_MAIN.value] == dagger.uuid
     assert any(member.name == 'Blinded' for member in discovered.body.conditions)
     assert unseen.get_normal_hp() == 31

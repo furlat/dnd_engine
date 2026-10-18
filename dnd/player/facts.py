@@ -270,7 +270,8 @@ class ActorBirth:
 class BodyState:
     """Every changeable field of a body, current at its record's occurrence."""
 
-    visual_loadout: VisualLoadout
+    # The content id of its visual loadout (the value travels once per seat: `BodyRecord.loadout`).
+    visual_loadout_id: str
     normal_hp: int
     maximum_hp: int
     temporary_hp: int
@@ -307,6 +308,9 @@ class BodyRecord:
     actor_uuid: UUID
     birth: Annotated[ActorBirth | None, Field(exclude_if=_unset)] = None
     body: BodyState
+    # The value of `body.visual_loadout_id`, when the seat holds no loadout of that id.
+    loadout: Annotated[VisualLoadout | None, Field(exclude_if=_unset)] = None
+    # The items it shows whose record carries something: a shown item without one has no effects.
     items: Annotated[tuple[ItemRecord, ...], Field(exclude_if=_no_rows)] = ()
 
 
@@ -1337,14 +1341,16 @@ class WorldUpdate:
 
 @dataclass(slots=True, kw_only=True)
 class StaticStore:
-    """The static rows the client was sent, never pruned: tiles by cell (the latest uuid there), tile looks and
-    boundary structures by content id, residue materials by id, object looks by item uuid."""
+    """The static rows the client was sent, never pruned: tiles by cell (the latest uuid there), tile looks,
+    boundary structures and body visual loadouts by content id, residue materials by id, object looks by item
+    uuid."""
 
     tiles: dict[tuple[int, int], TileStatic] = field(default_factory=dict)
     tile_looks: dict[str, TileLook] = field(default_factory=dict)
     residues: dict[str, ResidueMaterial] = field(default_factory=dict)
     object_looks: dict[UUID, ObjectLook] = field(default_factory=dict)
     boundary_structures: dict[str, BoundaryStructure] = field(default_factory=dict)
+    visual_loadouts: dict[str, VisualLoadout] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

@@ -32,23 +32,7 @@
      "structural_base_size": "Medium"
     },
     "body": {
-     "visual_loadout": {
-      "active_weapon_set": "melee",
-      "layers": [
-       {
-        "slot": "Head",
-        "item_uuid": "00000000-0000-4000-8000-000000001002",
-        "item_id": "apparel.helm",
-        "is_lit": null
-       },
-       {
-        "slot": "Body",
-        "item_uuid": "00000000-0000-4000-8000-000000001003",
-        "item_id": "apparel.robe",
-        "is_lit": null
-       }
-      ]
-     },
+     "visual_loadout_id": "47fec0bd6512cdfe",
      "normal_hp": 10,
      "maximum_hp": 10,
      "temporary_hp": 0,
@@ -117,6 +101,23 @@
      ],
      "remains_disposition": "intact",
      "spatial_disposition": "present"
+    },
+    "loadout": {
+     "active_weapon_set": "melee",
+     "layers": [
+      {
+       "slot": "Head",
+       "item_uuid": "00000000-0000-4000-8000-000000001002",
+       "item_id": "apparel.helm",
+       "is_lit": null
+      },
+      {
+       "slot": "Body",
+       "item_uuid": "00000000-0000-4000-8000-000000001003",
+       "item_id": "apparel.robe",
+       "is_lit": null
+      }
+     ]
     },
     "items": [
      {
