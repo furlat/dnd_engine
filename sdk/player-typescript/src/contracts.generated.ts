@@ -29,7 +29,7 @@ export type Kind = "health";
 export type Status = "ok";
 export type Kind1 = "bootstrap";
 export type ProtocolVersion = 1;
-export type PlayerSchemaVersion = 15;
+export type PlayerSchemaVersion = 16;
 export type SchemaDigest = string;
 export type GameId = string;
 export type GameEpoch = string;
@@ -1049,6 +1049,7 @@ export type EventType =
   | "spell_mastery_studied"
   | "spellbook_changed"
   | "spell_preparation_changed"
+  | "actor_sheet"
   | "attack"
   | "movement"
   | "step_movement"
@@ -1122,6 +1123,7 @@ export type EventType =
   | "wind_exposure"
   | "encounter_start"
   | "encounter_end"
+  | "initiative_order_changed"
   | "round_start"
   | "round_end"
   | "turn_start"
@@ -2341,11 +2343,7 @@ export type Height1 = number;
 export type Bits1 = string;
 export type Values = string;
 export type WorldUpdates = WorldUpdate[];
-export type Generation1 = string;
-export type ObserverUuid3 = string;
-export type Revision1 = number;
 export type Initiative = string[] | null;
-export type SheetOrder = string[] | null;
 export type ActorUuid1 = string;
 export type Species =
   | "species.dragonborn"
@@ -2400,15 +2398,11 @@ export type Label = string;
 export type Current = number;
 export type Maximum = number;
 export type Resources = PlayerResource[];
-export type Name13 = string;
-export type PortraitKey2 = string | null;
-export type NormalHp2 = number;
-export type MaximumHp2 = number;
 export type CompatibleItemSlots = [string, string[]][];
 /**
  * Handler display name.
  */
-export type Name14 = string;
+export type Name13 = string;
 /**
  * Primitive handler-rule identity.
  */
@@ -2439,6 +2433,10 @@ export type PermanentFeatureUses = string[];
 export type SourceId1 = string;
 export type SpellIds = string[];
 export type PreparedSpellSelections = PreparedSpellSelection[];
+export type Key1 = string;
+export type Current1 = number;
+export type Maximum1 = number;
+export type ResourceValues = PlayerResourceValue[];
 export type Sheets = SheetPatch[];
 export type Uuids = string[];
 export type ContactUuidIndex = number[];
@@ -2482,7 +2480,7 @@ export type UpperVolumeSurfaces = VolumeSurfaceSight[];
 export type Suppressions1 = SpellSuppression[];
 export type Sightings = SpatialEffectSighting[];
 export type Source1 = number;
-export type Revision2 = number;
+export type Revision1 = number;
 /**
  * @minItems 2
  * @maxItems 2
@@ -2518,7 +2516,7 @@ export type CorrelationId1 = string;
 export type ForceAttack1 = boolean;
 export type Uuid2 = string;
 export type Kind65 = "creature" | "object";
-export type Name15 = string | null;
+export type Name14 = string | null;
 export type Subjects = ChoiceSubject[];
 export type Positions3 = [number, number][];
 export type Index1 = number;
@@ -2669,7 +2667,7 @@ export type RestrictedActionBudget = string | null;
 /**
  * Human-readable cost label.
  */
-export type Name16 = string;
+export type Name15 = string;
 /**
  * Action economy bucket consumed by this cost.
  */
@@ -3059,7 +3057,7 @@ export type ItemChargeCost = number;
 /**
  * Human-readable cost label.
  */
-export type Name17 = string;
+export type Name16 = string;
 /**
  * Action economy bucket consumed by this cost.
  */
@@ -3096,7 +3094,7 @@ export type ConditionalCosts = ConditionalCost[];
  */
 export type FixedHealing = number | null;
 export type AllocationCompletion = "selected_only" | "fill_primary";
-export type Key1 =
+export type Key2 =
   "form" | "side" | "radius" | "ability" | "damage_type" | "movement" | "width" | "rank" | "resistance";
 export type Value3 = string;
 export type Label1 = string;
@@ -3319,12 +3317,12 @@ export type AudienceId9 = string;
 export type CommandNumber6 = number;
 export type Kind86 = "unknown";
 export type Kind87 = "content";
-export type Revision3 = string;
+export type Revision2 = string;
 export type Descriptors = ContentDescriptor[];
 export type Kind88 = "ready";
 export type Kind89 = "stream_status";
-export type Generation2 = string;
-export type ObserverUuid4 = string;
+export type Generation1 = string;
+export type ObserverUuid3 = string;
 export type Lineage3 = number;
 export type Root = number | null;
 export type Events = PlayerNode[];
@@ -3334,8 +3332,8 @@ export type Observations1 = PlayerObservation[];
 export type WorldUpdates1 = WorldUpdate[];
 export type Resolutions1 = PlayerResolution[];
 export type Lineages1 = PlayerLineage[];
-export type Generation3 = string;
-export type ObserverUuid5 = string;
+export type Generation2 = string;
+export type ObserverUuid4 = string;
 export type EncounterLogIndex = number;
 export type OperationEndCursor = number;
 export type CombatLogAppends = CombatLogAppend[];
@@ -5476,26 +5474,30 @@ export interface CellMask {
   bits: Bits1;
 }
 /**
- * The seat's operation-end display as a patch against its last one.
+ * The projection of a group's sheet and initiative facts for the seat's controlled actors.
  *
- * It always carries the revision; the initiative and the sheet order only
- * when they changed, and the sheets that changed. Against no display it
- * carries all of them.
+ * `sheets`: one patch per changed sheet; a sheet the seat does not hold arrives whole, in the
+ * publication order. `initiative`: the order's part the seat perceives at the end of the group,
+ * sent at initialization, when an order change shows under its current perception, or when
+ * anything entered its perception; leaving perception sends nothing.
  */
 export interface PlayerHUDPatch {
-  generation: Generation1;
-  observer_uuid: ObserverUuid3;
-  revision: Revision1;
   initiative?: Initiative;
-  sheet_order?: SheetOrder;
   sheets?: Sheets;
 }
+/**
+ * One sheet's change: its replaced fields and, by key, the new values of resource rows it holds.
+ */
 export interface SheetPatch {
   actor_uuid: ActorUuid1;
   changes: SheetChanges;
+  resource_values?: ResourceValues;
 }
 /**
  * Present fields replace the seat's sheet values; against no sheet every field is present.
+ *
+ * `resources` is whole when its key sequence changed; otherwise its changed rows travel as the patch's
+ * `resource_values`.
  */
 export interface SheetChanges {
   species?: Species | null;
@@ -5509,10 +5511,6 @@ export interface SheetChanges {
   saves?: Saves;
   proficiency_bonus?: ProficiencyBonus;
   resources?: Resources;
-  name?: Name13;
-  portrait_key?: PortraitKey2;
-  normal_hp?: NormalHp2;
-  maximum_hp?: MaximumHp2;
   compatible_item_slots?: CompatibleItemSlots;
   handler_details?: HandlerDetails;
   scribed_spell_ids?: ScribedSpellIds;
@@ -5552,6 +5550,9 @@ export interface ClassChoiceSelection {
   choice_id: ChoiceId1;
   values: Values2;
 }
+/**
+ * One spendable channel or resource row of a sheet; its label is fixed by its key.
+ */
 export interface PlayerResource {
   key: Key;
   label: Label;
@@ -5562,7 +5563,7 @@ export interface PlayerResource {
  * Player-toggleable event handler exposed with available actions.
  */
 export interface AvailableHandlerInfo {
-  name: Name14;
+  name: Name13;
   behavior_id: BehaviorId8;
   provided_by_id: ProvidedById1;
   origin_root_id?: OriginRootId1;
@@ -5576,6 +5577,14 @@ export interface AvailableHandlerInfo {
 export interface PreparedSpellSelection {
   source_id: SourceId1;
   spell_ids: SpellIds;
+}
+/**
+ * A resource row's new values, by its key.
+ */
+export interface PlayerResourceValue {
+  key: Key1;
+  current: Current1;
+  maximum: Maximum1;
 }
 /**
  * The distinct perceived values a group's sensory facts name, each once, as columns.
@@ -5682,7 +5691,7 @@ export interface VolumeSurfaceSight {
  */
 export interface LightRow {
   source: Source1;
-  revision: Revision2;
+  revision: Revision1;
   position: Position11;
   base_height_steps?: BaseHeightSteps6;
   very_bright_radius_feet: VeryBrightRadiusFeet3;
@@ -5767,7 +5776,7 @@ export interface PlayerChoices {
 export interface ChoiceSubject {
   uuid: Uuid2;
   kind: Kind65;
-  name?: Name15;
+  name?: Name14;
 }
 export interface SubjectBinding {
   index: Index1;
@@ -5939,7 +5948,7 @@ export interface PositionRegion {
  * Serializable action cost without executable callbacks.
  */
 export interface BaseCost {
-  name?: Name16;
+  name?: Name15;
   cost_type: CostType1;
   cost: Cost;
   resource_name?: ResourceName;
@@ -6082,7 +6091,7 @@ export interface TopologyEffectProfile {
  * A published cost paid only when the declared trigger occurs.
  */
 export interface ConditionalCost {
-  name?: Name17;
+  name?: Name16;
   cost_type: CostType2;
   cost: Cost1;
   resource_name?: ResourceName1;
@@ -6093,7 +6102,7 @@ export interface ConditionalCost {
  * One action-owned choice exposed without parsing execution tokens.
  */
 export interface ActionVariantFacet {
-  key: Key1;
+  key: Key2;
   value: Value3;
   label: Label1;
 }
@@ -6318,7 +6327,7 @@ export interface UnknownReceipt {
 }
 export interface ContentResponse {
   kind?: Kind87;
-  revision: Revision3;
+  revision: Revision2;
   descriptors: Descriptors;
 }
 export interface StreamReady {
@@ -6346,8 +6355,8 @@ export interface PlayerOperation {
   boundary: BoundaryState;
 }
 export interface PlayerLineage {
-  generation: Generation2;
-  observer_uuid: ObserverUuid4;
+  generation: Generation1;
+  observer_uuid: ObserverUuid3;
   lineage: Lineage3;
   root: Root;
   events: Events;
@@ -6395,8 +6404,8 @@ export interface SensoryRows1 {
   hazards?: Hazards;
 }
 export interface CombatLogAppend {
-  generation: Generation3;
-  observer_uuid: ObserverUuid5;
+  generation: Generation2;
+  observer_uuid: ObserverUuid4;
   encounter_log_index: EncounterLogIndex;
   operation_end_cursor: OperationEndCursor;
   entry: PlayerLogEntry;
