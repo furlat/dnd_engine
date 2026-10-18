@@ -10,7 +10,7 @@ from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType, HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import (
-    Event, EventHandler, EventPhase, EventQueue, EventType, PortalTransferEvent,
+    Event, EventHandler, EventPhase, EventQueue, EventType, MechanismInstallEvent, PortalTransferEvent,
     SpatialChangeEvent, Trigger,
 )
 from typing import ClassVar
@@ -194,9 +194,8 @@ def materialize_portal(positions: set[tuple[int, int]], exit_position: tuple[int
     source_uuid = uuid4()
     cause = parent_event
     if cause is None:
-        cause = EventQueue.publish_declaration(Event(name="Install Portal",
-            event_type=EventType.BASE_ACTION, source_entity_uuid=source_uuid,
-            phase=EventPhase.DECLARATION, use_register=False))
+        cause = EventQueue.publish_declaration(MechanismInstallEvent(name="Install Portal",
+            source_entity_uuid=source_uuid, phase=EventPhase.DECLARATION, use_register=False))
         for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
             if cause.canceled:
                 raise RuntimeError("Portal installation was canceled")

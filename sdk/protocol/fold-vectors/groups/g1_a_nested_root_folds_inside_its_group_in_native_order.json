@@ -1,0 +1,171 @@
+{
+ "name": "g1_a_nested_root_folds_inside_its_group_in_native_order",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "rule": "Roots whose versions interleave arrive as one group, in native order: the box the root places at occurrence 2 is removed by the nested root at occurrence 3, so the client ends without it (folded per root in completion order, the removal would precede the placement). A branch of the root keeps the parentless nested lineage inside its interval.",
+ "initial": {
+  "occurrence": 0,
+  "entered": {
+   "x0": 0,
+   "y0": 0,
+   "width": 3,
+   "height": 1,
+   "bits": "Bw=="
+  },
+  "tile_statics": [
+   {
+    "position": [
+     0,
+     0
+    ],
+    "tile_uuid": "00000000-0000-4000-8000-000100000000",
+    "surface": {
+     "base_material": "stone",
+     "layers": [],
+     "description": ""
+    },
+    "name": "Stone floor"
+   },
+   {
+    "position": [
+     1,
+     0
+    ],
+    "tile_uuid": "00000000-0000-4000-8000-000100001000",
+    "surface": {
+     "base_material": "stone",
+     "layers": [],
+     "description": ""
+    },
+    "name": "Stone floor"
+   },
+   {
+    "position": [
+     2,
+     0
+    ],
+    "tile_uuid": "00000000-0000-4000-8000-000100002000",
+    "surface": {
+     "base_material": "stone",
+     "layers": [],
+     "description": ""
+    },
+    "name": "Stone floor"
+   }
+  ],
+  "tile_columns": {
+   "cells": {
+    "x0": 0,
+    "y0": 0,
+    "width": 3,
+    "height": 1,
+    "bits": "Bw=="
+   },
+   "walking_cost": "AQEB",
+   "flying_cost": "AQEB",
+   "swimming_cost": "AAAA",
+   "burrowing_cost": "AAAA",
+   "flags": "AAAA",
+   "default_light": "AwMD",
+   "resolved_light": "AwMD"
+  }
+ },
+ "group": {
+  "generation": "00000000-0000-4000-8000-00000000f000",
+  "observer_uuid": "00000000-0000-4000-8000-00000000000a",
+  "lineage": 1,
+  "root": 3,
+  "events": [
+   {
+    "occurrence": 1,
+    "lineage": 1,
+    "children_lineages": [
+     2
+    ],
+    "phase": "execution"
+   },
+   {
+    "occurrence": 2,
+    "lineage": 2,
+    "parent_lineage": 1,
+    "phase": "completion"
+   },
+   {
+    "occurrence": 3,
+    "lineage": 3,
+    "phase": "completion"
+   },
+   {
+    "occurrence": 4,
+    "lineage": 1,
+    "children_lineages": [
+     2
+    ],
+    "phase": "completion"
+   }
+  ],
+  "version_rows": {
+   "occurrences": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "lineages": [
+    1,
+    2,
+    3,
+    1
+   ]
+  },
+  "start_cursor": 1,
+  "end_cursor": 5,
+  "observations": [],
+  "world_updates": [
+   {
+    "occurrence": 2,
+    "object_looks": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000002001",
+      "item_id": "item.fold_vectors.box",
+      "contact_passage": "structural"
+     }
+    ],
+    "objects": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000002001",
+      "state": {
+       "name": "Box",
+       "visual_item_name": "box",
+       "map_char": "B"
+      },
+      "placement": {
+       "position": [
+        1,
+        0
+       ],
+       "top_height_steps": 2
+      }
+     }
+    ]
+   },
+   {
+    "occurrence": 3,
+    "objects_removed": [
+     "00000000-0000-4000-8000-000000002001"
+    ]
+   }
+  ],
+  "audience": null
+ },
+ "expected": {
+  "objects": [],
+  "root_branch_occurrences": [
+   1,
+   2,
+   3,
+   4
+  ]
+ }
+}

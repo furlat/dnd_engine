@@ -763,8 +763,16 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
                             if names else (view.light_sources, view.light_source_removals))
     current.view = replace(view, light_sources=lights, light_source_removals=removals,
         position=anchor.position, passive_perception=anchor.passive_perception,
-        sense_modes_hash=anchor.sense_modes_hash, sense_modes=anchor.sense_modes,
+        sense_modes_key=anchor.sense_modes_key, sense_modes=anchor.sense_modes,
         visual_access=anchor.visual_access, paths_dirty=bool(current.dirty_members))
+
+
+def depart_contact(current: AudienceComposition, identity: UUID) -> None:
+    """A witnessed terminal departure ends the view's contact; the next fold recomposes that identity."""
+    if current.view is None:
+        return
+    current.view.entities.pop(identity, None)
+    current.contact_overrides.add(identity)
 
 
 @dataclass(frozen=True, slots=True)

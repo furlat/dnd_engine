@@ -11,6 +11,18 @@ from dnd.types.physical_access import ContactPassage
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 
 
+CARDINAL_DELTAS = {
+    CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
+    CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0),
+}
+OPPOSITE_DIRECTION = {
+    CardinalDirection.NORTH: CardinalDirection.SOUTH,
+    CardinalDirection.SOUTH: CardinalDirection.NORTH,
+    CardinalDirection.EAST: CardinalDirection.WEST,
+    CardinalDirection.WEST: CardinalDirection.EAST,
+}
+
+
 class WorldPlacementKind(StrEnum):
     """Whether a world object is placed at a Tile center or boundary."""
 
@@ -110,6 +122,20 @@ class WorldObjectPlacement(BaseModel):
         elif len(self.covered_supports) != 1:
             raise ValueError("boundary placement has one owner Tile")
         return self
+
+
+def placement_support_cells(placement: WorldObjectPlacement) -> frozenset[tuple[int, int]]:
+    """The cells an object touches: its banded supports and, for a boundary, the opposite incident support.
+
+    The one rule for the world fold's membership index, the seat's entering snapshot, the client's reset of
+    entered cells and the seat oracle.
+    """
+    cells = set(placement.positions)
+    if placement.kind is WorldPlacementKind.BOUNDARY:
+        assert placement.boundary_direction is not None
+        dx, dy = CARDINAL_DELTAS[placement.boundary_direction]
+        cells.add((placement.position[0] + dx, placement.position[1] + dy))
+    return frozenset(cells)
 
 
 class BoundaryStructureKind(StrEnum):

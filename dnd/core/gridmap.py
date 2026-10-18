@@ -2942,12 +2942,14 @@ class GridMap:
             if allow_none:
                 return
             raise ValueError("entity position cannot be None")
-        if (
-            type(position) is not tuple
-            or len(position) != 2
-            or any(type(component) is not int for component in position)
-        ):
+        if not GridMap.is_exact_position(position):
             raise ValueError("entity position must be an exact tuple[int, int]")
+
+    @staticmethod
+    def is_exact_position(position: Optional[Tuple[int, int]]) -> bool:
+        """Whether a position is one exact objective coordinate: a tuple of two ints."""
+        return (type(position) is tuple and len(position) == 2
+                and type(position[0]) is int and type(position[1]) is int)
 
     def commit_entity_membership(
         self,
@@ -3097,12 +3099,10 @@ class GridMap:
         if block is None:
             return None
         position = block.get_position()
-        try:
-            self.validate_entity_position(position, allow_none=False)
-        except ValueError:
+        if not GridMap.is_exact_position(position):
             return None
         tile = self._tiles.get(position)
-        if tile is None or entity_uuid not in tile.get_entity_uuids():
+        if tile is None or not tile.holds_entity(entity_uuid):
             return None
         return position
 
@@ -3342,6 +3342,17 @@ class GridMap:
         near = {(x + dx, y + dy) for x, y in contact_surface(placement) for dx, dy in offsets}
         return tuple(sorted(origin for origin in near.intersection(origins) if self.manual_object_contact(
             requester_uuid, object_uuid, subjective=subjective, origin=origin) is not None))
+
+    def object_contact_beyond(self, object_uuid: UUID, origin: Tuple[int, int], feet: int) -> bool:
+        """Whether every cell of the placed object's contact surface is farther than ``feet`` from ``origin``.
+
+        `attack_object_contact` from ``origin`` then finds no contact within
+        ``feet``: support distance is never shorter than grid distance, and the
+        subjective surface is a subset of the full one. False when unplaced.
+        """
+        placement = self._object_placements.get(object_uuid)
+        return placement is not None and all(
+            grid_distance_feet(origin, position) > feet for position in contact_surface(placement))
 
     def attack_object_contact(
         self, requester_uuid: UUID, object_uuid: UUID, *,

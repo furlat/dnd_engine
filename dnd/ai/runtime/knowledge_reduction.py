@@ -117,11 +117,12 @@ def _cell_observers(senses: dict[UUID, SensesSnapshot], positions: Iterable[tupl
         return result
     xs, ys = np.array(cells, dtype=np.int64).T
     box = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
-    for observer in sorted(senses, key=str):
+    # Each observer's text once: the sort key (texts are distinct) and every cell's entry.
+    for text, observer in sorted((str(observer), observer) for observer in senses):
         snapshot = senses[observer]
         hits = mask_array(snapshot.seen if seen else snapshot.visible, box)[xs - box[0], ys - box[1]]
         for index in np.flatnonzero(hits).tolist():
-            result[cells[index]].append(str(observer))
+            result[cells[index]].append(text)
     return result
 
 
@@ -218,7 +219,7 @@ class AIKnowledge:
 
         positions = world_event_positions(self.world, event, condition)
         objects = self._event_objects(event)
-        if apply_world_fact(self.world, event, condition):
+        if apply_world_fact(self.world, event, condition) is not None:
             self._refresh_world(positions, objects)
 
         if isinstance(event, SensoryUpdateEvent) and event.observer_uuid in self.controlled_entity_uuids:
@@ -245,7 +246,7 @@ class AIKnowledge:
                 if isinstance(ancestor, SpatialChangeEvent) and ancestor.change_type is SpatialChangeType.OBJECT_CHANGED:
                     affected = world_event_positions(self.world, ancestor)
                     changed_objects = self._event_objects(ancestor)
-                    if apply_world_fact(self.world, ancestor):
+                    if apply_world_fact(self.world, ancestor) is not None:
                         positions.update(affected)
                         objects.update(changed_objects)
                 parent = ancestor.parent_lineage

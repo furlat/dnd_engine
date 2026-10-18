@@ -7,13 +7,17 @@ import pytest
 
 from dnd.actions import Attack, AttackEvent
 from dnd.actions_functional import execute_by_index, get_available_actions, setup_standard_actions
+from dnd.blocks.base_item import BaseItem
 from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.content.items.environment_item_builders import build_authored_door
+from dnd.content.items.world_prop_builders import build_world_prop
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventHandler, EventPhase, EventQueue, EventType, TakeDamageEvent, Trigger
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.types.world import CardinalDirection
 
 
 @pytest.fixture
@@ -90,3 +94,41 @@ def test_canceling_damage_roll_application_keeps_hp_but_spends_attack(arena: Gam
     assert target.get_hp() == before
     assert source.action_economy.actions.normalized_score == 0
     assert not any(isinstance(event, TakeDamageEvent) for _, event in EventQueue.iter_events_since(cursor))
+
+
+def _place(kind: str, position: tuple[int, int], owner) -> BaseItem:
+    if kind == "stove":
+        item = build_authored_item("environment.furniture.clay_stove", owner)
+        item.place_on_grid(position)
+    elif kind == "bed":  # two floor spaces; rotated north, the second is one cell north (+y) of `position`
+        item = build_world_prop("environment.furniture.bed", source_entity_uuid=owner)
+        item.place_on_grid(position, orientation=CardinalDirection.NORTH)
+    elif kind == "door":  # on the east edge of `position`: contacted from either side of that edge
+        item = build_authored_door("environment.door.desert_c7")
+        item.place_on_grid(position, boundary_direction=CardinalDirection.EAST)
+    else:
+        raise ValueError(f"Unknown object kind {kind}")
+    return item
+
+
+@pytest.mark.parametrize("slot,attacker,kind,position,listed", [
+    (WeaponSlot.MELEE_MAIN, (2, 3), "stove", (3, 3), True),
+    (WeaponSlot.MELEE_MAIN, (1, 3), "bed", (3, 2), False),
+    # The anchor is 10 ft off; the near support or the edge's far side is 5 ft off.
+    (WeaponSlot.MELEE_MAIN, (3, 5), "bed", (3, 3), True),
+    (WeaponSlot.MELEE_MAIN, (5, 2), "door", (3, 2), True),
+    (WeaponSlot.RANGED_MAIN, (1, 3), "bed", (3, 2), True),
+], ids=["adjacent", "beyond reach", "near support", "door far side", "ranged"])
+def test_attack_lists_the_objects_its_weapon_reaches(arena: Game, slot, attacker, kind, position, listed):
+    source = Entity.create(uuid4(), "Attacker", config=EntityConfig(position=attacker))
+    source.install_initial_items(((build_authored_item("weapon.longbow", source.uuid), WeaponSlot.RANGED_MAIN),
+        (build_authored_item("weapon.longsword", source.uuid), WeaponSlot.MELEE_MAIN)))
+    source.compose_entity()
+    setup_standard_actions(source)
+    arena.deploy_entity(source, attacker)
+    item = _place(kind, position, source.uuid)
+    Entity.update_all_entities_senses()
+    assert item.uuid in source.senses.objects
+
+    row = next(row for row in get_available_actions(source).all_actions if row.template_name == f"Attack_{slot.value}")
+    assert (item.uuid in {target.target_uuid for target in row.valid_targets}) is listed

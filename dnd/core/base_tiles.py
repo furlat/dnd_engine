@@ -239,6 +239,10 @@ class Tile(BaseBlock):
         """Return a defensive snapshot of the Tile's present Entities."""
         return set(self._entity_uuids)
 
+    def holds_entity(self, entity_uuid: UUID) -> bool:
+        """Whether the Entity is present on this Tile (no snapshot)."""
+        return entity_uuid in self._entity_uuids
+
     def _replace_entity_uuids(self, entity_uuids: set[UUID]) -> None:
         """Replace complete occupancy; called only by GridMap commits."""
         self._entity_uuids = set(entity_uuids)

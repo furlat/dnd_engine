@@ -1,10 +1,17 @@
-"""Recorded local changes preserve remembered geometry and composite grants."""
+"""Recorded local changes reach the client by the world wire's rules (player schema 16).
+
+Leaving perception sends nothing, so the client keeps what it last saw; cells entering view are authoritative,
+so an object moved away while unseen is dropped when its old support is seen again; a composite names an
+attachment once the seat was sent its look; the client keeps a wall's faces not seen now.
+"""
 
 from uuid import uuid4
 
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from tests.sensory_cells import packed_cells
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.effect_types import ObservedChangeRef
+from dnd.core.traversal_connectors import ConnectorProvocationPolicy, TraversalConnectorKind
 from dnd.core.events import (
     EventPhase, SensoryUpdateEvent, SpatialChangeEvent, SpatialChangeType, WorldInitializedEvent, WorldModifiedEvent,
     WorldObjectState, WorldTileState,
@@ -14,8 +21,10 @@ from dnd.core.item_types import (
 )
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.world_edges import ElevationSurfaceKind
-from dnd.player.capture import CompletedLineage, IntervalEnvelope, ObjectiveRow
-from dnd.player.projection import begin_projection, project_lineage
+from dataclasses import replace
+from dnd.core.events import WorldConnectorState
+from dnd.player.capture import CompletedLineage, IntervalEnvelope, ObjectiveRow, WorldInterval
+from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.recorded import RecordedSequence, project_sequence
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.types.materials import Material, TileSurface
@@ -74,7 +83,7 @@ def initial(objects, visible, contacts):
     return IntervalEnvelope(name='recorded local changes', generation=generation, start_cursor=0,
         end_cursor=2, observer_uuid=observer, battlefield_id=world.battlefield_id, door_uuid=None,
         standing_torch_uuid=None, objective_rows=tuple(objective(i, event) for i, event in enumerate(events)),
-        admitted=tuple(enumerate(events)), dispositions=())
+        admitted=tuple(enumerate(events)), dispositions=(), world_interval=WorldInterval(events=tuple(enumerate(events))))
 
 
 def check(initialization, events):
@@ -85,10 +94,11 @@ def check(initialization, events):
         for index, event in enumerate(events))
     saved = RecordedSequence(initialization=initialization, lineages=lineages).model_dump_json()
     restored = RecordedSequence.model_validate_json(saved, context=PASSIVE_EVENT_REPLAY)
-    projection, public = begin_projection(restored.initialization)
+    session = SessionProjection()
+    projection, public = begin_projection(session, restored.initialization)
     states = [reduce_initialization(public)]
     for lineage in restored.lineages:
-        update = project_lineage(projection, lineage)
+        update = project_lineage(session, projection, lineage)
         states.append(states[-1] if update is None else reduce_lineage(states[-1], update))
     replay = project_sequence(restored)
     latest = reduce_initialization(replay.initialization)
@@ -114,8 +124,9 @@ def test_later_attachment_knowledge_refreshes_an_unchanged_remnant_and_preserves
         sensory(observer, passive_perception_changed=True, passive_perception=11),
     )
     states = check(start, events)
+    # The attachment's look was sent: the composite keeps naming it after the attachment is seen gone.
     assert [state.objects[root].item.remnant_state.intact_supported_items for state in states] == [
-        (), (identity,), (identity,), ()]
+        (), (identity,), (identity,), (identity,)]
     assert identity not in states[0].objects and identity in states[1].objects
     assert identity not in states[2].objects
 
@@ -139,7 +150,9 @@ def test_hidden_move_keeps_old_placement_until_that_support_is_observed():
         sensory(observer, visible_cells_added=[(1, 0)]),
     ))
     assert states[0].objects[identity].contained_items[0].item_uuid == child.item_uuid
-    assert states[1].objects[identity].contained_items is None
+    # Leaving sight sends nothing: the client keeps the contents it last saw.
+    kept = states[1].objects[identity].contained_items
+    assert kept is not None and kept[0].item_uuid == child.item_uuid
     assert states[2].objects[identity].placement.position == (1, 0)
     assert identity not in states[3].objects
 
@@ -216,5 +229,57 @@ def test_remote_section_visibility_and_provider_after_values_refresh_constructio
     ))
     assert states[0].objects[identity].item.construction_suppressions == ()
     outcomes = [state.objects[identity].item.construction_suppressions[0] for state in states[1:]]
-    assert [row.positions for row in outcomes] == [(), ((4, 0),), ((4, 0),), ()]
+    # Leaving view sends nothing: the client keeps the suppressed cell it last saw.
+    assert [row.positions for row in outcomes] == [(), ((4, 0),), ((4, 0),), ((4, 0),)]
     assert [row.area_geometry.radius_feet for row in outcomes] == [5, 5, 10, 10]
+
+
+def seen_by(observer, source, index):
+    """The observer's sensory child naming `source` as a change it saw happen (its parent, here)."""
+    child = sensory(observer).model_copy(update={"observed_changes": (ObservedChangeRef(source_event_uuid=source.uuid,
+        source_index=index, field="paths", owner_uuid=observer),), "parent_lineage": source.lineage_uuid,
+        "parent_event": source.uuid})
+    return source.model_copy(update={"children_lineages": [child.lineage_uuid]}), child
+
+
+def project_with_child(start, source):
+    """Project `source` and its observer's sensory child naming it, from `start`; the packet and the client."""
+    session = SessionProjection()
+    projection, public = begin_projection(session, start)
+    source, child = seen_by(start.observer_uuid, source, 2)
+    native = CompletedLineage(generation=start.generation, observer_uuid=start.observer_uuid, root=source,
+        events=(source, child), objective_rows=(objective(2, source), objective(3, child)), start_cursor=2,
+        end_cursor=4)
+    packet = project_lineage(session, projection, native)
+    assert packet is not None
+    return packet, reduce_lineage(reduce_initialization(public), packet)
+
+
+def test_a_change_its_observer_saw_happen_publishes_once():
+    start = initial((), ((1, 0), (2, 0)), {})
+    light = SpatialChangeEvent.model_validate(dict(source_entity_uuid=start.observer_uuid, use_register=False,
+        phase=EventPhase.COMPLETION, change_type=SpatialChangeType.LIGHT_CHANGED, position=(1, 0),
+        light_level_map={"1,0": LightLevel.DIM_LIGHT.value}), context=PASSIVE_EVENT_REPLAY)
+    packet, client = project_with_child(start, light)
+    assert len(packet.world_updates) == 1
+    assert client.tiles[(1, 0)].resolved_light is LightLevel.DIM_LIGHT
+
+
+def test_a_removed_connector_its_observer_saw_go_is_removed_once():
+    start = initial((), ((1, 0), (2, 0)), {})
+    world_event = start.admitted[0][1]
+    tiles = {row.position: row for row in world_event.tiles}
+    ladder = WorldConnectorState(connector_uuid=uuid4(), authored_id='ladder', kind=TraversalConnectorKind.LADDER,
+        presentation_key='ladder', endpoints=((1, 0), (2, 0)),
+        support_tile_uuids=(tiles[(1, 0)].tile_uuid, tiles[(2, 0)].tile_uuid), endpoint_elevations_feet=(0, 0),
+        movement_cost_feet=5, bidirectional=True, enabled=True,
+        provocation_policy=ConnectorProvocationPolicy.DOES_NOT_PROVOKE)
+    events = (world_event.model_copy(update={"connectors": (ladder,)}), start.admitted[1][1])
+    start = replace(start, admitted=tuple(enumerate(events)), world_interval=WorldInterval(
+        events=tuple(enumerate(events))), objective_rows=tuple(objective(i, event) for i, event in enumerate(events)))
+    gone = WorldModifiedEvent.model_validate(dict(source_entity_uuid=start.observer_uuid, use_register=False,
+        phase=EventPhase.COMPLETION, connector_uuid=ladder.connector_uuid, before=ladder, after=None),
+        context=PASSIVE_EVENT_REPLAY)
+    packet, client = project_with_child(start, gone)
+    assert [update.connectors_removed for update in packet.world_updates] == [(ladder.connector_uuid,)]
+    assert ladder.connector_uuid not in client.connectors

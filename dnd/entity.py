@@ -84,6 +84,7 @@ from dnd.blocks.health import (
     Health,
     HitDiceConfig,
     HitDiceHealingResult,
+    normal_hit_points,
 )
 from dnd.blocks.equipment import EquipmentConfig, Equipment, PreparedEquipmentRelease
 from dnd.blocks.creature_proficiencies import (
@@ -2482,7 +2483,7 @@ class Entity(BaseBlock):
 
     def get_normal_hp(self) -> int:
         """Return current normal HP before temporary hit points."""
-        return self.get_max_hp() - self.health.damage_taken
+        return normal_hit_points(self.get_max_hp(), self.health)
 
     @property
     def is_dying(self) -> bool:
@@ -3592,6 +3593,7 @@ class Entity(BaseBlock):
         resolution: DamageApplicationPreview,
         critical_hit: bool,
         impact_direction: tuple[float, float] | None,
+        resulting_normal_hp: int,
     ) -> DamageAppliedEvent:
         """Emit the factual positive-damage boundary through completion.
 
@@ -3604,6 +3606,7 @@ class Entity(BaseBlock):
             normal_hit_point_damage: Damage applied beyond temporary hit points.
             temporary_hit_point_damage: Temporary hit points consumed.
             resolution: Complete typed damage-resolution evidence.
+            resulting_normal_hp: Normal hit points after the damage is applied.
 
         Returns:
             Completed positive post-mitigation damage event.
@@ -3621,7 +3624,7 @@ class Entity(BaseBlock):
             applied_damage=applied_damage,
             normal_hit_point_damage=normal_hit_point_damage,
             temporary_hit_point_damage=temporary_hit_point_damage,
-            resulting_normal_hp=self.get_normal_hp(),
+            resulting_normal_hp=resulting_normal_hp,
             resulting_temporary_hp=max(0, self.health.temporary_hit_points.normalized_score),
             damage_type=damage_type,
             damages=damages,
@@ -3700,9 +3703,9 @@ class Entity(BaseBlock):
         Returns:
             Actual HP lost after handlers, cancellation, and resistances.
         """
-        normal_hp_before = self.get_normal_hp()
-        temporary_hp_before = max(0, self.health.temporary_hit_points.normalized_score)
         max_hp = self.get_max_hp()
+        normal_hp_before = normal_hit_points(max_hp, self.health)
+        temporary_hp_before = max(0, self.health.temporary_hit_points.normalized_score)
         event_damages = damages if damages else [
             Damage(
                 damage_type=damage_type,
@@ -3740,8 +3743,12 @@ class Entity(BaseBlock):
 
         actual_damage = 0
         damage_resolution: Optional[DamageApplicationPreview] = None
+        # The maximum after the incoming handlers, read once for the preview and the applied event:
+        # what runs between them writes only temporary hit points and damage taken, which it does not read.
+        max_hp_applied = self.get_max_hp()
         if not take_damage_event.canceled:
-            damage_resolution = self.preview_take_damage(take_damage_event)
+            damage_resolution = self.health.preview_damage_event(
+                take_damage_event, normal_hit_points_available=max(0, normal_hit_points(max_hp_applied, self.health)))
             actual_damage = self.health.apply_damage_preview(
                 damage_resolution,
                 source_entity_uuid,
@@ -3770,6 +3777,7 @@ class Entity(BaseBlock):
                 resolution=damage_resolution,
                 critical_hit=critical_hit,
                 impact_direction=impact_direction,
+                resulting_normal_hp=normal_hit_points(max_hp_applied, self.health),
             )
 
         if (
@@ -5746,14 +5754,21 @@ class Entity(BaseBlock):
     def _with_object_targets(
         self, template: BaseAction, pool: Dict[UUID, Tuple[int, int]],
     ) -> Dict[UUID, Tuple[int, int]]:
-        """Merge perceived attackable items without changing cached creature pools."""
+        """Merge perceived attackable items without changing cached creature pools.
+
+        An item whose contact surface lies wholly beyond the action's reach
+        (`target_reach_feet`) is one its admission rejects, and is left out
+        before any admission.
+        """
         if (template.effective_target_type is not TargetType.CREATURE_OR_OBJECT
                 and not (template.effective_target_type is TargetType.MULTI_ENTITY and template.multi_target_objects)):
             return pool
+        reach, origin, grid = template.target_reach_feet(), template.get_target_origin(), get_map()
         result = dict(pool)
         result.update({identity: contact.position
             for identity, contact in self.senses.objects.items()
             if isinstance(item := BaseBlock.get(identity), BaseItem)
+            and (reach is None or origin is None or not grid.object_contact_beyond(identity, origin, reach))
             and (item.is_active if template.object_target_policy == "active" else item.is_breakable())})
         return result
 

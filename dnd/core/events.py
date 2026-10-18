@@ -11,7 +11,7 @@ __all__ = [
     "Event", "Trigger", "BaseHandler", "EventHandler", "SpatialHandler", "EventQueue",
     "SensoryUpdateReason", "SensoryUpdateEvent",
     "WorldTileState", "WorldObjectState", "WorldConnectorState",
-    "WorldMaterializedState", "WorldInitializedEvent", "WorldModifiedEvent",
+    "WorldMaterializedState", "WorldInitializedEvent", "WorldModifiedEvent", "MechanismInstallEvent",
     "EntityCreatedEvent", "EntityLevelAddedEvent",
     "EntityLevelRemovedEvent",
     "SpatialEffectChangeEvent", "SpatialEffectInteractionEvent", "AreaReachEvent",
@@ -177,6 +177,10 @@ class OpenGroup:
         """Whether a simultaneous entry is open (`SIMULTANEOUS_ENTRIES`). A move step alone only
         settles perception once: its handlers, departures and reactions run as without a group."""
         return any(kind in SIMULTANEOUS_ENTRIES for kind in self.kinds)
+
+
+# How many contained grant pairs the queue keeps (`EventQueue._merged_grants`) before it starts again.
+CONTAINED_GRANTS_KEPT = 4096
 
 
 def merged_grants(grants: Dict[str, FrozenSet[str]], added: Mapping[str, FrozenSet[str]]) -> Dict[str, FrozenSet[str]]:
@@ -801,6 +805,14 @@ class WorldInitializedEvent(Event):
     connectors: Tuple[WorldConnectorState, ...] = ()
 
 
+class MechanismInstallEvent(Event):
+    """The root of installing a spatial mechanism (a portal, a pressure plate, a gas vent) into a running world:
+    its spatial effect and every fact the installation causes are its descendants."""
+
+    name: str = Field(default="Install Mechanism")
+    event_type: EventType = Field(default=EventType.BASE_ACTION)
+
+
 class WorldModifiedEvent(Event):
     """One completed structural edit against an already-running world."""
 
@@ -1398,6 +1410,12 @@ class EventQueue:
     _revealed_computer: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]] = None
     _identified_entity_observer_computer: Optional[Callable[
         ['Event', Dict[str, FrozenSet[str]]], Dict[str, FrozenSet[str]]]] = None
+    # The mapping pairs (grants, added) whose union is `grants` itself (`merged_grants` adds nothing):
+    # stored grant mappings are never edited, so such a pair stays contained. Keyed by the inputs' ids;
+    # each entry holds its inputs (so a kept id is not reused while held) and an answer also checks it
+    # holds these very objects. Not a runtime slot of the content loader: a derived table, cleared when
+    # full and with the queue.
+    _contained_grants: Dict[Tuple[int, int], Tuple[Mapping[str, FrozenSet[str]], Mapping[str, FrozenSet[str]]]] = {}
 
     @classmethod
     def begin_turn_execution(cls, execution_id: Optional[UUID] = None) -> UUID:
@@ -2365,6 +2383,23 @@ class EventQueue:
         return event.children_events + tail, event.lineage_children_events + tail
 
     @classmethod
+    def _merged_grants(cls, grants: Dict[str, FrozenSet[str]],
+                       added: Mapping[str, FrozenSet[str]]) -> Dict[str, FrozenSet[str]]:
+        """`merged_grants`, answering a pair already known to add nothing without merging it again."""
+        if not added:
+            return grants
+        key = (id(grants), id(added))
+        held = cls._contained_grants.get(key)
+        if held is not None and held[0] is grants and held[1] is added:
+            return grants
+        merged = merged_grants(grants, added)
+        if merged is grants:
+            if len(cls._contained_grants) >= CONTAINED_GRANTS_KEPT:
+                cls._contained_grants.clear()
+            cls._contained_grants[key] = (grants, added)
+        return merged
+
+    @classmethod
     def _store_event(
         cls,
         event: Event,
@@ -2391,7 +2426,7 @@ class EventQueue:
             if timing:
                 record_action_timing("event_queue.store.compute_identified_ms", started)
             started = time.perf_counter() if timing else 0.0
-            identified = merged_grants(identified, located)
+            identified = cls._merged_grants(identified, located)
             if timing:
                 record_action_timing("event_queue.store.merge_identified_ms", started)
 
@@ -2402,7 +2437,7 @@ class EventQueue:
                 # Canceled children retain the same causal parent as completed
                 # ones; relationship identity exists before any terminal phase.
                 event.parent_lineage = parent_event.lineage_uuid
-            identified = merged_grants(identified, parent_event.identified_entity_observer_uuids)
+            identified = cls._merged_grants(identified, parent_event.identified_entity_observer_uuids)
         event.identified_entity_observer_uuids = identified
         event.located_entity_observer_uuids = located
         if timing:
@@ -2899,6 +2934,7 @@ class EventQueue:
         cls._perceiver_computer = None
         cls._revealed_computer = None
         cls._identified_entity_observer_computer = None
+        cls._contained_grants.clear()
 
     @classmethod
     def get_events_chronological(cls, start_time: Optional[datetime] = None,

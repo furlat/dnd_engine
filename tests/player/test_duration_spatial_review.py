@@ -15,7 +15,7 @@ from dnd.game import Game
 from dnd.items.consumables import build_timed_fire_weapon_coat
 from dnd.player.audience import PlayerAudience
 from dnd.player.capture import capture_interval, capture_lineages
-from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
@@ -45,17 +45,19 @@ def actor(game, name, position):
 
 def view(built, members):
     audience = PlayerAudience(tuple(member.uuid for member in members), tuple(member.uuid for member in members))
-    projection, initial = begin_projection(capture_interval(name="duration review", start_cursor=0,
+    session = SessionProjection()
+    projection, initial = begin_projection(session, capture_interval(name="duration review", start_cursor=0,
         end_cursor=EventQueue.event_cursor(), observer_uuid=members[0].uuid,
         audience=audience, battlefield_id=built.definition.battlefield_id))
-    return projection, reduce_initialization(initial)
+    return (session, projection), reduce_initialization(initial)
 
 
-def consume(projection, state, roots):
+def consume(seat, state, roots):
+    session, projection = seat
     delivered = []
     for native in capture_lineages(roots, observer_uuid=state.observer_uuid,
             audience=state.viewing_audience, known_actor_uuids=frozenset(state.actors)):
-        public = project_lineage(projection, native)
+        public = project_lineage(session, projection, native)
         if public is not None:
             delivered.append(public)
             state = reduce_lineage(state, public)

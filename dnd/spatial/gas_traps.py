@@ -15,7 +15,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import (
     Damage, Event, EventHandler, EventPhase, EventQueue, EventType,
-    MechanismActivationEvent, SpatialChangeEvent, TurnEvent, Trigger,
+    MechanismActivationEvent, MechanismInstallEvent, SpatialChangeEvent, TurnEvent, Trigger,
 )
 from typing import ClassVar
 
@@ -238,8 +238,8 @@ def materialize_gas_vent(position: tuple[int, int], *, gas: GasCloudSpec | None 
     identity = uuid4()
     cause = parent_event
     if cause is None:
-        cause = EventQueue.publish_declaration(Event(name="Install gas vent", source_entity_uuid=identity,
-            event_type=EventType.BASE_ACTION, use_register=False))
+        cause = EventQueue.publish_declaration(MechanismInstallEvent(name="Install gas vent",
+            source_entity_uuid=identity, use_register=False))
         for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
             if cause.canceled:
                 raise RuntimeError("Gas vent installation was canceled")

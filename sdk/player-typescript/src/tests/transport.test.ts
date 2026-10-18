@@ -186,7 +186,8 @@ test('cursor wait deadline releases its registration', async t => {
 test('tile field updates preserve omissions and explicit clears', () => {
   for (const changes of [
     {default_light: 2},
-    {slope_axis: null, condition_names: [], residues: [], blocks_optics: false, walking_cost: 0, default_light: 0},
+    // A kept tile's scalars only: its conditions and residues have their own rows (player schema 16).
+    {slope_axis: null, blocks_optics: false, walking_cost: 0, default_light: 0},
   ]) {
     const value = {position: [-47, 20], changes};
     const decoded = sdk.decode<sdk.TileFieldUpdate>('TileFieldUpdate', encoder.encode(JSON.stringify(value)));
