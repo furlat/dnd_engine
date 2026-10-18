@@ -28,7 +28,7 @@ from dnd.core.events import (
     DeathEvent,
     DeathSaveEvent,
     EncounterEvent,
-    EntityCreatedEvent, EntityFactionChangedEvent,
+    ActorSheetEvent, EncounterStartEvent, EntityCreatedEvent, EntityFactionChangedEvent, InitiativeOrderChangedEvent,
     Event,
     EventPhase,
     EventQueue,
@@ -62,6 +62,8 @@ from dnd.world_facts import copy_world_facts, apply_world_fact as apply_recorded
 from dnd.player.audience import PlayerAudience, resolve_audience
 
 from dnd.player.event_record import RecordedEvent
+from dnd.player.sheet_facts import sheet_fact
+from dnd.types.actor_sheet import ActorSheetChange
 from dnd.player.facts import PlayerLogEntry
 from dnd.player.actor_facts import ActorState, ConditionFact, PresentationTarget
 from dnd.actor_projection import actor_fact_change, actor_fact_owner, actor_from_birth
@@ -170,6 +172,7 @@ class CaptureCheckpoint:
     the audiences sharing it). `root_of` and `trees` place the lineages of
     each still-open root; `pending` keeps the evidence of that root's folded
     versions until it completes, so a root's capture never folds history again.
+    `initiative` is the encounter's order (its start, then each join or leave); a session has one encounter.
     """
 
     generation: UUID
@@ -181,6 +184,7 @@ class CaptureCheckpoint:
     root_of: dict[UUID, UUID] = field(default_factory=dict)
     trees: dict[UUID, list[UUID]] = field(default_factory=dict)
     pending: dict[UUID, dict[UUID, AdmissionEvidence]] = field(default_factory=dict)
+    initiative: tuple[UUID, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -353,8 +357,10 @@ def capture_interval(
     dispositions: list[tuple[int, Disposition]] = []
     logs: dict[UUID, PlayerLogEntry] = {}
     for index, event in indexed:
-        is_admitted = any(_admitted(event, observer_uuid=identity, battlefield_id=battlefield_id)
-                          for identity in audience.observers)
+        # A controlled actor's birth and sheet facts, for its sheet (`sheet_facts`).
+        sheet = sheet_fact(event) if event.phase is EventPhase.COMPLETION else None
+        is_admitted = (sheet is not None and audience.controls(sheet.actor_uuid)) or any(
+            _admitted(event, observer_uuid=identity, battlefield_id=battlefield_id) for identity in audience.observers)
         if is_admitted:
             admitted.append((index, _retained_event(event, audience)))
             admitted_original.append((index, event))
@@ -364,7 +370,7 @@ def capture_interval(
             disposition = (
                 Disposition.STATE_ONLY
                 if isinstance(event, (EntityCreatedEvent, SensoryUpdateEvent, TurnEvent, RoundEvent, EncounterEvent))
-                or actor_fact_owner(event) is not None
+                or actor_fact_owner(event) is not None or sheet is not None
                 else Disposition.PENDING_DISPLAY
             )
         else:
@@ -481,6 +487,9 @@ def reduce_interval(
             dispositions[index] = Disposition.STATE_ONLY
         elif isinstance(event, (TurnEvent, RoundEvent, EncounterEvent)):
             _reduce_turn_fact(target, event)
+            dispositions[index] = Disposition.STATE_ONLY
+        elif sheet_fact(event) is not None:
+            # A sheet fact; the HUD projection reads it from the admitted events.
             dispositions[index] = Disposition.STATE_ONLY
         else:
             raise RuntimeError("capture admitted an unsupported Event subclass")
@@ -615,7 +624,7 @@ def _event_header(event: Event) -> Event:
 def _controller_redaction(event: Event, audience: PlayerAudience) -> bool | None:
     """Whether this seat controls the source, for the families that redact non-controllers; None otherwise."""
     match event:
-        case SpellbookChangedEvent() | SpellMasteryStudiedEvent() | PermanentFeatureUsedEvent() | SpellPreparationChangedEvent():
+        case SpellbookChangedEvent() | SpellMasteryStudiedEvent() | PermanentFeatureUsedEvent() | SpellPreparationChangedEvent() | ActorSheetEvent():
             return audience.controls(event.source_entity_uuid)
     return None
 
@@ -701,6 +710,10 @@ def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload:
         case SpellPreparationChangedEvent():
             copied = event.model_copy(update=common if controls else {
                 **common,"prepared_spell_selections":(),"casting_source_id":""})
+        case ActorSheetEvent():
+            copied = event.model_copy(update=common if controls else {**common, "change": ActorSheetChange()})
+        case InitiativeOrderChangedEvent():
+            copied = event.model_copy(update=common)
         case HealRollResultEvent():
             copied = event.model_copy(update={**common, "context": {}})
         case D20Event():
@@ -858,6 +871,9 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
             if root is not None:
                 pending.setdefault(root, {})[event.uuid] = row
         if completed:
+            match event:
+                case EncounterStartEvent() | InitiativeOrderChangedEvent():
+                    checkpoint.initiative = tuple(event.initiative_order)
             if change is not None:
                 # TODO(E3-bodies): E2 keeps today's shared fold, where a condition's item after-value does not
                 # reach the actors holding the item; every seat's fold applies it.
@@ -1230,6 +1246,9 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 pass
             case SpellMasteryStudiedEvent() | ConditionMembershipCommittedEvent() | RestResourcesRecoveredEvent() | PermanentFeatureUsedEvent() | ActionApplicationCommittedEvent() | MaximumHitPointReductionEvent() | EffectApplicationEvent() | ActionCostsCommittedEvent() | RestCompletedEvent() | HealingAppliedEvent():
                 # Admission/causal facts have no extra after-values or choreography.
+                pass
+            case ActorSheetEvent() | InitiativeOrderChangedEvent():
+                # Sheet and order facts are the HUD projection's, not a presented world value.
                 pass
             case ActionEvent() | TakeDamageEvent() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent() | SpellDamageRollResultEvent() | SpellbookChangedEvent() | SpellPreparationChangedEvent() | D20Event():
                 # These facts explain causality. Only the committed applied

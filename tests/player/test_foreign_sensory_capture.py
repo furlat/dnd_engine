@@ -21,7 +21,7 @@ from dnd.player.facts import ActionFact, SensoryFact
 from dnd.player.projection import begin_projection, project_lineage
 from dnd.player.recorded import RecordedSequence, project_sequence
 from dnd.player.reduction import reduce_initialization, reduce_lineage
-from dnd.player.session import Operation, snapshot_player_hud
+from dnd.player.session import Operation
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.world import LightLevel
 from tests.player.test_recorded_boundary import world
@@ -226,9 +226,7 @@ def test_split_seat_application_lineages_equal_independent_full_capture(session)
     Entity.update_entity_position(actor, (11, 10))
     operation = Operation(start_cursor=start, end_cursor=EventQueue.event_cursor(),
         roots=tuple(event for _, event in EventQueue.iter_events_since(start)
-            if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)),
-        hud_by_seat=tuple((seat, snapshot_player_hud(session, audience=audience))
-            for seat, audience in session.seats.items()))
+            if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)))
     actual = capture_application_operation(runtimes, operation, catalog)
     context = capture_context(next(iter(references.values())).capture, operation.roots)
     for seat, reference in references.items():
