@@ -694,3 +694,11 @@ Hard rules:
   - The rows grow with movement budget (Haste and Dash: move and jump destinations 135 → 500) and with the crowd in reach.
   - The cost is per-candidate admission: `discovery_admission` / `_requirements_contact` run once per (row × target).
   - Scratch: `lgc/choices_prof.py`, `prof_diff.py`.
+- 2026-10-18: **AI-step part 1 merged (62764eb4c): an exact reach prefilter for weapon attacks on objects.** On the seeded long game, Choices is −8.3 % and AI advances −6.4 %.
+  - The premise was partly wrong. Ranged long range (a 600 ft longbow) covers the map, so most object candidates are in reach.
+  - An in-reach object costs ~135 µs per admission, and half of that is a duplicated contact trace: `weapon_reach` and then `_physical_access_contact` on subjective scans.
+  - **Next:**
+    - (A) drop the duplicate trace on subjective scans;
+    - (2) evaluate the candidate-independent Jump and move values once per discovery call;
+    - (1) an incremental AI fold, ~12–15 ms of ai_decision op 4.
+  - ai_decision op 4 is dominated by the per-step engine settlement: ~197 of 449 ms profiled.
