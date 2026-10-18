@@ -446,11 +446,15 @@ def displacement_plan(caster: Entity, geometry: WallAssemblyPresentationGeometry
     path = geometry.path
     if isinstance(path, WallRing):
         return None
+    # The path's segments with their shells, rasterized once per plan, on the first side test.
+    segment_shells: list[tuple[WallSegment, set[tuple[int, int]]]] | None = None
     for identity in sorted(occupants, key=str):
         entity = Entity.get(identity)
         if entity is None:
             continue
         entity_position = entity.position
+        # The segment the occupant is displaced across, chosen on its first side test.
+        segment: WallSegment | None = None
         candidates = []
         for dx in range(-3, 4):
             for dy in range(-3, 4):
@@ -468,13 +472,18 @@ def displacement_plan(caster: Entity, geometry: WallAssemblyPresentationGeometry
                     if chosen != (side == "inside"):
                         continue
                 else:
-                    segments = ([WallSegment(start=a, end=b) for a, b in zip(path.points, path.points[1:])]
-                                if isinstance(path, WallPolyline) else [path])
-                    segments = [s for s in segments if entity_position in wall_shell_cells(
-                        geometry.model_copy(update={"path": s}))] or segments
-                    segment = min(segments, key=lambda s: hypot(
-                        (s.start[0] + s.end[0]) / 2 - entity_position[0],
-                        (s.start[1] + s.end[1]) / 2 - entity_position[1]))
+                    if segment is None:
+                        if segment_shells is None:
+                            segment_shells = [(part, wall_shell_cells(geometry.model_copy(update={"path": part})))
+                                              for part in ([WallSegment(start=a, end=b)
+                                                            for a, b in zip(path.points, path.points[1:])]
+                                                           if isinstance(path, WallPolyline) else [path])]
+                        # The nearest by midpoint among the segments whose shell holds the occupant, else all.
+                        segments = ([part for part, cells in segment_shells if entity_position in cells]
+                                    or [part for part, _ in segment_shells])
+                        segment = min(segments, key=lambda s: hypot(
+                            (s.start[0] + s.end[0]) / 2 - entity_position[0],
+                            (s.start[1] + s.end[1]) / 2 - entity_position[1]))
                     cross = ((segment.end[0] - segment.start[0]) * (position[1] - segment.start[1])
                              - (segment.end[1] - segment.start[1]) * (position[0] - segment.start[0]))
                     if (cross > 0) != (side == "left"):

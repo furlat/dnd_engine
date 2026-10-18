@@ -2942,12 +2942,14 @@ class GridMap:
             if allow_none:
                 return
             raise ValueError("entity position cannot be None")
-        if (
-            type(position) is not tuple
-            or len(position) != 2
-            or any(type(component) is not int for component in position)
-        ):
+        if not GridMap.is_exact_position(position):
             raise ValueError("entity position must be an exact tuple[int, int]")
+
+    @staticmethod
+    def is_exact_position(position: Optional[Tuple[int, int]]) -> bool:
+        """Whether a position is one exact objective coordinate: a tuple of two ints."""
+        return (type(position) is tuple and len(position) == 2
+                and type(position[0]) is int and type(position[1]) is int)
 
     def commit_entity_membership(
         self,
@@ -3097,12 +3099,10 @@ class GridMap:
         if block is None:
             return None
         position = block.get_position()
-        try:
-            self.validate_entity_position(position, allow_none=False)
-        except ValueError:
+        if not GridMap.is_exact_position(position):
             return None
         tile = self._tiles.get(position)
-        if tile is None or entity_uuid not in tile.get_entity_uuids():
+        if tile is None or not tile.holds_entity(entity_uuid):
             return None
         return position
 
