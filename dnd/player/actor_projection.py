@@ -1,21 +1,24 @@
-"""Presentation adaptation of the shared native after-value fold."""
+"""Presentation adaptation of the shared native actor fold."""
 
 from dataclasses import replace
+from uuid import UUID
 
-from dnd.actor_projection import (
-    actor_from_birth as actor_from_birth, actor_fact_owner as actor_fact_owner,
-    apply_actor_fact as apply_recorded_actor_fact,
-)
+from dnd.actor_projection import apply_actor_fact_change
 from dnd.core.condition_types import ConditionCategory
-from dnd.core.events import Event
-from dnd.types.actor_facts import ActorState, ConditionFact
+from dnd.types.actor_facts import ActorFactChange, ActorState
 
 
-def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact | None = None) -> ActorState:
-    """Keep the existing presentation membership while sharing native reduction."""
-    result = apply_recorded_actor_fact(actor, event, condition)
-    if any(row.category is ConditionCategory.INTERNAL for row in result.conditions):
-        result = replace(result, conditions=tuple(
-            row for row in result.conditions if row.category is not ConditionCategory.INTERNAL
-        ))
-    return result
+def without_internal_conditions(actor: ActorState) -> ActorState:
+    """The presented actor holds no INTERNAL memberships; their stats stay applied."""
+    if not any(row.category is ConditionCategory.INTERNAL for row in actor.conditions):
+        return actor
+    return replace(actor, conditions=tuple(
+        row for row in actor.conditions if row.category is not ConditionCategory.INTERNAL))
+
+
+def apply_presented_change(actors: dict[UUID, ActorState], change: ActorFactChange) -> tuple[UUID, ...]:
+    """The native fold, then the owner presented without INTERNAL memberships; the identities rewritten."""
+    written = apply_actor_fact_change(actors, change)
+    if change.owner_uuid is not None and change.owner_uuid in written:
+        actors[change.owner_uuid] = without_internal_conditions(actors[change.owner_uuid])
+    return written

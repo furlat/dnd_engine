@@ -2,8 +2,8 @@
 
 Each case appends one recorded native fact to a live-recorded startup and
 compares the body fields both folds hold: the client's, from the projected
-packets, and the engine's, `dnd.actor_projection.apply_actor_fact` over the
-same recording. The expected failures are latent on today's head (the live
+packets, and the engine's, `dnd.actor_projection.apply_actor_fact_change` of the
+same recording's actor change. The expected failures are latent on today's head (the live
 engine also emits a second fact that repairs the body); they turn green
 with E3-bodies of agent_docs/plans/EVENT_NATIVE_PUBLICATION_PLAN_2026-10-18.md.
 """
@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actor_projection import apply_actor_fact
+from dnd.actor_projection import actor_fact_change, apply_actor_fact_change
 from dnd.blocks.base_item import ItemResourceChangeEvent
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.condition_types import ConditionAgencyDenial, ConditionCategory
@@ -113,9 +113,12 @@ def check(session: Session, case: FoldCase) -> None:
     before = engine.actors[identity]
     event, fact = case.fact(before)
     index = startup.end_cursor
+    change = actor_fact_change(event, fact)
+    assert change is not None
+    # The recording carries the actor change its capture records for the fact.
     lineage = CompletedLineage(generation=startup.generation, observer_uuid=startup.observer_uuid, root=event,
         events=(event,), objective_rows=(objective(index, event),), start_cursor=index, end_cursor=index + 1,
-        conditions=() if fact is None else (fact,), audience=audience)
+        conditions=() if fact is None else (fact,), audience=audience, actor_fact_changes={event.uuid: change})
     recorded = RecordedSequence.model_validate_json(RecordedSequence(initialization=startup,
         lineages=(lineage,)).model_dump_json(), context=PASSIVE_EVENT_REPLAY)
     projection, initial = begin_projection(recorded.initialization)
@@ -124,7 +127,9 @@ def check(session: Session, case: FoldCase) -> None:
     packet = project_lineage(projection, recorded.lineages[0])
     if packet is not None:
         client = reduce_lineage(client, packet)
-    expected = engine_body(apply_actor_fact(before, event, fact))
+    actors = {identity: before}
+    apply_actor_fact_change(actors, change)
+    expected = engine_body(actors[identity])
     assert expected != engine_body(before), case.name
     assert client_body(client.actors[identity]) == expected, case.name
 
@@ -138,7 +143,7 @@ CASES = (
             instance_uuid=uuid4(), source_id='condition.test.recorded_ward')))), id='temporary-hp',
         marks=pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
             'the client folds a condition\'s resulting_stats without temporary_hp and its grant '
-            '(reduction.py ConditionChangeFact) while the engine applies them (actor_projection.apply_stats); '
+            '(reduction.py ConditionChangeFact) while the engine applies them (actor_projection.actor_fact_change); '
             f'latent on head: every live writer also emits TemporaryHitPointsChangedEvent; {PLAN}'))),
     pytest.param(FoldCase('internal condition raises armor class', True, lambda actor: condition_fact(
         actor, ConditionCategory.INTERNAL, stats_of(actor, armor_class=actor.armor_class + 2))), id='internal-ac',

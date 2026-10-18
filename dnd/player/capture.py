@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import ChainMap
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Mapping
@@ -66,9 +66,10 @@ from dnd.player.sheet_facts import sheet_fact
 from dnd.types.actor_sheet import ActorSheetChange
 from dnd.player.facts import PlayerLogEntry
 from dnd.player.actor_facts import ActorState, ConditionFact, PresentationTarget
+from dnd.actor_projection import actor_fact_change, actor_fact_owner, actor_from_birth
 from dnd.actor_projection import condition_fact as committed_condition_fact
-from dnd.actor_projection import remove_previous_item_holdings
-from dnd.player.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact
+from dnd.player.actor_projection import apply_presented_change
+from dnd.types.actor_facts import ActorFactChange
 
 
 class Disposition(StrEnum):
@@ -125,6 +126,8 @@ class IntervalEnvelope:
     audience: PlayerAudience | None = None
     # The audience's combat-log entry of each admitted event that has one.
     logs: dict[UUID, PlayerLogEntry] = field(default_factory=dict)
+    # The shared fold's actor change of each admitted event that has one, by event uuid.
+    actor_fact_changes: Mapping[UUID, ActorFactChange] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,13 +142,17 @@ class ActorAdmission:
 
 @dataclass(frozen=True, slots=True)
 class AdmissionEvidence:
-    """One version's seat-independent admission inputs, read at that version.
+    """One version's seat-independent capture evidence, read at that version.
 
     `observer` is the tracked observer of a completed sensory delta (else
     None), `observed` its changed contacts plus itself and `acquired` the
     contacts it did not hold before. `candidates` are the participants and
-    the fact owner. For each of these identities: its actor, the tracked
-    observers holding it as a contact, and its own last sensory position.
+    the fact owner. For each of these identities: its actor (before a
+    completed version's fold; after an arrival's or departure's fold at its
+    effect), the tracked observers holding it as a contact, and its own last
+    sensory position. `actor_fact_change` is the record of a completed
+    version's actor change (plan §4), the one every seat's fold applies; the
+    shared fold applies it without its item replacement (E3-bodies).
     """
 
     observer: UUID | None
@@ -155,6 +162,7 @@ class AdmissionEvidence:
     actors: Mapping[UUID, ActorState]
     holders: Mapping[UUID, Mapping[UUID, PerceivedContact]]
     positions: Mapping[UUID, tuple[int, int]]
+    actor_fact_change: ActorFactChange | None = None
 
 
 @dataclass(slots=True)
@@ -203,6 +211,8 @@ class CompletedLineage:
     observed_sources: tuple[RecordedEvent, ...] = ()
     # The audience's combat-log entry of each retained event that has one.
     logs: dict[UUID, PlayerLogEntry] = field(default_factory=dict)
+    # The shared fold's actor change of each retained event that has one, by event uuid.
+    actor_fact_changes: Mapping[UUID, ActorFactChange] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -368,6 +378,10 @@ def capture_interval(
             disposition = Disposition.UNSUPPORTED
         dispositions.append((index, disposition))
 
+    evidence: Mapping[UUID, AdmissionEvidence] = {}
+    if admitted_original:
+        evidence = (context or capture_context(
+            CaptureCheckpoint(generation, frozenset(audience.observers)), end_cursor=end_cursor)).evidence
     return IntervalEnvelope(
         name=name,
         generation=generation,
@@ -382,26 +396,17 @@ def capture_interval(
         admitted=tuple(admitted),
         dispositions=tuple(dispositions),
         conditions=tuple(fact for _, event in admitted_original if (fact := _condition_fact(event)) is not None),
-        admissions=(_derive_admissions(tuple(admitted_original), audience, (context or capture_context(
-            CaptureCheckpoint(generation, frozenset(audience.observers)), end_cursor=end_cursor)).evidence, frozenset(),
-        ) if admitted_original else ()),
+        admissions=(_derive_admissions(tuple(admitted_original), audience, evidence, frozenset())
+                    if admitted_original else ()),
         logs=logs,
+        actor_fact_changes=_actor_fact_changes(evidence, (event for _, event in admitted_original)),
     )
 
 
 def apply_world_fact(target: PresentationTarget, event: Event, condition: ConditionFact | None = None) -> bool:
-    """Fold recorded world after-values, reporting whether any were applied."""
-    holdings_changed = bool(remove_previous_item_holdings(target.actors, event)) if isinstance(event, ItemLocationStateEvent) else False
-    owned_item = condition.resulting_item if condition is not None else None
-    owned_changed = False
-    if owned_item is not None:
-        for identity, actor in tuple(target.actors.items()):
-            if any(item.item_uuid == owned_item.item_uuid for item in actor.items):
-                target.actors[identity] = replace(actor, items=tuple(
-                    owned_item if item.item_uuid == owned_item.item_uuid else item for item in actor.items))
-                owned_changed = True
+    """Fold recorded world after-values, reporting whether any were applied (actors take their own changes)."""
     if not apply_recorded_world_fact(target.recorded_world, event, condition):
-        return owned_changed or holdings_changed
+        return False
     if target.door_uuid is not None and (door := target.objects.get(target.door_uuid)) is not None:
         target.door_placement = door.placement
         target.door_is_open = door.item.is_open
@@ -443,18 +448,14 @@ def reduce_interval(
             _admit_actor(target, row)
         if event.canceled:
             continue
+        if (change := recorded_actor_change(envelope.actor_fact_changes, event)) is not None:
+            apply_presented_change(target.actors, change)
         condition = condition_facts.get(event.uuid)
         if condition is not None and (condition.resulting_tile is not None or condition.resulting_item is not None):
             apply_world_fact(target, event, condition)
             pending.add(index)
             continue
-        if isinstance(event, ItemLocationStateEvent):
-            remove_previous_item_holdings(target.actors, event)
-        owner = actor_fact_owner(event)
-        if owner is not None:
-            actor = target.actors.get(owner)
-            if actor is not None:
-                target.actors[owner] = apply_actor_fact(actor, event, condition_facts.get(event.uuid))
+        if actor_fact_owner(event) is not None:
             dispositions[index] = Disposition.STATE_ONLY
             continue
         if isinstance(event, EntityCreatedEvent):
@@ -793,6 +794,21 @@ def _condition_fact(event: Event) -> ConditionFact | None:
     )
 
 
+def recorded_actor_change(changes: Mapping[UUID, ActorFactChange], event: Event) -> ActorFactChange | None:
+    """A retained event's actor change; every fact with an owner was recorded one by the shared fold."""
+    change = changes.get(event.uuid)
+    if change is None and actor_fact_owner(event) is not None:
+        raise ValueError(f"actor fact {event.uuid} lacks its recorded actor change")
+    return change
+
+
+def _actor_fact_changes(evidence: Mapping[UUID, AdmissionEvidence], events: Iterable[Event]
+                        ) -> dict[UUID, ActorFactChange]:
+    """These retained events' actor changes, read from the one record of each: its version's evidence row."""
+    return {event.uuid: change for event in events
+            if (row := evidence.get(event.uuid)) is not None and (change := row.actor_fact_change) is not None}
+
+
 def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, AdmissionEvidence]:
     """Fold versions up to `end` once for every audience; their evidence and that of roots completing here."""
     if checkpoint.generation != EventQueue.generation_id():
@@ -809,8 +825,11 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
         if (not event.canceled and event.phase is EventPhase.EFFECT
                 and isinstance(event, SpatialChangeEvent)
                 and event.change_type in (SpatialChangeType.ENTITY_LEFT, SpatialChangeType.ENTITY_ENTERED)
-                and event.entity_uuid is not None and event.entity_uuid in actors):
-            actors[event.entity_uuid] = apply_actor_fact(actors[event.entity_uuid], event)
+                and event.entity_uuid is not None and event.entity_uuid in actors
+                and (arrival := actor_fact_change(event)) is not None):
+            # The committed arrival or departure is the actor's at its effect, before its sensory children;
+            # seats fold the completed version's record.
+            apply_presented_change(actors, arrival)
         observer: UUID | None = None
         observed: frozenset[UUID] = frozenset()
         acquired: frozenset[UUID] = frozenset()
@@ -830,6 +849,8 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
             if root is not None:
                 root_of[lineage] = root
                 trees.setdefault(root, []).append(lineage)
+        # Records, then the version's frozen row (actors before the fold), then the fold.
+        change = actor_fact_change(event, _condition_fact(event)) if completed else None
         if not event.canceled:
             candidates = set(_actor_participants(event))
             owner = actor_fact_owner(event)
@@ -840,19 +861,20 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
                 {identity: actors[identity] for identity in identities if identity in actors},
                 {identity: {member: held[identity] for member, held in contacts.items() if identity in held}
                  for identity in identities},
-                {identity: positions[identity] for identity in identities if identity in positions})
+                {identity: positions[identity] for identity in identities if identity in positions},
+                change)
             evidence[event.uuid] = row
             if root is not None:
                 pending.setdefault(root, {})[event.uuid] = row
         if completed:
-            if isinstance(event, ItemLocationStateEvent):
-                remove_previous_item_holdings(actors, event)
             match event:
                 case EncounterStartEvent() | InitiativeOrderChangedEvent():
                     checkpoint.initiative = tuple(event.initiative_order)
-            owner = actor_fact_owner(event)
-            if owner is not None and owner in actors:
-                actors[owner] = apply_actor_fact(actors[owner], event, _condition_fact(event))
+            if change is not None:
+                # TODO(E3-bodies): E2 keeps today's shared fold, where a condition's item after-value does not
+                # reach the actors holding the item; every seat's fold applies it.
+                apply_presented_change(actors, change if change.replaced_item is None
+                                       else replace(change, replaced_item=None))
             if (isinstance(event, SpatialChangeEvent) and event.terminal_release is not None
                     and event.entity_uuid is not None):
                 actors.pop(event.entity_uuid, None)
@@ -1121,6 +1143,7 @@ def _capture_lineage(
             for _, event in indexed
             if event.uuid in observed_source_ids and event.uuid not in retained_ids),
         logs=logs,
+        actor_fact_changes=_actor_fact_changes(context.evidence, retained),
     )
 
 
@@ -1144,7 +1167,9 @@ def lineage_branch(lineage: CompletedLineage, root: Event) -> CompletedLineage:
                    conditions=tuple(row for row in lineage.conditions if row.event_uuid in identities),
                    dispositions=tuple(row for row in lineage.dispositions if row[0] in identities),
                    admissions=tuple(row for row in lineage.admissions if row.event_uuid in version_ids),
-                   logs={identity: entry for identity, entry in lineage.logs.items() if identity in identities})
+                   logs={identity: entry for identity, entry in lineage.logs.items() if identity in identities},
+                   actor_fact_changes={identity: change for identity, change in lineage.actor_fact_changes.items()
+                                       if identity in identities})
 
 
 def _admit_actor(target: PresentationTarget, admission: ActorAdmission) -> None:
@@ -1197,20 +1222,16 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
             admission = next(admissions, None)
         if event.canceled or event.uuid in unsupported:
             continue
+        if (change := recorded_actor_change(lineage.actor_fact_changes, event)) is not None:
+            apply_presented_change(result.actors, change)
         condition = condition_facts.get(event.uuid)
         if condition is not None and (condition.resulting_tile is not None or condition.resulting_item is not None):
             apply_world_fact(result, event, condition)
             continue
-        if isinstance(event, ItemLocationStateEvent):
-            remove_previous_item_holdings(result.actors, event)
         owner = actor_fact_owner(event)
         if owner is not None:
-            actor = result.actors.get(owner)
-            if actor is None:
-                if isinstance(event, (AttackEvent, EquipmentEvent, SpatialChangeEvent)):
-                    continue
+            if owner not in result.actors and not isinstance(event, (AttackEvent, EquipmentEvent, SpatialChangeEvent)):
                 raise ValueError("actor fact requires its retained owner")
-            result.actors[owner] = apply_actor_fact(actor, event, condition_facts.get(event.uuid))
             continue
         match event:
             case SensoryUpdateEvent():
