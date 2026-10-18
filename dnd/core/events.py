@@ -88,6 +88,7 @@ from dnd.types.spatial_effects import (
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.item_types import ItemPresentationState
 from dnd.types.abilities import AbilityName, SavingThrowName, SkillName
+from dnd.types.actor_sheet import ActorSheetChange
 from dnd.types.character_progression import (
     AppliedClassLevel,
     AppliedOriginState,
@@ -5613,6 +5614,26 @@ class SpellPreparationChangedEvent(Event):
     name: str = "Spell Preparation Changed"
     casting_source_id: str
     prepared_spell_selections: Tuple[PreparedSpellSelection, ...]
+
+
+class ActorSheetEvent(Event):
+    """One player actor's sheet publication at an operation boundary, as its keyed change.
+
+    The source is the actor. Emitted only by the sheet publisher (dnd/actor_sheets.py), never with a parent.
+    """
+
+    event_type: EventType = EventType.ACTOR_SHEET
+    name: str = "Actor Sheet"
+    change: ActorSheetChange
+
+
+class InitiativeOrderChangedEvent(Event):
+    """The encounter's initiative order after a combatant joined or left (the start order is the encounter start's)."""
+
+    event_type: EventType = EventType.INITIATIVE_ORDER_CHANGED
+    name: str = "Initiative Order Changed"
+    encounter_uuid: UUID
+    initiative_order: Tuple[UUID, ...]
 
 
 class ActionApplicationCommittedEvent(Event):

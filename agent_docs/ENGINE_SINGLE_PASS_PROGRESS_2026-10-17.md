@@ -614,3 +614,21 @@ Hard rules:
   - **O3 baselines** must be recorded on this head.
   - Not admitted at startup (out of scope): TILE_CHANGED / TILE_REMOVED.
 - 2026-10-18: **FOV-rows merge re-gated by the integrator:** recorder 0 differences on 6 cases; transcripts byte-identical; sweep = r21.
+- 2026-10-18: **Sweep r29 on the E1 merge:** 64 failures, the same set as r21.
+- 2026-10-18: **Plan revision 3 (a8d40ed55, 5779fecb6).**
+  - E3a can't be byte-identical: today's wire diffs against each seat's held values, and keeping it would need a second fold. It is dissolved into E3-world, then E3-bodies, then E3-sensory.
+  - The E3 gates become O1–O4 plus identical log entries, with named re-entry byte exceptions. The human: "ensure the client has all the information needed to play and we do not have regression in how we handle subjective and boundaries of who sees what".
+  - O4, the disclosure boundary, is added to E0.
+  - The lane decisions are in scratchpad `e3design/*_brief.md`.
+- 2026-10-18: **E5 merged into codex/event-native-deltas (c157a21f7, a95edcaef, b505e60eb): the HUD as an op-end engine sheet publisher, H2c, player schema 16.**
+  - **Design.** One frozen published sheet per actor on `Session` (never per seat), compared at op end. A keyed `ActorSheetEvent` carries only the changed groups. `InitiativeOrderChangedEvent` is emitted at the three initiative writers. The per-seat HUD diff and `hud_snapshots` are deleted.
+  - **Gates on b505e60eb** (a8d40ed55 + E5):
+    - the HUD fold is equal at every op and seat on 9 cases;
+    - payloads minus `hud` are identical, initialization included;
+    - native events are identical except the added events;
+    - op-end HUD oracle and one-caller architecture test;
+    - sweep 0 unexpected against r29 (`test_gas_traps` share-one-exposure depends on test order);
+    - pyright 0 new.
+  - **HUD bytes per op** (G1): Fireball 5.2 → 2.7 KB, SG walk 1.5 → 0.4 KB, init 109 → 105 KB.
+  - **ms:** within load noise; E5's own CPU is lower or equal.
+  - **For the human:** H2c (a kept sheet per actor) instead of H2a (the whole sheet on each event), accepted by the integrator.
