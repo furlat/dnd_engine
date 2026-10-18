@@ -362,3 +362,22 @@ Hard rules:
   - Still over 100 KB:
     - Fireball/CoD: world_updates ~70 KB, combat_log 41–57, resolution_ref ~14, version_rows ~13.
     - Sleet drop: per-observer cells 70 KB.
+- 2026-10-18: **PV2 multi-observer seats merged (9795ef06f; df54787a8 … c357ba7e6), schema 14, PlayerSequence 7.**
+  - Each group's distinct contacts, sightings, light sources and removal identities are sent once as columns (`sensory_rows`). Facts name them by index. Default-valued scalars are left out by the cells' `exclude_if` rule.
+  - One-observer seats use the same shape. Plan line 671 says "plain per-observer"; the human may confirm the text.
+  - The SDKs (Python, TS 63/63) are regenerated. Godot note: agent_docs/GODOT_CLIENT_FOLD_SCHEMA_14_2026-10-18.md.
+  - Gates (agent, vs f908ec95e): folded client state strictly equal on 9 cases; sweep 0 new; pyright 0 new.
+  - Largest seat update:
+    - Sleet cast 321 → 142 KB; Sleet drop 615 → 179;
+    - Cloudkill cast 237 → 65; Cloudkill drop 484 → 138;
+    - Darkness 185 → 60; Daylight 502 → 204;
+    - Fireball 327 → 247; CoD 330 → 262;
+    - SG moves 221–235 → 94–107; Gust moves 81–102 → 37–58;
+    - blue initialization 3.28 → 2.12 MB.
+  - SG moves: publication 46–49 → 39–43 ms. `_current_effect` 90 → 6 calls per move.
+  - Still over 100 KB, and what dominates:
+    - Fireball/CoD: world_updates ~70 KB, combat_log 41–57, resolution_ref ~14, version_rows ~13.
+    - Daylight: sightings 47 KB, cells 47.
+    - Sleet drop: cells 70 KB.
+    - SG moves 3 of 6 at 101–107 KB.
+  - Publication now: the slow drop and light ops are dominated by `_world_update`, the per-observer cell fold and `dataclasses.replace`, not by rows.
