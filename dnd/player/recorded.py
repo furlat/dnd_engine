@@ -20,7 +20,7 @@ class RecordedSequence(BaseModel):
     """Private native event inputs, including local objective diagnostics."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schema_version: Literal[4] = 4
+    schema_version: Literal[5] = 5
     initialization: IntervalEnvelope
     lineages: tuple[CompletedLineage, ...]
     combat_log_appends: tuple[CombatLogAppend, ...] = ()

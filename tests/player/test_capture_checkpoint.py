@@ -60,9 +60,9 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
     original = capture_interval(**arguments)
     startup = capture_context(checkpoint, end_cursor=arguments['end_cursor'])
     assert capture_interval(**arguments, context=startup) == original
-    session = SessionProjection()
-    hot_projection, initial = begin_projection(session, original)
-    cold_projection, _ = begin_projection(session, original)
+    hot_session, cold_session = SessionProjection(), SessionProjection()
+    hot_projection, initial = begin_projection(hot_session, original)
+    cold_projection, _ = begin_projection(cold_session, original)
     hot = cold = reduce_initialization(initial)
     cursor = EventQueue.event_cursor()
 
@@ -77,8 +77,8 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
         original = capture_lineages(roots, **arguments)
         assert resumed == original
         for left, right in zip(resumed, original, strict=True):
-            hot_public = project_lineage(session, hot_projection, left)
-            cold_public = project_lineage(session, cold_projection, right)
+            hot_public = project_lineage(hot_session, hot_projection, left)
+            cold_public = project_lineage(cold_session, cold_projection, right)
             assert hot_public == cold_public
             if hot_public is not None:
                 assert encode_player_sequence(PlayerSequence(initialization=initial, lineages=(hot_public,))) == (

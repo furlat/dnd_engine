@@ -90,12 +90,12 @@ def test_carried_source_keeps_inventory_private_to_controller(world):
         observer.update_entity_senses(max_distance=8)
         session = SessionProjection()
         projection, initial = begin_projection(session, capture(built, observer))
-        views[observer.uuid] = projection, reduce_initialization(initial)
+        views[observer.uuid] = session, projection, reduce_initialization(initial)
     for lit in (True, False, True):
         root = execute_use_action(owner, torch.uuid, "Ignite Torch" if lit else "Extinguish Torch")
         assert root is not None and not root.canceled
         for observer in (owner, witness):
-            projection, state = views[observer.uuid]
+            session, projection, state = views[observer.uuid]
             for native in capture_lineages((root,), observer_uuid=observer.uuid,
                     known_actor_uuids=frozenset(state.actors)):
                 assert not native.dispositions
@@ -105,7 +105,7 @@ def test_carried_source_keeps_inventory_private_to_controller(world):
                 packet = project_lineage(session, projection, native)
                 if packet is not None:
                     state = reduce_lineage(state, packet)
-            views[observer.uuid] = projection, state
+            views[observer.uuid] = session, projection, state
             actor = state.actors[owner.uuid]
             assert not any(row.item_uuid == torch.uuid for row in actor.visual_loadout.layers)
             if observer is owner:

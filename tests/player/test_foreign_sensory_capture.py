@@ -18,7 +18,7 @@ from dnd.player.capture import reduce_interval, reduce_lineage as reduce_native_
 from dnd.player.event_record import decode_event, encode_event
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import ActionFact, SensoryFact
-from dnd.player.projection import SessionProjection, begin_projection, project_lineage
+from dnd.player.projection import SessionProjection, begin_projection, project_lineage, project_lineages
 from dnd.player.recorded import RecordedSequence, project_sequence
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.player.session import Operation
@@ -42,9 +42,9 @@ def test_each_audience_gets_identical_light_facts_and_cold_replay(world, members
     initial = capture_interval(name='audience light capture', start_cursor=0,
         end_cursor=EventQueue.event_cursor(), observer_uuid=observer, audience=audience,
         battlefield_id=built.definition.battlefield_id)
-    session = SessionProjection()
-    full_projection, first = begin_projection(session, initial)
-    admitted_projection, same_first = begin_projection(session, initial)
+    full_session, admitted_session = SessionProjection(), SessionProjection()
+    full_projection, first = begin_projection(full_session, initial)
+    admitted_projection, same_first = begin_projection(admitted_session, initial)
     assert first == same_first
     state = reduce_initialization(first)
     full_native, _ = reduce_interval(None, initial)
@@ -73,8 +73,8 @@ def test_each_audience_gets_identical_light_facts_and_cold_replay(world, members
                 assert disposition is Disposition.NOT_DISCLOSED
                 assert not audience.observes(originals[identity].observer_uuid)
                 omitted += 1
-            expected = project_lineage(session, full_projection, reference)
-            actual = project_lineage(session, admitted_projection, candidate)
+            expected = project_lineage(full_session, full_projection, reference)
+            actual = project_lineage(admitted_session, admitted_projection, candidate)
             assert actual == expected
             assert actual is not None
             state = reduce_lineage(state, actual)
@@ -139,11 +139,11 @@ def test_foreign_sensory_with_additional_evidence_keeps_its_full_capture(world, 
     assert admitted == full
     assert not admitted[0].dispositions
     assert decode_event(encode_event(admitted[0].root)).visible_cells_added == mask_from_positions([(5, 6)])
-    session = SessionProjection()
-    full_projection, _ = begin_projection(session, initial)
-    admitted_projection, _ = begin_projection(session, initial)
-    expected = project_lineage(session, full_projection, full[0])
-    actual = project_lineage(session, admitted_projection, admitted[0])
+    full_session, admitted_session = SessionProjection(), SessionProjection()
+    full_projection, _ = begin_projection(full_session, initial)
+    admitted_projection, _ = begin_projection(admitted_session, initial)
+    expected = project_lineage(full_session, full_projection, full[0])
+    actual = project_lineage(admitted_session, admitted_projection, admitted[0])
     assert actual == expected
     if guard != 'context':
         assert actual is not None
@@ -192,9 +192,9 @@ def test_invisible_torch_user_keeps_witness_light_children_without_disclosing_ac
     initial = capture_interval(name='unseen torch user', start_cursor=0,
         end_cursor=EventQueue.event_cursor(), observer_uuid=witness.uuid,
         battlefield_id=built.definition.battlefield_id)
-    session = SessionProjection()
-    full_projection, public = begin_projection(session, initial)
-    admitted_projection, _ = begin_projection(session, initial)
+    full_session, admitted_session = SessionProjection(), SessionProjection()
+    full_projection, public = begin_projection(full_session, initial)
+    admitted_projection, _ = begin_projection(admitted_session, initial)
     state = reduce_initialization(public)
     for action in ('Ignite Torch', 'Extinguish Torch'):
         root = execute_use_action(owner, torch.uuid, action)
@@ -206,8 +206,8 @@ def test_invisible_torch_user_keeps_witness_light_children_without_disclosing_ac
         packets = []
         for reference, candidate in zip(full, admitted, strict=True):
             assert candidate.observed_sources == reference.observed_sources
-            actual = project_lineage(session, admitted_projection, candidate)
-            assert actual == project_lineage(session, full_projection, reference)
+            actual = project_lineage(admitted_session, admitted_projection, candidate)
+            assert actual == project_lineage(full_session, full_projection, reference)
             if actual is not None:
                 packets.append(actual)
                 state = reduce_lineage(state, actual)
@@ -232,11 +232,20 @@ def test_split_seat_application_lineages_equal_independent_full_capture(session)
             if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)))
     actual = capture_application_operation(runtimes, operation, catalog)
     context = capture_context(next(iter(references.values())).capture, operation.roots)
+    # The reference captures every seat's full payloads, then projects each root for all seats of its session.
+    captured = {}
     for seat, reference in references.items():
         known = seat_capture_inputs(reference)
-        captured = capture_lineages(operation.roots, observer_uuid=reference.projection.remembered.observer_uuid,
+        captured[seat] = capture_lineages(operation.roots, observer_uuid=reference.projection.remembered.observer_uuid,
             audience=session.seats[seat], known_actor_uuids=known.actors, known_entity_names=known.names,
             known_connector_uuids=known.connectors, known_content_ids=known.content_ids, context=context)
-        expected = tuple(packet for native in captured
-            if (packet := project_lineage(reference.session, reference.projection, native)) is not None)
-        assert actual[seat].lineages == expected
+    shared = next(iter(references.values())).session
+    expected = {seat: [] for seat in references}
+    for root in range(len(operation.roots)):
+        for seat, packet in zip(references, project_lineages(shared,
+                tuple(reference.projection for reference in references.values()),
+                tuple(rows[root] for rows in captured.values())), strict=True):
+            if packet is not None:
+                expected[seat].append(packet)
+    for seat in references:
+        assert actual[seat].lineages == tuple(expected[seat])

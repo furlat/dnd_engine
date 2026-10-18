@@ -107,6 +107,19 @@ class ObjectiveRow:
 
 
 @dataclass(frozen=True, slots=True)
+class WorldInterval:
+    """An interval's completed versions as the session's one world fold reads them: their seat-independent
+    retained bodies (a sensory version's payload left out) and condition facts.
+
+    Server-side projection input only: it reaches no seat's wire, spool or replay. Every seat of a session starts
+    from the same one (EVENT_NATIVE_PUBLICATION_PLAN §5b; coordinator, 2026-10-18).
+    """
+
+    events: tuple[tuple[int, RecordedEvent], ...] = ()
+    conditions: tuple[ConditionFact, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class IntervalEnvelope:
     """One complete immutable cursor interval crossing the async seam."""
 
@@ -128,6 +141,8 @@ class IntervalEnvelope:
     logs: dict[UUID, PlayerLogEntry] = field(default_factory=dict)
     # The shared fold's actor change of each admitted event that has one, by event uuid.
     actor_fact_changes: Mapping[UUID, ActorFactChange] = field(default_factory=dict)
+    # The interval's world as every seat's session folds it.
+    world_interval: WorldInterval = field(default_factory=WorldInterval)
 
 
 @dataclass(frozen=True, slots=True)
@@ -384,6 +399,8 @@ def capture_interval(
     if admitted_original:
         evidence = (context or capture_context(
             CaptureCheckpoint(generation, frozenset(audience.observers)), end_cursor=end_cursor)).evidence
+    bodies = context.bodies if context is not None else {}
+    completed = tuple((index, event) for index, event in indexed if event.phase is EventPhase.COMPLETION)
     return IntervalEnvelope(
         name=name,
         generation=generation,
@@ -402,6 +419,9 @@ def capture_interval(
                     if admitted_original else ()),
         logs=logs,
         actor_fact_changes=_actor_fact_changes(evidence, (event for _, event in admitted_original)),
+        world_interval=WorldInterval(events=tuple((index, _cached_body(event, None, True, bodies))
+                for index, event in completed),
+            conditions=tuple(fact for _, event in completed if (fact := _condition_fact(event)) is not None)),
     )
 
 
@@ -658,6 +678,12 @@ def _retained_event(event: Event, audience: PlayerAudience, *, omit_sensory_payl
                     bodies: dict[tuple[UUID, bool, bool | None], Event] | None = None) -> Event:
     """The seat's retained event: the shared detached body (its combat log is the seat's `logs` entry)."""
     controls = _controller_redaction(event, audience)
+    return _cached_body(event, controls, omit_sensory_payload, bodies)
+
+
+def _cached_body(event: Event, controls: bool | None, omit_sensory_payload: bool,
+                 bodies: dict[tuple[UUID, bool, bool | None], Event] | None) -> Event:
+    """A version's retained body, built once per capture for its redaction and sensory payload choice."""
     key = (event.uuid, omit_sensory_payload, controls)
     body = bodies.get(key) if bodies is not None else None
     if body is None:

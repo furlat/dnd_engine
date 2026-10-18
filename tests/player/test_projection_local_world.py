@@ -14,7 +14,7 @@ from dnd.core.item_types import (
 )
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.world_edges import ElevationSurfaceKind
-from dnd.player.capture import CompletedLineage, IntervalEnvelope, ObjectiveRow
+from dnd.player.capture import CompletedLineage, IntervalEnvelope, ObjectiveRow, WorldInterval
 from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.recorded import RecordedSequence, project_sequence
 from dnd.player.reduction import reduce_initialization, reduce_lineage
@@ -74,7 +74,7 @@ def initial(objects, visible, contacts):
     return IntervalEnvelope(name='recorded local changes', generation=generation, start_cursor=0,
         end_cursor=2, observer_uuid=observer, battlefield_id=world.battlefield_id, door_uuid=None,
         standing_torch_uuid=None, objective_rows=tuple(objective(i, event) for i, event in enumerate(events)),
-        admitted=tuple(enumerate(events)), dispositions=())
+        admitted=tuple(enumerate(events)), dispositions=(), world_interval=WorldInterval(events=tuple(enumerate(events))))
 
 
 def check(initialization, events):

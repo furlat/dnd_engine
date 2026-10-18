@@ -1020,6 +1020,16 @@ def test_seat_publication_does_not_import_the_client_fold() -> None:
     )
 
 
+def test_the_session_world_has_one_writer() -> None:
+    """The session's one world fold is written in one place: the walk drivers' `_fold_version`, through E2's
+    `world_facts.apply_world_fact`."""
+    tree = ast.parse((REPOSITORY_ROOT / "dnd" / "player" / "projection.py").read_text(encoding="utf-8"))
+    writers = [function.name for function in ast.walk(tree) if isinstance(function, ast.FunctionDef)
+        for node in ast.walk(function) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        and node.func.id == "apply_world_fact"]
+    assert writers == ["_fold_version"]
+
+
 # The schema-16 world wire stages beside the projector until the switch moves its types into facts.py: only the
 # client fold and its codec import it (and its vector tooling, outside production).
 WORLD_WIRE_STAGING = "dnd.player.world_wire"

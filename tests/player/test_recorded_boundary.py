@@ -13,7 +13,6 @@ from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.player.audience import resolve_audience
 from dnd.player.capture import capture_interval, capture_lineages
-from dnd.player.actor_facts import PresentationTarget
 from dnd.player.facts import CombatLogAppend, ConditionChangeFact, PlayerLogEntry, PlayerState, PlayerWorld
 from dnd.player.projection import SessionProjection, ProjectionState, begin_projection, project_lineage, project_log_appends
 from dnd.player.reduction import reduce_initialization, reduce_lineage
@@ -32,8 +31,7 @@ def test_after_values_wait_for_all_disclosed_occurrences(native_order, expected)
     generation, observer = uuid4(), uuid4()
     world = PlayerWorld(battlefield_id="test", battlefield_name="Test",
         bounds=(0, 0, 1, 1), width=2, height=2)
-    projection = ProjectionState(
-        world=PresentationTarget(generation=generation, observer_uuid=observer), actors={},
+    projection = ProjectionState(generation=generation, observer_uuid=observer, actors={},
         remembered=PlayerState(generation=generation, observer_uuid=observer, world=world),
         audience=resolve_audience(observer, None), public_cursors={native: local for local, native in enumerate(native_order)}, next_occurrence=len(native_order))
     entry = PlayerLogEntry(entry_type=CombatLogEntryType.ACTION, source_name="", source_uuid="", target_name=None,
@@ -72,8 +70,9 @@ def start_view(session, built, actor):
 
 def test_condition_remaining_duration_is_recorded_under_turn_and_private_to_owner(world):
     _, built, (owner, witness) = world
-    session = SessionProjection()
-    projections = {actor.uuid: start_view(session, built, actor) for actor in (owner, witness)}
+    # Two independent one-seat projections, each with its own session.
+    sessions = {actor.uuid: SessionProjection() for actor in (owner, witness)}
+    projections = {actor.uuid: start_view(sessions[actor.uuid], built, actor) for actor in (owner, witness)}
     condition = Blinded(source_entity_uuid=owner.uuid, target_entity_uuid=owner.uuid,
         duration=Duration(duration=3, duration_type=DurationType.ROUNDS))
     applied = owner.add_condition(condition, check_save_throw=False)
@@ -89,7 +88,7 @@ def test_condition_remaining_duration_is_recorded_under_turn_and_private_to_owne
         state = reduce_initialization(initial)
         delivered = []
         for native in capture_lineages(roots, observer_uuid=actor.uuid, known_actor_uuids=frozenset(state.actors)):
-            public = project_lineage(session, projection, native)
+            public = project_lineage(sessions[actor.uuid], projection, native)
             if public is None:
                 assert actor is witness
                 continue

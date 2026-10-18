@@ -78,7 +78,7 @@ def seat_capture_inputs(runtime: AudienceRuntime) -> SeatCaptureInputs:
     sent = runtime.projection.static_sent
     return SeatCaptureInputs(actors=frozenset(sent.actor_births),
         names={str(identity): runtime.capture.names[identity] for identity in sent.actor_births},
-        connectors=known_connector_uuids(runtime.projection),
+        connectors=known_connector_uuids(runtime.session, runtime.projection),
         content_ids=frozenset(runtime.content_catalog.identity_content_ids[key] for key in sent.content))
 
 
