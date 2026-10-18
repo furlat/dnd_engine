@@ -51,7 +51,7 @@ class PlayerAudience:
     def observes(self, identity: UUID | None) -> bool:
         return identity in self._observer_set
 
-    def granted(self, observers: set[str]) -> bool:
+    def granted(self, observers: Collection[str]) -> bool:
         return not self.observer_ids.isdisjoint(observers)
 
 

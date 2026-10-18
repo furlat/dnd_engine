@@ -4,22 +4,26 @@ from dataclasses import dataclass, replace
 import json
 from typing import Collection, Iterator, Mapping, Sequence
 from dnd.types.actor import SpatialDisposition
+from dnd.types.actor_facts import (ChangeField, ChangeRow, ConditionMember, ConditionRow, DispositionRow, DurationRow,
+    GrantRow, InventoryRow, ItemEffectsRow, ItemStateRow, LayerRow, NumberRow, SizeRow, WeaponSetRow, dropped, upserted)
+from dnd.types.item_parts import VisualItem
 from dnd.core.cells import (CellRows, bit_rows, layer_rows, mask_positions, mask_rows, selected_mask, selected_values,
     values_items)
 from dnd.core.sensory_fold import copy_senses_snapshot
 from uuid import UUID
 
-from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.descriptors import ContentDescriptor
-from dnd.types.cells import CellMask, CellValues
+from dnd.core.item_types import ItemEffectPresentationState
+from dnd.core.life_types import LifeState
+from dnd.types.cells import CellMask, CellValues, cell_in
 from dnd.types.event_facts import EventType, SpatialChangeType
 from dnd.types.world import LightLevel
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensoryDelta
 from dnd.player.audience import (AudienceComposition, apply_current_audience, audience_view,
     begin_audience_composition, observe_audience, perceived_entities, resolve_audience)
 from dnd.player.facts import (
-    AttackFact, ConditionChangeFact, ConditionFact, DamageResultFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
-    ActorChanges, PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, SheetPatch, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
+    ActorBirth, ActorChangeFact, BodyRecord, ItemRecord, AttackFact, DamageResultFact, HealFact, ItemChargeFact, LifeFact, PlayerItem,
+    PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, SheetPatch, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialEffectSighting, SpatialFact, TurnFact,
     VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact, PlayerObject, StaticStore,
 )
@@ -90,56 +94,171 @@ def copy_target(target: PlayerState) -> PlayerState:
             effect_absences=dict(target.perception.effect_absences)))
 
 
-def observed_actor(previous: PlayerActor | None, observation: PlayerObservation) -> PlayerActor:
-    """The body after an observation's patch; against an absent body the patch is complete."""
-    if previous is None:
-        if observation.changes.keys() != ActorChanges.__optional_keys__:
-            raise ValueError("A first observation must carry the whole body")
-        return PlayerActor(uuid=observation.actor_uuid, **observation.changes)
-    return replace(previous, **observation.changes)
+def enter_item(target: PlayerState, record: ItemRecord) -> None:
+    """An item entering the seat's view: static parts kept from the first time, dynamic parts replaced whole.
+
+    The seat's item records are never pruned; a record without a look needs one the seat already holds.
+    """
+    previous = target.items.get(record.item_uuid)
+    look = record.look if record.look is not None else previous.look if previous is not None else None
+    if look is None:
+        raise ValueError("An item's first record requires its look")
+    target.items[record.item_uuid] = PlayerItem(look=look,
+        profile=record.profile if record.profile is not None else previous.profile if previous is not None else None,
+        state=record.state if record.state is not None else previous.state if previous is not None else None,
+        effects=record.effects)
 
 
-def apply_item_patches(target: PlayerState, patches: tuple[ItemPatch, ...]) -> None:
-    """A patch's components replace the seat's; against an absent record it carries the look."""
-    for patch in patches:
-        previous = target.items.get(patch.item_uuid)
-        if previous is None:
-            if patch.look is None:
-                raise ValueError("An item's first record requires its look")
-            target.items[patch.item_uuid] = PlayerItem(look=patch.look, profile=patch.profile, state=patch.state)
-        else:
-            target.items[patch.item_uuid] = PlayerItem(
-                look=patch.look if patch.look is not None else previous.look,
-                profile=patch.profile if patch.profile is not None else previous.profile,
-                state=patch.state if patch.state is not None else previous.state)
+def _birth(actor: PlayerActor) -> ActorBirth:
+    """The birth fields a seat holds for a body."""
+    return ActorBirth(name=actor.name, character_body_id=actor.character_body_id,
+        creature_content_ref=actor.creature_content_ref, appearance=actor.appearance,
+        structural_base_size=actor.structural_base_size, manifestation=actor.manifestation)
 
 
-def observe_body(target: PlayerState, observation: PlayerObservation) -> bool:
-    """Apply an observation's body and item patches; False if a terminal lifetime ignores it."""
-    previous = target.actors.get(observation.actor_uuid)
+def enter_body(target: PlayerState, record: BodyRecord) -> None:
+    """A body entering the seat's view: every changeable field replaced, its birth held from the first record.
+
+    The last visual position stays perception (contacts set it); a terminal lifetime ignores the record.
+    """
+    previous = target.actors.get(record.actor_uuid)
     if previous is not None and not previous.present:
-        return False  # A later retained observation cannot resurrect a terminal lifetime.
-    target.actors[observation.actor_uuid] = observed_actor(previous, observation)
-    apply_item_patches(target, observation.items)
-    return True
-
-
-def _observe(target: PlayerState, observation: PlayerObservation, *,
-             audience_composition: AudienceComposition | None = None) -> None:
-    if not observe_body(target, observation):
         return
-    if observation.contact is not None and target.senses is not None:
-        target.senses.entities[observation.actor_uuid] = observation.contact
-        if audience_composition is not None:
-            audience_composition.contact_overrides.add(observation.actor_uuid)
+    birth = record.birth if record.birth is not None else _birth(previous) if previous is not None else None
+    if birth is None:
+        raise ValueError("A body's first record requires its birth")
+    body = record.body
+    target.actors[record.actor_uuid] = PlayerActor(uuid=record.actor_uuid, name=birth.name,
+        character_body_id=birth.character_body_id, creature_content_ref=birth.creature_content_ref,
+        appearance=birth.appearance, structural_base_size=birth.structural_base_size,
+        manifestation=birth.manifestation, visual_loadout=body.visual_loadout, normal_hp=body.normal_hp,
+        maximum_hp=body.maximum_hp, temporary_hp=body.temporary_hp, temporary_hp_grant=body.temporary_hp_grant,
+        life_state=body.life_state, armor_class=body.armor_class, conditions=body.conditions,
+        controlled_items=body.controlled_items, occupancy_layer=body.occupancy_layer,
+        resolved_size=body.resolved_size, faction=body.faction, remains_disposition=body.remains_disposition,
+        spatial_disposition=body.spatial_disposition,
+        last_visual_position=previous.last_visual_position if previous is not None else None)
+    for item in record.items:
+        enter_item(target, item)
 
 
-def stage_actors(target: PlayerState, observations: tuple[PlayerObservation, ...]) -> PlayerState:
+def _condition_key(member: ConditionMember) -> UUID:
+    return member.condition_uuid
+
+
+def _layer_slot(layer: VisualItem) -> str:
+    return layer.slot
+
+
+def _item_uuid(identity: UUID) -> UUID:
+    return identity
+
+
+def _effect_key(effect: ItemEffectPresentationState) -> UUID:
+    return effect.effect_uuid
+
+
+def _changed_item(target: PlayerState, row: DurationRow | ItemEffectsRow | ItemStateRow) -> None:
+    """An item row's change to the seat's record of that item; a record the seat lacks stays absent."""
+    item_uuid = row.item_uuid
+    record = target.items.get(item_uuid) if item_uuid is not None else None
+    if item_uuid is None or record is None:
+        return
+    match row:
+        case DurationRow():
+            effect = next((effect for effect in record.effects if effect.effect_uuid == row.key), None)
+            if effect is not None:
+                target.items[item_uuid] = replace(record, effects=upserted(record.effects, _effect_key,
+                    effect.model_copy(update={"duration": row.duration})))
+        case ItemEffectsRow():
+            target.items[item_uuid] = replace(record, effects=row.effects)
+        case ItemStateRow():
+            if record.state is not None:
+                target.items[item_uuid] = replace(record, state=replace(record.state, **row.changes))
+
+
+def _changed_actor(target: PlayerState, actor: PlayerActor, row: ChangeRow) -> PlayerActor:
+    """One row applied to a body (or, for an item row, to the seat's record of that item), in dict order."""
+    match row:
+        case NumberRow(field=ChangeField.NORMAL_HP):
+            return replace(actor, normal_hp=row.value)
+        case NumberRow(field=ChangeField.MAXIMUM_HP):
+            return replace(actor, maximum_hp=row.value)
+        case NumberRow(field=ChangeField.TEMPORARY_HP):
+            return replace(actor, temporary_hp=row.value)
+        case NumberRow(field=ChangeField.ARMOR_CLASS):
+            return replace(actor, armor_class=row.value)
+        case GrantRow():
+            return replace(actor, temporary_hp_grant=row.value)
+        case SizeRow():
+            return replace(actor, resolved_size=row.value)
+        case DispositionRow():
+            return replace(actor, spatial_disposition=row.value)
+        case WeaponSetRow():
+            return replace(actor, visual_loadout=replace(actor.visual_loadout, active_weapon_set=row.value))
+        case ConditionRow(member=None):
+            return replace(actor, conditions=dropped(actor.conditions, _condition_key, row.condition_uuid))
+        case ConditionRow(member=ConditionMember() as member):
+            return replace(actor, conditions=upserted(actor.conditions, _condition_key, member))
+        case DurationRow(field=ChangeField.CONDITION_DURATION):
+            held = next((member for member in actor.conditions if member.condition_uuid == row.key), None)
+            if held is None or held.state is None:
+                return actor
+            return replace(actor, conditions=upserted(actor.conditions, _condition_key,
+                replace(held, state=held.state.model_copy(update={"duration": row.duration}))))
+        case LayerRow(layer=None):
+            return replace(actor, visual_loadout=replace(actor.visual_loadout,
+                layers=dropped(actor.visual_loadout.layers, _layer_slot, row.slot)))
+        case LayerRow(layer=VisualItem() as layer):
+            return replace(actor, visual_loadout=replace(actor.visual_loadout,
+                layers=upserted(actor.visual_loadout.layers, _layer_slot, layer)))
+        case InventoryRow():
+            if actor.controlled_items is None:
+                raise ValueError("inventory rows require the controlled actor's inventory")
+            return replace(actor, controlled_items=upserted(actor.controlled_items, _item_uuid, row.item_uuid)
+                if row.held else dropped(actor.controlled_items, _item_uuid, row.item_uuid))
+        case DurationRow() | ItemEffectsRow() | ItemStateRow():
+            _changed_item(target, row)
+    return actor
+
+
+def apply_actor_change_fact(target: PlayerState, fact: ActorChangeFact) -> None:
+    """An event's change to the seat's bodies: the items entering its view, then each actor's rows in order.
+
+    A terminal lifetime ignores its rows.
+    """
+    for record in fact.items:
+        enter_item(target, record)
+    for change in fact.actors:
+        actor = target.actors[change.actor_uuid]
+        if not actor.present:
+            continue
+        for row in change.rows:
+            actor = _changed_actor(target, actor, row)
+        target.actors[actor.uuid] = actor
+
+
+def clear_unseen_positions(target: PlayerState) -> None:
+    """A cell the seat sees shows what is there: a living body last seen on a visible cell that is no longer a
+    contact is no longer drawn there (its other values stay remembered)."""
+    senses = target.senses
+    if senses is None:
+        return
+    audience = target.viewing_audience
+    for identity, actor in tuple(target.actors.items()):
+        position = actor.last_visual_position
+        if (position is not None and actor.present and actor.life_state is not LifeState.DEAD
+                and not audience.controls(identity) and identity not in senses.entities
+                and cell_in(senses.visible, position)):
+            target.actors[identity] = replace(actor, last_visual_position=None)
+
+
+def stage_actors(target: PlayerState, bodies: tuple[BodyRecord, ...]) -> PlayerState:
     """Supply absent bodies for binding; existing historical actors win."""
     result = copy_target(target)
-    for observation in observations:
-        if observation.actor_uuid not in result.actors:
-            _observe(result, observation)
+    for record in bodies:
+        if record.actor_uuid not in result.actors:
+            enter_body(result, record)
     return result
 
 
@@ -154,7 +273,7 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
     if (target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid
             or target.viewing_audience != resolve_audience(lineage.observer_uuid, lineage.audience)):
         raise ValueError("player lineage belongs to a different observer or generation")
-    result = stage_actors(target, lineage.observations)
+    result = stage_actors(target, lineage.bodies)
     stage_static(result, lineage.world_updates)
     for update in lineage.world_updates:
         if update.tile_columns is not None:
@@ -302,6 +421,7 @@ def apply_sensed_fact(target: PlayerState, fact: FoldedFact, known: Collection[U
         case SensoryChanges():
             fold_senses(target, fact, cursor=target.reducer_cursor if source_cursor is None else source_cursor,
                 audience_composition=audience_composition)
+            clear_unseen_positions(target)
         case SensoryFact():
             raise ValueError("A sensory fact is folded with its group's rows resolved (sensory_changes)")
         case TurnFact():
@@ -351,8 +471,7 @@ def apply_record_fact(target: PlayerState, fact: PlayerFact, rows: SensoryRows,
             if actor.controlled_items is None or not target.viewing_audience.controls(actor.uuid):
                 raise ValueError("item charges require the controlled actor's inventory")
             if fact.item_destroyed:
-                if fact.item_uuid in actor.controlled_items:
-                    del target.items[fact.item_uuid]
+                # The seat's item record stays (static records are never pruned).
                 target.actors[actor.uuid] = replace(actor,
                     controlled_items=tuple(identity for identity in actor.controlled_items if identity != fact.item_uuid),
                     visual_loadout=replace(actor.visual_loadout, layers=tuple(layer for layer in actor.visual_loadout.layers
@@ -396,27 +515,8 @@ def apply_record_fact(target: PlayerState, fact: PlayerFact, rows: SensoryRows,
             actor = target.actors[fact.entity_uuid]
             target.actors[actor.uuid] = replace(actor, life_state=fact.new_state, normal_hp=fact.normal_hit_points,
                 remains_disposition=fact.remains_disposition)
-        case EquipmentFact():
-            actor = target.actors[fact.source_entity_uuid]
-            target.actors[actor.uuid] = replace(actor, **fact.changes)
-            apply_item_patches(target, fact.items)
-        case ConditionChangeFact():
-            actor = target.actors[fact.target_entity_uuid]
-            condition = fact.condition
-            members = {row.condition_uuid: row for row in actor.conditions}
-            change_membership(members, fact)
-            target.actors[actor.uuid] = replace(actor, conditions=tuple(members.values()),
-                spatial_disposition=(condition.resulting_stats.spatial_disposition
-                    if condition.resulting_stats is not None else actor.spatial_disposition),
-                normal_hp=(condition.resulting_stats.normal_hp
-                    if condition.resulting_stats is not None else actor.normal_hp),
-                maximum_hp=(condition.resulting_stats.maximum_hp if condition.resulting_stats is not None else
-                    actor.maximum_hp if condition.resulting_max_hp is None else condition.resulting_max_hp),
-                armor_class=(condition.resulting_stats.armor_class if condition.resulting_stats is not None else
-                    actor.armor_class if condition.resulting_ac is None else condition.resulting_ac),
-                resolved_size=(condition.resulting_stats.resolved_size
-                    if condition.resulting_stats is not None and condition.resulting_stats.resolved_size is not None
-                    else actor.resolved_size))
+        case ActorChangeFact():
+            apply_actor_change_fact(target, fact)
 
 
 def commit_current(target: PlayerState, fact: FoldedFact, *, source_cursor: int,
@@ -435,14 +535,6 @@ def commit_current(target: PlayerState, fact: FoldedFact, *, source_cursor: int,
     return True
 
 
-def change_membership(members: dict[UUID, ConditionFact], fact: ConditionChangeFact) -> None:
-    """A condition fact's effect on its target's memberships: a removal ends one, an internal condition is never held."""
-    if fact.event_type is EventType.CONDITION_REMOVAL:
-        members.pop(fact.condition.condition_uuid, None)
-    elif fact.condition.category is not ConditionCategory.INTERNAL:
-        members[fact.condition.condition_uuid] = fact.condition
-
-
 def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, values: SensoryValues, *,
                                source_cursor: int, occurrences: Collection[int],
                                audience_composition: AudienceComposition | None = None) -> None:
@@ -452,17 +544,17 @@ def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, values: S
 
 
 def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: VersionRows,
-            observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...], rows: SensoryRows) -> PlayerState:
+            bodies: tuple[BodyRecord, ...], updates: tuple[WorldUpdate, ...], rows: SensoryRows) -> PlayerState:
     """Fold received values in source order, including a timed partial group."""
     result = copy_target(target)
-    _apply_nodes(result, nodes, versions, observations, updates, rows)
+    _apply_nodes(result, nodes, versions, bodies, updates, rows)
     return result
 
 
 def occurrence_order(nodes: tuple[PlayerNode, ...],
-                     observations: tuple[PlayerObservation, ...]) -> Iterator[PlayerObservation | PlayerNode]:
-    """The one fold order of a received group: each node after the observations at or before its version."""
-    pending = iter(sorted(observations, key=lambda row: row.occurrence))
+                     bodies: tuple[BodyRecord, ...]) -> Iterator[BodyRecord | PlayerNode]:
+    """The one fold order of a received group: each node after the bodies entering at or before its version."""
+    pending = iter(sorted(bodies, key=lambda row: row.occurrence))
     observation = next(pending, None)
     for node in nodes:
         while observation is not None and observation.occurrence <= node.occurrence:
@@ -475,15 +567,15 @@ def occurrence_order(nodes: tuple[PlayerNode, ...],
 
 
 def _apply_nodes(result: PlayerState, nodes: tuple[PlayerNode, ...], versions: VersionRows,
-                 observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...], rows: SensoryRows, *,
+                 bodies: tuple[BodyRecord, ...], updates: tuple[WorldUpdate, ...], rows: SensoryRows, *,
                  audience_composition: AudienceComposition | None = None) -> None:
     occurrences = set(versions.occurrences)
     world_updates = {row.occurrence: row for row in updates}
     values = sensory_values(rows)
-    for row in occurrence_order(nodes, observations):
+    for row in occurrence_order(nodes, bodies):
         match row:
-            case PlayerObservation():
-                _observe(result, row, audience_composition=audience_composition)
+            case BodyRecord():
+                enter_body(result, row)
             case PlayerNode():
                 if row.occurrence in world_updates:
                     fold_world_update(result, world_updates[row.occurrence])
@@ -503,7 +595,7 @@ def state_before_event(before: PlayerState, lineage: PlayerLineage, event: Playe
     result = copy_target(before)
     stage_static(result, lineage.world_updates)
     _apply_lineage(result, replace(lineage, events=events, end_cursor=first,
-        observations=tuple(row for row in lineage.observations if row.occurrence in completed),
+        bodies=tuple(row for row in lineage.bodies if row.occurrence in completed),
         world_updates=tuple(row for row in lineage.world_updates if row.occurrence in completed)))
     return result
 
@@ -514,7 +606,7 @@ def reduce_initialization(initialization: PlayerInitialization, *,
                          world=initialization.world,
                          audience=resolve_audience(initialization.observer_uuid, initialization.audience))
     target = reduce_nodes(target, initialization.nodes, initialization.version_rows,
-                     initialization.observations, initialization.world_updates, initialization.sensory_rows)
+                     initialization.bodies, initialization.world_updates, initialization.sensory_rows)
     target.reducer_cursor = initialization.end_cursor
     if initialization.hud is not None:
         apply_hud(target, initialization.hud)
@@ -572,7 +664,7 @@ def _apply_lineage(target: PlayerState, lineage: PlayerLineage, *,
     if lineage.end_cursor <= target.reducer_cursor:
         raise ValueError("player lineage precedes this reduction position")
     result = target
-    _apply_nodes(result, lineage.events, lineage.version_rows, lineage.observations, lineage.world_updates,
+    _apply_nodes(result, lineage.events, lineage.version_rows, lineage.bodies, lineage.world_updates,
         lineage.sensory_rows, audience_composition=audience_composition)
     result.reducer_cursor = lineage.end_cursor
 
@@ -607,7 +699,7 @@ def lineage_branch(lineage: PlayerLineage, root: PlayerNode) -> PlayerLineage:
         events=nodes, version_rows=VersionRows(occurrences=tuple(row[0] for row in kept),
             lineages=tuple(row[1] for row in kept)),
         start_cursor=kept[0][0], end_cursor=kept[-1][0] + 1,
-        observations=tuple(row for row in lineage.observations if row.occurrence in identities),
+        bodies=tuple(row for row in lineage.bodies if row.occurrence in identities),
         world_updates=tuple(row for row in lineage.world_updates if row.occurrence in identities))
 
 

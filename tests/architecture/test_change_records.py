@@ -52,8 +52,8 @@ def test_actor_changes_have_one_producer_and_one_fold() -> None:
     assert (_calls("actor_fact_change")) == {"dnd/player/capture.py", "dnd/ai/runtime/knowledge_reduction.py"}
     assert (_calls("apply_actor_fact_change")) == {"dnd/player/actor_projection.py",
                                                       "dnd/ai/runtime/knowledge_reduction.py"}
-    # The one copy of a record: the shared fold's E2 deferral of a condition's item after-value (E3-bodies).
-    assert (_calls("replace", keyword="replaced_item")) == {"dnd/player/capture.py"}
+    # No record is copied: the shared fold applies a condition's item after-value with the rest (E3-bodies).
+    assert (_calls("replace", keyword="replaced_item")) == set()
 
 
 def test_keyed_tile_changes_have_their_writers_and_one_fold() -> None:

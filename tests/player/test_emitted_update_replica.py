@@ -1,11 +1,11 @@
 """Emitted updates, folded the way the client folds them, reproduce what the seat's projection knows.
 
-The server keeps no replica of a seat's client state. Its projection fold
-(`ProjectionState.remembered`) is what capture and the worker read, and the
-bodies it patches against, so the client fold of the detached updates must
-agree with it on every body and on everything else read there, and the
-client's composed view must equal a cold composition of its folded member
-senses. The HUD each seat shows equals the live engine (the op-end oracle).
+The server keeps no replica of a seat's client state: it holds no world, bodies or
+items (player schema 16). What its projection keeps for the seat
+(`ProjectionState.remembered`: the spatial content it was sent) must agree with
+the client fold of the detached updates, and the client's composed view must
+equal a cold composition of its folded member senses. The HUD each seat shows
+equals the live engine (the op-end oracle).
 """
 
 from dataclasses import dataclass
@@ -69,8 +69,8 @@ def operation_since(session: Session, start: int) -> Operation:
 
 
 def what_capture_reads(state: PlayerState) -> tuple:
-    # The server holds no world copy: the seat's world is the client's alone (player schema 16).
-    return (state.actors, state.items, state.spatial_content)
+    # The server holds no world, body or item copy: those are the client's alone (player schema 16).
+    return (state.spatial_content,)
 
 
 def check_replica(session: Session, steps: tuple[Step, ...]) -> dict[str, PlayerState]:
@@ -83,6 +83,9 @@ def check_replica(session: Session, steps: tuple[Step, ...]) -> dict[str, Player
     def check(name: str, seat: str, client: PlayerState, runtime: AudienceRuntime) -> None:
         case = f'{name} / {seat}'
         assert what_capture_reads(client) == what_capture_reads(runtime.projection.remembered), case
+        # The server holds no bodies or items; the capture fold and the session's actor fold agree.
+        assert not runtime.projection.remembered.actors and not runtime.projection.remembered.items, case
+        assert runtime.capture.actors == runtime.session.actors, case
         assert client.content == seat_content(runtime), case
         assert (client.reducer_cursor, len(client.combat_log_appends)) == (
             runtime.projection.next_occurrence, runtime.projection.next_log_append), case
@@ -169,6 +172,27 @@ SCENARIO = (
     Step('fighter walks up to the darkness', move(0, (8, 10))),
     Step('darkness zone ends', darkness_ends),
 )
+
+
+def test_a_seats_own_bodies_are_never_resent_whole(session):
+    # A controlled body is always perceived, so after initialization it travels as changes only, also when one
+    # member of the party loses and regains sight of the other (the fighter inside the darkness, then its end).
+    steps = SCENARIO[:-1] + (Step('fighter walks into the darkness', move(0, (10, 10))), SCENARIO[-1])
+    sorcerer = session.player_uuids[1]
+    session.game.entities[sorcerer].action_economy.set_normal_spell_slot_capacity(
+        uuid5(sorcerer, 'replica'), {level: 4 for level in range(1, 10)})
+    publish_sheets(session)
+    catalog = ui_content_manifest()
+    runtimes, _ = initialize_audiences(session, catalog)
+    resent = []
+    for step in steps:
+        start = EventQueue.event_cursor()
+        step.act(session)
+        updates = capture_application_operation(runtimes, operation_since(session, start), catalog)
+        for seat, update in updates.items():
+            resent += [(step.name, seat) for lineage in update.lineages for record in lineage.bodies
+                       if record.actor_uuid in session.seats[seat].controlled]
+    assert resent == []
 
 
 def test_client_fold_of_emitted_updates_matches_projection_and_cold_composition(session):

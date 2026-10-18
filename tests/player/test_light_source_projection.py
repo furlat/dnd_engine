@@ -8,12 +8,13 @@ import pytest
 from dnd.actions_functional import execute_use_action
 from dnd.content.items.environment_item_builders import build_wall_torch
 from dnd.core.base_actions import ActionEvent
-from dnd.core.events import EventPhase, EventQueue, EventType, SensoryUpdateEvent
+from dnd.core.events import EntityCreatedEvent, EventPhase, EventQueue, EventType, SensoryUpdateEvent
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.items.torches import build_torch
 from dnd.player.capture import CompletedLineage, ObjectiveRow, capture_interval, capture_lineages
+from dnd.types.actor_facts import HeldItem
 from dnd.player.audience import PlayerAudience
 from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.event_record import RecordedEvent, encode_event
@@ -50,6 +51,20 @@ def capture(built, observer):
     return capture_interval(name="source-light projection", start_cursor=0,
         end_cursor=EventQueue.event_cursor(), observer_uuid=observer.uuid,
         battlefield_id=built.definition.battlefield_id)
+
+
+def with_recorded_holdings(envelope, actor_uuid, item, slot):
+    """The recorded startup with the actor holding this item value, worn in `slot`, from its birth on (a value
+    boundary: the session's actors fold the recorded births and actor changes)."""
+    interval = envelope.world_interval
+    equipment = ((slot, item.item_uuid),) if slot is not None else ()
+    events = tuple((index, event.model_copy(update={"items": (item,), "equipment": equipment}))
+        if isinstance(event, EntityCreatedEvent) and event.entity_uuid == actor_uuid else (index, event)
+        for index, event in interval.events)
+    changes = {identity: replace(change, held_item=HeldItem(item, slot))
+               if change.held_item is not None and change.held_item.item.item_uuid == item.item_uuid else change
+               for identity, change in interval.actor_fact_changes.items()}
+    return replace(envelope, world_interval=replace(interval, events=events, actor_fact_changes=changes))
 
 
 def test_fixed_source_overrides_and_native_activation_survive_reduction(world):
@@ -130,16 +145,10 @@ def test_disclosed_equipment_source_after_values_preserve_activation(world, lit)
     assert owner.loot_item(torch)
     witness.update_entity_senses(max_distance=8)
     captured = capture(built, witness)
-    admitted = []
-    for row in captured.admissions:
-        if row.actor.uuid == owner.uuid:
-            item = torch.to_item_presentation_state().model_copy(update={
-                "is_lit": lit, "very_bright_radius_feet": 6,
-                "bright_radius_feet": 19, "dim_radius_feet": 31})
-            row = replace(row, actor=replace(row.actor, items=(item,),
-                equipment=(("weapon_melee_off", torch.uuid),)))
-        admitted.append(row)
-    _, initial = begin_projection(SessionProjection(), replace(captured, admissions=tuple(admitted)))
+    item = torch.to_item_presentation_state().model_copy(update={
+        "is_lit": lit, "very_bright_radius_feet": 6, "bright_radius_feet": 19, "dim_radius_feet": 31})
+    _, initial = begin_projection(SessionProjection(), with_recorded_holdings(captured, owner.uuid, item,
+        "weapon_melee_off"))
     state = reduce_initialization(initial)
     actor = state.actors[owner.uuid]
     source, = actor.visual_loadout.layers
@@ -162,9 +171,7 @@ def test_recorded_content_attribution_uses_foreign_equipment_grants(world, equip
     witness.update_entity_senses(max_distance=8)
     initial = capture(built, witness)
     item = torch.to_item_presentation_state()
-    initial = replace(initial, admissions=tuple(replace(row, actor=replace(row.actor,
-        items=(item,), equipment=(("weapon_melee_off", torch.uuid),) if equipped else ()))
-        if row.actor.uuid == owner.uuid else row for row in initial.admissions))
+    initial = with_recorded_holdings(initial, owner.uuid, item, "weapon_melee_off" if equipped else None)
     source = witness.uuid if foreign_handler else owner.uuid
     event = ActionEvent.model_validate(dict(name='Use recorded equipment', use_register=False,
         source_entity_uuid=source, phase=EventPhase.COMPLETION,

@@ -589,6 +589,11 @@ def after_operation(driver, kind, records):
     """An operation's records reach the seats' clients after its measurement and post-reply collection; with
     `--oracle`, O1 runs at its end. What they leave is collected unmeasured. Returns the byte report."""
     report = byte_report(deliver(driver.clients, records))
+    # The shared capture fold (advanced to the operation's end) and the session projection's actors (folded as
+    # of each occurrence) fold the same records: at the operation's end they agree.
+    runtime = next(iter(driver.runtime.audiences.values()))
+    if runtime.capture.actors != runtime.session.actors:
+        raise AssertionError(f'{kind}: the capture and session actor folds disagree')
     oracle = driver.clients.oracle
     if oracle is not None:
         result = seat_oracle.check(oracle, len(oracle.report), kind, driver.runtime.session, driver.clients.states)
