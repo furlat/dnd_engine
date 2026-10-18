@@ -916,3 +916,10 @@ Hard rules:
     - SG step 53 / 177 / 1057 / 276.
   - **Deduped ≈ G2, not G1.** Occurrence numbering and controller-only nodes are per seat, so encoding and the per-seat node walk can't be shared. The per-seat combat log is 413 of 1,478 profiled ms (Q8 addresses it).
   - **Proposal for the human:** per-side occurrence numbering plus a per-seat controller-only overlay. That makes a side's publication ≈ G1 plus the overlay. It is a wire change after E3-sensory.
+- 2026-10-18: **Settlement fast path merged (4cefc2424; Q7).**
+  - **Mechanism:** the objective light change is computed once per settlement. An observer whose sight inputs held keeps its view and is re-lit only at the changed rows. The proof is `_changed_light_rows`' docstring.
+  - **Fast-path rate:** ai_decision 177 of 183, SG walk 553 of 571. Fireball, Wall of Stone, Sleet and Daylight take the full path by design.
+  - **Gates:** exact; recorder and transcripts 0 differences on 10 cases.
+  - **Timing:** ai_decision op 4 203 → 185 ms (settlement only 184 → 141); SG moves −3 to −14 %.
+  - **What remains for op 4:** passive perception re-read (~9 ms; values have no revision key); building SensoryUpdateEvent (~7); identity grants at register (~7); contacts (~24); the AI decision itself.
+  - **Tooling:** scratchpad fanout/record_steps.py needs the new `measured_request(driver, mode, kind, request)` signature (fixed copy in sf/). wf/fov_oracle_batch.py is stale.
