@@ -14,7 +14,7 @@ from dnd.player.facts import (
     PlayerLineage, PlayerNode, PlayerObservation, PlayerUpdate, SensoryFact,
     SpatialFact, VersionRows,
 )
-from dnd.player.projection import begin_projection
+from dnd.player.projection import SessionProjection, begin_projection
 from dnd.player.reduction import reduce_initialization, reduce_lineage, reduce_operation
 from dnd.types.event_facts import SpatialChangeType
 from dnd.types.senses import PerceivedContact
@@ -42,7 +42,7 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
     envelope = capture_interval(name='operation audience fold', start_cursor=0,
         end_cursor=EventQueue.event_cursor(), observer_uuid=owner.uuid, audience=audience,
         battlefield_id=built.definition.battlefield_id)
-    _, initial = begin_projection(envelope)
+    _, initial = begin_projection(SessionProjection(), envelope)
     before = reduce_initialization(initial)
     frozen = deepcopy(before)
     template = next(node.fact for node in initial.nodes

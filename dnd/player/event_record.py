@@ -38,7 +38,7 @@ from dnd.core.events import (
     SkillCheckD20RollResultEvent, SkillCheckEvent, SpatialChangeEvent, SpatialEffectChangeEvent, SpatialEffectInteractionEvent,
     StepMovementEvent, TakeDamageEvent, TurnEndEvent, TurnEvent, TurnStartEvent,
     WorldInitializedEvent, WorldModifiedEvent, TileElevationChangeEvent, TemporaryHitPointsChangedEvent,
-    ActorSheetEvent, InitiativeOrderChangedEvent,
+    ActorSheetEvent, InitiativeOrderChangedEvent, MechanismInstallEvent, TraversalConnectorChangeEvent,
 )
 
 
@@ -60,7 +60,7 @@ EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
     SpatialEffectChangeEvent, SpatialEffectInteractionEvent, StepMovementEvent,
     ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, StandOfferEvent, EncounterEvent, EncounterStartEvent, EncounterEndEvent,
     RoundEvent, RoundStartEvent, RoundEndEvent, TurnEvent, TurnStartEvent, TurnEndEvent,
-    ActorSheetEvent, InitiativeOrderChangedEvent,
+    ActorSheetEvent, InitiativeOrderChangedEvent, MechanismInstallEvent, TraversalConnectorChangeEvent,
 )}
 # Keep the original archive discriminator while the Python name describes both operations.
 ITEM_RESOURCE_WIRE_TYPE = "dnd.blocks.base_item.ItemChargeConsumptionEvent"

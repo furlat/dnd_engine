@@ -17,13 +17,14 @@ from devtools.performance import gallery_crowd, seat_oracle
 from dnd.core.events import WorldConnectorState
 from dnd.core.traversal_connectors import ConnectorProvocationPolicy, TraversalConnectorKind
 from dnd.core.cells import mask_positions
-from dnd.player.application import initialize_audiences
+from dnd.player.application import initialize_audiences, seat_content
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import PlayerState
 from dnd.player.reduction import reduce_initialization
 from dnd.player.session import close_session, create_session
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.senses import PerceivedSpatialEffect
+from dnd.types.world_placement import placement_support_cells
 
 
 @pytest.mark.parametrize('layout,expected', [
@@ -97,7 +98,7 @@ def lost_tile(client: PlayerState) -> tuple[str, str, str | None]:
 
 def ghost_object(client: PlayerState) -> tuple[str, str, str | None]:
     """A copy of a held object in view, under an identity nothing in the world has."""
-    held = next(obj for obj in client.objects.values() if seat_oracle.support_cells(obj.placement)
+    held = next(obj for obj in client.objects.values() if placement_support_cells(obj.placement)
                 & set(mask_positions(senses(client).visible)))
     identity = uuid4()
     client.objects[identity] = replace(held, item=replace(held.item, item_uuid=identity),
@@ -119,11 +120,11 @@ def stale_connector(client: PlayerState) -> tuple[str, str, str | None]:
     """A connector the client holds between two visible cells, which the world does not have."""
     first, second = sorted(mask_positions(senses(client).visible))[:2]
     identity = uuid4()
-    client.connectors = (*client.connectors, WorldConnectorState(connector_uuid=identity, authored_id='ladder.gone',
+    client.connectors[identity] = WorldConnectorState(connector_uuid=identity, authored_id='ladder.gone',
         kind=TraversalConnectorKind.LADDER, presentation_key='ladder', endpoints=(first, second),
         support_tile_uuids=(client.tiles[first].tile_uuid, client.tiles[second].tile_uuid),
         endpoint_elevations_feet=(0, 0), movement_cost_feet=5, bidirectional=True, enabled=True,
-        provocation_policy=ConnectorProvocationPolicy.DOES_NOT_PROVOKE))
+        provocation_policy=ConnectorProvocationPolicy.DOES_NOT_PROVOKE)
     return 'connectors', str(identity), None
 
 
@@ -149,7 +150,7 @@ def test_o1_names_a_fault_planted_in_the_client_fold(session, fault):
                                        seat_oracle.client_view(client))
 
     # The start record, as worker.start sends it with the seat's admitted content.
-    client = reduce_initialization(initial, content_additions=runtimes[seat].projection.remembered.content)
+    client = reduce_initialization(initial, content_additions=seat_content(runtimes[seat]))
     before = o1(client)
     # On the untouched fold O1 reports at most E1's stale initial light (the startup fold lacks LIGHT_CHANGED).
     assert {seat_oracle.signature(row) for row in before} <= {'tiles:field:resolved_light'}, fault.name
@@ -162,7 +163,7 @@ def test_o4_names_knowledge_the_seat_was_never_given(session):
     no record sent, is a leak O4 names, although O1 (current perception only) cannot see it."""
     runtimes, initializations = initialize_audiences(session, ui_content_manifest())
     seat, initial = next(iter(initializations.items()))
-    client = reduce_initialization(initial, content_additions=runtimes[seat].projection.remembered.content)
+    client = reduce_initialization(initial, content_additions=seat_content(runtimes[seat]))
     base = seat_oracle.leaves(seat_oracle.held_view(client))
     assert seat_oracle.knowledge_leaks(base, seat_oracle.leaves(seat_oracle.held_view(client))) == []
 

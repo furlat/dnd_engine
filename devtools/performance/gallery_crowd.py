@@ -308,6 +308,14 @@ def log_bytes(record, payload):
     return len(payload) - len(stripped.model_dump_json().encode())
 
 
+def world_bytes(record, payload):
+    """The bytes the world updates take in a record's encoding `payload` (E3-world's column): the record's size
+    less that of the record without them."""
+    stripped = record.model_copy(update={'lineages': tuple(replace(lineage, world_updates=())
+        for lineage in record.lineages)})
+    return len(payload) - len(stripped.model_dump_json().encode())
+
+
 def initialize_clients(clients, publications, records):
     """Fold each seat's initialization record (Start's records, in its publications' order) from its wire bytes."""
     for publication, record in zip(publications, records, strict=True):
@@ -328,9 +336,10 @@ def deliver(clients, records):
         started = perf_counter()
         clients.states[seat] = reduce_operation(clients.states[seat], PlayerOperation.model_validate_json(payload))
         fold_ms = (perf_counter() - started) * 1000
-        row = rows.setdefault(seat, {'bytes': 0, 'log_bytes': 0, 'fold_ms': 0.0})
+        row = rows.setdefault(seat, {'bytes': 0, 'log_bytes': 0, 'world_bytes': 0, 'fold_ms': 0.0})
         row['bytes'] += len(payload)
         row['log_bytes'] += log_bytes(record, payload)
+        row['world_bytes'] += world_bytes(record, payload)
         row['fold_ms'] += fold_ms
         if clients.oracle is not None:
             seat_oracle.receive(clients.oracle, seat, record.cursor.sequence, payload, clients.states[seat])
@@ -368,9 +377,11 @@ def byte_report(rows):
                 'client_fold_ms': {'max': 0.0, 'total': 0.0, 'records': 0}}
     largest = max(rows, key=lambda seat: rows[seat]['bytes'])
     non_log = max(rows, key=lambda seat: rows[seat]['bytes'] - rows[seat]['log_bytes'])
-    return {'seat_bytes': {seat: {'bytes': row['bytes'], 'log_bytes': row['log_bytes']} for seat, row in rows.items()},
+    return {'seat_bytes': {seat: {'bytes': row['bytes'], 'log_bytes': row['log_bytes'],
+                                  'world_bytes': row['world_bytes']} for seat, row in rows.items()},
         'largest_update': {'seat': largest, 'bytes': rows[largest]['bytes'], 'log_bytes': rows[largest]['log_bytes'],
-            'non_log_bytes': rows[largest]['bytes'] - rows[largest]['log_bytes']},
+            'non_log_bytes': rows[largest]['bytes'] - rows[largest]['log_bytes'],
+            'world_bytes': rows[largest]['world_bytes']},
         'largest_non_log': {'seat': non_log, 'bytes': rows[non_log]['bytes'] - rows[non_log]['log_bytes']},
         'client_fold_ms': {'max': max(row['fold_ms'] for row in rows.values()),
             'total': sum(row['fold_ms'] for row in rows.values()), 'records': len(rows)}}
@@ -717,17 +728,15 @@ def door_named(name):
         if isinstance(door := BaseBlock.get(placement.object_uuid), DirectionalDoor) and door.name == name)
 
 
-def sequence_case(*steps, setup=None, published=True):
+def sequence_case(*steps, setup=None):
     """Measure each step in order in one fresh world (e.g. a cast, then a dispel), after an unmeasured `setup`,
-    published to every seat unless `published` is false (a trap materialized mid-game is battlefield authoring,
-    which the operation projector refuses as unsupported: such a setup reaches no seat, as before E0)."""
+    published to every seat (a trap materialized mid-game included: its install root is a `MechanismInstallEvent`)."""
 
     def case(runtime, driver, mode, caster_uuid):
         if setup is not None:
             cursor = EventQueue.event_cursor()
             setup(runtime)
-            if published:
-                driver.setup_rows.append(publish_setup(driver, cursor, 'case_setup'))
+            driver.setup_rows.append(publish_setup(driver, cursor, 'case_setup'))
         # The harness constructs these spells itself, outside any creature's content: build each as the
         # template a caster holds is built at character creation (its class and what it can create).
         incomplete = incomplete_models()
@@ -1186,8 +1195,8 @@ CASES = {
     # Remaining §1 rows (P0b-2). A third entry holds `crowd_recipe` options (roster variant, AI blue slot).
     'turn_undead': (False, sequence_case(use('action.class.cleric.turn_undead', actor=CLERIC_NAME)),
         {'roster': 'undead'}),
-    'gas_vent_plate': (False, sequence_case(move(PLATE, prefer_safe=False), setup=gas_vent_plate, published=False)),
-    'portal_plate': (False, sequence_case(move(PLATE, prefer_safe=False), setup=portal_plate, published=False)),
+    'gas_vent_plate': (False, sequence_case(move(PLATE, prefer_safe=False), setup=gas_vent_plate)),
+    'portal_plate': (False, sequence_case(move(PLATE, prefer_safe=False), setup=portal_plate)),
     # The single die is the enclosed witness's Dexterity save: a 20 makes it the escaper.
     'wall_of_stone': (False, sequence_case(cast('spell.wall_of_stone', aim=WALL_OF_STONE[0], faces=(20,),
         extra_target_positions=WALL_OF_STONE[1:], displacement_side='right')), {'roster': 'wall'}),

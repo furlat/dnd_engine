@@ -68,8 +68,7 @@ def census(runtime):
             'path_queries': len(grid._path_cache),
         },
         'seats': len(runtime.audiences),
-        'audiences': {seat: {'remembered_tiles': len(owner.projection.remembered.tiles),
-            'remembered_objects': len(owner.projection.remembered.objects),
+        'audiences': {seat: {'observed_objects': len(owner.projection.observed_objects),
             'seen': mask_count(owner.projection.remembered.senses.seen) if owner.projection.remembered.senses else 0,
             'visible': mask_count(owner.projection.remembered.senses.visible) if owner.projection.remembered.senses else 0,
             'fields': {runtime.session.game.entities[identity].name: {

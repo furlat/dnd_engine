@@ -722,3 +722,112 @@ Hard rules:
   - **Rows over 100 KB non-log on the head:**
     - G1, G2 and G3: Fireball, choices_caster and Circle of Death (residues, combat log, spell facts);
     - **G2 mass_healing_word: 758 KB.** It is ally 1's first sight of the lit hall after being down: world tiles 444 KB and objects 201 KB.
+- 2026-10-18: **E3-world Phase A and staging (codex/enp-e3-world, f597ad58d; not merged).**
+  - **Phase A, byte-identical** (12 gallery cases: transcripts, every seat's PlayerUpdate and every startup record; tests/engine, ai, player and architecture failures = r29; pyright 0 new):
+    - ab38e526a: the dead sensory `apply_world_fact` call goes; the server ends a departed contact through `audience.depart_contact`.
+    - 3bffe3446: `ProjectionState.audience`; `dnd/player/static_sent.py` `StaticSent` (one typed id set per kind: `actor_births`, `content`); `CaptureCheckpoint.names` (never popped); `known_connector_uuids`; startup content is public + witnessed (equal to the old rule on 114 test startups); the architecture test that application, capture and worker never import the client fold.
+    - f11f06ea9: the event-major walk (`_begin_walk`/`_enter_event`/`_leave_event`/`_end_walk`, drivers `project_lineages` and `begin_projections`); the native keys once per session in `SessionProjection`.
+  - **Decisions recorded (coordinator):**
+    - The session's one world fold lives in `SessionProjection` beside `capture` in `AudienceRuntime`, written only by the event-major driver's shared step through E2's `world_facts.apply_world_fact`. This replaces plan §5's "CaptureCheckpoint gains world facts"; `advance_capture` keeps only the evidence (actors, contacts, names).
+    - The startup world is a recorded session-level interval, folded by the same step on the live and recorded paths.
+    - The shared step folds in walk order and asserts each version is folded at most once. **Latent and unchanged (antiOOP F11):** roots are walked in completion order, so a root completing inside another root's execution is walked first; two overlapping roots writing one record end on the walk-order value, as today's per-seat folds do. Measured on f597ad58d: 101 of 586 root projections in tests/player + tests/ai, and 2 of 149 in 12 gallery cases (summon_retirement's initiative roots, which write no world), start below the previous root's last cursor.
+    - `object_members` has one writer, the world object rows; sensory's contact rows keep `object_contact_members`.
+  - **Staging** (no projector change): schema-16 world types, codec, client fold and vectors W1-W10 at `sdk/protocol/fold-vectors/world/` (49432f670, e6cd2593c); a look census over 29 gallery cases moved a floor item's visual name into its state.
+  - **Expected test change:** `test_content_local_admission.py::test_catalog_replacement_admits_public_values_and_keeps_private_links_hidden` still passes, but a replacement catalog no longer back-fills content witnessed before it (unreachable from the worker).
+  - Next: Phase B after E2 and E0 merge.
+- 2026-10-18: **E3-world: roots whose versions interleave are one walk group (codex/enp-e3-world, 759f3b0c5; coordinator).**
+  - **The rule, for E3-bodies and E3-sensory:** `capture_context` groups an operation's roots. A root starting before the last version of the group open so far joins it. The group's graph holds its roots' lineages and versions together, in source order, and is named by its root completing last. It is captured once, walked once by every seat and published as one `PlayerLineage` with its nodes in native order; the nested roots are parentless nodes inside the root's interval. A root that overlaps no other is its own group. Every fold walks these groups: the session world, the seats' and the clients'.
+  - **Why:** the client folds a seat's lineages in emission order, so only one native-order lineage fixes it. This replaces the latent F11 note above. In round_step_zones a Prone removal root completed inside its TurnStart root, was published first and left the seat showing Prone. Probe (each seat's client mirror vs the native entity after each of the 63 operations): 168 stale Prone rows before, 0 after.
+  - **Merged groups (all of them):**
+    - gallery:
+      - round_step_zones ×3: TurnStart + Prone removal;
+      - summon_retirement: Conjure Animals + InitiativeOrderChanged and three rider conditions (Bite Prone Rider, Keen Hearing and Smell, Pack Tactics);
+      - summon_retirement: Drop Concentration + InitiativeOrderChanged.
+    - tests (tests/player, ai, engine), all in test_bg3_spell_transport.py:
+      - Flame Blade + two ItemLocationState, WeaponEquip, WeaponUnequip;
+      - Flaming Sphere + InitiativeOrderChanged;
+      - Spiritual Weapon ×2 + InitiativeOrderChanged;
+      - Dismiss Summon + InitiativeOrderChanged.
+    - The other 10 gallery cases merge nothing. The earlier "101 of 586" counted repeated walks of one history and was not a merge count.
+  - **Gate vs ad08ffa45:** 12 gallery cases byte-identical (summon_retirement's merged roots publish the same bytes); tests/player, ai, architecture failures = r29.
+- 2026-10-18: **E3-world: the schema-16 world wire (codex/enp-e3-world, 657dff66c; not merged).**
+  - **What changed.** The server keeps no copy of a seat's world, and each world update is built from what the occurrence wrote.
+    - Source: E2's fold returns `AppliedWorldFact`, which names the records written. Values are read from the session world as of the occurrence. `world_publication` compares no world values, and an architecture test pins that.
+    - A record perceived before and after the occurrence travels as a keyed change.
+    - A record entering perception travels whole. Entering cells (cells coming into view, or a visible tile written whole) are authoritative: every object touching them, every connector with an endpoint there, and the tile as a static row (once per uuid) plus packed columns.
+    - The seat sees an object go when the occurrence wrote it, or when it sees the object's support without it.
+    - Leaving perception sends nothing.
+    - Static rows go once per seat: the tile's surface and name, a residue material, an object's look, and a boundary structure keyed by a digest of its value.
+    - Placements are compact: no derivable uuid, kind or lone support, no defaults. `visual_item_name` is left out when it equals `name`.
+    - The client fold is `world_reduction.fold_world_update`. Godot note: `agent_docs/GODOT_CLIENT_FOLD_WORLD_2026-10-18.md`. Vectors: `sdk/protocol/fold-vectors/world/w1-w12` and `groups/g1`.
+    - A record publishes once per seat (a walked event's own, or a change its members saw happen). A kept tile's keyed rows and a connector removal need the cells seen before and after.
+  - **Decisions (coordinator):**
+    - **Object members** are exact whenever an object row is sent. Between rows, the client holds the last row's bits, and a contact's members are E3-sensory's `object_contact_members`. Members-only rows were dropped: they cost about 100-215 KB per G1 update.
+    - **A perceived record written again by another occurrence travels again.**
+      - That re-admits a node carrying only a world update. Fireball adds 5 nodes per seat that sees the breaking objects: G1 +10 over 2 seat updates, G2 +150 over 30, G3 +35 over 7. The other 8 oracle cases add none.
+      - **Native follow-up (not this lane):** `BaseItem.destroy` (dnd/blocks/base_item.py) emits `refresh_object_state` (OBJECT_CHANGED) and later `publish_location_state(FLOOR)` with the same after-value. A wall torch also emits `put_out`'s FLOOR fact (dnd/items/torches.py) in between, so the Wall Torch breaking gives OBJECT_CHANGED at 195 and FLOOR at 196 and 197.
+    - **Placement as static content by revision is not built.** It touches the no-remembered-room rule; it stays the human's option if a row is still over 100 KB after the three E3 lanes.
+    - **RecordedSequence 5** carries the startup world interval (E3-bodies' H4 rides on it).
+  - **Re-entry rows (D1).** Largest seat update in KB, base → 2095deeff:
+    | Row | G1 | G2 | G3 |
+    |---|---|---|---|
+    | Sleet drop | 85.7 → 88.8 | 38.6 → 115.5 | 58.1 → 139.7 |
+    | Daylight | 83.7 → 92.3 | 45.0 → 139.9 | 65.5 → 95.4 |
+    | room_reentry door_open | — | 27.8 → 87.6 | — |
+    - Re-entered walls are the bulk: 214 walls in Sleet drop G2.
+    - Measured, not built (columnar object rows): Sleet drop G2 → 79.0, Daylight G2 → 101.9, mass_healing_word G2 → 344.7, door_open G2 → 68.3.
+  - **Other rows** (no regression):
+    - Fireball 202.0 → 160.7 (G1), 178.7 → 137.2 (G2), 187.7 → 146.3 (G3).
+    - mass_healing_word G2 758.8 → 382.7 (world 301.3: the healed ally's first sight of the lit hall, entering whole).
+    - Sleet cast, Spirit Guardians steps, Wall of Stone, portal_plate and round_step_zones are equal or smaller.
+    - The largest startup record per G2 seat drops 1.73 → 1.20 MB.
+    - Op ms (one run each, on a machine loaded by the batches): lower on most rows; the few higher ones are within run noise. The 3-run quiet timing is not done.
+    - Measured, not built: mass_healing_word G2's 1,070 tile static rows are 174 KB (one distinct surface and name). Interning surface and name would make them about 115 KB.
+  - **Gates.** Against E0's base (60adf05eb, seeded): 9 oracle cases (fireball, sleet_storm, darkness_daylight, spirit_guardians_walk, room_reentry, wall_of_stone, round_step_zones, portal_plate, mass_healing_word) × G1/G2/G3, at dab1966d3.
+    - **O1.** Every class count equals the base's, and no world class (tiles, objects, connectors) appears. Two changes: round_step_zones `body.conditions` goes 41 → 0 on all three layouts (the stale Prone), and portal_plate `cells:field:hazard` goes → 0 after e7f7e19c4.
+    - **O2.** 27 of 27 spool replays pass in a fresh process with hash seed 1.
+    - **O3.** The views equal the base's, except round_step_zones: 41 `body.conditions` (the Prone fix).
+    - **O4.**
+      - Bounded on all 27 runs: no seat learns anything the base did not tell it.
+      - Object member bits: every bit sent to a multi-member seat equals what its client derives from the per-member views the sensory wire carries (18 runs on G1 and G3, 0 mismatches).
+    - **Transcripts** (`--representation world-16`): events and logs are identical everywhere. Published updates outside `world_updates` are byte-identical, except Fireball's renumbered nodes (listed above).
+    - **Sweep** (r29's directories): 66 failures = r29's 64 plus 2 `cr0_evidence` tests that need git (a snapshot has none; they pass in the worktree).
+    - **pyright:** 0 new.
+  - **Expected test changes (merge note).** Each change follows the rule.
+    - `test_projection_local_world`: a composite keeps naming an attachment whose look was sent; contents and a suppressed cell stay as last seen after leaving view.
+    - `test_storage_loot`: closing the chest or losing sight keeps the last contents seen (renamed `…keeps_last_contents…`).
+    - `test_tile_field_updates`:
+      - entering rows, not whole tiles;
+      - a tile written whole re-enters;
+      - a tile's surface and name never change for its uuid (raises);
+      - the "already known tile" errors stay.
+    - `test_light_source_projection`: the light's after-value reaches the seat before the light's completion, which sends it again.
+    - `test_foreign_sensory_capture`: projects per walk group.
+    - `test_content_local_admission`, `test_emitted_update_replica`, `test_world_after_values_reach_seats`: the new fields (object looks; the server holds no world copy; connectors as a dict).
+    - `test_seat_oracle`: the start record carries the seat's startup content.
+    - SDK fixtures: tile field changes hold scalars only.
+  - **End reviews (antislop, antiOOP) — fixed in dab1966d3 / 657dff66c:**
+    - one publication per record (antislop blocker: a removal sent twice made the client raise);
+    - keyed tile rows and connector removals need cells seen before and after;
+    - a key-only `AppliedWorldFact`;
+    - one rule for a tile's own condition names (`tile_own_condition_names`), and one client static-row writer (`fold_static_rows`);
+    - the senses fold is its own walk step;
+    - seat knowledge passed by keyword;
+    - dead walk fields, members-only leftovers and stale docstrings removed;
+    - `test_foreign_sensory_capture` projects per walk group;
+    - every tile field is in the vectors (w12, with the column bytes checked against the Godot note).
+    The 12 gallery cases are byte-identical before and after these fixes.
+  - **Kept, with the reason:**
+    - The walk-local `pending` static rows: plan §3.5 says "never mid-walk".
+    - `CaptureCheckpoint.names`: Phase A, accepted.
+    - The T6 look-constancy and T8 delta-arithmetic tests: the look census over 29 gallery cases stands in for T6, and T8 is not built.
+    - `seat_oracle` still imports `world_facts` privates. This is E0's harness.
+    - The minor items are listed in the lane report.
+  - **World-changing roots are supported (coordinator, from E0's portal_plate O1 class and E1's open connector-edit item).**
+    - `materialize_portal`, `materialize_pressure_plate` and `materialize_gas_vent` now publish a typed `MechanismInstallEvent` root instead of a bare `Event`.
+    - Capture retains that root, and also `TraversalConnectorChangeEvent` (its live connectors left out, since the connector's cold rows are its world fact's), as recorded families.
+    - A mid-game connector edit or mechanism install now publishes through the keyed world path. Before this, the live operation projector raised "Unprojected committed state".
+    - The harness publishes `portal_plate`'s and `gas_vent_plate`'s setups.
+    - O1 on portal_plate: `cells:field:hazard` 6/90/21 → 0 on G1/G2/G3. `body.normal_hp` (E3-bodies) is counted at one more checkpoint, the published setup.
+    - Test: `test_live_connector_edits_and_mechanism_installs_publish_to_every_seat`. It raised before the fix.
+    - The 12 gallery cases are byte-identical apart from portal_plate's published updates (its setup is now published). The trap tests and tests/player, ai and architecture match r29.

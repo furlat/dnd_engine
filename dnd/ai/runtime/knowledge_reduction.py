@@ -219,7 +219,7 @@ class AIKnowledge:
 
         positions = world_event_positions(self.world, event, condition)
         objects = self._event_objects(event)
-        if apply_world_fact(self.world, event, condition):
+        if apply_world_fact(self.world, event, condition) is not None:
             self._refresh_world(positions, objects)
 
         if isinstance(event, SensoryUpdateEvent) and event.observer_uuid in self.controlled_entity_uuids:
@@ -246,7 +246,7 @@ class AIKnowledge:
                 if isinstance(ancestor, SpatialChangeEvent) and ancestor.change_type is SpatialChangeType.OBJECT_CHANGED:
                     affected = world_event_positions(self.world, ancestor)
                     changed_objects = self._event_objects(ancestor)
-                    if apply_world_fact(self.world, ancestor):
+                    if apply_world_fact(self.world, ancestor) is not None:
                         positions.update(affected)
                         objects.update(changed_objects)
                 parent = ancestor.parent_lineage
