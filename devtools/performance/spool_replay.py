@@ -8,7 +8,8 @@ so the follower resumes after the operation it consumed (a seat with two operati
 after a consumed operation fails). The
 host serves a copy of the spool, so nothing the host does to its recording can touch the run's. Each record is folded by the client reference fold. After every
 record the client state (memory included) must equal the live run's (the manifest's digests), the final states
-must match, and the O3 views stored at each operation end must be reproduced.
+must match, and the O3 views stored at each operation end must be reproduced. Each seat's digest stamps are
+restored from its own records (`stamp_replay`) and must equal the live run's.
 
     PYTHONHASHSEED=1 PYTHONPATH=<tree>:<tree>/sdk/python/src <python with jsonschema-rs> \\
         devtools/performance/spool_replay.py <oracle directory>
@@ -33,8 +34,9 @@ from uuid import UUID, uuid4
 import httpx
 
 from devtools.performance import seat_oracle
-from dnd.player.facts import PlayerState
+from dnd.player.facts import PlayerInitialization, PlayerState, WorldUpdate
 from dnd.player.reduction import reduce_initialization, reduce_operation
+from dnd.player.stamp_replay import replay_world_stamps
 from dnd_player import contracts, transport as sdk
 from server.app import create_app
 from server.config import SeatCredential, ServerConfig
@@ -104,13 +106,29 @@ def stored_views(directory: Path) -> dict[str, dict[int, list[str]]]:
     return views
 
 
-async def follow_seat(app, seat: str, token: str, digests: list[str], views: dict[int, list[str]]
-                      ) -> tuple[PlayerState | None, list[dict[str, Any]], dict[str, Any]]:
+def stamp_mismatches(seat: str, initialization: PlayerInitialization, updates: list[WorldUpdate],
+                     manifest: dict[str, Any], counts: dict[str, Any]) -> list[dict[str, Any]]:
+    """The seat's digest stamps restored from its records against the live run's: they must be equal."""
+    memory = PlayerState(generation=initialization.generation, observer_uuid=initialization.observer_uuid,
+                         world=initialization.world, audience=initialization.audience)
+    restored = seat_oracle.stamp_data(replay_world_stamps(memory, updates))
+    live = manifest['world_stamps'][seat]
+    counts['stamps'] = {'tiles': len(restored['tiles']), 'objects': len(restored['objects'])}
+    return [{'seat': seat, 'kind': 'stamp', 'record': kind, 'key': name, 'live': live[kind].get(name),
+             'restored': restored[kind].get(name)}
+            for kind in ('tiles', 'objects') for name in sorted(live[kind].keys() | restored[kind].keys())
+            if live[kind].get(name) != restored[kind].get(name)]
+
+
+async def follow_seat(app, seat: str, token: str, digests: list[str], views: dict[int, list[str]],
+                      manifest: dict[str, Any]) -> tuple[PlayerState | None, list[dict[str, Any]], dict[str, Any]]:
     """Follow one seat from its initialization to its final cursor; its final state, mismatches and counts."""
     transport = CutStream(httpx.ASGITransport(app=app))
     mismatches: list[dict[str, Any]] = []
     counts: dict[str, Any] = {'records': 0, 'streams_after': [], 'views': 0}
     state: list[PlayerState] = []
+    initializations: list[PlayerInitialization] = []
+    updates: list[WorldUpdate] = []
     async with httpx.AsyncClient(transport=transport, base_url='http://replay.invalid',
                                  headers={'Authorization': 'Bearer ' + token}) as http:
         connection = sdk.Connection(http, cast(contracts.BootstrapResponse, {}))
@@ -123,8 +141,12 @@ async def follow_seat(app, seat: str, token: str, digests: list[str], views: dic
             if packet['kind'] == 'initialization':
                 initial = InitializationResponse.model_validate_json(raw)
                 state[:] = [reduce_initialization(initial.initialization, content_additions=initial.content_additions)]
+                initializations[:] = [initial.initialization]
+                updates[:] = list(initial.initialization.world_updates)
             else:
-                state[0] = reduce_operation(state[0], PlayerOperation.model_validate_json(raw))
+                operation = PlayerOperation.model_validate_json(raw)
+                state[0] = reduce_operation(state[0], operation)
+                updates.extend(update for lineage in operation.lineages for update in lineage.world_updates)
             sequence = packet['cursor']['sequence']
             counts['records'] += 1
             digest = seat_oracle.state_digest(state[0])
@@ -138,6 +160,8 @@ async def follow_seat(app, seat: str, token: str, digests: list[str], views: dic
         follower = sdk.Follower(connection, consume)
         await sdk.follow(follower, reconnect_timeout=30)
         counts['streams_after'] = transport.resumed_after
+    if initializations:
+        mismatches.extend(stamp_mismatches(seat, initializations[0], updates, manifest, counts))
     if counts['records'] != len(digests):
         mismatches.append({'seat': seat, 'kind': 'records', 'replayed': counts['records'], 'live': len(digests)})
     # A seat with two operations or more must have resumed after a consumed operation, not from the start.
@@ -172,7 +196,7 @@ async def replay(directory: Path) -> dict[str, Any]:
             for seat in seats:
                 try:
                     final, mismatches, counts = await follow_seat(app, seat, tokens[seat], manifest['digests'][seat],
-                                                                  views.get(seat, {}))
+                                                                  views.get(seat, {}), manifest)
                 except (sdk.ApiError, sdk.ProtocolError, httpx.HTTPError) as error:
                     # A transport failure is a replay mismatch: the seat cannot reach its final cursor.
                     final, counts = None, {'records': 0, 'streams_after': [], 'views': 0}

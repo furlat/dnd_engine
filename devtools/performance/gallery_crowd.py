@@ -1275,7 +1275,10 @@ def finish_oracle(driver, game_epoch):
     seat_oracle.close_oracle(driver.clients.oracle, {'game_id': 'gallery-crowd', 'game_epoch': str(game_epoch),
         'hash_seed': os.environ.get('PYTHONHASHSEED'), 'identities': os.environ.get('GALLERY_IDENTITIES', 'random'), 'layout': driver.clients.layout,
         'slots': driver.clients.slots,
-        'publications': {seat: publication.model_dump(mode='json') for seat, publication in runtime.publications.items()}},
+        'publications': {seat: publication.model_dump(mode='json') for seat, publication in runtime.publications.items()},
+        # The restore check of O2: each seat's live digest stamps.
+        'world_stamps': {seat: seat_oracle.stamp_data(audience.projection.world_stamps)
+                         for seat, audience in runtime.audiences.items()}},
         driver.clients.states)
 
 
