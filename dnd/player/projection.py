@@ -45,8 +45,8 @@ from dnd.player.audience import (AudienceComposition, ComposedChange, PlayerAudi
 
 from dnd.player.actor_facts import ActorState, ConditionFact
 from dnd.player.actor_projection import fold_birth, fold_completed_actors
-from dnd.player.bodies import (ActorChangeViews, View, change_fact, change_rows, change_views, entering_body,
-    shown_items)
+from dnd.player.bodies import (ActorChangeViews, View, body_digest, body_stampable, change_fact, change_rows,
+    change_views, entering_body, shown_items)
 from dnd.types.actor_facts import ActorFactChange, ChangeRow, ConditionMember, ConditionRow, ItemEffectsRow, ItemStateRow
 from dnd.player.facts import (
     ActionCancellation, ActionFact, ActionReaction, ActorChangeFact, AreaReachFact, AttackFact, BodyRecord, ContentAttribution, DamageRequestFact, DamageResultFact,
@@ -65,7 +65,7 @@ from dnd.player.sheet_facts import sheet_fact
 from dnd.types.actor_sheet import PlayerResourceValue
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
 from dnd.player.world_digests import TileDigests, forget_written
-from dnd.player.world_stamps import SeatStamps, StampChanges, WorldStamps, merge_world_stamps
+from dnd.player.world_stamps import SeatStamps, StampChanges, WorldStamps, merge_world_stamps, unchanged_since
 from dnd.player.static_sent import StaticSent, merge_static_sent
 from dnd.player.spatial_commits import commit_current
 from dnd.player.world_publication import (SensedWorld, disclosed_world_object, object_observed, observed_remnant,
@@ -421,6 +421,8 @@ class BodiesStep:
     against the fold before the event) in both views (`change_views`)."""
 
     views: tuple[ActorChangeViews, ...]
+    # The actors the event wrote: a seat sent the event's fact drops its stamps of them.
+    changed: tuple[UUID, ...] = ()
 
 
 NO_BODIES_STEP = BodiesStep(())
@@ -1144,6 +1146,8 @@ class SeatWalk:
     content_at_event: dict[UUID, frozenset[str]] = field(default_factory=dict)
     # The walk's projected log entries by native entry (`seat_log_entry`'s memo), one per group and seat.
     retained_logs: dict[int, CombatLogEntry | None] = field(default_factory=dict)
+    # The walk's changes to the seat's body stamps, joining them at emission; None drops a stamp.
+    body_stamps: dict[UUID, int | None] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1274,9 +1278,9 @@ def _fold_actors(actors: dict[UUID, ActorState], names: dict[UUID, str],
         return NO_BODIES_STEP
     rows = change_rows(change, actors, consumed=condition is not None and condition.consumed)
     before = {row.actor_uuid: actors[row.actor_uuid] for row in rows}
-    fold_completed_actors(actors, event, change)
+    written = fold_completed_actors(actors, event, change)
     return BodiesStep(change_views(rows, before, {identity: actors[identity] for identity in before
-                                                  if identity in actors}))
+                                                  if identity in actors}), written)
 
 
 def _enter_body(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", actors: Mapping[UUID, ActorState],
@@ -1288,10 +1292,17 @@ def _enter_body(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", acto
         return
     record = entering_body(group.indexes[event.uuid], actor, state.audience, visual=visual,
         birth=identity not in walk.known, sent=state.static_sent, pending=walk.pending, loadout_ids=loadout_ids)
-    walk.bodies.append(record)
+    digest = body_digest(record) if body_stampable(record) else None
     walk.known.add(identity)
     walk.names[str(identity)] = actor.name
     walk.entered.add(identity)
+    if (record.birth is None and digest is not None
+            and unchanged_since(walk.body_stamps if identity in walk.body_stamps else state.body_stamps,
+                                identity, digest)):
+        # The seat holds this body as it is: confirmed unchanged, no record.
+        return
+    walk.bodies.append(record)
+    walk.body_stamps[identity] = digest
     walk.pending.item_looks.update(row.item_uuid for row in record.items if row.look is not None)
     walk.pending.item_profiles.update(row.item_uuid for row in record.items if row.profile is not None)
     walk.pending.visual_loadouts.add(record.body.visual_loadout_id)
@@ -1395,6 +1406,9 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
     fact = (sensory_fact if isinstance(event, SensoryUpdateEvent) else _project_fact(event, observer, actors,
             facts.get(event.uuid), walk.events, walk.entered, known, observed_objects, view, keys,
             step, state.static_sent, walk.pending, declaration_senses))
+    if fact is not None:
+        # The seat folds this event's after-values: its stamps of the bodies the event wrote no longer hold.
+        walk.body_stamps.update(dict.fromkeys(step.changed))
     if isinstance(fact, SpatialFact) and not event.canceled:
         if (commit_current(state.spatial_commit_cursors, fact, source_cursor=indexes[event.uuid],
                            occurrences=group.occurrences)
@@ -1770,6 +1784,9 @@ class ProjectionState:
     static_sent: StaticSent = field(default_factory=StaticSent)
     # The digest of each world record as the seat holds it, updated from each emitted group.
     world_stamps: WorldStamps = field(default_factory=WorldStamps)
+    # The digest of each body as the seat holds it (`world_stamps`' rule): its record as last sent whole, until a
+    # change the seat is sent drops it.
+    body_stamps: dict[UUID, int] = field(default_factory=dict)
     # Disclosed lineages, by their native key (`NativeKeys.lineages`).
     disclosed_lineages: set[int] = field(default_factory=set)
     public_versions: dict[UUID, int] = field(default_factory=dict)
@@ -1826,6 +1843,11 @@ def _merge_sent(state: "ProjectionState", walk: SeatWalk) -> None:
     sent.actor_births.update(row.actor_uuid for row in walk.bodies)
     merge_static_sent(sent, walk.pending)
     merge_world_stamps(state.world_stamps, walk.stamps)
+    for identity, digest in walk.body_stamps.items():
+        if digest is None:
+            state.body_stamps.pop(identity, None)
+        else:
+            state.body_stamps[identity] = digest
 
 
 def project_hud(audience: PlayerAudience, events: Iterable[Event],

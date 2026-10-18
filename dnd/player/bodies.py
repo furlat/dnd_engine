@@ -28,6 +28,7 @@ from dnd.player.audience import PlayerAudience
 from dnd.player.facts import (ActorBirth, ActorChangeFact, ActorRows, BodyRecord, BodyState, ItemRecord,
     VisualLoadout)
 from dnd.player.static_sent import StaticSent
+from dnd.player.world_stamps import stable_digest
 from dnd.types.actor_facts import (ActorFactChange, ActorState, ChangeField, ChangeRow, ConditionFact,
     ConditionMember, ConditionRow, DispositionRow, DurationRow, GrantRow, InventoryRow, ItemEffectsRow, ItemStateRow,
     LayerRow, NumberRow, SizeRow, WeaponSetRow)
@@ -163,6 +164,8 @@ def _without_duration(member: ConditionMember) -> ConditionMember:
 
 
 LOADOUT = TypeAdapter(VisualLoadout)
+BODY_STATE = TypeAdapter(BodyState)
+ITEM_RECORDS = TypeAdapter(tuple[ItemRecord, ...])
 
 
 def loadout_id(loadout: VisualLoadout) -> str:
@@ -448,6 +451,23 @@ def change_fact(event: Event, views: tuple[ActorChangeViews, ...], audience: Pla
     if not actors and not records:
         return None
     return ActorChangeFact(actors=tuple(actors), items=tuple(records))
+
+
+def body_stampable(record: BodyRecord) -> bool:
+    """Whether a body record can be confirmed unchanged (`world_stamps`' rule): not when its value depends on the
+    seat's numbering or on the lineages it was disclosed (a membership's application cursor or concentration
+    slots, an item's effects or concentration slots), which map it as the update is emitted: it travels whole."""
+    return not any(member.state is not None and (member.state.applied_source_event_cursor is not None
+                                                 or member.state.concentration_slots)
+                   for member in record.body.conditions) and not any(
+        row.effects or row.state is not None and row.state.concentration_slots for row in record.items)
+
+
+def body_digest(record: BodyRecord) -> int:
+    """A body as the seat holds it from its record: its changeable fields (its loadout by id) and its items'
+    dynamic parts (their looks and profiles are static; a shown item without state or effects has none)."""
+    return stable_digest(BODY_STATE.dump_json(record.body) + b"\n" + ITEM_RECORDS.dump_json(
+        tuple(replace(row, look=None, profile=None) for row in record.items if row.state is not None or row.effects)))
 
 
 def entering_body(occurrence: int, actor: ActorState, audience: PlayerAudience, *, visual: bool, birth: bool,
