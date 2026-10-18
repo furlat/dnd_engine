@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actor_projection import actor_from_birth, apply_actor_fact
+from dnd.actor_projection import actor_fact_change, actor_from_birth, apply_actor_fact_change
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent
 from dnd.core.events import EntityCreatedEvent, EntityFactionChangedEvent, Event, EventPhase, EventQueue, EventType
@@ -104,7 +104,11 @@ def test_faction_after_value_round_trips_without_recreating_actor() -> None:
     assert isinstance(event, EntityFactionChangedEvent)
     assert event.parent_event == born.uuid and event.previous_faction == "party"
     retained = decode_event(encode_event(event))
-    changed = apply_actor_fact(state, retained)
+    change = actor_fact_change(retained)
+    assert change is not None
+    actors = {state.uuid: state}
+    assert apply_actor_fact_change(actors, change) == (state.uuid,)
+    changed = actors[state.uuid]
     assert changed.uuid == state.uuid and changed.faction == "uncontrolled"
     assert changed.normal_hp == state.normal_hp and incoming.get_hp() == hp
     cursor = EventQueue.event_cursor()

@@ -45,8 +45,9 @@ from dnd.types.summoning import SummonDepartureCause
 from dnd.player.audience import AudienceComposition, PlayerAudience, depart_contact, resolve_audience
 
 from dnd.player.actor_facts import ActorState, ConditionFact, PresentationTarget
-from dnd.player.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact
-from dnd.actor_projection import remove_previous_item_holdings
+from dnd.actor_projection import actor_fact_owner, actor_from_birth
+from dnd.player.actor_projection import apply_presented_change
+from dnd.types.actor_facts import ActorFactChange
 from dnd.player.facts import (
     ActionCancellation, ActionFact, ActionReaction, ActorChanges, AreaReachFact, AttackFact, ConditionChangeFact, ItemEffectChangeFact, ContentAttribution, DamageRequestFact, DamageResultFact,
     DeathSaveFact, EquipmentFact, FloorItem, ForcedMovementFact, PortalTransferFact, MechanismActivationFact, HealFact, ItemChargeFact, LifeFact,
@@ -56,7 +57,8 @@ from dnd.player.facts import (
     PlayerWorld, PlayerResolution, LightRow, SensoryFact, SensoryRows, ShoveFact, SpellApplication, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
     VersionRows, VisualItem, VisualLoadout, WorldUpdate, ItemLook, ItemPatch, ItemProfile, ItemState, PlayerItem, TileFieldUpdate, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
 )
-from dnd.player.capture import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
+from dnd.player.capture import (ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact,
+    recorded_actor_change)
 from dnd.player.sheet_facts import sheet_fact
 from dnd.types.actor_sheet import PlayerResourceValue
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
@@ -1354,6 +1356,8 @@ class SeatWalk:
     admissions: tuple[ActorAdmission, ...]
     # The condition facts by their event (a recorded fact may name none).
     facts: dict[UUID | None, ConditionFact]
+    # The shared fold's actor change of each event that has one (E2's record), by event uuid.
+    actor_fact_changes: Mapping[UUID, ActorFactChange]
     logs: Mapping[UUID, PlayerLogEntry]
     by_version: dict[UUID, Event]
     by_lineage: dict[UUID, Event]
@@ -1393,7 +1397,8 @@ class EventFootprint:
 
 def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event, ...],
                 admissions: tuple[ActorAdmission, ...], conditions: tuple[ConditionFact, ...],
-                logs: Mapping[UUID, PlayerLogEntry], observed_sources: tuple[Event, ...] = ()) -> SeatWalk:
+                actor_fact_changes: Mapping[UUID, ActorFactChange], logs: Mapping[UUID, PlayerLogEntry],
+                observed_sources: tuple[Event, ...] = ()) -> SeatWalk:
     """A seat's walk over a group: its events (old recordings upgraded) and their schedules."""
     events = upgrade_recorded_spatial_commits(events, tuple(
         (row.lineage_uuid, row.event_uuid) for row in sorted(group.versions, key=lambda row: row.source_index)))
@@ -1429,7 +1434,7 @@ def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event,
             assert removed.object_uuid is not None
             removal_starts.setdefault(removed.object_uuid, version.source_index)
     return SeatWalk(events=events, admissions=admissions, facts={row.event_uuid: row for row in conditions},
-        logs=logs, by_version={event.uuid: event for event in (*observed_sources, *events)}, by_lineage=by_lineage,
+        actor_fact_changes=actor_fact_changes, logs=logs, by_version={event.uuid: event for event in (*observed_sources, *events)}, by_lineage=by_lineage,
         admissions_at=_due(events, indexes, [(row, indexes[row.event_uuid]) for row in admissions]),
         deliveries_at=_due(events, indexes, list(delivery_starts.items())),
         removals_at=_due(events, indexes, list(removal_starts.items())),
@@ -1469,28 +1474,16 @@ def _enter_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", eve
         return None
     if isinstance(event, EntityCreatedEvent):
         private_actors[event.entity_uuid] = actor_from_birth(event)
-    owner = actor_fact_owner(event)
-    if isinstance(event, ItemLocationStateEvent):
-        removed_holders = remove_previous_item_holdings(private_actors, event)
-        for identity in removed_holders:
+    if (change := recorded_actor_change(walk.actor_fact_changes, event)) is not None:
+        for identity in apply_presented_change(private_actors, change):
+            if identity == change.owner_uuid:
+                continue
+            # Another holder's gear changed: the item left it, or the copy it holds changed.
             contact = private_world.senses.entities.get(identity) if private_world.senses is not None else None
             if identity in walk.known and (observer.controls(identity) or contact is not None and contact.visual):
                 walk.observations.append(_gear_observation(group.indexes[event.uuid], private_actors[identity],
                     observer, walk.records))
     condition = walk.facts.get(event.uuid)
-    if owner is not None and owner in private_actors:
-        private_actors[owner] = apply_actor_fact(private_actors[owner], event, condition)
-    owned_item = condition.resulting_item if condition is not None else None
-    if owned_item is not None:
-        for identity, actor in tuple(private_actors.items()):
-            if not any(item.item_uuid == owned_item.item_uuid for item in actor.items):
-                continue
-            actor = replace(actor, items=tuple(owned_item if item.item_uuid == owned_item.item_uuid else item
-                                               for item in actor.items))
-            private_actors[identity] = actor
-            contact = private_world.senses.entities.get(identity) if private_world.senses is not None else None
-            if identity in walk.known and (observer.controls(identity) or contact is not None and contact.visual):
-                walk.observations.append(_gear_observation(group.indexes[event.uuid], actor, observer, walk.records))
     positions, object_positions = world_event_footprints(private_world.recorded_world, event, condition)
     changed_objects = world_event_objects(private_world.recorded_world, event, condition)
     changed_objects.update(world_objects_at(private_world.recorded_world, object_positions))
@@ -2287,7 +2280,8 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
         states.append(state)
         worlds.append(world)
         walks.append(_begin_walk(group, state, tuple(event for _, event in initialization.admitted),
-            initialization.admissions, initialization.conditions, initialization.logs))
+            initialization.admissions, initialization.conditions, initialization.actor_fact_changes,
+            initialization.logs))
     steps: dict[int, list[tuple[int, Event]]] = {}
     for seat, walk in enumerate(walks):
         for event in walk.events:
@@ -2345,7 +2339,8 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
             if isinstance(event, SpatialEffectChangeEvent) and state.audience.controls(event.source_entity_uuid))
     group = _walk_group(session, versions)
     walks = tuple(_begin_walk(group, state, upgrade_recorded_resolutions(lineage.events), lineage.admissions,
-        lineage.conditions, lineage.logs, lineage.observed_sources) for state, lineage in zip(states, lineages))
+        lineage.conditions, lineage.actor_fact_changes, lineage.logs, lineage.observed_sources)
+        for state, lineage in zip(states, lineages))
     order = tuple(event.uuid for event in walks[0].events)
     if any(tuple(event.uuid for event in walk.events) != order for walk in walks[1:]):
         raise ValueError("The seats of one root walk its events in one order")

@@ -21,6 +21,7 @@ from dnd.types.abilities import AbilityName
 from dnd.types.residues import ObjectResidueState, ResidueContribution, ResidueEllipse, ResidueFieldState, TileResidueState
 from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.world import CardinalDirection, OccupancyLayer, WorldEdgeChannel
+from dnd.types.event_facts import KeyedResidueChange, KeyedTileChange
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,32 +201,38 @@ def deposit_residues(
     field = _residue_field(profile)
     hazardous = _hazardous(profile)
     results: dict[tuple[int, int], TileResidueState] = {}
-    changed: list[tuple[int, int]] = []
+    # Each changed cell's keyed change: this material, the contribution row it grew, and the
+    # tile's condition names when the material is new there (plan Q4 (W)).
+    changed: list[KeyedTileChange] = []
     new_cells: list[tuple[int, int]] = []
     for position, ellipses in cells.items():
         tile = grid.get_tile(*position)
         if tile is None:
             continue
         previous = tile.residue_state(profile.residue_id)
+        contribution: int | None = None
         if previous is None:
             added = min(amount, profile.max_amount)
+            if ellipses or deposit_source is not None:
+                contribution = 0
             state = TileResidueState(
                 condition_uuid=_cell_identity(field, position), residue_id=profile.residue_id,
                 description=profile.description, amount=added, max_amount=profile.max_amount,
                 contributions=((ResidueContribution(ellipses=ellipses, amount=added, deposit_source=deposit_source),)
-                               if ellipses or deposit_source is not None else ()))
+                               if contribution is not None else ()))
             new_cells.append(position)
         elif previous.amount < profile.max_amount:
             added = min(amount, profile.max_amount - previous.amount)
             contributions = previous.contributions
             if ellipses or deposit_source is not None:
-                matching = next((index for index, row in enumerate(contributions)
+                contribution = next((index for index, row in enumerate(contributions)
                     if row.ellipses == ellipses and row.deposit_source == deposit_source), None)
-                if matching is None:
+                if contribution is None:
+                    contribution = len(contributions)
                     contributions += (ResidueContribution(ellipses=ellipses, amount=added, deposit_source=deposit_source),)
                 else:
                     rows = list(contributions)
-                    rows[matching] = rows[matching].model_copy(update={"amount": rows[matching].amount + added})
+                    rows[contribution] = rows[contribution].model_copy(update={"amount": rows[contribution].amount + added})
                     contributions = tuple(rows)
             state = previous.model_copy(update={"amount": previous.amount + added, "contributions": contributions})
         else:
@@ -233,7 +240,9 @@ def deposit_residues(
             continue
         tile.record_residue(state, name=profile.name, hazardous=hazardous)
         results[position] = state
-        changed.append(position)
+        changed.append(KeyedTileChange(position=position,
+            fields={"condition_names": tile.condition_names()} if previous is None else {},
+            residues=(KeyedResidueChange(residue_id=profile.residue_id, contribution_index=contribution, state=state),)))
     field.cells.update(new_cells)
     parent_uuid = parent_event.uuid if parent_event is not None else None
     if new_cells and hazardous:
@@ -269,20 +278,27 @@ def remove_residues(
         return {}
     profile = _PROFILES[residue_id]
     removed: dict[tuple[int, int], TileResidueState] = {}
+    changes: list[KeyedTileChange] = []
     for position in positions:
         tile = grid.get_tile(*position)
-        state = tile.forget_residue(residue_id) if tile is not None else None
-        if state is not None:
-            removed[position] = state
-            field.cells.discard(position)
+        if tile is None:
+            continue
+        state = tile.forget_residue(residue_id)
+        if state is None:
+            continue
+        removed[position] = state
+        field.cells.discard(position)
+        # Keyed removal: the material leaves the tile, and its name leaves the tile's condition names.
+        changes.append(KeyedTileChange(position=position, fields={"condition_names": tile.condition_names()},
+            residues=(KeyedResidueChange(residue_id=residue_id),)))
     if not removed:
         return removed
     parent_uuid = parent_event.uuid if parent_event is not None else None
     if _hazardous(profile):
         _cover_entry_cells(field, profile)
-        grid.commit_tile_mechanics(removed, source_entity_uuid=source_entity_uuid, parent_event=parent_uuid)
+        grid.commit_tile_mechanics(changes, source_entity_uuid=source_entity_uuid, parent_event=parent_uuid)
     else:
-        grid.publish_tiles_state_changed(removed, source_entity_uuid=source_entity_uuid, parent_event=parent_uuid)
+        grid.publish_tiles_state_changed(changes, source_entity_uuid=source_entity_uuid, parent_event=parent_uuid)
     return removed
 
 
