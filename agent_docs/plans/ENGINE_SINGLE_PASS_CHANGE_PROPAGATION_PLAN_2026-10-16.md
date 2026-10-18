@@ -629,7 +629,11 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 - Not met: the per-observer budget (0.33 ms) and area independence (emit scales with changed cells).
 - Open:
   - `Tile.resolved_light_level` is still computed from contributions (reading the GridMap grid from Tile would invert the DAG);
-  - the `_identity_grants` invalidation rule (keyed by `perception_revision`) is to be stated here;
+  - identity grants (PV1a-2, cab998982): the `_identity_grants` memo is deleted. The settled observers' granted
+    cells are one frozen `GrantTable` owned by SpatialSensesSystem and their only holder (`ObserverField.grants`
+    is gone). Invalidation: each settlement replaces its observers' rows after it publishes; register and
+    unregister drop the observer's row with its field; reset and a replaced map empty it. `observers_granted` and
+    `identifying_observers` read it with one gather;
   - ~179 test uses read `capture_senses_snapshot` set forms (PV1b).
 
 **PV1a-2 (next):**
