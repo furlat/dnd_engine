@@ -7,7 +7,7 @@ from dnd.core.aoe import AoEShape, Sphere
 from dnd.conditions import Concentrating, InvisibilityEffect
 from dnd.core.base_conditions import ConditionStateChangedEvent
 from dnd.core.condition_types import ConditionTag
-from dnd.core.encounter_facts import OpeningTurnFacts, opening_turn_facts
+from dnd.encounter import Encounter, OpeningTurnFacts
 from dnd.core.saving_throw_types import SAVING_THROW_CONTEXT_KEY, SavingThrowContext
 from dnd.types.discovery import ActorScan, Relationship, ScanRecord
 from dnd.types.world import MovementMode
@@ -1885,7 +1885,8 @@ def _assassinate_target_facts(source_uuid: UUID, target_uuid: UUID | None) -> Op
     if (source is None or target is None or source.active_encounter_uuid is None
             or source.active_encounter_uuid != target.active_encounter_uuid):
         return None
-    return opening_turn_facts(source.active_encounter_uuid, target.uuid)
+    encounter = Encounter.get(source.active_encounter_uuid)
+    return encounter.opening_turn_facts(target.uuid) if encounter is not None else None
 
 
 def assassinate_advantage(source_entity_uuid: UUID, target_entity_uuid: UUID | None,

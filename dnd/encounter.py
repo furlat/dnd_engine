@@ -22,7 +22,6 @@ from collections.abc import Iterator
 import logging
 
 from dnd.core.base_object import BaseObject
-from dnd.core.encounter_facts import OpeningTurnFacts
 from dnd.core.condition_types import ConditionRemovalTrigger
 from dnd.core.dice import Dice, RollType
 from dnd.core.values import ValueRead, read_value, parts
@@ -292,6 +291,19 @@ class CombatantState(BaseObject):
         if entity is None:
             return False
         return entity.is_encounter_alive
+
+
+@dataclass(frozen=True, slots=True)
+class OpeningTurnFacts:
+    """A combatant's opening-turn facts, read live from its encounter.
+
+    Attributes:
+        has_started_turn: Whether the combatant's first encounter turn has begun.
+        is_surprised: Whether the combatant is still within its surprised first turn.
+    """
+
+    has_started_turn: bool
+    is_surprised: bool
 
 
 @dataclass(slots=True)
