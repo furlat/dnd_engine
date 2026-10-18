@@ -4,7 +4,7 @@ O1, perceived equality. At an operation's end each seat's perceived view is buil
 `differences` lists every record held on one side only and every differing field of a record held on both:
 
 - the reference, from the live engine: every member's current senses (`capture_senses_snapshot`), composed by
-  `audience_view`; the visible cells' live tiles (`Tile.to_world_tile_state`); the live placed objects
+  `composed_view` (visible parts only, plan §3.2); the visible cells' live tiles (`Tile.to_world_tile_state`); the live placed objects
   (`project_world_object`) through the seats' world publication rule (`world_publication.object_observed` and
   `disclosed_world_object`, which read no seat memory); the live connectors (`project_world_connector`); each perceived body read from its live aggregate
   (`Entity._entity_created_event`, `actor_from_birth`) and disclosed by the body record a seat receives when the
@@ -66,7 +66,7 @@ from dnd.core.events import WorldConnectorState, WorldTileState
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.player.actor_facts import ActorState
-from dnd.player.audience import AudiencePerception, PlayerAudience, audience_view
+from dnd.player.audience import AudiencePerception, PlayerAudience, composed_view
 from dnd.player.facts import (PlayerActor, PlayerCharacterSheet, PlayerItem, PlayerObject, PlayerState,
     SpatialEffectContent)
 from dnd.player.bodies import entering_body
@@ -175,15 +175,12 @@ def _effects(composed: Mapping[UUID, PerceivedSpatialEffect], members: Mapping[U
 
 def _lights(composed: Mapping[UUID, PerceivedLightSource], members: Mapping[UUID, SensesSnapshot],
             visible: set[Position] | None) -> dict[str, Any]:
-    """Each composed light source with its footprint on visible cells, and the members holding it. With
-    `visible` None (O4), every held source with its whole footprint."""
-    names = {key(position) for position in visible} if visible is not None else None
+    """Each composed light source at a visible cell, and the members holding it. With `visible` None (O4), every
+    held source. (A perceived source carries no footprint: the cells' light is their own value.)"""
     result = {}
     for identity, source in composed.items():
-        footprint = {cell: level for cell, level in source.affected_tiles.items() if names is None or cell in names}
-        if visible is None or footprint or tuple(source.position) in visible:
+        if visible is None or tuple(source.position) in visible:
             data = LIGHT.dump_python(source, mode='json')
-            data['affected_tiles'] = dict(sorted(footprint.items()))
             data['members'] = sorted(str(member) for member, senses in members.items() if identity in senses.light_sources)
             result[str(identity)] = data
     return result
@@ -428,7 +425,7 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
     """The reference: what the seat perceives now, read from the live engine and disclosed by the projector's
     functions. `client` supplies only identities: the seat's generation, stream observer and world bounds."""
     members = live_members(world.session, audience)
-    senses = audience_view(AudiencePerception(members=members), client.observer_uuid)
+    senses = composed_view(AudiencePerception(members=members), client.observer_uuid)
     if senses is None:
         return {category: {} for category in CATEGORIES}
     # An effect's duration is disclosed to its owner's controllers only (the rule of `_public_occurrences`,
@@ -598,11 +595,14 @@ def close_oracle(oracle: Oracle, manifest: dict[str, Any], states: Mapping[str, 
 
 
 def _schema16_view(view: View) -> View:
-    """A stored view in the schema-16 item shape (base recordings held item effects in the look)."""
+    """A stored view in the schema-16 shape: item effects out of the look, and no light footprint (base recordings
+    carried a perceived source's always-empty `affected_tiles`)."""
     for actor in view.get('actors', {}).values():
         for item in (actor or {}).get('items', {}).values():
             if item is not None:
                 _schema16_item(item)
+    for source in view.get('lights', {}).values():
+        source.pop('affected_tiles', None)
     return view
 
 

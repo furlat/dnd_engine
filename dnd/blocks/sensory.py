@@ -2597,7 +2597,7 @@ class SpatialSensesSystem:
                     continue
                 values = row.values + (row.anchor_uuid if entity_seen else None, row.anchor_uuid if item_seen else None)
                 old = previous.get(identity)
-                if old is not None and not old.affected_tiles and previous_values.get(identity) == values:
+                if old is not None and previous_values.get(identity) == values:
                     sources[identity] = old
                 else:
                     key = ("light", identity, values)

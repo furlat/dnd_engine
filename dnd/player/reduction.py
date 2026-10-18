@@ -8,7 +8,7 @@ from dnd.types.actor_facts import (ChangeField, ChangeRow, ConditionMember, Cond
     GrantRow, InventoryRow, ItemEffectsRow, ItemStateRow, LayerRow, NumberRow, SizeRow, WeaponSetRow, dropped, upserted)
 from dnd.types.item_parts import VisualItem
 from dnd.core.cells import (CellRows, bit_rows, layer_rows, mask_positions, mask_rows, mask_union, selected_mask,
-    selected_values, update_cells, values_items)
+    selected_values, update_cells)
 from dnd.core.sensory_fold import copy_senses_snapshot, sense_modes_key
 from uuid import UUID
 
@@ -17,11 +17,10 @@ from dnd.core.item_types import ItemEffectPresentationState
 from dnd.core.life_types import LifeState
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues, cell_in
 from dnd.types.event_facts import EventType, SpatialChangeType
-from dnd.types.world import LightLevel
 from dnd.types.senses import (PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesSnapshot,
     SensoryDelta)
-from dnd.player.audience import (AudienceComposition, apply_current_audience, audience_view,
-    begin_audience_composition, observe_audience, perceived_entities, resolve_audience)
+from dnd.player.audience import (AudienceComposition, AudiencePerception, apply_settlement,
+    begin_audience_composition, depart_contact, perceived_entities, resolve_audience)
 from dnd.player.facts import (
     ActorBirth, ActorChangeFact, BodyRecord, ItemRecord, AttackFact, DamageResultFact, HealFact, ItemChargeFact, LifeFact, PlayerItem,
     PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, SheetPatch, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerSequence,
@@ -90,11 +89,8 @@ def copy_target(target: PlayerState) -> PlayerState:
         items=dict(target.items), spatial_content=dict(target.spatial_content),
         spatial_commit_cursors=dict(target.spatial_commit_cursors),
         senses=None if senses is None else copy_senses_snapshot(senses),
-        perception=replace(target.perception,
-            members={identity: copy_senses_snapshot(value) for identity, value in target.perception.members.items()},
-            contact_cursors=dict(target.perception.contact_cursors),
-            effect_cursors=dict(target.perception.effect_cursors),
-            effect_absences=dict(target.perception.effect_absences)),
+        perception=AudiencePerception(
+            {identity: copy_senses_snapshot(value) for identity, value in target.perception.members.items()}),
         entity_members=dict(target.entity_members), object_contact_members=dict(target.object_contact_members),
         effect_members=dict(target.effect_members), light_sources=dict(target.light_sources),
         remembered_effects=dict(target.remembered_effects))
@@ -330,8 +326,7 @@ def sensory_values(rows: SensoryRows) -> SensoryValues:
         very_bright_radius_feet=row.very_bright_radius_feet, bright_radius_feet=row.bright_radius_feet,
         dim_radius_feet=row.dim_radius_feet, appearance=row.appearance, actor_anchored=row.actor_anchored,
         anchor_entity_uuid=uuids[row.anchor_entity] if row.anchor_entity is not None else None,
-        anchor_item_uuid=uuids[row.anchor_item] if row.anchor_item is not None else None,
-        affected_tiles={f"{x},{y}": LightLevel(level) for (x, y), level in values_items(row.affected_tiles)})
+        anchor_item_uuid=uuids[row.anchor_item] if row.anchor_item is not None else None)
         for row in rows.light_sources), mask_rows(rows.cells), layer_rows(rows.light_levels), layer_rows(rows.hazards))
 
 
@@ -414,10 +409,11 @@ def apply_sensed_fact(target: PlayerState, fact: FoldedFact, known: Collection[U
     match fact:
         case SpatialFact():
             if fact.terminal_departure and fact.entity_uuid is not None and fact.entity_uuid in known:
-                if target.senses is not None:
+                if audience_composition is not None:
+                    depart_contact(audience_composition, fact.entity_uuid)
+                    target.senses = audience_composition.view
+                elif target.senses is not None:
                     target.senses.entities.pop(fact.entity_uuid, None)
-                    if audience_composition is not None:
-                        audience_composition.contact_overrides.add(fact.entity_uuid)
             elif (target.viewing_audience.controls(fact.entity_uuid)
                     and fact.change_type is SpatialChangeType.ENTITY_ENTERED
                     and target.senses is not None and fact.entity_uuid == target.observer_uuid):
@@ -425,8 +421,7 @@ def apply_sensed_fact(target: PlayerState, fact: FoldedFact, known: Collection[U
                 # sensory batch folds an arrival and return to the same cell.
                 target.senses = replace(target.senses, position=fact.position)
         case SensoryChanges():
-            fold_senses(target, fact, cursor=target.reducer_cursor if source_cursor is None else source_cursor,
-                audience_composition=audience_composition)
+            fold_senses(target, fact, audience_composition=audience_composition)
             clear_unseen_positions(target)
         case SensoryFact():
             raise ValueError("A sensory fact is folded with its group's rows resolved (sensory_changes)")
@@ -437,15 +432,14 @@ def apply_sensed_fact(target: PlayerState, fact: FoldedFact, known: Collection[U
                 target.current_actor_uuid = fact.entity_uuid if fact.event_type is EventType.TURN_START else None
 
 
-def fold_senses(target: PlayerState, delta: SensoryDelta, *, cursor: int,
+def fold_senses(target: PlayerState, delta: SensoryDelta, *,
                 audience_composition: AudienceComposition | None) -> None:
-    """Fold one member's sensory after-values into the seat's perception and its composed view."""
-    if audience_composition is None:
-        target.perception = observe_audience(target.perception, target.viewing_audience, delta, cursor)
-        target.senses = audience_view(target.perception, target.observer_uuid)
-    else:
-        apply_current_audience(audience_composition, target.viewing_audience, target.observer_uuid, delta, cursor)
-        target.perception, target.senses = audience_composition.perception, audience_composition.view
+    """Fold one member's sensory after-values into the seat's perception and its composed view: a settlement of
+    one observation, by the seat composition's own function (plan §3.1)."""
+    composition = (audience_composition if audience_composition is not None
+                   else begin_audience_composition(target.perception, target.observer_uuid))
+    apply_settlement(composition, target.viewing_audience, target.observer_uuid, (delta,))
+    target.perception, target.senses = composition.perception, composition.view
 
 
 def apply_record_fact(target: PlayerState, fact: PlayerFact, rows: SensoryRows,

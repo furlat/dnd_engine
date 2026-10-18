@@ -54,7 +54,7 @@ def initialize_audiences(session: Session, catalog: UIContentManifest
         projection, initial = projected[seat]
         # The startup publication's projection: the sheets whole, the perceived initiative.
         initial = replace(initial, hud=project_hud(audience, (event for _, event in startup.admitted), None,
-            checkpoint.initiative, perceived_entities(audience, projection.remembered.perception)))
+            checkpoint.initiative, perceived_entities(audience, projection.audience_composition.perception)))
         # Startup content: the public catalog and the observed content the initialization witnesses.
         projection.static_sent.content.update(row.ref.identity_key
             for row in startup_content(content_catalog, initial))
@@ -95,7 +95,7 @@ def capture_application_operation(runtimes: dict[str, AudienceRuntime], operatio
     replacement_catalog = None
     # What each seat's client knew before the operation, and each root captured for it.
     known_before = {seat: seat_capture_inputs(runtime) for seat, runtime in runtimes.items()}
-    perceived_before = {seat: perceived_entities(runtime.projection.audience, runtime.projection.remembered.perception)
+    perceived_before = {seat: perceived_entities(runtime.projection.audience, runtime.projection.audience_composition.perception)
         for seat, runtime in runtimes.items()}
     natives = {seat: capture_lineages(operation.roots, observer_uuid=runtime.projection.remembered.observer_uuid,
             audience=runtime.projection.audience, known_actor_uuids=known.actors, context=context,
@@ -128,7 +128,7 @@ def capture_application_operation(runtimes: dict[str, AudienceRuntime], operatio
         appends = project_log_appends(projection, appends)
         hud = project_hud(audience, (event for native in natives[seat] for event in native.events),
             (order_before, perceived_before[seat]), checkpoint.initiative,
-            perceived_entities(audience, remembered.perception))
+            perceived_entities(audience, projection.audience_composition.perception))
         added: dict[str, ContentDescriptor] = {}
         if runtime.content_catalog.source is not catalog:
             # A replacement catalog sends its new public descriptors now, its observed ones as they are witnessed.

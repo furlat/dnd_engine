@@ -15,8 +15,7 @@ from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, Spell
 from dnd.spells.abjuration import CounterspellReactionEvent
 from dnd.blocks.base_item import ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
-from dnd.core.cells import (flag_bits, mask_from_positions, mask_union, shared_cells, shared_values,
-    values_from_items, zeros_left_out)
+from dnd.core.cells import flag_bits, mask_from_positions, mask_union, shared_cells, shared_values, zeros_left_out
 from dnd.types.cells import EMPTY_CELLS, CellMask, CellValues, cell_in, no_cells
 from dnd.types.senses import SensesSnapshot, PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
@@ -40,7 +39,7 @@ from dnd.types.event_facts import AppliedWorldFact
 from dnd.types.class_features import FontConversion
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult
 from dnd.types.summoning import SummonDepartureCause
-from dnd.player.audience import AudienceComposition, PlayerAudience, depart_contact, resolve_audience
+from dnd.player.audience import AudienceComposition, PlayerAudience, apply_settlement, depart_contact, resolve_audience
 
 from dnd.player.actor_facts import ActorState, ConditionFact
 from dnd.player.actor_projection import fold_birth, fold_completed_actors
@@ -62,7 +61,7 @@ from dnd.player.sheet_facts import sheet_fact
 from dnd.types.actor_sheet import PlayerResourceValue
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
 from dnd.player.static_sent import StaticSent, merge_static_sent
-from dnd.player.reduction import commit_current, fold_senses
+from dnd.player.reduction import commit_current
 from dnd.player.world_publication import (SensedWorld, disclosed_world_object, object_observed, observed_remnant,
     seat_world_update)
 from dnd.player.compatibility import legacy_damage_reference
@@ -962,6 +961,10 @@ class SeatWalk:
     table: SensoryTable
     # The bodies the seat holds at this point of the walk (their births sent).
     known: set[UUID]
+    # The seat's settlements: at the first sensory event of its members in each, all of them (in walk order);
+    # the others are `settled` there (plan §3.1: one composition per settlement).
+    settlements: dict[UUID, tuple[SensoryUpdateEvent, ...]] = field(default_factory=dict)
+    settled: frozenset[UUID] = frozenset()
     # The bodies that entered the seat's view during the walk.
     entered: set[UUID] = field(default_factory=set)
     # An interaction may itself hide the object. Retain its already granted
@@ -1018,12 +1021,19 @@ def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event,
             assert removed.object_uuid is not None
             removal_starts.setdefault(removed.object_uuid, version.source_index)
     sent = state.static_sent
+    # A settlement's events share its marker; an event recorded without one is a settlement of its own.
+    settlements: dict[int | UUID, list[SensoryUpdateEvent]] = {}
+    for event in events:
+        if isinstance(event, SensoryUpdateEvent) and state.audience.observes(event.observer_uuid):
+            settlements.setdefault(event.settlement if event.settlement is not None else event.uuid, []).append(event)
     return SeatWalk(events=events, facts={row.event_uuid: row for row in conditions},
         actor_fact_changes=actor_fact_changes, logs=logs, by_lineage=by_lineage,
         deliveries_at=_due(events, indexes, list(delivery_starts.items())),
         removals_at=_due(events, indexes, list(removal_starts.items())),
         explicit_destructions=frozenset(event.item_uuid for event in events if isinstance(event, ItemDestructionEvent)),
         table=SensoryTable(), known=set(sent.actor_births),
+        settlements={members[0].uuid: tuple(members) for members in settlements.values()},
+        settled=frozenset(event.uuid for members in settlements.values() for event in members[1:]),
         observed_objects=set(state.observed_objects))
 
 
@@ -1092,22 +1102,25 @@ def _enter_body(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", acto
 
 def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", world: WorldFacts, event: Event,
                    applied: AppliedWorldFact | None, folded: Mapping[UUID, AppliedWorldFact | None],
-                   before: CellMask) -> None:
+                   before: CellMask, settlement: tuple[SensoryUpdateEvent, ...] = ()) -> None:
     """The seat's world update at an event (`before`: its composed view's visible cells before the event): what
-    the event wrote or, at a sensory event of one of its members, what that member's senses changed and what the
-    changes it saw happen wrote (folded at their own versions), each of those once per seat."""
+    the event wrote or, at a settlement of its members (`settlement`, at its first event), what their senses
+    changed and what the changes they saw happen wrote (folded at their own versions), each of those once per
+    seat."""
     composition, audience = state.audience_composition, state.audience
     records: tuple[AppliedWorldFact, ...] = (applied,) if applied is not None else ()
     # Each record publishes once per seat: a walked event's own, or an observed change's at the first sight of it.
     walk.published_sources.add(event.uuid)
     sensed = None
-    if isinstance(event, SensoryUpdateEvent) and audience.observes(event.observer_uuid):
-        sources = tuple(source for source in dict.fromkeys(row.source_event_uuid for row in event.observed_changes)
-            if source not in walk.published_sources)
+    if settlement:
+        sources = tuple(source for source in dict.fromkeys(row.source_event_uuid for member in settlement
+            for row in member.observed_changes) if source not in walk.published_sources)
         walk.published_sources.update(sources)
         records = tuple(record for source in sources if (record := folded.get(source)) is not None)
-        sensed = SensedWorld(frozenset(event.object_contacts_changed) | event.object_contacts_removed,
-            frozenset(event.spatial_effects_changed) | event.spatial_effects_removed)
+        sensed = SensedWorld(frozenset(identity for member in settlement
+                for identity in (*member.object_contacts_changed, *member.object_contacts_removed)),
+            frozenset(identity for member in settlement
+                for identity in (*member.spatial_effects_changed, *member.spatial_effects_removed)))
     view = composition.view
     if view is None:
         return
@@ -1126,26 +1139,28 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
     node. `folded` holds what each version the group folded so far applied."""
     observer, remembered = state.audience, state.remembered
     keys, indexes, facts = group.keys, group.indexes, walk.facts
-    sensed_here = isinstance(event, SensoryUpdateEvent) and observer.observes(event.observer_uuid)
-    if not event.canceled and (applied is not None or sensed_here):
+    settlement = walk.settlements.get(event.uuid, ())
+    # A settlement's later events were composed at its first.
+    if not event.canceled and event.uuid not in walk.settled and (applied is not None or settlement):
         composition = state.audience_composition
         before = composition.view.visible if composition.view is not None else EMPTY_CELLS
-        if isinstance(event, SensoryUpdateEvent) and sensed_here:
-            # The member's senses: the seat's perception and composed view after the event. A body enters when
-            # the seat's composed view takes it as a contact (a member regaining a body another holds is no
-            # entry); only the member's changed contacts can enter, in the member's order. A controlled body
-            # never enters here: it is always perceived (below).
+        if settlement:
+            # The settlement's senses, at its first event: the seat's perception and composed view after all of
+            # its members' observations, composed once. A body enters when the seat's composed view takes it as
+            # a contact (a member regaining a body another holds is no entry); only the members' changed contacts
+            # can enter, in their order. A controlled body never enters here: it is always perceived (below).
             held = composition.view.entities if composition.view is not None else {}
-            entering = tuple(identity for identity in event.entity_contacts_changed
-                             if not observer.controls(identity) and (identity not in held or identity not in walk.known))
-            fold_senses(remembered, event, cursor=indexes[event.uuid], audience_composition=composition)
+            entering = tuple(identity for identity in dict.fromkeys(identity for member in settlement
+                for identity in member.entity_contacts_changed)
+                if not observer.controls(identity) and (identity not in held or identity not in walk.known))
+            apply_settlement(composition, observer, state.observer_uuid, settlement)
             view = composition.view
             if view is not None:
                 for identity in entering:
                     contact = view.entities.get(identity)
                     if contact is not None:
                         _enter_body(walk, group, state, actors, event, identity, contact.visual)
-        _publish_world(walk, group, state, world, event, applied, folded, before)
+        _publish_world(walk, group, state, world, event, applied, folded, before, settlement)
     for identity in observer.controlled:
         # A controlled body is always perceived: it enters once the session holds it.
         if identity not in walk.known and identity in actors:
@@ -1651,14 +1666,7 @@ def _light_row(source: PerceivedLightSource, uuid: Callable[[UUID], int]) -> Lig
         bright_radius_feet=source.bright_radius_feet, dim_radius_feet=source.dim_radius_feet,
         appearance=source.appearance, actor_anchored=source.actor_anchored,
         anchor_entity=uuid(source.anchor_entity_uuid) if source.anchor_entity_uuid is not None else None,
-        anchor_item=uuid(source.anchor_item_uuid) if source.anchor_item_uuid is not None else None,
-        affected_tiles=values_from_items({_tile(key): level.value for key, level in source.affected_tiles.items()}))
-
-
-def _tile(key: str) -> tuple[int, int]:
-    """A light footprint's tile key ("x,y") as a cell."""
-    x, y = key.split(",")
-    return int(x), int(y)
+        anchor_item=uuid(source.anchor_item_uuid) if source.anchor_item_uuid is not None else None)
 
 
 def _shared_rows(nodes: tuple[PlayerNode, ...], table: SensoryTable

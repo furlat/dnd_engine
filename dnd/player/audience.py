@@ -4,14 +4,14 @@ This module never queries native owners. The display view is composed from
 complete recorded observations; it grants no actor additional senses or actions.
 """
 
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from uuid import UUID
 
 import numpy as np
 
-from dnd.core.cells import Box, cell_layers, mask_box, mask_positions, mask_union, pack_layers, union_box
-from dnd.core.sensory_fold import apply_current_senses, copy_senses_snapshot, prepare_sensory_delta, reduce_senses_snapshot
+from dnd.core.cells import Box, cell_layers, mask_box, mask_union, pack_layers, pack_mask, pack_values, union_box
+from dnd.core.sensory_fold import apply_current_senses, copy_senses_snapshot, prepare_sensory_delta
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues, cell_in
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SensoryDelta, SensesSnapshot
 
@@ -64,71 +64,21 @@ def resolve_audience(observer_uuid: UUID, audience: PlayerAudience | None) -> Pl
     return audience
 
 
+
 @dataclass(frozen=True, slots=True)
 class AudiencePerception:
-    """Independent member snapshots with event-order provenance for arbitration."""
+    """Each member's own snapshot: what it perceives now (native perception, its retained effect rows included).
+
+    The seat's composed view is a function of these snapshots alone (`composed_view`); no sighting order or
+    remembered footprint enters it (plan §3.2).
+    """
+
     members: dict[UUID, SensesSnapshot] = field(default_factory=dict)
-    contact_cursors: dict[tuple[UUID, UUID], int] = field(default_factory=dict)
-    effect_cursors: dict[tuple[UUID, UUID], int] = field(default_factory=dict)
-    effect_absences: dict[tuple[UUID, tuple[int, int]], int] = field(default_factory=dict)
 
 
 def perceived_entities(audience: PlayerAudience, perception: AudiencePerception) -> frozenset[UUID]:
     """The entities a seat perceives now: its controlled actors and every member's entity contacts."""
     return frozenset(audience.controlled).union(*(snapshot.entities for snapshot in perception.members.values()))
-
-
-def observe_audience(previous: AudiencePerception, audience: PlayerAudience,
-                     event: SensoryDelta, cursor: int) -> AudiencePerception:
-    if not audience.observes(event.observer_uuid):
-        raise ValueError("Sensory observation does not belong to this audience")
-    members = dict(previous.members)
-    members[event.observer_uuid] = reduce_senses_snapshot(
-        event.observer_uuid, members.get(event.observer_uuid), event)
-    contacts = dict(previous.contact_cursors)
-    effects = dict(previous.effect_cursors)
-    absent = dict(previous.effect_absences)
-    current = members[event.observer_uuid]
-    before = previous.members.get(event.observer_uuid)
-    for identity in (*event.entity_contacts_changed, *event.object_contacts_changed):
-        contacts[event.observer_uuid, identity] = cursor
-    for identity, observed in event.spatial_effects_changed.items():
-        if (any(cell_in(current.visible, position) for position in observed.positions)
-                or observed.visible_volume_positions or observed.upper_volume_surfaces):
-            effects[event.observer_uuid, identity] = cursor
-    # Seeing an empty cell is evidence too, including a member's first visit.
-    # It retires only that cell of another member's remembered footprint.
-    known: dict[UUID, set[tuple[int, int]]] = {}
-    for senses in (*previous.members.values(), current):
-        for identity, observed in senses.spatial_effects.items():
-            known.setdefault(identity, set()).update(observed.positions)
-    for identity, positions in known.items():
-        observed = current.spatial_effects.get(identity)
-        present = set(observed.positions) if observed is not None else set()
-        for position in (position for position in positions if cell_in(current.visible, position)):
-            key = identity, position
-            if position in present:
-                if absent.get(key, -1) <= cursor:
-                    absent.pop(key, None)
-            elif absent.get(key, -1) <= cursor:
-                prior = before.spatial_effects.get(identity) if before is not None else None
-                apparent = any(row.apparent_presence for senses in previous.members.values()
-                               if (row := senses.spatial_effects.get(identity)) is not None)
-                # A known concealed effect has native removal evidence too;
-                # another observer merely failing to discover it does not.
-                if apparent or prior is not None and position in prior.positions:
-                    absent[key] = cursor
-    return AudiencePerception(members, contacts, effects, absent)
-
-
-def _contacts(perception: AudiencePerception, *, objects: bool) -> dict[UUID, PerceivedContact]:
-    selected: dict[UUID, tuple[tuple[bool, int, int], PerceivedContact]] = {}
-    for observer, senses in perception.members.items():
-        for identity, contact in (senses.objects if objects else senses.entities).items():
-            rank = (contact.visual, perception.contact_cursors.get((observer, identity), -1), -observer.int)
-            if identity not in selected or rank > selected[identity][0]:
-                selected[identity] = rank, contact
-    return {identity: row[1] for identity, row in selected.items()}
 
 
 def _effect_signature(value: PerceivedSpatialEffect) -> tuple:
@@ -199,61 +149,6 @@ def _join_effects(first: PerceivedSpatialEffect, rows: Iterable[PerceivedSpatial
         'upper_volume_surfaces': tuple(upper[key] for key in sorted(upper)),
         'suppressions': suppressions,
         'construction_sections': tuple(sections)})
-
-
-def _effects(perception: AudiencePerception) -> dict[UUID, PerceivedSpatialEffect]:
-    selected: dict[UUID, tuple[tuple[int, int, int], PerceivedSpatialEffect]] = {}
-    for observer, senses in perception.members.items():
-        for identity, observed in senses.spatial_effects.items():
-            rank = (observed.owner_revision if observed.owner_revision is not None else -1,
-                    perception.effect_cursors.get((observer, identity), -1), -observer.int)
-            if identity not in selected or rank > selected[identity][0]:
-                selected[identity] = rank, observed
-    result = {}
-    for identity, (_, newest) in selected.items():
-        merged = _join_effects(newest, (row for observer in sorted(perception.members, key=lambda value: value.int)
-            if (row := perception.members[observer].spatial_effects.get(identity)) is not None))
-        positions = {position for position in merged.positions
-                     if (identity, position) not in perception.effect_absences}
-        if positions or merged.visible_volume_positions or merged.upper_volume_surfaces:
-            result[identity] = merged.model_copy(update={'positions': tuple(sorted(positions))})
-    return result
-
-
-def light_sources(perception: AudiencePerception) -> tuple[dict[UUID, PerceivedLightSource], dict[UUID, int]]:
-    """Union only current-revision optical footprints across permitted observers.
-
-    Equal revision removal means this observer lost sight; a newer removal
-    retires stale source versions still retained by other observer snapshots.
-    """
-    revisions: dict[UUID, int] = {}
-    for senses in perception.members.values():
-        for identity, revision in senses.light_source_removals.items():
-            revisions[identity] = max(revisions.get(identity, -1), revision)
-        for identity, source in senses.light_sources.items():
-            revisions[identity] = max(revisions.get(identity, -1), source.revision)
-    rows: dict[UUID, list[PerceivedLightSource]] = {}
-    for observer in sorted(perception.members, key=lambda value: value.int):
-        for identity, source in perception.members[observer].light_sources.items():
-            if source.revision == revisions[identity]:
-                rows.setdefault(identity, []).append(source)
-    result = {identity: _merged_light(members) for identity, members in rows.items()}
-    return result, {identity: revision for identity, revision in revisions.items() if identity not in result}
-
-
-def _merged_light(rows: list[PerceivedLightSource]) -> PerceivedLightSource:
-    """The first member's row with every member's footprint (later rows win) and first anchors."""
-    first = rows[0]
-    if len(rows) == 1:
-        return first
-    tiles: dict = {}
-    for row in rows:
-        tiles.update(row.affected_tiles)
-    entity = next((row.anchor_entity_uuid for row in rows if row.anchor_entity_uuid), None)
-    item = next((row.anchor_item_uuid for row in rows if row.anchor_item_uuid), None)
-    if tiles == first.affected_tiles and entity == first.anchor_entity_uuid and item == first.anchor_item_uuid:
-        return first
-    return first.model_copy(update={"affected_tiles": tiles, "anchor_entity_uuid": entity, "anchor_item_uuid": item})
 
 
 def update_light_sources(
@@ -413,28 +308,106 @@ def _fold_view_cells(current: "AudienceComposition", observer: UUID, before: Sen
     current.view = replace(view, visible=cells, effective_light_levels=light, hazardous_cells=hazard)
 
 
-def audience_view(perception: AudiencePerception, observer_uuid: UUID) -> SensesSnapshot | None:
-    """Compose display evidence, never a native observer or targeting capability.
+def _visible_part(row: PerceivedSpatialEffect, senses: SensesSnapshot) -> PerceivedSpatialEffect | None:
+    """A member's effect row as the member perceives it now (plan §3.2): its cells the member sees and its seen
+    volume cells; None when nothing of it is perceived."""
+    volume = row.visible_volume_positions
+    positions = tuple(position for position in row.positions
+                      if cell_in(senses.visible, position) or position in volume)
+    if not positions and not row.upper_volume_surfaces:
+        return None
+    return row if len(positions) == len(row.positions) else row.model_copy(update={"positions": positions})
 
-    Scalar sense capabilities remain those of the stable stream observer. Only
-    already-authorized spatial observations are united for presentation.
+
+def _composed_effect(perception: AudiencePerception, identity: UUID, holders: Iterable[UUID]
+                     ) -> "ComposedEffect | None":
+    """An effect as the seat perceives it, and the members perceiving it: the members' visible parts joined,
+    led by the newest revision (ties: the smaller member uuid)."""
+    parts = {}
+    for member in holders:
+        senses = perception.members[member]
+        row = senses.spatial_effects.get(identity)
+        if row is not None and (part := _visible_part(row, senses)) is not None:
+            parts[member] = part
+    if not parts:
+        return None
+    newest = max(parts, key=lambda member: (parts[member].owner_revision if parts[member].owner_revision is not None
+                                            else -1, -member.int))
+    joined = _join_effects(parts[newest], (parts[member] for member in sorted(parts, key=lambda value: value.int)))
+    return ComposedEffect(joined, frozenset(parts))
+
+
+def _composed_contact(perception: AudiencePerception, identity: UUID, holders: Iterable[UUID], *,
+                      objects: bool) -> "ComposedContact | None":
+    """A contact as the seat perceives it, and the members holding it: a visual holder's first, then the smaller
+    member uuid's."""
+    rows = {member: contact for member in holders if (contact := (perception.members[member].objects if objects
+            else perception.members[member].entities).get(identity)) is not None}
+    if not rows:
+        return None
+    holder = max(rows, key=lambda member: (rows[member].visual, -member.int))
+    return ComposedContact(rows[holder], frozenset(rows))
+
+
+def _merged_light(rows: list[PerceivedLightSource]) -> PerceivedLightSource:
+    """The first member's row with the first anchors any member discloses."""
+    first = rows[0]
+    if len(rows) == 1:
+        return first
+    entity = next((row.anchor_entity_uuid for row in rows if row.anchor_entity_uuid), None)
+    item = next((row.anchor_item_uuid for row in rows if row.anchor_item_uuid), None)
+    if entity == first.anchor_entity_uuid and item == first.anchor_item_uuid:
+        return first
+    return first.model_copy(update={"anchor_entity_uuid": entity, "anchor_item_uuid": item})
+
+
+def _holders(perception: AudiencePerception) -> tuple[dict[UUID, set[UUID]], dict[UUID, set[UUID]], dict[UUID, set[UUID]]]:
+    """Which members hold each entity contact, object contact and effect row."""
+    entities: dict[UUID, set[UUID]] = {}
+    objects: dict[UUID, set[UUID]] = {}
+    effects: dict[UUID, set[UUID]] = {}
+    for member, senses in perception.members.items():
+        for identity in senses.entities:
+            entities.setdefault(identity, set()).add(member)
+        for identity in senses.objects:
+            objects.setdefault(identity, set()).add(member)
+        for identity in senses.spatial_effects:
+            effects.setdefault(identity, set()).add(member)
+    return entities, objects, effects
+
+
+def composed_view(perception: AudiencePerception, observer_uuid: UUID) -> SensesSnapshot | None:
+    """The seat's composed view of its members' snapshots (plan §3.1, §3.2), a function of those snapshots alone.
+
+    Each visible cell shows the observation of the member seeing it in the brightest light (ties: the smaller
+    uuid); each contact, its visual holder's (ties: the smaller uuid); each effect, its members' visible parts
+    (`_composed_effect`); each light source, its newest rows. The seen cells are every member's; the scalar
+    capabilities stay the stream observer's (the first member's before it perceives). It grants no actor
+    additional senses or actions. `apply_settlement` keeps it incrementally.
     """
     if not perception.members:
         return None
-    anchor = perception.members.get(observer_uuid) or next(iter(perception.members.values()))
+    members = perception.members
+    anchor = members.get(observer_uuid) or next(iter(members.values()))
     visible, light, hazards = _composed_view_cells(perception)
-    lights, removals = light_sources(perception)
+    entity_holders, object_holders, effect_holders = _holders(perception)
+    entities = {identity: composed.contact for identity, owners in entity_holders.items()
+                if (composed := _composed_contact(perception, identity, owners, objects=False)) is not None}
+    objects = {identity: composed.contact for identity, owners in object_holders.items()
+               if (composed := _composed_contact(perception, identity, owners, objects=True)) is not None}
+    effects = {identity: composed.effect for identity, owners in effect_holders.items()
+               if (composed := _composed_effect(perception, identity, owners)) is not None}
+    names = {identity for senses in members.values() for identity in (*senses.light_sources, *senses.light_source_removals)}
+    lights, removals = update_light_sources(perception, names, {}, {})
     return replace(anchor, light_sources=lights, light_source_removals=removals, visible=visible,
-        seen=mask_union(*(senses.seen for senses in perception.members.values())),
-        entities=_contacts(perception, objects=False), objects=_contacts(perception, objects=True),
-        effective_light_levels=light, hazardous_cells=hazards,
-        spatial_effects=_effects(perception),
-        paths_dirty=any(senses.paths_dirty for senses in perception.members.values()))
+        seen=mask_union(*(senses.seen for senses in members.values())), entities=entities, objects=objects,
+        effective_light_levels=light, hazardous_cells=hazards, spatial_effects=effects,
+        paths_dirty=any(senses.paths_dirty for senses in members.values()))
 
 
 @dataclass(slots=True)
 class AudienceComposition:
-    """Indexes and current view owned by one private recorded audience fold."""
+    """One seat's composition: its members' snapshots, the composed view and the indexes that keep it."""
 
     perception: AudiencePerception = field(default_factory=AudiencePerception)
     view: SensesSnapshot | None = None
@@ -450,17 +423,11 @@ class AudienceComposition:
     shown_light: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=np.uint8))
     shown_hazard: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=np.uint8))
     shown_owner: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=np.uint16))
+    # The members holding each entity contact, object contact and effect row.
     entity_members: dict[UUID, set[UUID]] = field(default_factory=dict)
     object_members: dict[UUID, set[UUID]] = field(default_factory=dict)
     effect_members: dict[UUID, set[UUID]] = field(default_factory=dict)
-    effect_positions: dict[UUID, set[tuple[int, int]]] = field(default_factory=dict)
-    member_effect_positions: dict[tuple[UUID, UUID], set[tuple[int, int]]] = field(default_factory=dict)
-    effects_at: dict[tuple[int, int], set[UUID]] = field(default_factory=dict)
-    visible_effects: dict[UUID, set[UUID]] = field(default_factory=dict)
     dirty_members: set[UUID] = field(default_factory=set)
-    contact_overrides: set[UUID] = field(default_factory=set)
-    # The member whose contact the view shows, per (is object, identity), once composed.
-    contact_holders: dict[tuple[bool, UUID], UUID] = field(default_factory=dict)
 
 
 def _membership(index: dict, key, identity: UUID, present: bool) -> None:
@@ -474,305 +441,228 @@ def _membership(index: dict, key, identity: UUID, present: bool) -> None:
 
 def copy_audience_perception(perception: AudiencePerception) -> AudiencePerception:
     """Detach a retained public before-state from an owned current fold."""
-    return AudiencePerception(
-        {identity: copy_senses_snapshot(value) for identity, value in perception.members.items()},
-        dict(perception.contact_cursors), dict(perception.effect_cursors), dict(perception.effect_absences))
+    return AudiencePerception({identity: copy_senses_snapshot(value) for identity, value in perception.members.items()})
 
 
 def begin_audience_composition(perception: AudiencePerception, observer_uuid: UUID) -> AudienceComposition:
     """Acquire a detached fold once; ordinary observations never recopy history."""
     perception = copy_audience_perception(perception)
-    current = AudienceComposition(perception=perception, view=audience_view(perception, observer_uuid))
+    current = AudienceComposition(perception=perception, view=composed_view(perception, observer_uuid))
     _restack(current)
-    for observer, senses in perception.members.items():
-        for identity in senses.entities:
-            _membership(current.entity_members, identity, observer, True)
-        for identity in senses.objects:
-            _membership(current.object_members, identity, observer, True)
-        for identity, effect in senses.spatial_effects.items():
-            _membership(current.effect_members, identity, observer, True)
-            positions = set(effect.positions)
-            current.member_effect_positions[observer, identity] = positions
-            current.effect_positions.setdefault(identity, set()).update(positions)
-        if senses.paths_dirty:
-            current.dirty_members.add(observer)
-    for identity, positions in current.effect_positions.items():
-        for position in positions:
-            _membership(current.effects_at, position, identity, True)
-        for observer, senses in perception.members.items():
-            if any(cell_in(senses.visible, position) for position in positions):
-                current.visible_effects.setdefault(observer, set()).add(identity)
+    current.entity_members, current.object_members, current.effect_members = _holders(perception)
+    current.dirty_members = {member for member, senses in perception.members.items() if senses.paths_dirty}
     return current
 
 
-def _contact_rank(current: AudienceComposition, observer: UUID, identity: UUID,
-                  contact: PerceivedContact) -> tuple[bool, int, int]:
-    return contact.visual, current.perception.contact_cursors.get((observer, identity), -1), -observer.int
+@dataclass(frozen=True, slots=True)
+class ComposedContact:
+    """A contact as the seat perceives it, and the members holding it."""
+
+    contact: PerceivedContact
+    members: frozenset[UUID]
 
 
-def _current_contact(current: AudienceComposition, identity: UUID, *,
-                     objects: bool) -> tuple[PerceivedContact | None, UUID | None]:
-    owners = (current.object_members if objects else current.entity_members).get(identity, ())
-    selected = holder = None
-    rank = None
-    for observer in owners:
-        member = current.perception.members[observer]
-        contact = (member.objects if objects else member.entities)[identity]
-        candidate = _contact_rank(current, observer, identity, contact)
-        if rank is None or candidate > rank:
-            rank, selected, holder = candidate, contact, observer
-    return selected, holder
+@dataclass(frozen=True, slots=True)
+class ComposedEffect:
+    """An effect as the seat perceives it (its visible part, with its native duration and revision), and the
+    members perceiving it."""
+
+    effect: PerceivedSpatialEffect
+    members: frozenset[UUID]
 
 
-def _rank_of(row: PerceivedSpatialEffect, cursor: int, observer: UUID) -> tuple[int, int, int]:
-    """A member's claim to show an effect: its row's newest revision, then its latest sighting, then the smaller uuid."""
-    return (row.owner_revision if row.owner_revision is not None else -1, cursor, -observer.int)
+Position = tuple[int, int]
 
 
-def _effect_rank(perception: AudiencePerception, observer: UUID, identity: UUID) -> tuple[int, int, int]:
-    return _rank_of(perception.members[observer].spatial_effects[identity],
-                    perception.effect_cursors.get((observer, identity), -1), observer)
+@dataclass(frozen=True, slots=True)
+class ComposedChange:
+    """One settlement's change of a seat's composed view: the composed before and after of every record it
+    changed (None: absent), the cells, and which anchor scalars changed. Built from `apply_settlement`'s locals.
 
-
-def _current_effect(current: AudienceComposition, identity: UUID) -> PerceivedSpatialEffect | None:
-    owners = current.effect_members.get(identity, ())
-    if not owners:
-        return None
-    perception = current.perception
-    owner = max(owners, key=lambda observer: _effect_rank(perception, observer, identity))
-    merged = _join_effects(perception.members[owner].spatial_effects[identity],
-        (perception.members[observer].spatial_effects[identity] for observer in sorted(owners, key=lambda value: value.int)))
-    positions = {position for position in merged.positions if (identity, position) not in perception.effect_absences}
-    if positions or merged.visible_volume_positions or merged.upper_volume_surfaces:
-        return merged.model_copy(update={'positions': tuple(sorted(positions))})
-    return None
-
-
-def _keeps_composed_effect(current: AudienceComposition, observer: UUID, identity: UUID,
-                           sighting: PerceivedSpatialEffect, prior: PerceivedSpatialEffect | None,
-                           prior_cursor: int) -> bool:
-    """Whether `observer` now seeing `sighting` (instead of `prior`, sighted at `prior_cursor`) leaves the composed effect as it is.
-
-    It does when the newest row among the other members equals it: the newest
-    row is then this value before and after, a row equal to the join's first
-    is a no-op in the join wherever it sorts, and the observer's prior row
-    either equals it, was absent, or neither led nor joined (another revision,
-    ranked below). The caller has checked that no absence of the effect
-    appeared or retired.
+    `retired` are the cells that left a member's own effect row in the settlement: that member saw the effect
+    leave them (a row loses a cell only when its member observes the cell again).
     """
-    perception = current.perception
-    others = [owner for owner in current.effect_members.get(identity, ()) if owner != observer]
-    if not others:
-        return False
-    newest = max(others, key=lambda owner: _effect_rank(perception, owner, identity))
-    row = perception.members[newest].spatial_effects[identity]
-    if not (row is sighting or row == sighting):
-        return False
-    if prior is None or prior is sighting or prior == sighting:
-        return True
-    return (prior.owner_revision != sighting.owner_revision
-            and _rank_of(prior, prior_cursor, observer) < _effect_rank(perception, newest, identity))
+
+    initial: bool
+    visible_added: CellMask
+    visible_removed: CellMask
+    light_changed: CellValues
+    hazards_changed: CellValues
+    entities: Mapping[UUID, tuple[ComposedContact | None, ComposedContact | None]]
+    objects: Mapping[UUID, tuple[ComposedContact | None, ComposedContact | None]]
+    effects: Mapping[UUID, tuple[ComposedEffect | None, ComposedEffect | None]]
+    retired: Mapping[UUID, frozenset[Position]]
+    lights: Mapping[UUID, tuple[PerceivedLightSource | None, PerceivedLightSource | None]]
+    position_changed: bool
+    passive_perception_changed: bool
+    sense_modes_changed: bool
+    visual_access_changed: bool
+    paths_dirty: bool
 
 
-def _keeps_composed_light(view: SensesSnapshot, identity: UUID, source: PerceivedLightSource,
-                          prior: PerceivedLightSource | None) -> bool:
-    """Whether a member now holding `source` (instead of `prior`) leaves the composed light as it is.
-
-    It does when the view already shows `source`: the newest revision is then
-    its own, and `_merged_light` of rows merging to `source` gains one more
-    equal row (or swaps an equal one), unless the member's prior row of that
-    revision differs.
-    """
-    held = view.light_sources.get(identity)
-    return (held is not None and (held is source or held == source)
-            and (prior is None or prior.revision != source.revision or prior is source or prior == source))
-
-
-def apply_current_audience(current: AudienceComposition, audience: PlayerAudience, observer_uuid: UUID,
-                           event: SensoryDelta, cursor: int) -> None:
-    """Apply local sensory changes to an exclusively owned audience composition."""
-    if not audience.observes(event.observer_uuid):
-        raise ValueError("Sensory observation does not belong to this audience")
-    observer = event.observer_uuid
-    perception = current.perception
-    before = perception.members.get(observer)
-    prepared = prepare_sensory_delta(observer, before, event)
-    added, removed = event.visible_cells_added, event.visible_cells_removed
-    # The box of the cells this delta can change for its own observer, and so in the view.
-    cells = union_box(mask_box(added), mask_box(removed), mask_box(event.effective_light_levels_changed.cells),
-        mask_box(event.hazardous_cells_changed.cells),
-        mask_box(before.visible) if event.initial and before is not None else None)
-    contacts = (set(event.entity_contacts_changed) | event.entity_contacts_removed
-                | event.object_contacts_changed.keys() | event.object_contacts_removed)
-    overrides = set(current.contact_overrides)
-    contacts.update(overrides)
-    current.contact_overrides.clear()
-    effects = set(event.spatial_effects_changed) | event.spatial_effects_removed
-    if event.initial and before is not None:
-        contacts.update(before.entities)
-        contacts.update(before.objects)
-        effects.update(before.spatial_effects)
-    def visible(position: tuple[int, int]) -> bool:
-        return cell_in(added, position) or (not event.initial and not cell_in(removed, position)
-            and before is not None and cell_in(before.visible, position))
-    changed_effect_positions = {identity: set(effect.positions)
-        for identity, effect in event.spatial_effects_changed.items()}
-    def observed_positions(identity: UUID) -> set[tuple[int, int]]:
-        if identity in changed_effect_positions:
-            return changed_effect_positions[identity]
-        if event.initial or identity in event.spatial_effects_removed:
-            return set()
-        return current.member_effect_positions.get((observer, identity), set())
-    def visible_positions(positions: set[tuple[int, int]]) -> set[tuple[int, int]]:
-        return {position for position in positions if visible(position)}
-
-    # Preserve empty-cell evidence even for an otherwise empty sensory delta.
-    # Previous member rows must still be available here, before owned mutation.
-    candidates = set(current.visible_effects.get(observer, ())) | effects
-    for position in mask_positions(added):
-        candidates.update(current.effects_at.get(position, ()))
-    absence_updates: dict[tuple[UUID, tuple[int, int]], int | None] = {}
-    # Effects whose absent cells appear or retire.
-    absence_changed: set[UUID] = set()
-    for identity in candidates:
-        positions = visible_positions(current.effect_positions.get(identity, set()))
-        present = observed_positions(identity)
-        positions.update(visible_positions(present))
-        prior = current.member_effect_positions.get((observer, identity), set())
-        apparent = any(perception.members[member].spatial_effects[identity].apparent_presence
-                       for member in current.effect_members.get(identity, ()))
-        for position in positions:
-            key = identity, position
-            old = perception.effect_absences.get(key)
-            if (old if old is not None else -1) > cursor:
-                continue
-            if position in present:
-                if old is not None:
-                    absence_updates[key] = None
-                    absence_changed.add(identity)
-            elif apparent or position in prior:
-                absence_updates[key] = cursor
-                if old is None:
-                    absence_changed.add(identity)
-    recompute_effects = effects | absence_changed
-    effect_cursors = {identity: cursor for identity, effect in event.spatial_effects_changed.items()
-        if any(visible(position) for position in effect.positions)
-        or effect.visible_volume_positions or effect.upper_volume_surfaces}
-    # The member's rows before this delta (its snapshot's containers are advanced in place below).
-    prior_effects = ({identity: (before.spatial_effects.get(identity), perception.effect_cursors.get((observer, identity), -1))
-                      for identity in event.spatial_effects_changed} if before is not None and not event.initial else {})
-    prior_lights = ({identity: before.light_sources.get(identity) for identity in event.light_sources_changed}
-                    if before is not None and not event.initial else {})
-
-    member = apply_current_senses(before, event, prepared)
-    perception.members[observer] = member
-    for identity in (*event.entity_contacts_changed, *event.object_contacts_changed):
-        perception.contact_cursors[observer, identity] = cursor
-    perception.effect_cursors.update(((observer, identity), value) for identity, value in effect_cursors.items())
-    for key, value in absence_updates.items():
-        if value is None:
-            perception.effect_absences.pop(key, None)
-        else:
-            perception.effect_absences[key] = value
-    for identity in contacts:
-        _membership(current.entity_members, identity, observer, identity in member.entities)
-        _membership(current.object_members, identity, observer, identity in member.objects)
-    for identity in effects:
-        _membership(current.effect_members, identity, observer, identity in member.spatial_effects)
-        if identity in member.spatial_effects:
-            current.member_effect_positions[observer, identity] = changed_effect_positions[identity]
-        else:
-            current.member_effect_positions.pop((observer, identity), None)
-        previous_positions = current.effect_positions.pop(identity, set())
-        positions = set().union(*(current.member_effect_positions[owner, identity]
-            for owner in current.effect_members.get(identity, ())))
-        if positions:
-            current.effect_positions[identity] = positions
-        touched = previous_positions | positions
-        for position in touched:
-            _membership(current.effects_at, position, identity, position in positions)
-        for owner, senses in perception.members.items():
-            if owner != observer and not any(cell_in(senses.visible, position) for position in touched):
-                continue
-            values = current.visible_effects.setdefault(owner, set())
-            if any(cell_in(senses.visible, position) for position in positions):
-                values.add(identity)
-            else:
-                values.discard(identity)
-    active_effects = current.visible_effects.setdefault(observer, set())
-    for identity in candidates:
-        if any(cell_in(member.visible, position) for position in current.effect_positions.get(identity, ())):
-            active_effects.add(identity)
-        else:
-            active_effects.discard(identity)
-    if member.paths_dirty:
-        current.dirty_members.add(observer)
+def _cells_change(before: SensesSnapshot | None, after: SensesSnapshot
+                  ) -> tuple[CellMask, CellMask, CellValues, CellValues]:
+    """The composed cells added and removed, and the light and hazard after-values where a cell was added or its
+    value changed."""
+    if (before is not None and before.visible is after.visible and before.effective_light_levels
+            is after.effective_light_levels and before.hazardous_cells is after.hazardous_cells):
+        return EMPTY_CELLS, EMPTY_CELLS, EMPTY_VALUES, EMPTY_VALUES
+    held = before.visible if before is not None else EMPTY_CELLS
+    box = union_box(mask_box(held), mask_box(after.visible))
+    if box is None:
+        return EMPTY_CELLS, EMPTY_CELLS, EMPTY_VALUES, EMPTY_VALUES
+    if before is not None:
+        old, (old_light, old_hazard) = cell_layers(held, (before.effective_light_levels, before.hazardous_cells), box)
     else:
-        current.dirty_members.discard(observer)
+        old, (old_light, old_hazard) = cell_layers(EMPTY_CELLS, (EMPTY_VALUES, EMPTY_VALUES), box)
+    new, (new_light, new_hazard) = cell_layers(after.visible, (after.effective_light_levels, after.hazardous_cells), box)
+    return (pack_mask(box[0], box[1], new & ~old), pack_mask(box[0], box[1], old & ~new),
+            pack_values(box[0], box[1], new & (~old | (old_light != new_light)), new_light),
+            pack_values(box[0], box[1], new & (~old | (old_hazard != new_hazard)), new_hazard))
 
-    if current.view is None:
-        current.view = replace(member, visible=EMPTY_CELLS, seen=EMPTY_CELLS, entities={}, objects={},
-            effective_light_levels=EMPTY_VALUES, hazardous_cells=EMPTY_VALUES, spatial_effects={})
-    _fold_view_cells(current, observer, before, member, cells, hazards_only=not (event.initial or added.width
-        or removed.width or event.effective_light_levels_changed.cells.width))
+
+def apply_settlement(current: AudienceComposition, audience: PlayerAudience, observer_uuid: UUID,
+                     events: Sequence[SensoryDelta]) -> ComposedChange:
+    """Fold one settlement's member observations (`events`, in order) into an exclusively owned composition and
+    return the change of the composed view (plan §3.1): one composition per settlement, never member by member.
+
+    Each member's snapshot advances by the shared native reducer and its cell layer over the cells it changed;
+    the records its observation names (and its effect rows on cells its sight changed) are composed again once,
+    from the members' snapshots after the settlement, so the view always equals `composed_view`.
+    """
+    perception = current.perception
+    before_view = current.view
+    entity_names: dict[UUID, ComposedContact | None] = {}
+    object_names: dict[UUID, ComposedContact | None] = {}
+    effect_names: dict[UUID, ComposedEffect | None] = {}
+    light_names: set[UUID] = set()
+    retired: dict[UUID, set[Position]] = {}
+    initial = any(event.initial for event in events)
+    seen_added = []
+    for event in events:
+        if not audience.observes(event.observer_uuid):
+            raise ValueError("Sensory observation does not belong to this audience")
+        observer = event.observer_uuid
+        before = perception.members.get(observer)
+        prepared = prepare_sensory_delta(observer, before, event)
+        added, removed = event.visible_cells_added, event.visible_cells_removed
+        # The box of the cells this observation can change for its own member, and so in the view.
+        cells = union_box(mask_box(added), mask_box(removed), mask_box(event.effective_light_levels_changed.cells),
+            mask_box(event.hazardous_cells_changed.cells),
+            mask_box(before.visible) if event.initial and before is not None else None)
+        entities = {*event.entity_contacts_changed, *event.entity_contacts_removed}
+        objects = {*event.object_contacts_changed, *event.object_contacts_removed}
+        effects = {*event.spatial_effects_changed, *event.spatial_effects_removed}
+        if before is not None:
+            if event.initial:
+                entities.update(before.entities)
+                objects.update(before.objects)
+                effects.update(before.spatial_effects)
+            elif added.width or removed.width:
+                # A member's changed sight changes its rows' visible parts on those cells.
+                sight = mask_union(added, removed)
+                effects.update(identity for identity, row in before.spatial_effects.items()
+                               if any(cell_in(sight, position) for position in row.positions))
+        # Each record's composed value before the settlement, taken when it is first named (only members naming
+        # a record change its inputs).
+        for identity in entities - entity_names.keys():
+            entity_names[identity] = _composed_contact(perception, identity,
+                current.entity_members.get(identity, ()), objects=False)
+        for identity in objects - object_names.keys():
+            object_names[identity] = _composed_contact(perception, identity,
+                current.object_members.get(identity, ()), objects=True)
+        for identity in effects - effect_names.keys():
+            effect_names[identity] = _composed_effect(perception, identity, current.effect_members.get(identity, ()))
+        prior = {identity: before.spatial_effects.get(identity) for identity in effects} if before is not None else {}
+
+        member = apply_current_senses(before, event, prepared)
+        perception.members[observer] = member
+        for identity in entities:
+            _membership(current.entity_members, identity, observer, identity in member.entities)
+        for identity in objects:
+            _membership(current.object_members, identity, observer, identity in member.objects)
+        for identity in effects:
+            _membership(current.effect_members, identity, observer, identity in member.spatial_effects)
+            row = prior.get(identity)
+            if row is not None:
+                now = member.spatial_effects.get(identity)
+                gone = set(row.positions).difference(now.positions if now is not None else ())
+                if gone:
+                    retired.setdefault(identity, set()).update(gone)
+        light_names.update(event.light_sources_changed, event.light_sources_removed)
+        seen_added.append(event.seen_cells_added)
+        if member.paths_dirty:
+            current.dirty_members.add(observer)
+        else:
+            current.dirty_members.discard(observer)
+        if current.view is None:
+            current.view = replace(member, visible=EMPTY_CELLS, seen=EMPTY_CELLS, entities={}, objects={},
+                effective_light_levels=EMPTY_VALUES, hazardous_cells=EMPTY_VALUES, spatial_effects={},
+                light_sources={}, light_source_removals={})
+        _fold_view_cells(current, observer, before, member, cells, hazards_only=not (event.initial or added.width
+            or removed.width or event.effective_light_levels_changed.cells.width))
+
     view = current.view
-    for identity in contacts:
-        for objects, destination in ((False, view.entities), (True, view.objects)):
-            key = objects, identity
-            held = current.contact_holders.get(key)
-            owners = (current.object_members if objects else current.entity_members).get(identity, ())
-            if identity not in overrides and held is not None and held != observer and held in owners:
-                # Only this observer changed: it takes the contact only by outranking the holder.
-                if observer not in owners:
-                    continue
-                mine = (member.objects if objects else member.entities)[identity]
-                theirs = (perception.members[held].objects if objects else perception.members[held].entities)[identity]
-                if _contact_rank(current, observer, identity, mine) <= _contact_rank(current, held, identity, theirs):
-                    continue
-                contact, holder = mine, observer
-            else:
-                contact, holder = _current_contact(current, identity, objects=objects)
-            if contact is None or holder is None:
+    assert view is not None
+    entities_after, objects_after, effects_after = dict(view.entities), dict(view.objects), dict(view.spatial_effects)
+    entity_changes: dict[UUID, tuple[ComposedContact | None, ComposedContact | None]] = {}
+    object_changes: dict[UUID, tuple[ComposedContact | None, ComposedContact | None]] = {}
+    effect_changes: dict[UUID, tuple[ComposedEffect | None, ComposedEffect | None]] = {}
+    for names, index, destination, changes, objects_kind in (
+            (entity_names, current.entity_members, entities_after, entity_changes, False),
+            (object_names, current.object_members, objects_after, object_changes, True)):
+        for identity in sorted(names, key=str):
+            after = _composed_contact(perception, identity, index.get(identity, ()), objects=objects_kind)
+            if after is None:
                 destination.pop(identity, None)
-                current.contact_holders.pop(key, None)
             else:
-                destination[identity] = contact
-                current.contact_holders[key] = holder
-    for identity in recompute_effects:
-        if (identity in prior_effects and identity not in absence_changed
-                and identity not in event.spatial_effects_removed
-                and _keeps_composed_effect(current, observer, identity, event.spatial_effects_changed[identity],
-                                           *prior_effects[identity])):
-            continue
-        effect = _current_effect(current, identity)
-        if effect is None:
-            view.spatial_effects.pop(identity, None)
+                destination[identity] = after.contact
+            if after != names[identity]:
+                changes[identity] = names[identity], after
+    for identity in sorted(effect_names, key=str):
+        after_effect = _composed_effect(perception, identity, current.effect_members.get(identity, ()))
+        if after_effect is None:
+            effects_after.pop(identity, None)
         else:
-            view.spatial_effects[identity] = effect
-    view = replace(view, seen=mask_union(*(source.seen for source in perception.members.values()))
-        if event.initial else mask_union(view.seen, event.seen_cells_added))
+            effects_after[identity] = after_effect.effect
+        if after_effect != effect_names[identity]:
+            effect_changes[identity] = effect_names[identity], after_effect
+    if initial:
+        light_names.update(identity for senses in perception.members.values()
+                           for identity in (*senses.light_sources, *senses.light_source_removals))
+        light_names.update(view.light_sources)
+    lights, removals = (update_light_sources(perception, light_names, view.light_sources, view.light_source_removals)
+                        if light_names else (view.light_sources, view.light_source_removals))
+    light_changes = {identity: (held, lights.get(identity)) for identity in sorted(light_names, key=str)
+                     if (held := view.light_sources.get(identity)) != lights.get(identity)}
     anchor = perception.members.get(observer_uuid) or next(iter(perception.members.values()))
-    # Only the sources this delta names can change their composed row.
-    if event.initial:
-        lights, removals = light_sources(perception)
-    else:
-        # A source the view already shows as this member's new row keeps its composed row.
-        names = set(event.light_sources_removed) | {identity for identity, source in event.light_sources_changed.items()
-            if not _keeps_composed_light(view, identity, source, prior_lights.get(identity))}
-        lights, removals = (update_light_sources(perception, names, view.light_sources, view.light_source_removals)
-                            if names else (view.light_sources, view.light_source_removals))
-    current.view = replace(view, light_sources=lights, light_source_removals=removals,
+    current.view = replace(view, entities=entities_after, objects=objects_after, spatial_effects=effects_after,
+        light_sources=lights, light_source_removals=removals,
+        seen=(mask_union(*(senses.seen for senses in perception.members.values())) if initial
+              else mask_union(view.seen, *seen_added)),
         position=anchor.position, passive_perception=anchor.passive_perception,
         sense_modes_key=anchor.sense_modes_key, sense_modes=anchor.sense_modes,
         visual_access=anchor.visual_access, paths_dirty=bool(current.dirty_members))
+    after_view = current.view
+    added_cells, removed_cells, light_values, hazard_values = _cells_change(before_view, after_view)
+    entered = before_view is None
+    return ComposedChange(initial=entered, visible_added=added_cells, visible_removed=removed_cells,
+        light_changed=light_values, hazards_changed=hazard_values,
+        entities=entity_changes, objects=object_changes, effects=effect_changes,
+        retired={identity: frozenset(cells) for identity, cells in retired.items()}, lights=light_changes,
+        position_changed=entered or before_view.position != after_view.position,
+        passive_perception_changed=entered or before_view.passive_perception != after_view.passive_perception,
+        sense_modes_changed=entered or before_view.sense_modes_key != after_view.sense_modes_key,
+        visual_access_changed=entered or before_view.visual_access != after_view.visual_access,
+        paths_dirty=any(event.paths_dirty for event in events))
 
 
 def depart_contact(current: AudienceComposition, identity: UUID) -> None:
-    """A witnessed terminal departure ends the view's contact; the next fold recomposes that identity."""
-    if current.view is None:
-        return
-    current.view.entities.pop(identity, None)
-    current.contact_overrides.add(identity)
+    """A witnessed terminal departure ends the view's contact (a member's later observation of it composes it
+    again)."""
+    if current.view is not None:
+        current.view.entities.pop(identity, None)
+
 
 
 @dataclass(frozen=True, slots=True)
