@@ -3151,7 +3151,7 @@ class Entity(BaseBlock):
         weapon_bonuses = parts(weapon_bonus)
         if shield_attack is not None:
             proficiency_bonus = part(ModifiableValue(source_entity_uuid=self.uuid,
-                name="Shield Bash fixed proficiency", base=0, use_register=False))
+                name="Shield attack proficiency", base=0, use_register=False))
         elif natural_weapon is not None and natural_weapon.fixed_attack_bonus is not None:
             intrinsic = ModifiableValue(source_entity_uuid=self.uuid, name="Intrinsic attack bonus",
                 base=natural_weapon.fixed_attack_bonus, use_register=False)

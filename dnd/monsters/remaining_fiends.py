@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict
 
 from dnd.actions import CORE_STANDARD_ACTION_DECLARATIONS, SpellAction
 from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
-from dnd.classes.fighter import create_protection_handler, twf_off_hand_melee_ability_bonus
+from dnd.classes.fighter import twf_off_hand_melee_ability_bonus
 from dnd.content_system.action_definitions import ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS
 from dnd.content_system.condition_definitions import CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS
 from dnd.content_system.creature_possessions import (
@@ -25,25 +25,25 @@ from dnd.core.content.materialization import CreatureBuildContext
 from dnd.core.content.provenance import ContentFidelity, ContentProvenance, ContentProvenanceRelation, ContentReviewStatus
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import ContentDeclaration, creature_factory, get_content_declaration
-from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.equipment_types import BodyPart, EquipmentSlot, WeaponSlot
 from dnd.core.modifiers import ContextualNumericalModifier
 from dnd.core.values import Channel, Kind, add_modifier
 from dnd.entity import Entity
 from dnd.monsters.multiattack_definitions import declare_multiattack_configuration
-from dnd.monsters.roster_casting import grant_innate_reaction, grant_innate_spell
+from dnd.monsters.protection import register_protection
+from dnd.monsters.roster_casting import (
+    COUNTERSPELL_REACTION_SPELL, SHIELD_REACTION_SPELL, InnateReactionSpell, grant_innate_reaction, grant_innate_spell,
+)
 from dnd.monsters.srd_roster import HitDieValue, create_creature_entity
 from dnd.monsters.traits import (
     InnateFlight, InnateInvisibility, MagicResistance, MultiattackAction, ParryFeature,
     register_multiattack, register_parry,
 )
-from dnd.spells.abjuration import COUNTERSPELL_REACTION_DECLARATION, SHIELD_REACTION_DECLARATION
 from dnd.spells.catalog_content import SPELL_CONTENT_DECLARATIONS_BY_CLASS
 from dnd.spells.conjuration import Darkness, Grease, Web
 from dnd.spells.enchantment import Bane, Bless, Command
 from dnd.spells.evocation import EldritchBlast, Thunderwave
-from dnd.spells.reaction_spell_content import COUNTERSPELL_SPELL_DECLARATION, SHIELD_SPELL_DECLARATION
 from dnd.spells.transmutation import Slow
 
 
@@ -83,8 +83,9 @@ class RemainingFiendDefinition:
     paired_weapon_training: bool = False
     one_handed_offhand: bool = False
     athletic: bool = False
+    legendary_deferred: bool = False
     spells: tuple[InnateSpellSelection, ...] = ()
-    reactions: tuple[tuple[str, int, int], ...] = ()
+    reactions: tuple[tuple[InnateReactionSpell, int, int], ...] = ()
 
 
 def _equipped(item_id: str, slot: EquipmentSlot) -> CreaturePossessionGrant:
@@ -125,7 +126,8 @@ REMAINING_FIEND_DEFINITIONS = (
         (22,14,22,18,16,20),207,18,
         (_body("weapon.creature.wing_regent_devil_claws"),_equipped("armor.half_plate",BodyPart.BODY)),
         size=Size.LARGE,hit_die=10,proficiency=4,attacks=((MAIN,3),),magic_resistance=True,
-        devils_sight=True,flying_speed=60,spells=(InnateSpellSelection(Slow,3,1),),reactions=(("spell.counterspell",3,3),)),
+        devils_sight=True,flying_speed=60,legendary_deferred=True,
+        spells=(InnateSpellSelection(Slow,3,1),),reactions=((COUNTERSPELL_REACTION_SPELL,3,3),)),
     RemainingFiendDefinition("glaive_warden_devil", "Glaive Warden Devil", "C09", "Demon Elite 4",
         (18,14,18,12,14,14),110,13,_kit("weapon.roster.psychic_trident","armor.half_plate"),
         proficiency=3,attacks=((MAIN,2),),magic_resistance=True),
@@ -158,7 +160,7 @@ REMAINING_FIEND_DEFINITIONS = (
     RemainingFiendDefinition("night_notary_devil", "Night Notary Devil", "C18", "Demon Spawn 8",
         (10,14,16,16,14,18),90,12,_kit("weapon.quarterstaff"),magic_resistance=True,devils_sight=True,
         spells=(InnateSpellSelection(EldritchBlast,0,caster_level=11),InnateSpellSelection(Darkness,2,3),InnateSpellSelection(Web,2,3),InnateSpellSelection(Slow,3,1)),
-        reactions=(("spell.counterspell",3,1),)),
+        reactions=((COUNTERSPELL_REACTION_SPELL,3,1),)),
     RemainingFiendDefinition("gate_guard_devil", "Gate Guard Devil", "C19", "Demon Spawn 9",
         (12,16,16,10,12,10),75,10,_kit("weapon.scimitar","armor.studded_leather","shield.shield"),
         attacks=((MAIN,2),),protection=True),
@@ -166,7 +168,7 @@ REMAINING_FIEND_DEFINITIONS = (
         (12,18,16,12,14,12),90,12,_kit("weapon.longbow","armor.half_plate",ranged=True),attacks=((BOW,2),)),
     RemainingFiendDefinition("bastion_magus_devil", "Bastion Magus Devil", "C21", "Demon Spawn 11",
         (12,14,16,14,12,16),75,10,_kit("focus.wand","armor.half_plate"),
-        spells=(InnateSpellSelection(EldritchBlast,0,caster_level=5),InnateSpellSelection(Bless,1,3),InnateSpellSelection(Web,2,3)),reactions=(("spell.shield",1,3),)),
+        spells=(InnateSpellSelection(EldritchBlast,0,caster_level=5),InnateSpellSelection(Bless,1,3),InnateSpellSelection(Web,2,3)),reactions=((SHIELD_REACTION_SPELL,1,3),)),
     RemainingFiendDefinition("bulwark_devil", "Bulwark Devil", "C22", "Demon Spawn 12",
         (18,12,18,10,12,12),85,10,_kit("weapon.shortsword","armor.half_plate","shield.shield"),
         attacks=((MAIN,2),),protection=True),
@@ -206,14 +208,14 @@ def _provenance(definition: RemainingFiendDefinition) -> ContentProvenance:
     notes = "Authored stats and accepted real-item kits; CR is provisional. No humanoid stat-block foundation."
     if definition.imp:
         notes += " Armed Imp Sting/Shapechanger and nonsilvered physical resistance omitted by disposition."
-    if definition.source_id == "C08":
+    if definition.legendary_deferred:
         notes += " Legendary actions and Legendary Resistance deferred."
     if definition.paired_weapon_training:
         notes += " Exact Multiattack count; separately paid native bonus offhand attack retained as an explicit adaptation."
     return ContentProvenance(primary_source_id="neurodragon.original_b2b3930",
         source_anchor=f"Authored Devils study 2026-10-01 {definition.source_id}; dispositions 2026-10-02; authoring plan 2026-10-18",
         relation=ContentProvenanceRelation.ORIGINAL_CONTENT,
-        fidelity=ContentFidelity.PARTIAL if definition.imp or definition.source_id == "C08" or definition.paired_weapon_training else ContentFidelity.COMPLETE,
+        fidelity=ContentFidelity.PARTIAL if definition.imp or definition.legendary_deferred or definition.paired_weapon_training else ContentFidelity.COMPLETE,
         review_status=ContentReviewStatus.REVIEWED,
         notes=notes)
 
@@ -226,8 +228,6 @@ REMAINING_FIEND_MULTIATTACK_DECLARATIONS = tuple(
     for index,row in enumerate(REMAINING_FIEND_DEFINITIONS) if row.attacks)
 _MULTIATTACKS = {row.ref.content_id.removeprefix("action.monster.multiattack."): row
     for row in REMAINING_FIEND_MULTIATTACK_DECLARATIONS}
-_REACTION_SPELLS = {"spell.counterspell": (COUNTERSPELL_SPELL_DECLARATION,COUNTERSPELL_REACTION_DECLARATION),
-    "spell.shield": (SHIELD_SPELL_DECLARATION,SHIELD_REACTION_DECLARATION)}
 
 
 def _declare(definition: RemainingFiendDefinition) -> ContentDeclaration:
@@ -271,19 +271,15 @@ def _declare(definition: RemainingFiendDefinition) -> ContentDeclaration:
         if definition.parry:
             register_parry(entity,definition.parry)
         if definition.protection:
-            handler = create_protection_handler(entity.uuid)
-            handler.behavior_binding = BehaviorBinding(behavior_id="reaction.class_feature.fighter.protection",
-                provided_by_id=context.requested_ref.content_id,origin_root_id=context.requested_ref.content_id,
-                runtime_owner_uuid=entity.uuid)
-            entity.add_event_handler(handler)
+            register_protection(entity,context.requested_ref)
         if multiattack is not None:
             register_multiattack(entity,multiattack.descriptor.display_name,definition.attacks,
                 configured_action_ref=multiattack.ref)
         for selection in definition.spells:
             grant_innate_spell(entity,selection.spell_type,caster_level=selection.caster_level,
                 cast_rank=selection.rank,daily_uses=selection.daily_uses)
-        for spell_id,rank,uses in definition.reactions:
-            grant_innate_reaction(entity,spell_id,cast_rank=rank,daily_uses=uses)
+        for reaction,rank,uses in definition.reactions:
+            grant_innate_reaction(entity,reaction,cast_rank=rank,daily_uses=uses)
         return entity
 
     factory.__name__ = f"build_{definition.key}"
@@ -306,10 +302,9 @@ def _declare(definition: RemainingFiendDefinition) -> ContentDeclaration:
             for row in (ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[MultiattackAction],multiattack))
     dependencies.extend(ContentDependency(relation=ContentDependencyRelation.GRANTS_SPELL,
         target_ref=SPELL_CONTENT_DECLARATIONS_BY_CLASS[selection.spell_type].ref) for selection in definition.spells)
-    for spell_id,_,_ in definition.reactions:
-        spell,handler = _REACTION_SPELLS[spell_id]
-        dependencies.extend((ContentDependency(relation=ContentDependencyRelation.GRANTS_SPELL,target_ref=spell.ref),
-            ContentDependency(relation=ContentDependencyRelation.INSTALLS_HANDLER,target_ref=handler.ref)))
+    for reaction,_,_ in definition.reactions:
+        dependencies.extend((ContentDependency(relation=ContentDependencyRelation.GRANTS_SPELL,target_ref=reaction.spell.ref),
+            ContentDependency(relation=ContentDependencyRelation.INSTALLS_HANDLER,target_ref=reaction.reaction.ref)))
     declared = creature_factory(pack_id="content.neurodragon",content_id=f"creature.{definition.key}",version=1,
         parameters=RemainingFiendParameters,
         descriptor=ContentDescriptorSpec(display_name=definition.name,

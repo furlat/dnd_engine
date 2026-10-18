@@ -68,3 +68,20 @@ fighters, finite three-dose Assassin supplies and actual daily Devil caster
 recipes. That record, its complete180-row ledger and family evidence own the
 new authoring tests, source omissions and presentation status. The earlier
 mechanics-only validation above remains historical evidence for that batch.
+
+
+## Corrections made when merging into the integration line
+
+2026-10-18, branch `codex/npc-merge`. These supersede the statements above where they differ.
+
+- Assassinate's opening-turn read: `dnd/core/encounter_facts.py` is gone. It cast a registry object to a reader Protocol to call up into Encounter. `OpeningTurnFacts` now lives in `dnd/encounter.py`, and the trait reads `Encounter.get(...)` directly.
+- Assassinate's advantage now also requires the assassin's own first turn to be in progress (SRD: "during its first turn"). A late joiner in the assassin's second turn no longer grants it.
+- Leadership has no shared-language gate. Most existing creatures carry no language data, so the gate silently disabled Leadership for every SRD ally. Hearing, Silence, range and the leader's incapacitation still gate it. Sight and the "ends if incapacitated" wording remain open.
+- Protection is no longer listed as a retired Fighter declaration, so the inventory needs no exemption. Every creature installs it through `dnd/monsters/protection.py`.
+- Shield Bash: the Gladiator's +7, 2d4+4 numbers are now fields of the `ShieldBash` action, as with WightLifeDrain. The core `ShieldAttackSpec` has no defaults. Shield Bash and Life Drain substitutions use `register_multiattack(..., attack_replacement=...)`.
+- Innate casts: daily uses ride the existing `alt_skip_slot` + `alt_extra_costs` path, the same one Tiefling Darkness uses. Innate reaction spells are typed rows (`SHIELD_REACTION_SPELL`, `COUNTERSPELL_REACTION_SPELL`), not spell-id string tables. The unused at-will reaction branch is removed.
+- Recipe data replaces identity checks:
+  - humanoid foundations carry their resistances, immunities, condition immunities, bleeding, Magic Resistance, spell damage resistance and innate Invisibility (previously `profile is ARCHMAGE/SENTINEL`);
+  - undead profiles carry their expertise;
+  - the Wing Regent's deferred legendary note is a field (previously `source_id == "C08"`).
+- Brute's held-weapon die is a feature field, not a subclass hook.

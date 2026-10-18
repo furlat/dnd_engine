@@ -24,7 +24,6 @@ from dnd.content_system.condition_definitions import (
     CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
 from dnd.content_system.reaction_definitions import (
-    PROTECTION_REACTION_DECLARATION,
     REACTION_BEHAVIOR_DECLARATIONS,
     REACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
@@ -121,13 +120,10 @@ _ALL_BUILT_IN_DECLARATIONS: tuple[
     *SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS,
     *SRD_CREATURE_DECLARATIONS,
 )
-# Protection remains a reusable NPC reaction after the old PC feature roots retire.
-_REUSABLE_NPC_REACTION_IDS = frozenset({PROTECTION_REACTION_DECLARATION.ref.content_id})
 BUILT_IN_DECLARATION_INVENTORY = tuple(
     declaration
     for declaration in _ALL_BUILT_IN_DECLARATIONS
-    if (declaration.ref.content_id not in CHARACTER_RETIRED_DECLARATION_IDS
-        or declaration.ref.content_id in _REUSABLE_NPC_REACTION_IDS)
+    if declaration.ref.content_id not in CHARACTER_RETIRED_DECLARATION_IDS
 )
 _ALL_BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS = {
     **BODY_BEHAVIOR_DECLARATIONS_BY_CLASS,
@@ -147,8 +143,7 @@ _BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS = {
     behavior_class: declaration
     for behavior_class, declaration
     in _ALL_BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS.items()
-    if (declaration.ref.content_id not in CHARACTER_RETIRED_DECLARATION_IDS
-        or declaration.ref.content_id in _REUSABLE_NPC_REACTION_IDS)
+    if declaration.ref.content_id not in CHARACTER_RETIRED_DECLARATION_IDS
 }
 _BUILT_IN_CLASS_BEHAVIOR_IDS = {
     declaration.ref.content_id

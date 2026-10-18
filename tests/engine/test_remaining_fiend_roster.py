@@ -247,13 +247,13 @@ def test_every_selected_spell_has_exact_innate_source_rank_and_finite_resource(g
         assert source.ability == "charisma" and source.provider_id == actor.content_ref.content_id
         assert source.source_kind == "innate" and source.provider_level == selection.caster_level
         assert source.maximum_spell_rank == selection.rank and action.cast_at_level == selection.rank
-        assert not any(cost.cost_type.startswith("spell_slot") for cost in action.costs)
+        assert not any(cost.cost_type.startswith("spell_slot") for cost in action.effective_costs)
         if selection.daily_uses is not None:
             resource = f"innate.{action.behavior_binding.behavior_id}.{selection.rank}"
             assert actor.action_economy.get_resource_current(resource) == selection.daily_uses
-            assert sum(cost.resource_cost for cost in action.costs if cost.resource_name == resource) == 1
-    for spell_id,rank,uses in definition.reactions:
-        ownership = actor.spellcasting.learned_reaction_spell_handlers[spell_id]
+            assert sum(cost.resource_cost for cost in action.effective_costs if cost.resource_name == resource) == 1
+    for reaction,rank,uses in definition.reactions:
+        ownership = actor.spellcasting.learned_reaction_spell_handlers[reaction.spell.ref.content_id]
         assert len(ownership.sources) == 1
         selected = next(iter(ownership.sources.values()))
         source = actor.spellcasting.sources[selected.source_id]

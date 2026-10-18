@@ -17,7 +17,9 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import Channel, Kind, add_modifier
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
-from dnd.monsters.traits import register_brute, register_shield_bash, shield_bash_multiattack
+from dnd.monsters.traits import (
+    AttackReplacement, MultiattackAction, ShieldBash, register_brute, register_shield_bash,
+)
 from dnd.runtime_reset import reset_engine_runtime
 
 
@@ -54,6 +56,14 @@ def setup_bash(game, *, size=Size.MEDIUM):
     register_brute(owner)
     register_shield_bash(owner)
     return owner, target, shield
+
+
+def bash_multiattack(owner):
+    """Three longsword attacks, one of which the shield bash may replace."""
+    return MultiattackAction(source_entity_uuid=owner.uuid, template=True,
+        attack_sequence=((WeaponSlot.MELEE_MAIN, 3),),
+        attack_replacement=AttackReplacement(sequence_index=0, weapon_kind=WeaponKind.LONGSWORD,
+            action=ShieldBash(source_entity_uuid=owner.uuid)))
 
 
 def perform_bash(owner, target, faces):
@@ -171,8 +181,7 @@ def test_replacing_shield_during_attack_cannot_use_stale_declared_item(game, pha
 
 def test_shield_bash_replaces_exactly_one_attack_in_existing_multiattack_budget(game):
     owner, target, _ = setup_bash(game)
-    action = shield_bash_multiattack(owner.uuid, WeaponKind.LONGSWORD)
-    action.template = True
+    action = bash_multiattack(owner)
     owner.register_action(action)
     row = next(row for row in owner.get_available_actions().entity_actions
         if row.behavior_id == 'action.monster.multiattack' and row.variant_facets)
@@ -191,8 +200,7 @@ def test_shield_bash_replaces_exactly_one_attack_in_existing_multiattack_budget(
 
 def test_shield_substitution_disappears_without_shield_and_rejects_stale_choice(game):
     owner, target, shield = setup_bash(game)
-    action = shield_bash_multiattack(owner.uuid, WeaponKind.LONGSWORD)
-    action.template = True
+    action = bash_multiattack(owner)
     owner.register_action(action)
     assert owner.unequip_item(WeaponSlot.MELEE_OFF) is shield
     choices = [row.variant_facets for row in owner.get_available_actions().entity_actions

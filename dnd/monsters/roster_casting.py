@@ -1,14 +1,17 @@
 """Authored NPC spell selections composed through existing source and cost owners."""
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from uuid import UUID, uuid5
 
-from dnd.actions import SpellAction, entity_action_economy_cost_evaluator, entity_resource_cost_evaluator
+from dnd.actions import SpellAction, entity_resource_cost_evaluator
 from dnd.blocks.action_economy import RechargeType, ResourceCapacityPolicy
-from dnd.blocks.spellcasting import FreeSpellCastGrant
 from dnd.core.base_actions import Cost
-from dnd.core.content.registration import get_content_declaration
+from dnd.core.content.registration import ContentDeclaration, get_content_declaration
+from dnd.core.events import EventHandler
 from dnd.entity import Entity
 from dnd.spells.abjuration import (
+    COUNTERSPELL_REACTION_DECLARATION, SHIELD_REACTION_DECLARATION,
     Banishment, GlobeOfInvulnerability, MageArmor, Stoneskin,
     create_counterspell_reaction_handler, create_shield_reaction_handler,
 )
@@ -18,6 +21,7 @@ from dnd.spells.evocation import (
     MagicMissile, ShockingGrasp,
 )
 from dnd.spells.illusion import GreaterInvisibility, MirrorImage
+from dnd.spells.reaction_spell_content import COUNTERSPELL_SPELL_DECLARATION, SHIELD_SPELL_DECLARATION
 from dnd.spells.transmutation import Fly
 from dnd.spells.wall_constructions import WallOfForce
 from dnd.types.abilities import AbilityName
@@ -25,14 +29,24 @@ from dnd.types.abilities import AbilityName
 
 MAGE_SPELLS = (FireBolt, Light, MageArmor, MagicMissile, MistyStep, Fireball, Fly,
                GreaterInvisibility, IceStorm, ConeOfCold)
-MAGE_OMITTED_SPELLS = ("detect_magic", "mage_hand", "prestidigitation", "suggestion")
 ARCHMAGE_SPELLS = (FireBolt, Light, ShockingGrasp, MageArmor, MagicMissile,
                   MirrorImage, MistyStep, Fly, LightningBolt, Banishment,
                   FireShield, Stoneskin, ConeOfCold, WallOfForce, GlobeOfInvulnerability)
-ARCHMAGE_OMITTED_SPELLS = (
-    "mage_hand", "prestidigitation", "detect_magic", "identify", "detect_thoughts",
-    "scrying", "teleport", "mind_blank", "time_stop", "disguise_self",
-)
+
+
+@dataclass(frozen=True, slots=True)
+class InnateReactionSpell:
+    """A reaction spell an authored creature casts from its own daily innate uses."""
+
+    spell: ContentDeclaration
+    reaction: ContentDeclaration
+    create_handler: Callable[[UUID], EventHandler]
+
+
+SHIELD_REACTION_SPELL = InnateReactionSpell(
+    SHIELD_SPELL_DECLARATION, SHIELD_REACTION_DECLARATION, create_shield_reaction_handler)
+COUNTERSPELL_REACTION_SPELL = InnateReactionSpell(
+    COUNTERSPELL_SPELL_DECLARATION, COUNTERSPELL_REACTION_DECLARATION, create_counterspell_reaction_handler)
 
 
 def _innate_source(entity: Entity, spell_id: str, *, caster_level: int,
@@ -62,42 +76,32 @@ def grant_innate_spell(entity: Entity, spell_type: type[SpellAction], *, caster_
     """Register a fixed-rank native cast with its real source and finite uses."""
     declaration = get_content_declaration(spell_type)
     spell_id = declaration.ref.content_id
+    # A cast level of 0 is SpellAction's own "cast at the spell's level".
     action = spell_type(source_entity_uuid=entity.uuid, caster_level=caster_level,
-        alt_skip_slot=True, template=True, **({"cast_at_level": cast_rank} if cast_rank is not None else {}))
+        cast_at_level=cast_rank if cast_rank is not None else 0, alt_skip_slot=True, template=True)
     source, resource = _innate_source(entity, spell_id, caster_level=caster_level,
         rank=action.cast_at_level, daily_uses=daily_uses, ability=ability)
     action.spellcasting_source_id = source
-    action.costs = [cost for cost in action.costs if not cost.cost_type.startswith("spell_slot")]
     if resource is not None:
-        if not action.costs:
-            action.costs = [Cost(name=action.name, cost_type="actions", cost=0,
-                evaluator=entity_action_economy_cost_evaluator)]
-        action.costs[0] = action.costs[0].model_copy(update={
-            "resource_name": resource, "resource_cost": 1,
-            "resource_evaluator": entity_resource_cost_evaluator,
-        })
+        action.alt_extra_costs = [Cost(name=f"{action.name} daily use", cost_type="actions", cost=0,
+            resource_name=resource, resource_cost=1, resource_evaluator=entity_resource_cost_evaluator)]
     entity.register_action(action)
     return action
 
 
-def grant_innate_reaction(entity: Entity, spell_id: str, *, cast_rank: int,
-                          daily_uses: int | None = None, caster_level: int = 1,
+def grant_innate_reaction(entity: Entity, reaction: InnateReactionSpell, *, cast_rank: int,
+                          daily_uses: int, caster_level: int = 1,
                           ability: AbilityName = "charisma") -> None:
-    """Bind the existing Shield/Counterspell handler to its exact innate cost."""
-    factories = {"spell.shield": create_shield_reaction_handler,
-                 "spell.counterspell": create_counterspell_reaction_handler}
-    factory = factories[spell_id]
+    """Bind the existing reaction spell handler to its exact fixed-rank daily innate source."""
+    spell_id = reaction.spell.ref.content_id
     source, resource = _innate_source(entity, spell_id, caster_level=caster_level,
         rank=cast_rank, daily_uses=daily_uses, ability=ability)
     existing = entity.spellcasting.learned_reaction_spell_handlers.get(spell_id)
-    handler = factory(entity.uuid) if existing is None else None
-    handler_uuid = existing.handler_uuid if existing is not None else handler.uuid
+    if existing is not None:
+        entity.spellcasting.add_learned_reaction_spell_source(spell_id=spell_id,
+            source_id=source, handler_uuid=existing.handler_uuid, fixed_cast_rank=cast_rank, resource_name=resource)
+        return
+    handler = reaction.create_handler(entity.uuid)
     entity.spellcasting.add_learned_reaction_spell_source(spell_id=spell_id,
-        source_id=source, handler_uuid=handler_uuid,
-        fixed_cast_rank=cast_rank if resource is not None else None, resource_name=resource)
-    if handler is not None:
-        entity.add_event_handler(handler)
-    if resource is None:
-        entity.spellcasting.free_cast_grants[source] = FreeSpellCastGrant(
-            grant_id=source, provider_id=entity.content_ref.content_id, source_id=source,
-            spell_id=spell_id, cast_rank=cast_rank, label="Innate")
+        source_id=source, handler_uuid=handler.uuid, fixed_cast_rank=cast_rank, resource_name=resource)
+    entity.add_event_handler(handler)

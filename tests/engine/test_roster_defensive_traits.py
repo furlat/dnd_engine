@@ -302,12 +302,12 @@ def test_leadership_refused_effect_does_not_inspire_allies(game):
 
 
 @pytest.mark.parametrize("roll_type", [RollType.ATTACK, RollType.SAVE])
-@pytest.mark.parametrize("reason", ["eligible", "out_of_range", "no_shared_language", "deafened", "leader_deafened", "leader_incapacitated", "leader_is_roller", "enemy"])
-def test_leadership_uses_local_range_language_hearing_and_agency_facts(game, roll_type, reason):
+@pytest.mark.parametrize("reason", ["eligible", "ally_without_language_data", "out_of_range", "deafened", "leader_deafened", "leader_incapacitated", "leader_is_roller", "enemy"])
+def test_leadership_uses_local_range_hearing_and_agency_facts(game, roll_type, reason):
     leader = actor(game, "knight", (2, 2))
     ally = actor(game, "veteran", (10, 2) if reason == "out_of_range" else (3, 2),
                 "enemies" if reason == "enemy" else "allies")
-    if reason != "no_shared_language":
+    if reason != "ally_without_language_data":
         grant_common(ally)
     use_leadership(leader)
     if reason == "deafened":
@@ -319,7 +319,7 @@ def test_leadership_uses_local_range_language_hearing_and_agency_facts(game, rol
 
     roll, event = support_roll(leader if reason == "leader_is_roller" else ally, roll_type)
 
-    eligible = reason in {"eligible", "leader_deafened"}
+    eligible = reason in {"eligible", "ally_without_language_data", "leader_deafened"}
     assert roll.total == (12 if eligible else 10)
     assert len(event.roll_modifications) == (1 if eligible else 0)
 

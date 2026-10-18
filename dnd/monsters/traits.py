@@ -175,6 +175,7 @@ def register_multiattack(
     attacks: tuple[tuple[WeaponSlot, int], ...],
     *,
     configured_action_ref: ContentRef,
+    attack_replacement: AttackReplacement | None = None,
 ) -> None:
     """Register one exactly identified monster stat-block Multiattack."""
     _register_action_once(
@@ -185,6 +186,7 @@ def register_multiattack(
             name=name,
             attack_sequence=attacks,
             configured_action_ref=configured_action_ref,
+            attack_replacement=attack_replacement,
         ),
     )
 
@@ -735,11 +737,21 @@ class BonusDamageFeature(BaseCondition):
     once_per_turn: bool = Field(default=False, description="Whether only one use per turn is allowed.")
     melee_only: bool = Field(default=False, description="Whether only reach attacks qualify.")
     weapon_only: bool = Field(default=True, description="Whether only weapon damage events qualify.")
+    held_weapon_die: bool = Field(default=False,
+        description="Whether the extra die is the held melee weapon's own die instead of damage_dice.")
 
     def _bonus_die_size(
         self, owner: Entity, weapon_slot: Optional[WeaponSlot], attack_kind: str,
     ) -> Optional[DamageDieValue]:
-        return self.damage_dice
+        """The extra die, or None when a held-weapon die has no held melee weapon to read."""
+        if not self.held_weapon_die:
+            return self.damage_dice
+        if attack_kind != "weapon" or weapon_slot is None:
+            return None
+        weapon = owner.equipment.get_weapon(weapon_slot)
+        if weapon is None or weapon.is_body_attack or weapon.range.type is not RangeType.REACH:
+            return None
+        return weapon.attack_damage_die(owner.uuid)
 
     def get_action_damage_roll_profiles(self, action: object) -> tuple[DamageRollProfile, ...]:
         """Declare actor-known bonus damage when it is not target-dependent."""
@@ -756,7 +768,7 @@ class BonusDamageFeature(BaseCondition):
             attack_range = action.natural_range if isinstance(action, NaturalAttack) else actor.get_weapon_range(action.weapon_slot)
             if attack_range.type != RangeType.REACH:
                 return ()
-        attack_kind = "natural" if isinstance(action, NaturalAttack) else "weapon"
+        attack_kind = "natural" if action.get_natural_weapon() is not None else "weapon"
         die_size = self._bonus_die_size(actor, action.weapon_slot, attack_kind)
         if die_size is None:
             return ()
@@ -891,18 +903,8 @@ class BruteFeature(BonusDamageFeature):
     description: str = Field(
         default="Deals one additional damage die of the held melee weapon.",
     )
-    damage_dice: DamageDieValue = Field(default=8)
     melee_only: bool = Field(default=True)
-
-    def _bonus_die_size(
-        self, owner: Entity, weapon_slot: Optional[WeaponSlot], attack_kind: str,
-    ) -> Optional[DamageDieValue]:
-        if attack_kind != "weapon" or weapon_slot is None:
-            return None
-        weapon = owner.equipment.get_weapon(weapon_slot)
-        if weapon is None or weapon.is_body_attack or weapon.range.type is not RangeType.REACH:
-            return None
-        return weapon.attack_damage_die(owner.uuid)
+    held_weapon_die: bool = Field(default=True)
 
 
 class SurpriseAttackFeature(BonusDamageFeature):
@@ -1340,7 +1342,7 @@ DivineEminenceAction.creates = (*DivineEminenceAction.creates, DivineEminenceAct
 class LeadershipAction(BaseAction):
     """Knight leadership action that grants nearby allies attack/save d4."""
     name: str = Field(default="Leadership", description="Action name.")
-    description: str = Field(default="Once per short or long rest, inspire nearby allies for 1 minute to add 1d4 to attacks and saves they hear and understand.", description="Rules summary.")
+    description: str = Field(default="Once per short or long rest, inspire nearby allies for 1 minute to add 1d4 to attacks and saves while they can hear it.", description="Rules summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Self action.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(
         name="Leadership Cost", cost_type="actions", cost=1,
@@ -1483,12 +1485,6 @@ class LeadershipAura(AreaCondition):
                 or not leader.can_take_actions()
                 or (deafness is not None and deafness.contributions_active())
                 or any(row.handler_name == "Leadership" for row in event.roll_modifications)):
-            return None
-        languages = leader.creature_proficiencies
-        if not any(
-            languages.knows_language(language) and roller.creature_proficiencies.knows_language(language)
-            for language in languages.base_languages | languages.language_sources.keys()
-        ):
             return None
         if any(zone.blocks_sound and zone.contributions_active()
                for zone in get_map().get_spatial_conditions_at(leader.position)):
@@ -1695,10 +1691,6 @@ class EvasionFeature(BaseCondition):
         if owner is not None:
             owner.health.evasion_sources.discard(self.uuid)
 
-    def _remove(self, event: Event | None = None):
-        self._release_owned_runtime_state(parent_event=event)
-        return super()._remove(event)
-
 
 class SpellDamageResistance(BaseCondition):
     name: str = "Spell Damage Resistance"
@@ -1715,10 +1707,6 @@ class SpellDamageResistance(BaseCondition):
         owner = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if owner is not None:
             owner.health.spell_damage_resistance_sources.discard(self.uuid)
-
-    def _remove(self, event: Event | None = None):
-        self._release_owned_runtime_state(parent_event=event)
-        return super()._remove(event)
 
 
 class InnateFlight(BaseCondition):
@@ -1878,7 +1866,9 @@ def register_assassinate(entity: Entity) -> None:
         target_entity_uuid=entity.uuid))
 
 
-def _assassinate_target_facts(source_uuid: UUID, target_uuid: UUID | None) -> OpeningTurnFacts | None:
+def _assassinate_facts(source_uuid: UUID, target_uuid: UUID | None,
+                       ) -> tuple[OpeningTurnFacts, OpeningTurnFacts] | None:
+    """The assassin's and the target's opening-turn facts in their shared active encounter."""
     if target_uuid is None:
         return None
     source, target = Entity.get(source_uuid), Entity.get(target_uuid)
@@ -1886,13 +1876,18 @@ def _assassinate_target_facts(source_uuid: UUID, target_uuid: UUID | None) -> Op
             or source.active_encounter_uuid != target.active_encounter_uuid):
         return None
     encounter = Encounter.get(source.active_encounter_uuid)
-    return encounter.opening_turn_facts(target.uuid) if encounter is not None else None
+    if encounter is None:
+        return None
+    source_facts, target_facts = encounter.opening_turn_facts(source.uuid), encounter.opening_turn_facts(target.uuid)
+    if source_facts is None or target_facts is None:
+        return None
+    return source_facts, target_facts
 
 
 def assassinate_advantage(source_entity_uuid: UUID, target_entity_uuid: UUID | None,
                           context: dict | None) -> AdvantageModifier | None:
-    facts = _assassinate_target_facts(source_entity_uuid, target_entity_uuid)
-    if facts is None or facts.has_started_turn:
+    facts = _assassinate_facts(source_entity_uuid, target_entity_uuid)
+    if facts is None or not facts[0].in_first_turn or facts[1].has_started_turn:
         return None
     return AdvantageModifier(name="Assassinate", value=AdvantageStatus.ADVANTAGE,
         source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid,
@@ -1901,8 +1896,8 @@ def assassinate_advantage(source_entity_uuid: UUID, target_entity_uuid: UUID | N
 
 def assassinate_critical(source_entity_uuid: UUID, target_entity_uuid: UUID | None,
                          context: dict | None) -> CriticalModifier | None:
-    facts = _assassinate_target_facts(source_entity_uuid, target_entity_uuid)
-    if facts is None or not facts.is_surprised:
+    facts = _assassinate_facts(source_entity_uuid, target_entity_uuid)
+    if facts is None or not facts[1].is_surprised:
         return None
     return CriticalModifier(name="Assassinate", value=CriticalStatus.AUTOCRIT,
         source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid,
@@ -1913,7 +1908,8 @@ class AssassinateFeature(BaseCondition):
     """Opening advantage and critical hits only during actual target surprise."""
 
     name: str = "Assassinate"
-    description: str = "Advantage before a target's first turn; hits against surprised targets are critical."
+    description: str = ("During its first turn, advantage against creatures that have not taken a turn; "
+                        "hits against surprised targets are critical.")
 
     def _apply(self, event: Event):
         owner = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -1930,12 +1926,20 @@ class AssassinateFeature(BaseCondition):
 
 
 class ShieldBash(Attack):
-    """The selected Gladiator shield attack through the ordinary Attack owner."""
+    """The Gladiator's stat-block shield attack with an actual held shield, through the ordinary Attack owner."""
 
     name: str = "Shield Bash"
-    description: str = "Bash with an actual held shield: +7, 2d4+4 bludgeoning."
+    description: str = "Melee +7, reach 5 ft., 2d4+4 bludgeoning with an actual held shield."
     weapon_slot: Literal[WeaponSlot.MELEE_OFF] = WeaponSlot.MELEE_OFF
     ordinary_off_hand_default: ClassVar[bool] = False
+    bash_dice_numbers: int = Field(default=2, ge=1, description="Stat-block bash damage dice.")
+    bash_damage_dice: DamageDieValue = Field(default=4, description="Stat-block bash damage die.")
+    bash_damage_type: DamageType = Field(default=DamageType.BLUDGEONING, description="Stat-block bash damage type.")
+    fixed_attack_bonus: int = Field(default=7, description="Stat-block attack bonus, replacing ability and proficiency.")
+    fixed_damage_bonus: int = Field(default=4, description="Stat-block damage bonus, replacing the ability modifier.")
+    prone_save_dc: int = Field(default=15, description="Strength save DC against the bash's Prone rider.")
+    prone_target_sizes: frozenset[Size] = Field(default=frozenset({Size.TINY, Size.SMALL, Size.MEDIUM}),
+        description="Target sizes the Prone rider applies to; larger targets take only the damage.")
 
     def get_shield_attack(self) -> Optional[ShieldAttackSpec]:
         owner = Entity.get(self.source_entity_uuid)
@@ -1943,7 +1947,9 @@ class ShieldBash(Attack):
         if shield is None:
             return None
         return ShieldAttackSpec(item_uuid=shield.uuid, name=shield.name,
-            range=Range(type=RangeType.REACH, normal=5))
+            dice_numbers=self.bash_dice_numbers, damage_dice=self.bash_damage_dice,
+            damage_type=self.bash_damage_type, range=Range(type=RangeType.REACH, normal=5),
+            fixed_attack_bonus=self.fixed_attack_bonus, fixed_damage_bonus=self.fixed_damage_bonus)
 
     def get_attack_source_metadata(self) -> Optional[AttackSourceMetadata]:
         return super().get_attack_source_metadata() if self.get_shield_attack() is not None else None
@@ -1957,21 +1963,11 @@ class ShieldBash(Attack):
         return super().rule_admission(scan, selection)
 
 
-MultiattackAction.creates = (*MultiattackAction.creates, ShieldBash)
-
-
 def register_shield_bash(entity: Entity) -> None:
     """Grant the shared bash and its exact action-owned saved Prone rider."""
-    _register_action_once(entity, ShieldBash(source_entity_uuid=entity.uuid, template=True))
+    bash = ShieldBash(source_entity_uuid=entity.uuid, template=True)
+    _register_action_once(entity, bash)
     _add_feature_once(entity, HitSaveRiderFeature(name="Shield Bash Prone Rider",
         source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid,
-        attack_behavior_ids=("action.monster.shield_bash",), save_ability="strength", save_dc=15,
-        eligible_target_sizes=frozenset({Size.TINY, Size.SMALL, Size.MEDIUM}), condition_name="Prone"))
-
-
-def shield_bash_multiattack(owner_uuid: UUID, weapon_kind: WeaponKind) -> MultiattackAction:
-    """Three selected melee attacks, with at most one shield substitution."""
-    return MultiattackAction(source_entity_uuid=owner_uuid,
-        attack_sequence=((WeaponSlot.MELEE_MAIN, 3),),
-        attack_replacement=AttackReplacement(sequence_index=0, weapon_kind=weapon_kind,
-            action=ShieldBash(source_entity_uuid=owner_uuid)))
+        attack_behavior_ids=("action.monster.shield_bash",), save_ability="strength", save_dc=bash.prone_save_dc,
+        eligible_target_sizes=bash.prone_target_sizes, condition_name="Prone"))

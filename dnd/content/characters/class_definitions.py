@@ -70,13 +70,13 @@ FIGHTER_ASI_VALUES = tuple(
 
 # Exact legacy declarations displaced by the direct Fighter/Champion owner.
 # Shared Extra Attack and Lucky identities remain admitted until their other
-# class families move off the legacy path.
+# class families move off the legacy path; the Protection reaction stays
+# admitted as the shared handler that Fighters and authored NPCs install.
 FIGHTER_RETIRED_DECLARATION_IDS = frozenset({
     "class.fighter",
     "subclass.fighter.champion",
     "action.class.fighter.action_surge",
     "action.class.fighter.second_wind",
-    "reaction.class_feature.fighter.protection",
     *FIGHTER_FIGHTING_STYLES,
     "class_feature.fighter.action_surge",
     "class_feature.fighter.improved_critical",

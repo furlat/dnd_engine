@@ -186,7 +186,7 @@ def test_help_rejects_missing_or_ineligible_pair_before_action_cost(game, target
     assert not assistance(enemy)
 
 
-def test_assassinate_opening_advantage_stops_at_first_turn_start(game):
+def test_assassinate_opening_advantage_lasts_only_through_the_assassins_first_turn(game):
     assassin = actor(game, 'Ordinary named attacker', (3, 3), 'party')
     target = actor(game, 'Target', (4, 3), 'foes')
     register_assassinate(assassin)
@@ -219,20 +219,33 @@ def test_assassinate_surprise_crit_requires_hit_and_ends_after_skipped_turn(game
     attack(assassin, target, advantage=True)  # New encounter, no stale surprise.
 
 
-def test_assassinate_late_join_uses_joined_targets_own_first_turn(game):
+def test_assassinate_covers_a_creature_that_joins_during_the_assassins_first_turn(game):
+    assassin = actor(game, 'Assassin', (3, 3), 'party')
+    original = actor(game, 'Original target', (4, 3), 'foes')
+    register_assassinate(assassin)
+    encounter = battle((assassin, original))
+    encounter.start_turn()
+    incoming = actor(game, 'Early arrival', (3, 4), 'foes')
+    join = encounter.prepare_combatant_join(incoming,
+        HumanController(source_entity_uuid=incoming.uuid), after_uuid=assassin.uuid)
+    encounter.commit_combatant_join(join)
+    attack(assassin, incoming, advantage=True)  # The assassin's first turn; the arrival has not acted.
+    encounter.next_turn()
+    attack(assassin, incoming, advantage=False)
+
+
+def test_assassinate_advantage_is_only_during_the_assassins_first_turn(game):
     assassin = actor(game, 'Assassin', (3, 3), 'party')
     original = actor(game, 'Original target', (4, 3), 'foes')
     register_assassinate(assassin)
     encounter = battle((assassin, original))
     encounter.start_turn()
     encounter.next_turn()
-    encounter.next_turn()  # Round two.
+    encounter.next_turn()  # Round two: the assassin's second turn.
     incoming = actor(game, 'Late arrival', (3, 4), 'foes')
     join = encounter.prepare_combatant_join(incoming,
         HumanController(source_entity_uuid=incoming.uuid), after_uuid=assassin.uuid)
     encounter.commit_combatant_join(join)
-    attack(assassin, incoming, advantage=True)
-    encounter.next_turn()
     attack(assassin, incoming, advantage=False)
 
 
@@ -284,7 +297,7 @@ def test_assassin_four_die_sneak_attack_uses_final_attack_facts(game):
     target = actor(game, 'Target', (4, 3), 'foes')
     register_assassinate(owner)
     register_sneak_attack(owner, dice_numbers=4)
-    battle((owner, target))
+    battle((owner, target)).start_turn()
     template = next(action for action in owner.registered_actions
         if isinstance(action, Attack) and action.weapon_slot is WeaponSlot.MELEE_MAIN)
     hp = target.get_normal_hp()

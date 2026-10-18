@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict
 from dnd.actions import CORE_STANDARD_ACTION_DECLARATIONS
 from dnd.actions_functional import register_spell
 from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
-from dnd.classes.fighter import create_protection_handler
 from dnd.content_system.action_definitions import ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS
 from dnd.content_system.condition_definitions import CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS
 from dnd.content_system.creature_possessions import (
@@ -21,13 +20,13 @@ from dnd.core.content.provenance import (
     ContentFidelity, ContentProvenance, ContentProvenanceRelation, ContentReviewStatus,
 )
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.content.registration import ContentDeclaration, creature_factory, get_content_declaration
 from dnd.core.creature_types import Size
 from dnd.core.equipment_types import BodyPart, EquipmentSlot, WeaponSlot
 from dnd.entity import Entity
 from dnd.monsters.bestiary import register_goblin_nimble_escape
 from dnd.monsters.multiattack_definitions import GOBLIN_MULTIATTACK_CONFIGURATIONS_BY_ID, MultiattackConfigurationDefinition
+from dnd.monsters.protection import register_protection
 from dnd.monsters.srd_roster import HitDieValue, create_creature_entity
 from dnd.monsters.traits import (
     BruteFeature, MultiattackAction, SurpriseAttackFeature,
@@ -225,11 +224,7 @@ def build_goblin(context: CreatureBuildContext, definition: GoblinDefinition, *,
         register_brute(entity)
         register_surprise_attack(entity)
     if definition.protection:
-        handler = create_protection_handler(entity.uuid)
-        handler.behavior_binding = BehaviorBinding(behavior_id="reaction.class_feature.fighter.protection",
-            provided_by_id=context.requested_ref.content_id, origin_root_id=context.requested_ref.content_id,
-            runtime_owner_uuid=entity.uuid)
-        entity.add_event_handler(handler)
+        register_protection(entity, context.requested_ref)
     if profile.caster:
         for spell_type in CASTER_SPELLS:
             register_spell(entity, spell_type, caster_level=9)

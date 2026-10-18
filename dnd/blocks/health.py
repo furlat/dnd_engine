@@ -694,8 +694,8 @@ class Health(BaseBlock):
             declared_damage=event.total_damage,
             attack_magical=tuple(damage.attack_magical for damage in event.damages[:len(components)]),
             from_spell=tuple(
-                (damage.effect_origin or event.effect_origin) is not None
-                and (damage.effect_origin or event.effect_origin).kind is EffectOriginKind.SPELL
+                (origin := damage.effect_origin or event.effect_origin) is not None
+                and origin.kind is EffectOriginKind.SPELL
                 for damage in event.damages[:len(components)]
             ),
             normal_hit_points_available=normal_hit_points_available,

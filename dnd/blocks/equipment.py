@@ -1055,7 +1055,7 @@ class Equipment(BaseBlock):
         """Return weapon, equipment, ability, and range attack components for one attack read."""
         if shield_attack is not None:
             return (ModifiableValue(source_entity_uuid=self.source_entity_uuid,
-                name="Shield Bash attack bonus", base=shield_attack.fixed_attack_bonus, use_register=False),
+                name="Shield attack bonus", base=shield_attack.fixed_attack_bonus, use_register=False),
                 [self.attack_bonus, self.melee_attack_bonus], (), shield_attack.range)
         weapon = None if natural_weapon else self.get_weapon(weapon_slot)
         attack_bonuses = [self.attack_bonus]
@@ -1427,7 +1427,7 @@ class Equipment(BaseBlock):
         """Return all damage payloads for an attack read from a weapon slot."""
         if shield_attack is not None:
             bonus = ModifiableValue(source_entity_uuid=self.source_entity_uuid,
-                name="Shield Bash damage bonus", base=shield_attack.fixed_damage_bonus, use_register=False)
+                name="Shield attack damage bonus", base=shield_attack.fixed_damage_bonus, use_register=False)
             damage = Damage(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=read.target_entity_uuid,
                 context={"attack_ability": "Strength", "range_type": RangeType.REACH.value},
                 damage_dice=shield_attack.damage_dice, dice_numbers=shield_attack.dice_numbers,

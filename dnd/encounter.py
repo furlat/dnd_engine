@@ -299,10 +299,12 @@ class OpeningTurnFacts:
 
     Attributes:
         has_started_turn: Whether the combatant's first encounter turn has begun.
+        in_first_turn: Whether the combatant's first encounter turn is the turn in progress.
         is_surprised: Whether the combatant is still within its surprised first turn.
     """
 
     has_started_turn: bool
+    in_first_turn: bool
     is_surprised: bool
 
 
@@ -406,6 +408,8 @@ class Encounter(BaseObject):
             return None
         return OpeningTurnFacts(
             has_started_turn=combatant.has_started_turn,
+            in_first_turn=(combatant.has_started_turn and combatant.turn_count == 0
+                and self.turn_state is TurnState.IN_PROGRESS and self.get_current_combatant() is combatant),
             is_surprised=(combatant.surprised and self.round_number == 1
                 and combatant.turn_count == 0 and not entity.prevents_surprise()),
         )

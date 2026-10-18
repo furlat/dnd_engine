@@ -13,7 +13,7 @@ from dnd.actions import CORE_STANDARD_ACTION_DECLARATIONS, SpellAction
 from dnd.actions_functional import register_spell
 from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
 from dnd.classes.barbarian import RecklessAttack
-from dnd.classes.fighter import create_protection_handler, twf_off_hand_melee_ability_bonus
+from dnd.classes.fighter import twf_off_hand_melee_ability_bonus
 from dnd.content_system.action_definitions import ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS
 from dnd.content_system.condition_definitions import CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS
 from dnd.content_system.reaction_definitions import PROTECTION_REACTION_DECLARATION
@@ -28,25 +28,24 @@ from dnd.core.content.provenance import (
 )
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import ContentDeclaration, creature_factory, get_content_declaration
-from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.equipment_types import BodyPart, EquipmentSlot, WeaponKind, WeaponSlot
 from dnd.core.modifiers import ContextualNumericalModifier
 from dnd.core.values import Channel, Kind, add_modifier
 from dnd.entity import Entity
 from dnd.monsters.multiattack_definitions import declare_multiattack_configuration
+from dnd.monsters.protection import register_protection
 from dnd.monsters.roster_casting import (
     ARCHMAGE_SPELLS, MAGE_SPELLS, grant_innate_spell,
 )
 from dnd.monsters.srd_roster import HitDieValue, create_creature_entity
 from dnd.monsters.traits import (
-    AggressiveMoveAction, AssassinateFeature, BraveFeature, BruteFeature,
+    AggressiveMoveAction, AssassinateFeature, AttackReplacement, BraveFeature, BruteFeature,
     DivineEminenceAction, EvasionFeature, HitSaveRiderFeature, LeadershipAction,
     MagicResistance, MultiattackAction, ParryFeature, ShieldBash, SneakAttackFeature,
     SpellDamageResistance, register_aggressive, register_assassinate, register_brave,
     register_brute, register_divine_eminence, register_leadership, register_multiattack,
     register_parry, register_reckless, register_shield_bash, register_sneak_attack,
-    shield_bash_multiattack,
 )
 from dnd.spells.abjuration import (
     COUNTERSPELL_REACTION_DECLARATION, SHIELD_REACTION_DECLARATION,
@@ -93,6 +92,14 @@ class NpcFoundation:
     spells: tuple[type[SpellAction], ...] = ()
     shield_spell: bool = False
     counterspell: bool = False
+    resistances: tuple[DamageType, ...] = ()
+    immunities: tuple[DamageType, ...] = ()
+    nonmagical_attack_resistances: tuple[DamageType, ...] = ()
+    condition_immunities: tuple[str, ...] = ()
+    bleeds: bool = True
+    magic_resistance: bool = False
+    spell_damage_resistance: bool = False
+    innate_invisibility: bool = False
 
 
 ORC = NpcFoundation("Orc", (16,12,16,7,11,10), 15,2,
@@ -111,7 +118,8 @@ TRAINED = replace(GLADIATOR, source="Gladiator; authored level11 martial-die ref
 ASSASSIN = NpcFoundation("Assassin", (11,16,14,13,11,10),78,12,proficiency=3,
     skills=("acrobatics","deception","perception","stealth"),expertise=("stealth",),
     saves=("dexterity","intelligence"),
-    languages=("language.common","language.elvish","language.thieves_cant"),assassin=True)
+    languages=("language.common","language.elvish","language.thieves_cant"),assassin=True,
+    resistances=(DamageType.POISON,))
 KNIGHT = NpcFoundation("Knight",(16,11,14,11,11,15),52,8,
     saves=("constitution","wisdom"),parry=2,brave=True,leadership=True)
 VETERAN = NpcFoundation("Veteran",(16,13,14,10,11,10),58,9,
@@ -134,10 +142,14 @@ ARCHMAGE = NpcFoundation("Archmage",(10,14,12,20,15,16),99,18,proficiency=4,
                "language.infernal","language.celestial"),
     caster_level=18,casting_ability="intelligence",
     slots=((1,4),(2,3),(3,3),(4,3),(5,3),(6,1),(7,1),(8,1),(9,1)),
-    spells=ARCHMAGE_SPELLS,counterspell=True)
+    spells=ARCHMAGE_SPELLS,counterspell=True,
+    magic_resistance=True,spell_damage_resistance=True,innate_invisibility=True)
 SENTINEL = NpcFoundation("Authored Arcane Sentinel E01",(16,14,18,10,12,8),119,14,
     proficiency=3,creature_type=CreatureType.ELEMENTAL,skills=("perception",),
-    saves=("constitution","wisdom"),darkvision=True)
+    saves=("constitution","wisdom"),darkvision=True,
+    immunities=(DamageType.POISON,),
+    nonmagical_attack_resistances=(DamageType.BLUDGEONING,DamageType.PIERCING,DamageType.SLASHING),
+    condition_immunities=("Poisoned","Exhaustion"),bleeds=False)
 
 
 @dataclass(frozen=True)
@@ -155,7 +167,7 @@ class HumanoidRosterDefinition:
     innate_burning_hands: bool = False
     slow: bool = False
     divine_eminence: bool = False
-    shield_bash: bool = False
+    shield_bash_with: WeaponKind | None = None
     trained_die: HitDieValue | None = None
 
 
@@ -215,7 +227,7 @@ HUMANOID_ROSTER_DEFINITIONS = (
     HumanoidRosterDefinition("enemy_gateplate","Gateplate","enemy","3Footsoldier",GLADIATOR,(
         _equipped("weapon.longsword",MAIN),_equipped("shield.shield",OFF),
         _equipped("armor.plate",BODY),_equipped("apparel.iron_helmet",BodyPart.HEAD)),
-        attacks=((MAIN,3),),shield_bash=True,protection=True),
+        attacks=((MAIN,3),),shield_bash_with=WeaponKind.LONGSWORD,protection=True),
     HumanoidRosterDefinition("enemy_blue_twinblade","Blue Twinblade Poisoner","enemy","4Assassin",ASSASSIN,(
         _equipped("weapon.shortsword",MAIN),_equipped("weapon.shortsword",OFF),
         _equipped("armor.studded_leather",BODY),_equipped("apparel.cloth_hood",BodyPart.HEAD),*_POISON),
@@ -288,7 +300,7 @@ HUMANOID_ROSTER_DEFINITIONS = (
     HumanoidRosterDefinition("character_violet_oathbreaker","Violet Oathbreaker","character","7DeathKnight",GLADIATOR,(
         _equipped("weapon.roster.psychic_longsword_greater",MAIN),_equipped("shield.shield",OFF),
         _equipped("armor.plate",BODY),_equipped("apparel.iron_helmet",BodyPart.HEAD)),
-        attacks=((MAIN,3),),shield_bash=True),
+        attacks=((MAIN,3),),shield_bash_with=WeaponKind.LONGSWORD),
     HumanoidRosterDefinition("character_hex_sovereign","Magenta Hex Sovereign","character","8DarkLord",MAGE,(
         _equipped("apparel.robes",BODY),),slow=True),
     HumanoidRosterDefinition("character_blue_spark","Blue-spark Arc Marksman","character","9Longbow",VETERAN,(
@@ -334,12 +346,10 @@ def build_roster_humanoid(context: CreatureBuildContext, row: HumanoidRosterDefi
         creature_type=profile.creature_type,size=profile.size,movement=profile.speed,
         darkvision=profile.darkvision,save_proficiencies=profile.saves,languages=profile.languages,
         spellcasting_ability=profile.casting_ability,spell_slots=slots,
-        resistances=(DamageType.POISON,) if profile.assassin else (),
-        immunities=(DamageType.POISON,) if profile is SENTINEL else (),
-        nonmagical_attack_resistances=(DamageType.BLUDGEONING,DamageType.PIERCING,DamageType.SLASHING)
-            if profile is SENTINEL else ())
+        resistances=profile.resistances,immunities=profile.immunities,
+        nonmagical_attack_resistances=profile.nonmagical_attack_resistances)
     entity.appearance.visual_scale = 1.0
-    if profile is not SENTINEL:
+    if profile.bleeds:
         install_body_response(entity,BLOOD_BODY_RESPONSE)
     for skill in profile.expertise:
         entity.skill_set.get_skill(skill).set_expertise(True)
@@ -357,12 +367,8 @@ def build_roster_humanoid(context: CreatureBuildContext, row: HumanoidRosterDefi
     if profile.reckless:
         register_reckless(entity)
     if row.protection:
-        handler = create_protection_handler(entity.uuid)
-        handler.behavior_binding = BehaviorBinding(behavior_id=PROTECTION_REACTION_DECLARATION.ref.content_id,
-            provided_by_id=context.requested_ref.content_id,origin_root_id=context.requested_ref.content_id,
-            runtime_owner_uuid=entity.uuid)
-        entity.add_event_handler(handler)
-    if any(slot is OFF for slot,count in row.attacks):
+        register_protection(entity,context.requested_ref)
+    if any(slot is OFF for slot,_ in row.attacks):
         add_modifier(entity.equipment.off_hand_melee_ability_bonus,Channel.SELF_CONTEXTUAL,Kind.VALUE,
             ContextualNumericalModifier(name="Two-Weapon Fighting",source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,callable=twf_off_hand_melee_ability_bonus))
@@ -376,18 +382,14 @@ def build_roster_humanoid(context: CreatureBuildContext, row: HumanoidRosterDefi
         entity.equipment.unarmed_damage_dice = row.trained_die
         entity.equipment.unarmed_dice_numbers = 1
         entity.equipment.unarmed_damage_type = DamageType.BLUDGEONING
+    if row.shield_bash_with is not None:
+        register_shield_bash(entity)
     if row.attacks:
         declaration = _MULTIATTACK_BY_KEY[row.key]
-        if row.shield_bash:
-            register_shield_bash(entity)
-            action = shield_bash_multiattack(entity.uuid,WeaponKind.LONGSWORD)
-            action.template = True
-            action.name = declaration.descriptor.display_name
-            action.configured_action_ref = declaration.ref
-            entity.register_action(action)
-        else:
-            register_multiattack(entity,declaration.descriptor.display_name,row.attacks,
-                configured_action_ref=declaration.ref)
+        register_multiattack(entity,declaration.descriptor.display_name,row.attacks,
+            configured_action_ref=declaration.ref,
+            attack_replacement=None if row.shield_bash_with is None else AttackReplacement(
+                sequence_index=0,weapon_kind=row.shield_bash_with,action=ShieldBash(source_entity_uuid=entity.uuid)))
     for spell in _selected_spells(row):
         register_spell(entity,spell,caster_level=profile.caster_level)
     if profile.shield_spell:
@@ -396,13 +398,17 @@ def build_roster_humanoid(context: CreatureBuildContext, row: HumanoidRosterDefi
         register_counterspell_reaction(entity)
     if row.innate_burning_hands:
         grant_innate_spell(entity,BurningHands,cast_rank=1,daily_uses=1)
-    if profile is ARCHMAGE:
-        grant_innate_spell(entity,Invisibility,caster_level=18,cast_rank=2,ability="intelligence")
+    if profile.innate_invisibility:
+        if profile.casting_ability is None:
+            raise ValueError(f"{profile.source} innate Invisibility needs the foundation's casting ability")
+        grant_innate_spell(entity,Invisibility,caster_level=profile.caster_level,cast_rank=2,
+            ability=profile.casting_ability)
+    if profile.magic_resistance:
         entity.add_condition(MagicResistance(source_entity_uuid=entity.uuid,target_entity_uuid=entity.uuid))
+    if profile.spell_damage_resistance:
         entity.add_condition(SpellDamageResistance(source_entity_uuid=entity.uuid,target_entity_uuid=entity.uuid))
-    if profile is SENTINEL:
-        entity.add_condition_immunity("Poisoned",immunity_name="Elemental body")
-        entity.add_condition_immunity("Exhaustion",immunity_name="Elemental body")
+    for condition_name in profile.condition_immunities:
+        entity.add_condition_immunity(condition_name,immunity_name=row.name)
     return entity
 
 
@@ -417,15 +423,15 @@ def _declare(row: HumanoidRosterDefinition) -> ContentDeclaration:
         (profile.brave,BraveFeature),(profile.brute,BruteFeature),(bool(profile.parry),ParryFeature),
         (profile.assassin,AssassinateFeature),(profile.assassin,SneakAttackFeature),
         (profile.assassin,EvasionFeature),
-        (row.shield_bash,HitSaveRiderFeature),(profile is ARCHMAGE,MagicResistance),
-        (profile is ARCHMAGE,SpellDamageResistance),
+        (row.shield_bash_with is not None,HitSaveRiderFeature),(profile.magic_resistance,MagicResistance),
+        (profile.spell_damage_resistance,SpellDamageResistance),
     )
     dependencies.extend(ContentDependency(relation=ContentDependencyRelation.GRANTS_FEATURE,
         target_ref=CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[feature].ref)
         for enabled,feature in features if enabled)
     actions = ((profile.aggressive,AggressiveMoveAction),(profile.leadership,LeadershipAction),
         (profile.reckless,RecklessAttack),(bool(row.attacks),MultiattackAction),
-        (row.divine_eminence,DivineEminenceAction),(row.shield_bash,ShieldBash))
+        (row.divine_eminence,DivineEminenceAction),(row.shield_bash_with is not None,ShieldBash))
     dependencies.extend(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,
         target_ref=ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[action].ref)
         for enabled,action in actions if enabled)
@@ -433,7 +439,7 @@ def _declare(row: HumanoidRosterDefinition) -> ContentDeclaration:
         dependencies.append(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,
             target_ref=_MULTIATTACK_BY_KEY[row.key].ref))
     spells = (*_selected_spells(row), *((BurningHands,) if row.innate_burning_hands else ()),
-        *((Invisibility,) if profile is ARCHMAGE else ()))
+        *((Invisibility,) if profile.innate_invisibility else ()))
     dependencies.extend(ContentDependency(relation=ContentDependencyRelation.GRANTS_SPELL,
         target_ref=SPELL_CONTENT_DECLARATIONS_BY_CLASS[spell].ref) for spell in spells)
     for enabled,reaction in ((profile.shield_spell,SHIELD_REACTION_DECLARATION),

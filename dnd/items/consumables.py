@@ -63,7 +63,7 @@ from dnd.core.content.runtime import (
     bind_runtime_behavior_child,
 )
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import Damage, Event, EventPhase, EventType, EventQueue, EventHandler, Trigger, DamageRollResultEvent
+from dnd.core.events import Damage, Event, EventPhase, EventType, EventHandler, Trigger, DamageRollResultEvent
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.core.dice import AttackOutcome
 from dnd.core.creature_types import DamageType

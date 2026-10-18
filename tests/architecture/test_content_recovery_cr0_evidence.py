@@ -34,6 +34,9 @@ from dnd.monsters.multiattack_definitions import (
     GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS,
     SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS,
 )
+from dnd.monsters.remaining_fiends import REMAINING_FIEND_MULTIATTACK_DECLARATIONS
+from dnd.monsters.roster_humanoids import HUMANOID_MULTIATTACK_DECLARATIONS
+from dnd.monsters.undead_roster import UNDEAD_MULTIATTACK_DECLARATIONS
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -1406,18 +1409,23 @@ def test_every_structural_definition_has_one_exact_authored_owner() -> None:
     historical = {row.ref.identity_key for row in SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS}
     current_body = {row.ref.identity_key for row in BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS}
     current_goblins = {row.ref.identity_key for row in GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS}
+    roster_rows = (*HUMANOID_MULTIATTACK_DECLARATIONS, *UNDEAD_MULTIATTACK_DECLARATIONS,
+                   *REMAINING_FIEND_MULTIATTACK_DECLARATIONS)
+    current_rosters = {row.ref.identity_key for row in roster_rows}
     assert len(historical) == 11
     assert len(current_body) == len(BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS) == 5
     assert len(current_goblins) == len(GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS) == 2
+    assert len(current_rosters) == len(roster_rows)
     assert not historical & current_body
     assert not current_goblins & (historical | current_body)
-    assert structural_identities == historical | current_body | current_goblins
+    assert not current_rosters & (historical | current_body | current_goblins)
+    assert structural_identities == historical | current_body | current_goblins | current_rosters
     manifest_rows = _definition_manifest_rows()
     assert set(manifest_rows) >= historical
     for identity in sorted(historical):
         _validate_static_owner(identity, "structural_definition")
     for row in (*BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS,
-                *GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS):
+                *GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS, *roster_rows):
         assert declarations[row.ref.identity_key] is row
         assert sum(candidate.ref.identity_key == row.ref.identity_key
                    for candidate in BUILT_IN_DECLARATION_INVENTORY) == 1

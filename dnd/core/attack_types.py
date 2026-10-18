@@ -43,16 +43,16 @@ class NaturalWeaponSpec(BaseModel):
 
 
 class ShieldAttackSpec(BaseModel):
-    """An authored bash with one actual equipped shield, retained by its UUID."""
+    """An authored bash with one actual equipped shield, retained by its UUID; its numbers come from the action."""
 
     item_uuid: UUID
     name: str
-    dice_numbers: int = 2
-    damage_dice: DamageDieValue = 4
-    damage_type: DamageType = DamageType.BLUDGEONING
+    dice_numbers: int
+    damage_dice: DamageDieValue
+    damage_type: DamageType
     range: Range
-    fixed_attack_bonus: int = 7
-    fixed_damage_bonus: int = 4
+    fixed_attack_bonus: int
+    fixed_damage_bonus: int
 
 
 class AttackSourceMetadata(BaseModel):

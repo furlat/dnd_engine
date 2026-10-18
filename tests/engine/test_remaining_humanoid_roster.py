@@ -16,11 +16,12 @@ from dnd.content_system.creature_materialization import materialize_creature
 from dnd.core.action_types import ActionSelection, ActionVariantFacet
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
 from dnd.core.creature_types import CreatureType, DamageType, Size
-from dnd.core.dice import fixed_dice_faces
+from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import AdvantageStatus, ResistanceStatus
+from dnd.core.modifiers import AdvantageStatus, NumericalModifier, ResistanceStatus
+from dnd.core.values import Channel, Kind, add_modifier
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.monsters.roster_humanoids import HUMANOID_ROSTER_RECIPES_BY_ID
@@ -327,8 +328,17 @@ def test_gateplate_protection_competes_with_parry_for_one_reaction(game):
     assert isinstance(first,AttackEvent) and first.dice_roll.advantage_status is AdvantageStatus.DISADVANTAGE
     assert defender.action_economy.reactions.normalized_score == 0
     attacker.on_turn_start()
-    second = perform(attacker,template,defender,faces=(20,1,1))
-    assert isinstance(second,AttackEvent) and defender.action_economy.reactions.normalized_score == 0
+    add_modifier(attacker.equipment.attack_bonus,Channel.SELF_STATIC,Kind.VALUE,NumericalModifier(name="Test aim",
+        value=2,source_entity_uuid=attacker.uuid,target_entity_uuid=attacker.uuid))
+    # 18 + 2 meets AC 20 exactly: Parry's +3 would turn this hit into a miss, but Protection spent the reaction.
+    second = perform(attacker,template,defender,faces=(18,1,1))
+    assert isinstance(second,AttackEvent) and second.attack_outcome is AttackOutcome.HIT
+    assert defender.action_economy.reactions.normalized_score == 0
+    defender.action_economy.reset_all_costs()  # Control: with its reaction back, Parry turns the same roll away.
+    attacker.on_turn_start()
+    third = perform(attacker,template,defender,faces=(18,1,1))
+    assert isinstance(third,AttackEvent) and third.attack_outcome is AttackOutcome.MISS
+    assert defender.action_economy.reactions.normalized_score == 0
 
 
 @pytest.mark.parametrize("key",["enemy_gateplate","character_violet_oathbreaker"])

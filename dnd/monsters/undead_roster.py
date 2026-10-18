@@ -9,7 +9,6 @@ from dnd.actions import CORE_STANDARD_ACTION_DECLARATIONS, SpellAction
 from dnd.actions_functional import register_spell
 from dnd.body_responses import BONE_BODY_RESPONSE, install_body_response
 from dnd.classes.barbarian import RecklessAttack
-from dnd.classes.fighter import create_protection_handler
 from dnd.content_system.action_definitions import ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS
 from dnd.content_system.condition_definitions import CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS
 from dnd.content_system.creature_possessions import CreaturePossessionDisposition, CreaturePossessionGrant, apply_creature_possessions
@@ -20,12 +19,12 @@ from dnd.core.content.materialization import CreatureBuildContext
 from dnd.core.content.provenance import ContentFidelity, ContentProvenance, ContentProvenanceRelation, ContentReviewStatus
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import ContentDeclaration, creature_factory, get_content_declaration
-from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.equipment_types import BodyPart, EquipmentSlot, WeaponKind, WeaponSlot
 from dnd.core.proficiency_types import ProficiencyMode
 from dnd.entity import Entity
 from dnd.monsters.multiattack_definitions import declare_multiattack_configuration
+from dnd.monsters.protection import register_protection
 from dnd.monsters.roster_casting import ARCHMAGE_SPELLS, MAGE_SPELLS, grant_innate_spell
 from dnd.monsters.srd_roster import HitDieValue, create_creature_entity
 from dnd.monsters.traits import (
@@ -38,7 +37,7 @@ from dnd.spells.abjuration import COUNTERSPELL_REACTION_DECLARATION, SHIELD_REAC
 from dnd.spells.catalog_content import SPELL_CONTENT_DECLARATIONS_BY_CLASS
 from dnd.spells.evocation import BurningHands
 from dnd.spells.illusion import Invisibility
-from dnd.types.abilities import AbilityName
+from dnd.types.abilities import AbilityName, SkillName
 
 
 class UndeadRosterParameters(BaseModel):
@@ -54,6 +53,7 @@ class UndeadProfile:
     proficiency: int
     saves: tuple[AbilityName, ...] = ()
     skills: tuple[str, ...] = ()
+    expertise: tuple[SkillName, ...] = ()
     brute: bool = False
     brave: bool = False
     reckless: bool = False
@@ -65,11 +65,12 @@ class UndeadProfile:
 
 
 GLADIATOR = UndeadProfile((18,15,16,10,12,15),112,8,15,3,
-    saves=("strength","dexterity","constitution"),skills=("athletics","intimidation"),brute=True,brave=True)
+    saves=("strength","dexterity","constitution"),skills=("athletics","intimidation"),expertise=("athletics",),
+    brute=True,brave=True)
 WIGHT = UndeadProfile((15,14,16,10,13,15),45,8,6,2,skills=("perception","stealth"),wight=True)
 BERSERKER = UndeadProfile((16,12,17,9,11,9),67,8,9,2,reckless=True)
 ARCHMAGE = UndeadProfile((10,14,12,20,15,16),99,8,18,4,
-    saves=("intelligence","wisdom"),skills=("arcana","history"),caster_level=18,
+    saves=("intelligence","wisdom"),skills=("arcana","history"),expertise=("arcana","history"),caster_level=18,
     spells=ARCHMAGE_SPELLS,slots=((1,4),(2,3),(3,3),(4,3),(5,3),(6,1),(7,1),(8,1),(9,1)),archmage=True)
 MAGE = UndeadProfile((9,14,11,17,12,11),40,8,9,3,
     saves=("intelligence","wisdom"),skills=("arcana","history"),caster_level=9,
@@ -150,9 +151,10 @@ def _declare_undead(definition: UndeadDefinition) -> ContentDeclaration:
         for condition in ("Poisoned","Exhaustion"):
             entity.add_condition_immunity(condition,immunity_name=definition.name)
         apply_creature_possessions(entity,definition.possessions,possession_mode=context.possession_mode)
+        for skill in profile.expertise:
+            entity.skill_set.get_skill(skill).add_proficiency_source(entity.uuid,ProficiencyMode.EXPERTISE)
         if profile.brute:
             register_brute(entity)
-            entity.skill_set.athletics.add_proficiency_source(entity.uuid,ProficiencyMode.EXPERTISE)
         if profile.brave:
             register_brave(entity)
         if profile.reckless:
@@ -163,20 +165,12 @@ def _declare_undead(definition: UndeadDefinition) -> ContentDeclaration:
         if definition.parry:
             register_parry(entity,definition.parry)
         if definition.protection:
-            handler=create_protection_handler(entity.uuid)
-            handler.behavior_binding=BehaviorBinding(behavior_id=PROTECTION_REACTION_DECLARATION.ref.content_id,
-                provided_by_id=context.requested_ref.content_id,origin_root_id=context.requested_ref.content_id,
-                runtime_owner_uuid=entity.uuid)
-            entity.add_event_handler(handler)
+            register_protection(entity,context.requested_ref)
         if configuration is not None:
-            if definition.life_drain_weapon is not None:
-                action=MultiattackAction(source_entity_uuid=entity.uuid,template=True,
-                    attack_sequence=definition.attacks,configured_action_ref=configuration.ref,
-                    attack_replacement=AttackReplacement(sequence_index=0,weapon_kind=definition.life_drain_weapon,
-                        action=WightLifeDrain(source_entity_uuid=entity.uuid)))
-                entity.register_action(action)
-            else:
-                register_multiattack(entity,"Multiattack",definition.attacks,configured_action_ref=configuration.ref)
+            register_multiattack(entity,"Multiattack",definition.attacks,configured_action_ref=configuration.ref,
+                attack_replacement=None if definition.life_drain_weapon is None else AttackReplacement(
+                    sequence_index=0,weapon_kind=definition.life_drain_weapon,
+                    action=WightLifeDrain(source_entity_uuid=entity.uuid)))
         if definition.burning_hands:
             grant_innate_spell(entity,BurningHands,caster_level=1,cast_rank=1,daily_uses=1)
         for spell_type in profile.spells:
@@ -184,8 +178,6 @@ def _declare_undead(definition: UndeadDefinition) -> ContentDeclaration:
         if profile.caster_level:
             register_counterspell_reaction(entity)
             if profile.archmage:
-                for skill in (entity.skill_set.arcana,entity.skill_set.history):
-                    skill.add_proficiency_source(entity.uuid,ProficiencyMode.EXPERTISE)
                 entity.add_condition(MagicResistance(source_entity_uuid=entity.uuid,target_entity_uuid=entity.uuid))
                 entity.add_condition(SpellDamageResistance(source_entity_uuid=entity.uuid,target_entity_uuid=entity.uuid))
                 grant_innate_spell(entity,Invisibility,caster_level=18,ability="intelligence")

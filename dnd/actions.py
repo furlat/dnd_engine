@@ -3077,17 +3077,18 @@ class HelpAttack(BaseAction):
         return list(self.current_selection().target_uuids)
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        if not selection.target_uuids or len(selection.target_uuids) > 2:
+        targets: tuple[UUID, ...] = selection.target_uuids
+        if len(targets) not in (1, 2):
             return "Select an adjacent enemy and an allied attacker"
         helper = Entity.get(self.source_entity_uuid)
-        enemy = Entity.get(selection.target_uuids[0])
+        enemy = Entity.get(targets[0])
         if helper is None or enemy is None or not helper.is_enemy(enemy):
             return "Help Attack requires an enemy"
         if helper.senses.get_feet_distance(enemy.position) > 5:
             return "Help Attack enemy is not adjacent"
-        if len(selection.target_uuids) == 1:
+        if len(targets) == 1:
             return None if scan.subjective and self.template else "Select an allied attacker"
-        ally = Entity.get(selection.target_uuids[1])
+        ally = Entity.get(targets[-1])
         if ally is None or ally.uuid == helper.uuid or not helper.is_ally(ally):
             return "Help Attack requires another allied attacker"
         return None
