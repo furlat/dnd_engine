@@ -3,8 +3,9 @@
 A fresh process, with a hash seed other than the live run's, serves the run's retained spool through the player
 server's own routes (`server.app` over `server.recording`, the host's seats at their final publications) and
 follows every seat with the SDK transport (`dnd_player.transport.follow`: initialization, event stream, ACK).
-The first event stream of each seat is cut half-way through its bytes, as a dropped connection, so the follower
-resumes after its last consumed operation (a seat with two operations or more that did not resume fails). The
+The first event stream of each seat is dropped half-way through its second operation, as a dropped connection,
+so the follower resumes after the operation it consumed (a seat with two operations or more that did not resume
+after a consumed operation fails). The
 host serves a copy of the spool, so nothing the host does to its recording can touch the run's. Each record is folded by the client reference fold. After every
 record the client state (memory included) must equal the live run's (the manifest's digests), the final states
 must match, and the O3 views stored at each operation end must be reproduced.
@@ -61,8 +62,22 @@ def retained_recording(directory: Path, seats: tuple[str, ...]) -> Recording:
     return Recording(directory, seat_oracle.SPOOL_QUOTA, audiences)
 
 
+def cut_position(body: bytes) -> int:
+    """Where to drop the first event stream: half-way through its second operation event, so the follower has
+    consumed one operation and must resume after it; half-way through the stream when it holds one operation."""
+    marks: list[int] = []
+    index = body.find(b'\nevent: operation')
+    while index >= 0 and len(marks) < 2:
+        marks.append(index + 1)
+        index = body.find(b'\nevent: operation', index + 1)
+    if len(marks) < 2:
+        return len(body) // 2
+    end = body.find(b'\n\n', marks[1])
+    return marks[1] + ((end if end >= 0 else len(body)) - marks[1]) // 2
+
+
 class CutStream(httpx.AsyncBaseTransport):
-    """The app's responses; the first event stream ends half-way through its bytes, as a dropped connection."""
+    """The app's responses; the first event stream is dropped mid-way through its second operation (`cut_position`)."""
 
     def __init__(self, inner: httpx.AsyncBaseTransport):
         self.inner = inner
@@ -76,7 +91,7 @@ class CutStream(httpx.AsyncBaseTransport):
         if len(self.resumed_after) > 1:
             return response
         body = await response.aread()
-        return httpx.Response(response.status_code, headers=response.headers, content=body[:len(body) // 2])
+        return httpx.Response(response.status_code, headers=response.headers, content=body[:cut_position(body)])
 
 
 def stored_views(directory: Path) -> dict[str, dict[int, list[str]]]:
