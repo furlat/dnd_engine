@@ -20,6 +20,22 @@ Status: **revision 2, decisions taken (§8); implementation started with E0 (the
   - the client fold time per update is reported;
   - bytes are the largest seat update per op, per layout.
 
+## 1b. Where publication time goes today (integrator's profile at ff7701f9a; cProfile ms; real ≈ ÷2)
+
+| Case | Publication | Seat audience fold (`fold_senses` → `apply_current_audience`, once per member fact) | `_world_update` | HUD `_snapshot_sheets` | `advance_capture` |
+| --- | --- | --- | --- | --- | --- |
+| SG move | 104 | 47 (90 calls) | 6 | 18 | 7 |
+| Sleet drop | 282 | 105 (30) | 77 | 18 | 7 |
+| Daylight | 270 | 118 (30) | 46 | 18 | 8 |
+| Fireball | 197 | 44 (30) | 35 | 19 | 18 |
+| Wall of Stone | 123 | 41 (30) | 29 | 18 | 9 |
+
+- **Inside the audience fold, most of the time is per-member remembered-effect machinery** (`_current_effect`, `visible_positions`, `_membership` ×15K, `any()` ×2.2K per Daylight op): ≈50–60 %. §3.2 (visible part only, no absences or footprint memory) deletes it.
+- **What remains** (the cell fold 6–9, senses 4–6, light rows up to 11) runs once per settlement under §3.1, not once per member fact.
+- `_world_update` is replaced by the stateless world lane, and the HUD by E5.
+- **Projection, real ms:** after E3 and E5, publication is Daylight ≈86 → ≈35–40, Sleet drop ≈90 → ≈35, Fireball ≈65 → ≈25, Wall of Stone ≈39 → ≈15. Totals are then ≈95 / ≈85 / ≈105 / ≈115: Fireball and Wall of Stone become native-bound.
+- **Wall of Stone native** (≈90 real) is no longer light work: `recompute_lights_at_positions` is ≈23 profiled. It is settlement ≈85 profiled (mostly the 30 views' wall-FOV re-solves, owned by the wall-FOV lane), the escape rule ≈38 (its escape Move ≈31), and the zone install ≈46.
+
 ## 2. Scope
 
 - **In scope:**
