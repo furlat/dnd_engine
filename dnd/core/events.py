@@ -3942,7 +3942,6 @@ class SpatialChangeEvent(Event):
                      tile_blocks_optics: Optional[bool] = None,
                      tile_blocks_propagation: Optional[bool] = None,
                      new_light_level: Optional[int] = None,
-                     source_entity_uuid: Optional[UUID] = None,
                      senses_hint: Optional['SensesUpdateHint'] = None,
                      parent_event: Optional[UUID] = None,
                      directional_position: Optional[Tuple[int, int]] = None,
@@ -3987,7 +3986,7 @@ class SpatialChangeEvent(Event):
                 ),
             )
         return cls(
-            source_entity_uuid=source_entity_uuid or uuid4(),
+            source_entity_uuid=uuid4(),
             event_type=EventType.SPATIAL_TILE_CHANGED,
             change_type=SpatialChangeType.TILE_CHANGED,
             position=position,

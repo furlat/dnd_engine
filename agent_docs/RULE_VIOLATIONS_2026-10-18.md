@@ -68,6 +68,12 @@ Of the 75 added `isinstance` calls, 55 repeat a call the base already made (move
 
 e260e92e1 removes imports and a map lookup that the perception merges left unused: `CENTER`, `reach_mask` and `cell_key` in sensory.py, `SpatialChannel` in entity.py, and an unused `grid = get_map()`.
 
+## Cleanup lane (codex/enp-cleanup, base 2b2dcc45e)
+
+Items the integrator assigned after the census. Each is done exactly or skipped with its reason. Gallery transcripts (fireball, circle_of_death, sleet_storm, wall_of_stone, spirit_guardians_walk, choices_caster, ai_decision) are compared with the base after each item.
+
+- **Dead code.** `GridMap.publish_tile_state_changed` had no callers and is deleted. `PlayerCausalIndex` / `index_player_lineage` (dnd/player/reduction.py) were called only from `game_obsolete/`. Nothing live or under `tests/` imports `game_obsolete`, and the package cannot be imported anyway (its modules import `game.*`, which no longer exists), so both are deleted.
+
 ## How to re-run
 
 The census is the `git diff d13e6ad HEAD --unified=0 -- 'dnd/*.py' 'server/*.py'` scan recorded in the integrator's scratchpad (`logs/rule_census_final.txt`). It counts added and removed lines per pattern and separates new `isinstance` call texts from moved ones.
