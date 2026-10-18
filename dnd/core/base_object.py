@@ -27,11 +27,14 @@ class CreatesModels(Protocol):
     def model_rebuild(cls) -> bool | None: ...
 
 
-# Default factories of models whose schema is built in play (`defer_build`, below)
-# or that are made with `model_construct`. Pydantic reads a default factory's
-# signature at each such build and construction, and CPython reads the signature
-# of a C callable (`list`, `set`, `frozenset`, `tuple`, `time.time`) by defining
-# a class: a reference cycle each time. A Python function's signature makes none.
+# Default factories pydantic reads in play: those of every field of a model whose
+# schema is built after import (a `defer_build` action or condition, or an event
+# completed late, such as ConditionApplicationEvent with its inherited Event
+# fields), and of a field a `model_construct` call leaves out. Pydantic reads the
+# factory's signature at each such build or construction, and CPython reads a C
+# callable's signature (`list`, `set`, `frozenset`, `tuple`, `time.time`) by
+# defining a class: a reference cycle each time. A Python function's signature
+# makes none; `dict` has no text signature, so inspect raises before parsing.
 def empty_list() -> list[Any]:
     return []
 

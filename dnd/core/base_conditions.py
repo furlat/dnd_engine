@@ -303,6 +303,7 @@ class BaseCondition(BaseObject):
     """Base state package for modifiers, handlers, subconditions, and cleanup."""
 
     # Catalog registration needs the fields, not every behavior's compiled schema.
+    # Its default factories are Python functions (`dnd.core.base_object.empty_list`, ...).
     model_config = ConfigDict(defer_build=True)
 
     requires_intact_item: bool = True

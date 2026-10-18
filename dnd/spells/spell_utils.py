@@ -240,7 +240,7 @@ def in_spell_placement_region(action: BaseAction, position: tuple[int, int]) -> 
 
 
 def _own_tile_placement(action: BaseAction, position: tuple[int, int]) -> bool:
-    """The caster's own tile, when in range."""
+    """The caster's own tile, when it is a map tile in range."""
     caster=Entity.get(action.source_entity_uuid)
     return (caster is not None and position==caster.position and get_map().has_tile(*position)
         and action.target_position_error(position) is None)

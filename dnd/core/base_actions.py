@@ -1228,7 +1228,8 @@ class BaseAction(BaseObject):
     alt_skip_slot: bool = Field(default=False, description="Whether temporary overrides skip spell-slot costs.")
 
     # Compile a behavior's validation schema when it is first used, not merely
-    # because the built-in catalog imports its definition.
+    # because the built-in catalog imports its definition. Its default factories
+    # are Python functions (`dnd.core.base_object.empty_list`, ...).
     model_config = ConfigDict(arbitrary_types_allowed=True, defer_build=True)
 
     @model_validator(mode="after")
@@ -1605,7 +1606,9 @@ class BaseAction(BaseObject):
         senses = self._region_senses()
         if senses is None:
             return []
-        return [position for position in visible_positions(senses.cells) if self.in_visible_region(position)]
+        selection = self.get_position_selection()
+        return [position for position in visible_positions(senses.cells)
+                if self._visible_cell_in_region(senses, selection, position)]
 
     def valid_positions_among(self, points: Iterable[Tuple[int, int]]) -> List[Tuple[int, int]]:
         """The given points that `get_valid_positions` lists, in the order given.
@@ -1618,15 +1621,15 @@ class BaseAction(BaseObject):
 
     @final
     def in_visible_region(self, position: Tuple[int, int]) -> bool:
-        """The default region's rule for one point (`BaseAction.get_valid_positions`).
-
-        A visible cell in range, other than the source's own cell unless it is a
-        path vertex.
-        """
+        """The default region's rule for one point (`BaseAction.get_valid_positions`):
+        a visible cell that `_visible_cell_in_region` holds."""
         senses = self._region_senses()
-        if senses is None or not cell_visible(senses.cells, position):
-            return False
-        selection = self.get_position_selection()
+        return (senses is not None and cell_visible(senses.cells, position)
+                and self._visible_cell_in_region(senses, self.get_position_selection(), position))
+
+    def _visible_cell_in_region(self, senses: Senses, selection: Optional[PositionSelection],
+                                position: Tuple[int, int]) -> bool:
+        """For a visible cell: in range, and not the source's own cell unless the action selects a path."""
         if position == senses.position and (selection is None or selection.kind != "path"):
             return False
         return self.target_position_error(position) is None
