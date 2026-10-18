@@ -329,9 +329,11 @@ def publish(runtime, updates):
         if not (update.lineages or update.combat_log_appends or update.content_additions or update.hud is not None
                 or worker.boundary(runtime.session, seat, previous.state_revision) != previous.boundary):
             continue
-        revision = str(uuid4())
-        boundary = worker.boundary(runtime.session, seat, revision)
         cursor = previous.cursor.model_copy(update={'sequence': previous.cursor.sequence + 1})
+        # A fresh token per record, as the worker's, but drawn from no generator: the identities a transcript
+        # seeds (gallery_transcript.py) stay those of a harness that publishes nothing itself.
+        revision = str(uuid5(cursor.audience_id, f'harness-publication:{cursor.sequence}'))
+        boundary = worker.boundary(runtime.session, seat, revision)
         runtime.publications[seat] = previous.model_copy(update={'cursor': cursor, 'state_revision': revision,
             'boundary': boundary})
         records.append((seat, PlayerOperation(audience=update.audience, lineages=update.lineages, hud=update.hud,
