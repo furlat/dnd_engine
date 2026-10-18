@@ -6,27 +6,27 @@ import pytest
 from dnd_player.transport import ProtocolError, decode
 
 
+# A light source row of its group: identities are rows of the group's uuids; the footprint is a level per cell.
 SOURCE = {
-    'source_uuid': '00000000-0000-4000-8000-000000000001', 'revision': 3,
-    'position': [-2, 6], 'base_height_steps': 2, 'very_bright_radius_feet': 10,
-    'bright_radius_feet': 20, 'dim_radius_feet': 20, 'appearance': 'torch',
-    'actor_anchored': True, 'anchor_entity_uuid': None, 'anchor_item_uuid': None,
-    'affected_tiles': {'-2,6': 4, '1,6': 3, '4,6': 2},
+    'source': 0, 'revision': 3, 'position': [-2, 6], 'base_height_steps': 2, 'very_bright_radius_feet': 10,
+    'bright_radius_feet': 20, 'dim_radius_feet': 20, 'appearance': 'torch', 'actor_anchored': True,
+    'anchor_entity': None, 'anchor_item': 1,
+    'affected_tiles': {'cells': {'x0': -2, 'y0': 6, 'width': 7, 'height': 1, 'bits': 'SQ=='}, 'values': 'BAMC'},
 }
 
 
-def test_optical_source_preserves_anonymous_anchor_and_exact_footprint():
-    assert decode('PerceivedLightSource', json.dumps(SOURCE).encode()) == SOURCE
+def test_light_row_preserves_anchors_footprint_and_sparse_defaults():
+    assert decode('LightRow', json.dumps(SOURCE).encode()) == SOURCE
     sparse = {key: value for key, value in SOURCE.items() if key not in
-        ('appearance', 'actor_anchored', 'anchor_entity_uuid', 'anchor_item_uuid', 'affected_tiles')}
-    assert decode('PerceivedLightSource', json.dumps(sparse).encode()) == sparse
+        ('base_height_steps', 'appearance', 'actor_anchored', 'anchor_entity', 'anchor_item', 'affected_tiles')}
+    assert decode('LightRow', json.dumps(sparse).encode()) == sparse
 
 
 @pytest.mark.parametrize('field,value', [
-    ('revision', -1), ('position', [1]), ('position', [1.5, 2]),
+    ('revision', -1), ('source', -1), ('position', [1]), ('position', [1.5, 2]),
     ('appearance', 'private_inventory'), ('actor_anchored', 1),
-    ('affected_tiles', {'1,2': 99}), ('anchor_item_uuid', 'not-a-uuid'),
+    ('affected_tiles', {'1,2': 4}), ('anchor_item', 'not-an-index'),
 ])
-def test_invalid_optical_source_is_rejected(field, value):
+def test_invalid_light_row_is_rejected(field, value):
     with pytest.raises(ProtocolError):
-        decode('PerceivedLightSource', json.dumps({**SOURCE, field: value}).encode())
+        decode('LightRow', json.dumps({**SOURCE, field: value}).encode())

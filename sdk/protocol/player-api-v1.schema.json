@@ -1380,62 +1380,6 @@
       "type": "object",
       "additionalProperties": false
     },
-    "ApplicationMembership": {
-      "additionalProperties": false,
-      "description": "One ordered application belonging to an existing action lineage.",
-      "properties": {
-        "lineage_uuid": {
-          "format": "uuid",
-          "title": "Lineage Uuid",
-          "type": "string"
-        },
-        "application_id": {
-          "format": "uuid",
-          "title": "Application Id",
-          "type": "string"
-        },
-        "index": {
-          "minimum": 0,
-          "title": "Index",
-          "type": "integer",
-          "maximum": 9007199254740991
-        }
-      },
-      "required": [
-        "lineage_uuid",
-        "application_id",
-        "index"
-      ],
-      "title": "ApplicationMembership",
-      "type": "object"
-    },
-    "ApplicationResolutionRef": {
-      "additionalProperties": false,
-      "properties": {
-        "kind": {
-          "const": "application",
-          "default": "application",
-          "title": "Kind",
-          "type": "string"
-        },
-        "lineage_uuid": {
-          "format": "uuid",
-          "title": "Lineage Uuid",
-          "type": "string"
-        },
-        "application_id": {
-          "format": "uuid",
-          "title": "Application Id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "lineage_uuid",
-        "application_id"
-      ],
-      "title": "ApplicationResolutionRef",
-      "type": "object"
-    },
     "AppliedClassLevel": {
       "description": "One ordered class-level step installed on an Entity.",
       "properties": {
@@ -7058,27 +7002,6 @@
       "title": "EventPhase",
       "type": "string"
     },
-    "EventResolutionRef": {
-      "additionalProperties": false,
-      "properties": {
-        "kind": {
-          "const": "event",
-          "default": "event",
-          "title": "Kind",
-          "type": "string"
-        },
-        "lineage_uuid": {
-          "format": "uuid",
-          "title": "Lineage Uuid",
-          "type": "string"
-        }
-      },
-      "required": [
-        "lineage_uuid"
-      ],
-      "title": "EventResolutionRef",
-      "type": "object"
-    },
     "EventType": {
       "description": "Kinds of state transitions that handlers and logs can subscribe to.",
       "enum": [
@@ -10232,6 +10155,132 @@
       "minimum": -9007199254740991,
       "maximum": 9007199254740991
     },
+    "LightRow": {
+      "description": "A perceived light source (`PerceivedLightSource`) as a row of its group: its identities name the group's `uuids`.\n\n`affected_tiles` is its footprint as a level per cell; a field holding its\ndefault is left out.",
+      "properties": {
+        "source": {
+          "minimum": 0,
+          "title": "Source",
+          "type": "integer",
+          "maximum": 9007199254740991
+        },
+        "revision": {
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer",
+          "maximum": 9007199254740991
+        },
+        "position": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          ],
+          "title": "Position",
+          "type": "array"
+        },
+        "base_height_steps": {
+          "default": 0,
+          "title": "Base Height Steps",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "very_bright_radius_feet": {
+          "title": "Very Bright Radius Feet",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "bright_radius_feet": {
+          "title": "Bright Radius Feet",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "dim_radius_feet": {
+          "title": "Dim Radius Feet",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "appearance": {
+          "default": "neutral",
+          "enum": [
+            "torch",
+            "neutral"
+          ],
+          "title": "Appearance",
+          "type": "string"
+        },
+        "actor_anchored": {
+          "default": false,
+          "title": "Actor Anchored",
+          "type": "boolean"
+        },
+        "anchor_entity": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Anchor Entity"
+        },
+        "anchor_item": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer",
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Anchor Item"
+        },
+        "affected_tiles": {
+          "$ref": "#/$defs/CellValues",
+          "default": {
+            "cells": {
+              "bits": "",
+              "height": 0,
+              "width": 0,
+              "x0": 0,
+              "y0": 0
+            },
+            "values": ""
+          }
+        }
+      },
+      "required": [
+        "source",
+        "revision",
+        "position",
+        "very_bright_radius_feet",
+        "bright_radius_feet",
+        "dim_radius_feet"
+      ],
+      "title": "LightRow",
+      "type": "object",
+      "additionalProperties": false
+    },
     "LinePresentationGeometry": {
       "additionalProperties": false,
       "description": "A widened line originating at one cell.",
@@ -11672,123 +11721,6 @@
       "type": "object",
       "additionalProperties": false
     },
-    "PerceivedLightSource": {
-      "description": "One optical emitter, without undisclosed actor or inventory identities.\n\nFootprint levels are this source's actual occluded contribution before\ntile MAX/caps; WorldTileState.resolved_light is the final objective level.",
-      "properties": {
-        "source_uuid": {
-          "format": "uuid",
-          "title": "Source Uuid",
-          "type": "string"
-        },
-        "revision": {
-          "minimum": 0,
-          "title": "Revision",
-          "type": "integer",
-          "maximum": 9007199254740991
-        },
-        "position": {
-          "maxItems": 2,
-          "minItems": 2,
-          "prefixItems": [
-            {
-              "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991
-            },
-            {
-              "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991
-            }
-          ],
-          "title": "Position",
-          "type": "array"
-        },
-        "base_height_steps": {
-          "title": "Base Height Steps",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "very_bright_radius_feet": {
-          "title": "Very Bright Radius Feet",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "bright_radius_feet": {
-          "title": "Bright Radius Feet",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "dim_radius_feet": {
-          "title": "Dim Radius Feet",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "appearance": {
-          "default": "neutral",
-          "enum": [
-            "torch",
-            "neutral"
-          ],
-          "title": "Appearance",
-          "type": "string"
-        },
-        "actor_anchored": {
-          "default": false,
-          "title": "Actor Anchored",
-          "type": "boolean"
-        },
-        "anchor_entity_uuid": {
-          "anyOf": [
-            {
-              "format": "uuid",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Anchor Entity Uuid"
-        },
-        "anchor_item_uuid": {
-          "anyOf": [
-            {
-              "format": "uuid",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Anchor Item Uuid"
-        },
-        "affected_tiles": {
-          "additionalProperties": {
-            "$ref": "#/$defs/LightLevel"
-          },
-          "title": "Affected Tiles",
-          "type": "object"
-        }
-      },
-      "required": [
-        "source_uuid",
-        "revision",
-        "position",
-        "base_height_steps",
-        "very_bright_radius_feet",
-        "bright_radius_feet",
-        "dim_radius_feet"
-      ],
-      "title": "PerceivedLightSource",
-      "type": "object",
-      "additionalProperties": false
-    },
     "PlayerAction": {
       "additionalProperties": false,
       "properties": {
@@ -12734,11 +12666,7 @@
           "type": "array"
         },
         "version_rows": {
-          "items": {
-            "$ref": "#/$defs/VersionRow"
-          },
-          "title": "Version Rows",
-          "type": "array"
+          "$ref": "#/$defs/VersionRows"
         },
         "end_cursor": {
           "title": "End Cursor",
@@ -12787,13 +12715,35 @@
           "default": {
             "uuids": [],
             "contact_uuid_index": [],
-            "contacts": [],
+            "contact_positions": [],
+            "contact_visual": {
+              "bits": "",
+              "start": 0
+            },
+            "contact_special_senses": [],
             "sighting_uuid_index": [],
             "sightings": [],
             "light_sources": [],
             "light_removal_uuid_index": [],
-            "light_removal_revisions": []
+            "light_removal_revisions": [],
+            "cells": {
+              "bits": "",
+              "height": 0,
+              "width": 0,
+              "x0": 0,
+              "y0": 0
+            },
+            "light_levels": [],
+            "hazards": []
           }
+        },
+        "resolutions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlayerResolution"
+          },
+          "title": "Resolutions",
+          "type": "array"
         }
       },
       "required": [
@@ -12849,11 +12799,7 @@
           "type": "array"
         },
         "version_rows": {
-          "items": {
-            "$ref": "#/$defs/VersionRow"
-          },
-          "title": "Version Rows",
-          "type": "array"
+          "$ref": "#/$defs/VersionRows"
         },
         "start_cursor": {
           "title": "Start Cursor",
@@ -12899,13 +12845,35 @@
           "default": {
             "uuids": [],
             "contact_uuid_index": [],
-            "contacts": [],
+            "contact_positions": [],
+            "contact_visual": {
+              "bits": "",
+              "start": 0
+            },
+            "contact_special_senses": [],
             "sighting_uuid_index": [],
             "sightings": [],
             "light_sources": [],
             "light_removal_uuid_index": [],
-            "light_removal_revisions": []
+            "light_removal_revisions": [],
+            "cells": {
+              "bits": "",
+              "height": 0,
+              "width": 0,
+              "x0": 0,
+              "y0": 0
+            },
+            "light_levels": [],
+            "hazards": []
           }
+        },
+        "resolutions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlayerResolution"
+          },
+          "title": "Resolutions",
+          "type": "array"
         }
       },
       "required": [
@@ -13125,7 +13093,7 @@
       "additionalProperties": false
     },
     "PlayerNode": {
-      "description": "One disclosed event version.\n\nVersions are identified by the seat's occurrence index (the version\nrow's `source_index`), lineages by the occurrence index of their first\nversion the seat received.",
+      "description": "One disclosed event version.\n\nVersions are identified by the seat's occurrence index (an entry of its\ngroup's `version_rows.occurrences`), lineages by the occurrence index of their first\nversion the seat received.",
       "properties": {
         "occurrence": {
           "title": "Occurrence",
@@ -13150,6 +13118,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Parent Event"
         },
         "parent_lineage": {
@@ -13163,9 +13132,11 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Parent Lineage"
         },
         "children_lineages": {
+          "default": [],
           "items": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -13178,6 +13149,7 @@
           "$ref": "#/$defs/EventPhase"
         },
         "canceled": {
+          "default": false,
           "title": "Canceled",
           "type": "boolean"
         },
@@ -13334,33 +13306,22 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Fact"
         },
-        "resolution_ref": {
+        "resolution": {
           "anyOf": [
             {
-              "discriminator": {
-                "mapping": {
-                  "application": "#/$defs/ApplicationResolutionRef",
-                  "event": "#/$defs/EventResolutionRef"
-                },
-                "propertyName": "kind"
-              },
-              "oneOf": [
-                {
-                  "$ref": "#/$defs/EventResolutionRef"
-                },
-                {
-                  "$ref": "#/$defs/ApplicationResolutionRef"
-                }
-              ]
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Resolution Ref"
+          "title": "Resolution"
         },
         "cancellation": {
           "anyOf": [
@@ -13409,12 +13370,7 @@
       "required": [
         "occurrence",
         "lineage",
-        "parent_event",
-        "parent_lineage",
-        "children_lineages",
-        "phase",
-        "canceled",
-        "fact"
+        "phase"
       ],
       "title": "PlayerNode",
       "type": "object",
@@ -13477,7 +13433,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "items": {
           "default": [],
@@ -13490,9 +13447,7 @@
       },
       "required": [
         "occurrence",
-        "actor_uuid",
-        "changes",
-        "contact"
+        "actor_uuid"
       ],
       "title": "PlayerObservation",
       "type": "object",
@@ -13584,6 +13539,36 @@
       ],
       "title": "PlayerOperation",
       "type": "object"
+    },
+    "PlayerResolution": {
+      "description": "A resolution nodes belong to: the resolved lineage (the seat's lineage index) and, for one application of it, its identity.",
+      "properties": {
+        "lineage": {
+          "title": "Lineage",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "application_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Application Id"
+        }
+      },
+      "required": [
+        "lineage"
+      ],
+      "title": "PlayerResolution",
+      "type": "object",
+      "additionalProperties": false
     },
     "PlayerResource": {
       "properties": {
@@ -14378,8 +14363,8 @@
           "maximum": 9007199254740991
         },
         "player_schema_version": {
-          "const": 14,
-          "default": 14,
+          "const": 15,
+          "default": 15,
           "title": "Player Schema Version",
           "type": "integer",
           "minimum": -9007199254740991,
@@ -14757,6 +14742,27 @@
       ],
       "title": "RollModificationLogFact",
       "type": "object"
+    },
+    "RowBits": {
+      "description": "A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set\n(least significant bit first within each byte). Canonical: `bits` starts and ends with a\nnonzero byte, and the empty subset is start 0, no bits.",
+      "properties": {
+        "start": {
+          "default": 0,
+          "title": "Start",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "bits": {
+          "default": "",
+          "format": "base64url",
+          "title": "Bits",
+          "type": "string"
+        }
+      },
+      "title": "RowBits",
+      "type": "object",
+      "additionalProperties": false
     },
     "SavingThrowFact": {
       "description": "The disclosed outcome of one native save, without private roll modifiers.",
@@ -15168,7 +15174,7 @@
       "type": "string"
     },
     "SensoryFact": {
-      "description": "One observer's sensory after-values; its changed and removed values are rows of its group's `SensoryRows`.\n\n`entity_contacts_changed` / `object_contacts_changed` index contact rows,\n`spatial_effect_sightings` sighting rows, `light_sources_changed` light\nsources, `light_sources_removed` light removal rows; the three other removed\nlists index `uuids`. A list never names two rows of one identity. (While\nprojection builds a group, the indices name its `SensoryTable` rows.)",
+      "description": "One observer's sensory after-values; its observer, changed and removed values are rows of its group's `SensoryRows`.\n\n`observer` indexes `uuids`; `entity_contacts_changed` /\n`object_contacts_changed` index contact rows, `spatial_effect_sightings`\nsighting rows, `light_sources_changed` light sources,\n`light_sources_removed` light removal rows; the three other removed lists\nindex `uuids`. A list never names two rows of one identity. The cell lists\nare subsets of the group's row tables: the visible and seen lists of\n`cells`, `effective_light_levels_changed` of `light_levels`,\n`hazardous_cells_changed` of `hazards`; a value list names one row per\ncell. (While projection builds a group, `observer` names the fact's\n`SensoryTable` row and the other indices that table's rows; the cell lists\nare set when the group's row tables are.)",
       "properties": {
         "kind": {
           "const": "sensory",
@@ -15176,10 +15182,11 @@
           "title": "Kind",
           "type": "string"
         },
-        "observer_uuid": {
-          "format": "uuid",
-          "title": "Observer Uuid",
-          "type": "string"
+        "observer": {
+          "minimum": 0,
+          "title": "Observer",
+          "type": "integer",
+          "maximum": 9007199254740991
         },
         "initial": {
           "default": false,
@@ -15210,16 +15217,10 @@
           "type": "boolean"
         },
         "effective_light_levels_changed": {
-          "$ref": "#/$defs/CellValues",
+          "$ref": "#/$defs/RowBits",
           "default": {
-            "cells": {
-              "bits": "",
-              "height": 0,
-              "width": 0,
-              "x0": 0,
-              "y0": 0
-            },
-            "values": ""
+            "start": 0,
+            "bits": ""
           }
         },
         "cause_occurrence": {
@@ -15237,32 +15238,23 @@
           "title": "Cause Occurrence"
         },
         "visible_cells_added": {
-          "$ref": "#/$defs/CellMask",
+          "$ref": "#/$defs/RowBits",
           "default": {
-            "x0": 0,
-            "y0": 0,
-            "width": 0,
-            "height": 0,
+            "start": 0,
             "bits": ""
           }
         },
         "visible_cells_removed": {
-          "$ref": "#/$defs/CellMask",
+          "$ref": "#/$defs/RowBits",
           "default": {
-            "x0": 0,
-            "y0": 0,
-            "width": 0,
-            "height": 0,
+            "start": 0,
             "bits": ""
           }
         },
         "seen_cells_added": {
-          "$ref": "#/$defs/CellMask",
+          "$ref": "#/$defs/RowBits",
           "default": {
-            "x0": 0,
-            "y0": 0,
-            "width": 0,
-            "height": 0,
+            "start": 0,
             "bits": ""
           }
         },
@@ -15370,16 +15362,10 @@
           "type": "boolean"
         },
         "hazardous_cells_changed": {
-          "$ref": "#/$defs/CellValues",
+          "$ref": "#/$defs/RowBits",
           "default": {
-            "cells": {
-              "bits": "",
-              "height": 0,
-              "width": 0,
-              "x0": 0,
-              "y0": 0
-            },
-            "values": ""
+            "start": 0,
+            "bits": ""
           }
         },
         "spatial_effect_sightings": {
@@ -15434,7 +15420,7 @@
         }
       },
       "required": [
-        "observer_uuid",
+        "observer",
         "observer_position"
       ],
       "title": "SensoryFact",
@@ -15442,7 +15428,7 @@
       "additionalProperties": false
     },
     "SensoryRows": {
-      "description": "The distinct perceived values a group's sensory facts name, each once, as columns.\n\nEvery identity a removed list or a keyed row names is in `uuids` once.\nContact row i is the entity or object `uuids[contact_uuid_index[i]]`\nperceived as `contacts[i]`; sighting row i is the effect\n`uuids[sighting_uuid_index[i]]` seen as `sightings[i]`; light removal row i\nis the source `uuids[light_removal_uuid_index[i]]` gone at revision\n`light_removal_revisions[i]`. A light source row is the record itself; it\ncarries its `source_uuid`.",
+      "description": "The distinct perceived values a group's sensory facts name, each once, as columns.\n\nEvery identity an observer, a removed list or a row names is in `uuids`\nonce. Contact row i is the entity or object `uuids[contact_uuid_index[i]]`\nperceived at `contact_positions[i]`, visually if row i is in\n`contact_visual`, with special senses `contact_special_senses[i]` (no\nrow has any when that column is empty); sighting row i is the effect\n`uuids[sighting_uuid_index[i]]` seen as `sightings[i]`; light removal row i\nis the source `uuids[light_removal_uuid_index[i]]` gone at revision\n`light_removal_revisions[i]`; light source row i is `light_sources[i]`.\n\nThree row tables hold the cells the facts' cell lists name, each once:\n`cells` the rows of the visible and seen lists (its cells in cell order);\n`light_levels` the rows of the light lists and `hazards` those of the\nhazard lists, each table the distinct (cell, value) pairs by cell in cell\norder, then by value. Layer k of a table holds, for each cell with more\nthan k values in the group, its (k+1)-th smallest.",
       "properties": {
         "uuids": {
           "default": [],
@@ -15463,12 +15449,44 @@
           "title": "Contact Uuid Index",
           "type": "array"
         },
-        "contacts": {
+        "contact_positions": {
           "default": [],
           "items": {
-            "$ref": "#/$defs/PerceivedContact"
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ],
+            "type": "array"
           },
-          "title": "Contacts",
+          "title": "Contact Positions",
+          "type": "array"
+        },
+        "contact_visual": {
+          "$ref": "#/$defs/RowBits",
+          "default": {
+            "start": 0,
+            "bits": ""
+          }
+        },
+        "contact_special_senses": {
+          "default": [],
+          "items": {
+            "items": {
+              "$ref": "#/$defs/SensesType"
+            },
+            "type": "array"
+          },
+          "title": "Contact Special Senses",
           "type": "array"
         },
         "sighting_uuid_index": {
@@ -15492,7 +15510,7 @@
         "light_sources": {
           "default": [],
           "items": {
-            "$ref": "#/$defs/PerceivedLightSource"
+            "$ref": "#/$defs/LightRow"
           },
           "title": "Light Sources",
           "type": "array"
@@ -15515,6 +15533,32 @@
             "maximum": 9007199254740991
           },
           "title": "Light Removal Revisions",
+          "type": "array"
+        },
+        "cells": {
+          "$ref": "#/$defs/CellMask",
+          "default": {
+            "x0": 0,
+            "y0": 0,
+            "width": 0,
+            "height": 0,
+            "bits": ""
+          }
+        },
+        "light_levels": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CellValues"
+          },
+          "title": "Light Levels",
+          "type": "array"
+        },
+        "hazards": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CellValues"
+          },
+          "title": "Hazards",
           "type": "array"
         }
       },
@@ -16248,7 +16292,7 @@
       "type": "string"
     },
     "SpatialEffectSighting": {
-      "description": "One observation of a spatial effect without its static content (`PerceivedSpatialEffect`'s other fields).",
+      "description": "One observation of a spatial effect without its static content (`PerceivedSpatialEffect`'s other fields).\n\nIts cell lists are sets of cells (`positions`, `visible_volume_positions`):\na perceived effect's lists are sorted and hold each cell once, which is\nthe order the client unpacks them in. A field holding its default is left out.",
       "properties": {
         "duration": {
           "anyOf": [
@@ -16262,25 +16306,7 @@
           "default": null
         },
         "positions": {
-          "items": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "type": "array"
-          },
-          "title": "Positions",
-          "type": "array"
+          "$ref": "#/$defs/CellMask"
         },
         "owner_revision": {
           "anyOf": [
@@ -16552,26 +16578,14 @@
           "default": null
         },
         "visible_volume_positions": {
-          "default": [],
-          "items": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            ],
-            "type": "array"
-          },
-          "title": "Visible Volume Positions",
-          "type": "array"
+          "$ref": "#/$defs/CellMask",
+          "default": {
+            "x0": 0,
+            "y0": 0,
+            "width": 0,
+            "height": 0,
+            "bits": ""
+          }
         },
         "upper_volume_surfaces": {
           "default": [],
@@ -16939,6 +16953,36 @@
       "title": "SpeciesVariant",
       "type": "string"
     },
+    "SpellApplication": {
+      "description": "A spell application's membership: its owning lineage (the seat's lineage index), identity and order.",
+      "properties": {
+        "lineage": {
+          "title": "Lineage",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "application_id": {
+          "format": "uuid",
+          "title": "Application Id",
+          "type": "string"
+        },
+        "index": {
+          "minimum": 0,
+          "title": "Index",
+          "type": "integer",
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "lineage",
+        "application_id",
+        "index"
+      ],
+      "title": "SpellApplication",
+      "type": "object",
+      "additionalProperties": false
+    },
     "SpellDamageLogData": {
       "additionalProperties": false,
       "properties": {
@@ -17059,7 +17103,7 @@
         "application": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ApplicationMembership"
+              "$ref": "#/$defs/SpellApplication"
             },
             {
               "type": "null"
@@ -19052,26 +19096,31 @@
       "title": "UnlocatedMovementLogData",
       "type": "object"
     },
-    "VersionRow": {
+    "VersionRows": {
+      "description": "A group's versions as columns: version i is occurrence `occurrences[i]` of lineage `lineages[i]`.",
       "properties": {
-        "source_index": {
-          "title": "Source Index",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
+        "occurrences": {
+          "default": [],
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "title": "Occurrences",
+          "type": "array"
         },
-        "lineage": {
-          "title": "Lineage",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
+        "lineages": {
+          "default": [],
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "title": "Lineages",
+          "type": "array"
         }
       },
-      "required": [
-        "source_index",
-        "lineage"
-      ],
-      "title": "VersionRow",
+      "title": "VersionRows",
       "type": "object",
       "additionalProperties": false
     },
@@ -19914,9 +19963,6 @@
         "default_light": {
           "$ref": "#/$defs/LightLevel"
         },
-        "resolved_light": {
-          "$ref": "#/$defs/LightLevel"
-        },
         "condition_names": {
           "items": {
             "type": "string"
@@ -20064,6 +20110,7 @@
       "type": "object"
     },
     "WorldUpdate": {
+      "description": "The world values a seat observes at an occurrence: new tiles, known tiles' changed fields, objects, connectors.\n\n`resolved_light` is the changed resolved light of known tiles, as a value\nper cell (a `LightLevel`); `tile_changes` carry their other changed fields.",
       "properties": {
         "occurrence": {
           "title": "Occurrence",
@@ -20107,6 +20154,19 @@
           },
           "title": "Tile Changes",
           "type": "array"
+        },
+        "resolved_light": {
+          "$ref": "#/$defs/CellValues",
+          "default": {
+            "cells": {
+              "bits": "",
+              "height": 0,
+              "width": 0,
+              "x0": 0,
+              "y0": 0
+            },
+            "values": ""
+          }
         }
       },
       "required": [

@@ -13,7 +13,7 @@ const status = (final?: number): sdk.StatusSnapshot => ({...scope, boundary: {..
 const protocol = identity as sdk.ProtocolIdentity;
 const initial = (sequence = 0): sdk.InitializationResponse => ({kind: 'initialization', protocol, cursor: cursor(sequence), content_revision: 'r', content_additions: [],
   initialization: {generation: uuid, observer_uuid: uuid, world: {battlefield_id: 'test', battlefield_name: 'é', bounds: [-1, -1, 1, 1], width: 3, height: 3},
-    nodes: [], version_rows: [], end_cursor: 0, observations: [], world_updates: []}});
+    nodes: [], version_rows: {}, end_cursor: 0, observations: [], world_updates: []}});
 const operation = (sequence: number): sdk.PlayerOperation => ({kind: 'operation', protocol, cursor: cursor(sequence), state_revision: 'r', command_number: null, boundary,
   audience: {controlled: [uuid], observers: [uuid]}, lineages: [], hud: null, combat_log_appends: [], content_additions: []});
 const event = (name: string, value: unknown, sequence?: number) => `event: ${name}\n${sequence === undefined ? '' : `id: ${sequence}\n`}data: ${JSON.stringify(value)}\n\n`;
@@ -185,8 +185,8 @@ test('cursor wait deadline releases its registration', async t => {
 
 test('tile field updates preserve omissions and explicit clears', () => {
   for (const changes of [
-    {resolved_light: 2},
-    {slope_axis: null, condition_names: [], residues: [], blocks_optics: false, walking_cost: 0, resolved_light: 0},
+    {default_light: 2},
+    {slope_axis: null, condition_names: [], residues: [], blocks_optics: false, walking_cost: 0, default_light: 0},
   ]) {
     const value = {position: [-47, 20], changes};
     const decoded = sdk.decode<sdk.TileFieldUpdate>('TileFieldUpdate', encoder.encode(JSON.stringify(value)));
@@ -197,7 +197,8 @@ test('tile field updates preserve omissions and explicit clears', () => {
 
 test('tile field updates reject invalid values and identity fields', () => {
   for (const changes of [
-    {resolved_light: null}, {condition_names: null}, {walking_cost: -1},
+    // Changed resolved light travels as the world update's packed `resolved_light`.
+    {resolved_light: 2}, {condition_names: null}, {walking_cost: -1},
     {walking_cost: true}, {walking_cost: 1.5}, {tile_uuid: uuid}, {position: [1, 0]}, {unknown: 1},
   ]) assert.throws(() => sdk.decode('TileFieldUpdate', encoder.encode(JSON.stringify({position: [1, 0], changes}))), sdk.ProtocolError);
 });
