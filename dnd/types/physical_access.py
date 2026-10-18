@@ -1,6 +1,8 @@
 """Dependency-neutral physical contact and provider passage facts."""
 
+from dataclasses import dataclass
 from enum import StrEnum
+from uuid import UUID
 
 
 class PhysicalAccess(StrEnum):
@@ -33,3 +35,16 @@ def contact_passage_allows(
     if policy is ContactPassage.HAND_AND_LIGHT_WEAPONS:
         return access in (PhysicalAccess.HAND, PhysicalAccess.LIGHT_WEAPON)
     return False
+
+
+@dataclass(frozen=True, slots=True)
+class ObjectContact:
+    """One `GridMap.attack_object_contact` result (`position`, None: no contact) with the arguments it was traced with."""
+
+    requester_uuid: UUID
+    object_uuid: UUID
+    range_feet: int
+    access: PhysicalAccess
+    subjective: bool
+    origin: tuple[int, int]
+    position: tuple[int, int] | None
