@@ -1,0 +1,234 @@
+{
+ "name": "v6_an_effect_that_ends_in_view_leaves_nothing",
+ "rule": "An effect that ends while its members see it leaves perception with all its cells retired: nothing is remembered.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a",
+  "00000000-0000-4000-8000-00000000000b"
+ ],
+ "steps": [
+  {
+   "sensory_rows": {
+    "uuids": [
+     "00000000-0000-4000-8000-000000003001"
+    ],
+    "sighting_uuid_index": [
+     0
+    ],
+    "sightings": [
+     {
+      "positions": {
+       "x0": 1,
+       "y0": 1,
+       "width": 2,
+       "height": 1,
+       "bits": "Aw=="
+      },
+      "apparent_presence": true
+     }
+    ],
+    "sighting_members": [
+     3
+    ],
+    "cells": {
+     "x0": 1,
+     "y0": 1,
+     "width": 2,
+     "height": 1,
+     "bits": "Aw=="
+    },
+    "light_levels": [
+     {
+      "cells": {
+       "x0": 1,
+       "y0": 1,
+       "width": 2,
+       "height": 1,
+       "bits": "Aw=="
+      },
+      "values": "AwM="
+     }
+    ]
+   },
+   "fact": {
+    "kind": "sensory",
+    "initial": true,
+    "observer_position": [
+     1,
+     0
+    ],
+    "visible_cells_added": {
+     "start": 0,
+     "bits": "Aw=="
+    },
+    "effective_light_levels_changed": {
+     "start": 0,
+     "bits": "Aw=="
+    },
+    "sense_modes_changed": true,
+    "sense_modes": [
+     {
+      "sense_type": "Darkvision",
+      "range_feet": 60
+     }
+    ],
+    "passive_perception_changed": true,
+    "passive_perception": 12,
+    "visual_access_changed": true,
+    "visual_access": 1,
+    "spatial_effects_added": [
+     0
+    ],
+    "spatial_effect_content": {
+     "00000000-0000-4000-8000-000000003001": {
+      "content_ref": {
+       "pack_id": "test.fold_vectors",
+       "definition_kind": "condition",
+       "content_id": "condition.fold_vectors.fog",
+       "content_version": 1,
+       "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "name": "Fog",
+      "description": "A fog."
+     }
+    }
+   },
+   "expected": {
+    "visible": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      1
+     ]
+    ],
+    "seen": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      1
+     ]
+    ],
+    "light": {
+     "1,1": 3,
+     "2,1": 3
+    },
+    "hazard": {},
+    "position": [
+     1,
+     0
+    ],
+    "passive_perception": 12,
+    "visual_access": 1,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": false,
+    "entities": {},
+    "objects": {},
+    "effects": {
+     "00000000-0000-4000-8000-000000003001": {
+      "name": "Fog",
+      "positions": [
+       [
+        1,
+        1
+       ],
+       [
+        2,
+        1
+       ]
+      ],
+      "volume": [],
+      "apparent": true,
+      "anchor_position": null,
+      "trap_state": null,
+      "members": 3
+     }
+    },
+    "remembered": {},
+    "lights": {}
+   }
+  },
+  {
+   "sensory_rows": {
+    "uuids": [
+     "00000000-0000-4000-8000-000000003001"
+    ],
+    "retired_uuid_index": [
+     0
+    ],
+    "retired_cells": [
+     {
+      "x0": 1,
+      "y0": 1,
+      "width": 2,
+      "height": 1,
+      "bits": "Aw=="
+     }
+    ]
+   },
+   "fact": {
+    "kind": "sensory",
+    "spatial_effects_removed": [
+     0
+    ],
+    "spatial_effect_cells_retired": [
+     0
+    ]
+   },
+   "expected": {
+    "visible": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      1
+     ]
+    ],
+    "seen": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      1
+     ]
+    ],
+    "light": {
+     "1,1": 3,
+     "2,1": 3
+    },
+    "hazard": {},
+    "position": [
+     1,
+     0
+    ],
+    "passive_perception": 12,
+    "visual_access": 1,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": false,
+    "entities": {},
+    "objects": {},
+    "effects": {},
+    "remembered": {},
+    "lights": {}
+   }
+  }
+ ]
+}

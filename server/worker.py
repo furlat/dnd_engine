@@ -207,7 +207,7 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
         next_boundary = boundary(session, seat, revision)
         cursor = PlayerCursor(**previous.cursor.model_dump(exclude={'sequence'}), sequence=previous.cursor.sequence + 1)
         publication = previous.model_copy(update={'cursor': cursor, 'state_revision': revision, 'boundary': next_boundary})
-        record = PlayerOperation(audience=update.audience, lineages=update.lineages, hud=update.hud,
+        record = PlayerOperation(generation=update.generation, observer_uuid=update.observer_uuid, lineages=update.lineages, hud=update.hud,
             combat_log_appends=update.combat_log_appends, content_additions=update.content_additions,
             protocol=protocol_identity(), cursor=cursor,
             state_revision=revision, command_number=request.request.command_number if isinstance(request, Command) and owns_command else None,

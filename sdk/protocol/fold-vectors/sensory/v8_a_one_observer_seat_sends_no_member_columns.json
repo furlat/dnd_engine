@@ -1,0 +1,179 @@
+{
+ "name": "v8_a_one_observer_seat_sends_no_member_columns",
+ "rule": "A seat with one observer leaves the member columns out: every contact and effect is that observer's.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "sensory_rows": {
+    "uuids": [
+     "00000000-0000-4000-8000-000000001001",
+     "00000000-0000-4000-8000-000000003001"
+    ],
+    "contact_uuid_index": [
+     0
+    ],
+    "contact_positions": [
+     [
+      1,
+      1
+     ]
+    ],
+    "contact_visual": {
+     "start": 0,
+     "bits": "AQ=="
+    },
+    "sighting_uuid_index": [
+     1
+    ],
+    "sightings": [
+     {
+      "positions": {
+       "x0": 2,
+       "y0": 1,
+       "width": 1,
+       "height": 1,
+       "bits": "AQ=="
+      },
+      "apparent_presence": true
+     }
+    ],
+    "cells": {
+     "x0": 1,
+     "y0": 1,
+     "width": 2,
+     "height": 1,
+     "bits": "Aw=="
+    },
+    "light_levels": [
+     {
+      "cells": {
+       "x0": 1,
+       "y0": 1,
+       "width": 2,
+       "height": 1,
+       "bits": "Aw=="
+      },
+      "values": "AwM="
+     }
+    ]
+   },
+   "fact": {
+    "kind": "sensory",
+    "initial": true,
+    "observer_position": [
+     1,
+     0
+    ],
+    "visible_cells_added": {
+     "start": 0,
+     "bits": "Aw=="
+    },
+    "effective_light_levels_changed": {
+     "start": 0,
+     "bits": "Aw=="
+    },
+    "entity_contacts_changed": [
+     0
+    ],
+    "sense_modes_changed": true,
+    "sense_modes": [
+     {
+      "sense_type": "Darkvision",
+      "range_feet": 60
+     }
+    ],
+    "passive_perception_changed": true,
+    "passive_perception": 12,
+    "visual_access_changed": true,
+    "visual_access": 1,
+    "spatial_effects_added": [
+     0
+    ],
+    "spatial_effect_content": {
+     "00000000-0000-4000-8000-000000003001": {
+      "content_ref": {
+       "pack_id": "test.fold_vectors",
+       "definition_kind": "condition",
+       "content_id": "condition.fold_vectors.fog",
+       "content_version": 1,
+       "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "name": "Fog",
+      "description": "A fog."
+     }
+    }
+   },
+   "expected": {
+    "visible": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      1
+     ]
+    ],
+    "seen": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      1
+     ]
+    ],
+    "light": {
+     "1,1": 3,
+     "2,1": 3
+    },
+    "hazard": {},
+    "position": [
+     1,
+     0
+    ],
+    "passive_perception": 12,
+    "visual_access": 1,
+    "sense_modes": [
+     [
+      "Darkvision",
+      60
+     ]
+    ],
+    "paths_dirty": false,
+    "entities": {
+     "00000000-0000-4000-8000-000000001001": {
+      "position": [
+       1,
+       1
+      ],
+      "visual": true,
+      "members": 1
+     }
+    },
+    "objects": {},
+    "effects": {
+     "00000000-0000-4000-8000-000000003001": {
+      "name": "Fog",
+      "positions": [
+       [
+        2,
+        1
+       ]
+      ],
+      "volume": [],
+      "apparent": true,
+      "anchor_position": null,
+      "trap_state": null,
+      "members": 1
+     }
+    },
+    "remembered": {},
+    "lights": {}
+   }
+  }
+ ]
+}

@@ -98,3 +98,29 @@ def test_one_blocker_change_publishes_one_light_fact_for_every_source_it_moves()
     light_facts = (_completed(cursor, EventType.SPATIAL_LIGHT_CHANGED)
         + _completed(cursor, EventType.SPATIAL_LIGHT_SOURCES_CHANGED))
     assert len(light_facts) == 1
+
+
+def _settlements(cursor: int) -> list[tuple[object, int | None]]:
+    """Each sensory update since `cursor`: its observer and settlement marker, in order."""
+    return [(event.observer_uuid, event.settlement) for event in _completed(cursor, EventType.SENSORY_UPDATE)]
+
+
+def test_observers_settled_together_share_one_settlement() -> None:
+    """One change settles every observer it reaches in one pass, marked as one settlement; the next change is
+    another settlement."""
+    reset_senses_state(width=8, height=3)
+    first = create_skeleton(name="First", position=(0, 1), darkvision=False)
+    second = create_skeleton(name="Second", position=(7, 1), darkvision=False)
+    zone = FogCloudZone(source_entity_uuid=first.uuid, position=(4, 0), affected_positions={(4, 0), (4, 1)})
+
+    cursor = EventQueue.event_cursor()
+    assert zone.activate(parent_event=_cause(first.uuid)) is not None
+    settled = _settlements(cursor)
+    assert {observer for observer, _ in settled} == {first.uuid, second.uuid}
+    markers = {marker for _, marker in settled}
+    assert len(markers) == 1 and None not in markers
+
+    cursor = EventQueue.event_cursor()
+    assert zone.deactivate(parent_event=_cause(first.uuid))
+    later = {marker for _, marker in _settlements(cursor)}
+    assert len(later) == 1 and later.isdisjoint(markers)

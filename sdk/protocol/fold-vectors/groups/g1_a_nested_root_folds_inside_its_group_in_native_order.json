@@ -68,14 +68,11 @@
   }
  },
  "group": {
-  "generation": "00000000-0000-4000-8000-00000000f000",
-  "observer_uuid": "00000000-0000-4000-8000-00000000000a",
   "lineage": 1,
   "root": 3,
   "events": [
    {
     "occurrence": 1,
-    "lineage": 1,
     "children_lineages": [
      2
     ],
@@ -83,18 +80,14 @@
    },
    {
     "occurrence": 2,
-    "lineage": 2,
-    "parent_lineage": 1,
     "phase": "completion"
    },
    {
     "occurrence": 3,
-    "lineage": 3,
     "phase": "completion"
    },
    {
     "occurrence": 4,
-    "lineage": 1,
     "children_lineages": [
      2
     ],
@@ -161,8 +154,7 @@
      "00000000-0000-4000-8000-000000002001"
     ]
    }
-  ],
-  "audience": null
+  ]
  },
  "expected": {
   "objects": [],

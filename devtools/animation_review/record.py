@@ -29,7 +29,7 @@ from game.motion import MotionTimeline
 from game.playback_frame import PlaybackFrame, sample_playback_frame
 from game.body_history import retain_body_head
 from dnd.player.facts import ActionFact, AttackFact, ForcedMovementFact, MovementFact, PlayerState, PortalTransferFact, SpellFact, StepFact
-from dnd.player.reduction import reduce_lineage, stage_lineage
+from dnd.player.reduction import node_lineages, reduce_lineage, stage_lineage
 from game.presentation_group import presentation_groups, reduce_presentation_group, stage_presentation_group, bind_presentation_group
 from game.presentation_coverage import lineage_coverage, missing_observed_bindings, presentation_inventory
 from game.projection import Camera, TILE_WIDTH, ZOOM_LEVELS, project_screen
@@ -70,7 +70,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
         for root in sequence.lineages for event in root.events),
         "Every received causal node is terminal before video sampling begins; an empty perceived history is valid.")
     check("complete-descendants", all(
-        child in {event.lineage for event in root.events}
+        child in set(node_lineages(root.events, root.version_rows))
         for root in sequence.lineages for event in root.events for child in event.children_lineages),
         "Original child lineage identities are retained, including technical nodes.")
     pygame.init()

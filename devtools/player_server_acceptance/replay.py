@@ -81,10 +81,9 @@ def check_group(group: dict, controlled: set[str], events: set[int], lineages: s
             counts['applied_damage'] += 1
         if fact['kind'] == 'turn' and fact['event_type'] == 'encounter_end':
             counts['encounter_end'] += 1
-        if fact['kind'] == 'spell' and fact['application'] is not None:
+        if (fact['kind'] == 'spell' and node.get('resolution') is not None
+                and resolutions[node['resolution']].get('application_id') is not None):
             counts['spell_applications'] += 1
-            if fact['application']['index'] > 0:
-                counts['nonfirst_spell_applications'] += 1
     for observation in group['observations']:
         require(observation['occurrence'] in events, 'Observation references an undisclosed occurrence')
         check_body(observation['actor_uuid'], observation['changes'], observation['items'], controlled)

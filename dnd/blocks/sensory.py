@@ -491,6 +491,7 @@ def emit_sensory_update_delta(
     register_event: bool = True,
     initial: bool = False,
     cells: CellChange,
+    settlement: int,
     contact_changes: Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]] = None,
     shared: Optional[SharedValues] = None,
     contact_deltas: Optional[Tuple[Tuple[Dict[UUID, PerceivedContact], Set[UUID]],
@@ -507,6 +508,7 @@ def emit_sensory_update_delta(
         register_event: Whether to register the completed event immediately.
         initial: Publish the complete after-state without an unrecorded seed.
         cells: The cell change of this before and after (`_cell_change`), against no cells when initial.
+        settlement: The settlement the transition belongs to (`SpatialSensesSystem._settlement`).
         contact_changes: The entities and objects whose contacts can differ, when known.
         shared: The settlement's shared values: equal change references are built once.
         contact_deltas: The entity and object contact deltas, when the caller computed them.
@@ -622,6 +624,7 @@ def emit_sensory_update_delta(
         spatial_effects_removed=effects_removed,
         cause_event_uuid=cause_event.uuid if cause_event is not None else None,
         update_reason=reason,
+        settlement=settlement,
         parent_event=cause_event.uuid if cause_event is not None else None,
         parent_lineage=cause_event.lineage_uuid if cause_event is not None else None,
         phase=EventPhase.COMPLETION,
@@ -1240,6 +1243,8 @@ class SpatialSensesSystem:
         self._covered_observers: FrozenSet[UUID] = frozenset()
         # Each observer's last navigation read, replaced by its next materialization; reset clears it.
         self._navigation_reads: Dict[UUID, NavigationRead] = {}
+        # The next settlement's marker: the observers one pass settles share it (`SensoryUpdateEvent.settlement`).
+        self._next_settlement = 0
 
     def attach(self) -> None:
         """Attach the reducer to the existing pre-completion event boundary."""
@@ -1275,6 +1280,14 @@ class SpatialSensesSystem:
         self._table_changes.clear()
         self._map = None
         self._navigation_reads.clear()
+        self._next_settlement = 0
+
+    def _settlement(self) -> int:
+        """A new settlement's marker: one per `_emit_settlement` pass (its observers' events share it) and one
+        per explicit refresh (`_emit_refresh`)."""
+        marker = self._next_settlement
+        self._next_settlement += 1
+        return marker
 
     def _recording(self) -> bool:
         """Whether facts are recorded for the open group instead of settled now.
@@ -1535,6 +1548,7 @@ class SpatialSensesSystem:
         completion sequence)."""
         diagnostic = action_timing_enabled()
         sensory_events: List[SensoryUpdateEvent] = []
+        settlement = self._settlement()
         for observer_uuid in observers:
             after = published_senses(self.senses_by_observer[observer_uuid])
             initial = observer_uuid not in self.published_observers
@@ -1546,7 +1560,7 @@ class SpatialSensesSystem:
                 self._emit_refresh(observer_uuid, settled[observer_uuid][0], after, initial, change)
                 continue
             sensory_event = self._emit_settled(observer_uuid, settled[observer_uuid], after, initial, change,
-                                               events[observer_uuid], cause, shared)
+                                               events[observer_uuid], cause, shared, settlement)
             if sensory_event is not None:
                 sensory_events.append(sensory_event)
         return sensory_events
@@ -1555,7 +1569,7 @@ class SpatialSensesSystem:
                       settled: ObserverSettled,
                       after: PublishedSenses, initial: bool, change: CellChange,
                       events: Sequence[Event], cause: Optional[Event],
-                      shared: SharedValues) -> Optional[SensoryUpdateEvent]:
+                      shared: SharedValues, settlement: int) -> Optional[SensoryUpdateEvent]:
         """Emit the difference of one observer's published perception."""
         senses = self.senses_by_observer[observer_uuid]
         before, effect_before, _ = settled
@@ -1594,6 +1608,7 @@ class SpatialSensesSystem:
             register_event=False,
             initial=initial,
             cells=change,
+            settlement=settlement,
             shared=shared,
             contact_deltas=(entity_delta, object_delta),
         )
@@ -1632,8 +1647,11 @@ class SpatialSensesSystem:
 
     def _emit_refresh(self, observer_uuid: UUID, before: PublishedSenses, after: PublishedSenses, initial: bool,
                       change: CellChange) -> Optional[SensoryUpdateEvent]:
+        """Publish an independent refresh (registered at once). It is its own settlement, even when a group's
+        settlement emits it: a refresh has no cause, so it is a root of its own, captured apart from the group's
+        settled observers, and a settlement composes only within one captured group."""
         event = emit_sensory_update_delta(observer_uuid, None, before, after, SensoryUpdateReason.UNKNOWN,
-                                          initial=initial, cells=change)
+                                          initial=initial, cells=change, settlement=self._settlement())
         if event is not None:
             self.published_observers.add(observer_uuid)
         return event
@@ -2812,7 +2830,7 @@ class SpatialSensesSystem:
                     continue
                 values = row.values + (row.anchor_uuid if entity_seen else None, row.anchor_uuid if item_seen else None)
                 old = previous.get(identity)
-                if old is not None and not old.affected_tiles and previous_values.get(identity) == values:
+                if old is not None and previous_values.get(identity) == values:
                     sources[identity] = old
                 else:
                     key = ("light", identity, values)

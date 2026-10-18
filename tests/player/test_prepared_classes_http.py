@@ -27,7 +27,7 @@ from tests.progression.prepared_class_support import prepared_build
 def fold(state, operations):
     """The client's fold of delivered operations; a HUD travels as a patch against the last one."""
     for row in operations:
-        state = reduce_operation(state, PlayerUpdate(audience=row.audience, lineages=row.lineages, hud=row.hud,
+        state = reduce_operation(state, PlayerUpdate(generation=row.generation, observer_uuid=row.observer_uuid, lineages=row.lineages, hud=row.hud,
             combat_log_appends=row.combat_log_appends, content_additions=row.content_additions))
     return state
 

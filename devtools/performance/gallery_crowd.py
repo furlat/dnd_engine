@@ -362,7 +362,7 @@ def publish(runtime, updates):
         boundary = worker.boundary(runtime.session, seat, revision)
         runtime.publications[seat] = previous.model_copy(update={'cursor': cursor, 'state_revision': revision,
             'boundary': boundary})
-        records.append((seat, PlayerOperation(audience=update.audience, lineages=update.lineages, hud=update.hud,
+        records.append((seat, PlayerOperation(generation=update.generation, observer_uuid=update.observer_uuid, lineages=update.lineages, hud=update.hud,
             combat_log_appends=update.combat_log_appends, content_additions=update.content_additions,
             protocol=protocol_identity(), cursor=cursor, state_revision=revision, command_number=None,
             boundary=boundary)))

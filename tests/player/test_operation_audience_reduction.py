@@ -19,7 +19,6 @@ from dnd.player.projection import SessionProjection, begin_projection
 from dnd.player.reduction import reduce_initialization, reduce_lineage, reduce_operation
 from dnd.types.event_facts import SpatialChangeType
 from tests.player.test_recorded_boundary import world
-from dnd.types.cells import NO_ROWS
 
 
 @pytest.mark.parametrize('together', [False, True])
@@ -45,17 +44,8 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
     _, initial = begin_projection(SessionProjection(), envelope)
     before = reduce_initialization(initial)
     frozen = deepcopy(before)
-    template = next(node.fact for node in initial.nodes
-        if isinstance(node.fact, SensoryFact) and initial.sensory_rows.uuids[node.fact.observer] == owner.uuid)
-    sensory = replace(template, initial=False, observer_position_changed=False,
-        effective_light_levels_changed=NO_ROWS, cause_occurrence=None,
-        visible_cells_added=NO_ROWS, visible_cells_removed=NO_ROWS, seen_cells_added=NO_ROWS,
-        entity_contacts_changed=(), entity_contacts_removed=(),
-        object_contacts_changed=(), object_contacts_removed=(),
-        sense_modes_changed=False, sense_modes=None, passive_perception_changed=False,
-        passive_perception=None, visual_access_changed=False, visual_access=None,
-        hazardous_cells_changed=NO_ROWS, spatial_effect_sightings=(), spatial_effect_content={},
-            spatial_effects_removed=())
+    # A settlement of the seat that changed nothing it is shown but its paths.
+    sensory = SensoryFact(paths_dirty=True)
     lineages = []
     for index, step in enumerate(steps, start=before.reducer_cursor):
         # Each step is its own one-version lineage: its occurrence is its lineage's index.
@@ -78,14 +68,12 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
                 temporary_hp=held.temporary_hp, life_state=held.life_state, armor_class=held.armor_class,
                 conditions=held.conditions, occupancy_layer=held.occupancy_layer, faction=held.faction,
                 resolved_size=held.resolved_size), loadout=held.visual_loadout),)
-        node = PlayerNode(occurrence=index, lineage=index, parent_event=None,
+        node = PlayerNode(occurrence=index, parent_event=None,
             parent_lineage=None, children_lineages=(), phase=EventPhase.COMPLETION,
             canceled=step == 'canceled', fact=fact)
-        lineages.append(PlayerLineage(generation=before.generation, observer_uuid=owner.uuid,
-            audience=audience, lineage=index, root=0, events=(node,),
+        lineages.append(PlayerLineage(lineage=index, root=0, events=(node,),
             version_rows=VersionRows(occurrences=(index,), lineages=(index,)),
             start_cursor=index, end_cursor=index + 1, bodies=bodies,
-            # The template's light source indices name the initialization's rows.
             sensory_rows=initial.sensory_rows))
     if together:
         lineages = [replace(lineages[0], events=tuple(node for row in lineages for node in row.events),
@@ -93,7 +81,7 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
                 lineages=tuple(value for row in lineages for value in row.version_rows.lineages)),
             bodies=tuple(value for row in lineages for value in row.bodies),
             end_cursor=lineages[-1].end_cursor)]
-    update = PlayerUpdate(audience=audience, lineages=tuple(lineages), hud=None,
+    update = PlayerUpdate(generation=before.generation, observer_uuid=owner.uuid, lineages=tuple(lineages), hud=None,
         combat_log_appends=(), content_additions=())
     received = PlayerUpdate.model_validate_json(update.model_dump_json())
     expected = before

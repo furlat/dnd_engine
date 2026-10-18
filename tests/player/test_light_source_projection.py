@@ -252,16 +252,16 @@ def test_shared_light_tile_after_values_precede_parent_completion_and_survive_co
                 assert set(mask_positions(update.entered)) <= {position}
                 assert {row.position for row in update.tile_changes} <= {position}
                 assert not update.objects and not update.objects_removed
-            # The light's after-value reaches the seat at the first observer's sight of it, before the light's
-            # completion (which carries the same after-value again).
-            earliest = min(cursor for cursor, public in projection.public_cursors.items()
-                if public == packet.world_updates[0].occurrence)
-            assert earliest < indexes[light_completion.uuid]
+            if light is not LightLevel.DARKNESS:
+                # The light's after-value reaches the seat at its members' sight of it, before the light's
+                # completion (which carries the same after-value again).
+                earliest = min(cursor for cursor, public in projection.public_cursors.items()
+                    if public == packet.world_updates[0].occurrence)
+                assert earliest < indexes[light_completion.uuid]
             state = reduce_lineage(state, packet)
-        # The first observer's source after-value is projected while the other
-        # observer still grants this cell. Darkness is remembered at that prefix
-        # before the second child's visibility removal closes the shared grant.
-        assert state.tiles[position].resolved_light is light
+        # The members' settlement is composed once (plan §3.1): darkness hides the cell from both before any
+        # member's partial view could grant its new value, so the seat keeps the light it last saw.
+        assert state.tiles[position].resolved_light is (LightLevel.DIM_LIGHT if light is LightLevel.DARKNESS else light)
         assert cell_in(state.senses.visible, position) is (light is not LightLevel.DARKNESS)
         assert state.tiles[neighbor] == unchanged
 

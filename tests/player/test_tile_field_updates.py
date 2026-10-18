@@ -38,8 +38,8 @@ def light_change(observer, light):
 
 
 def project_event(session, projection, event, index, *, disclosed=True):
-    native = CompletedLineage(generation=projection.remembered.generation,
-        observer_uuid=projection.remembered.observer_uuid, root=event, events=(event,),
+    native = CompletedLineage(generation=projection.generation,
+        observer_uuid=projection.observer_uuid, root=event, events=(event,),
         objective_rows=(objective(index, event),), start_cursor=index, end_cursor=index+1)
     packet = project_lineage(session, projection, native)
     assert (packet is not None) is disclosed
@@ -173,7 +173,7 @@ def test_client_fold_checks_tile_bases_in_event_order_without_staging_future_val
     before = reduce_initialization(public)
     packet = project_event(session, projection, light_change(start.observer_uuid, LightLevel.DIM_LIGHT), 2)
     assert stage_lineage(before, packet).tiles[(1, 0)] == before.tiles[(1, 0)]
-    update = PlayerUpdate(audience=before.viewing_audience, lineages=(packet,), hud=None,
+    update = PlayerUpdate(generation=before.generation, observer_uuid=before.observer_uuid, lineages=(packet,), hud=None,
                           combat_log_appends=(), content_additions=())
     missing = TileFieldUpdate(position=(99, 99), changes={'walking_cost': 3})
     invalid_world = replace(packet.world_updates[0], tile_changes=(*packet.world_updates[0].tile_changes, missing))

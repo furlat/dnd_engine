@@ -4,7 +4,7 @@ O1, perceived equality. At an operation's end each seat's perceived view is buil
 `differences` lists every record held on one side only and every differing field of a record held on both:
 
 - the reference, from the live engine: every member's current senses (`capture_senses_snapshot`), composed by
-  `audience_view`; the visible cells' live tiles (`Tile.to_world_tile_state`); the live placed objects
+  `composed_view` (visible parts only, plan §3.2); the visible cells' live tiles (`Tile.to_world_tile_state`); the live placed objects
   (`project_world_object`) through the seats' world publication rule (`world_publication.object_observed` and
   `disclosed_world_object`, which read no seat memory); the live connectors (`project_world_connector`); each perceived body read from its live aggregate
   (`Entity._entity_created_event`, `actor_from_birth`) and disclosed by the body record a seat receives when the
@@ -13,25 +13,26 @@ O1, perceived equality. At an operation's end each seat's perceived view is buil
   effect's condition's source);
 - the client's, from the reference fold of the records the seat received (`dnd.player.reduction`), as held.
 
-Both sides are what the seat perceives now: the composed visible cells with their light and hazard, each
-member's visible cells (today's wire carries them; under Q1 (a) they leave it in E3, so O3 differs there by
-design), the tiles of visible cells, the objects touching a visible cell or held
+Both sides are what the seat perceives now: the composed visible cells with their light and hazard (the cells
+are composed: Q1 (a)), the seen cells (the client's: every cell it has seen visible; the reference: every member's
+seen cells), the tiles of visible cells, the objects touching a visible cell or held
 as a contact (each on its faces seen now, with the attachments in view and the protections of providers perceived
 now: `_perceived_object`, the rest being seat memory), the connectors with both endpoints visible, the visible
-cells of effects, the light sources with a visible footprint cell, the bodies of contacts and of the seat's own
-members, and any living body the client draws at a visible cell without a contact (a ghost).
+cells of effects, the light sources at a visible cell, the bodies of contacts and of the seat's own
+members, and any living body the client draws at a visible cell without a contact (a ghost). Each contact and
+effect names the members perceiving it (the client's member bitsets); a light source names none (D2).
 
 Fields left out of both sides, none of them a current perceived value:
 - `applied_source_event_cursor` (conditions, item effects): the seat's own occurrence numbering;
 - a condition's `event_uuid`, `resulting_*` and `consumed`: values as of its event (the body holds the current ones);
-- an effect's `owner_revision`: the seat's own numbering of the effect's changes (`_observe_spatial_revisions`);
+- an effect's `owner_revision` and a light source's `revision`: native numbering the seat is not sent;
 - a non-visual contact's `last_visual_position`: the last sighting.
 
 O3: the client side of O1, written per operation and seat, is the perceived-state baseline (`views.jsonl.gz`).
 
 O4, the disclosure boundary: a seat's knowledge is the union over operations of the flat (category, key, field
 path, value) leaves of everything its client holds, memory included (`held_view`, O1's shapes and excluded
-fields); each operation's new leaves are written per seat (`held.jsonl.gz`). Against a base run, every leaf the
+fields; an effect's remembered cells count as its cells); each operation's new leaves are written per seat (`held.jsonl.gz`). Against a base run, every leaf the
 new run's seat holds at operation k that the base run's did not hold by k is a leak: knowledge too early or
 extra. An empty O4 report means no seat ever learned anything the base did not tell it; a change of wire shape
 shows as leaks too and is listed by the lane that makes it.
@@ -60,15 +61,15 @@ from dnd.blocks.base_item import BaseItem
 from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.cells import mask_positions, values_items
+from dnd.core.cells import mask_positions, mask_union, values_items
 from dnd.core.item_types import ItemIntegrity
 from dnd.core.events import WorldConnectorState, WorldTileState
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.player.actor_facts import ActorState
-from dnd.player.audience import AudiencePerception, PlayerAudience, audience_view
-from dnd.player.facts import (PlayerActor, PlayerCharacterSheet, PlayerItem, PlayerObject, PlayerState,
-    SpatialEffectContent)
+from dnd.player.audience import AudiencePerception, PlayerAudience, composed_view
+from dnd.player.facts import (PlayerActor, PlayerCharacterSheet, PlayerItem, PlayerLightSource, PlayerObject,
+    PlayerState, SpatialEffectContent)
 from dnd.player.bodies import entering_body
 from dnd.player.reduction import enter_body
 from dnd.player.static_sent import StaticSent
@@ -76,7 +77,7 @@ from dnd.player.world_stamps import WorldStamps
 from dnd.player.world_publication import disclosed_world_object, object_observed
 from dnd.player.session import Session
 from dnd.types.actor_facts import ConditionMember
-from dnd.types.cells import cell_in
+from dnd.types.cells import CellMask, cell_in
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SensesSnapshot
 from dnd.types.world import CardinalDirection
 from dnd.types.world_placement import WorldObjectPlacement, boundary_sides, placement_support_cells
@@ -100,13 +101,14 @@ CONDITION = TypeAdapter(ConditionMember)
 CONTACT = TypeAdapter(PerceivedContact)
 EFFECT = TypeAdapter(PerceivedSpatialEffect)
 LIGHT = TypeAdapter(PerceivedLightSource)
+PLAYER_LIGHT = TypeAdapter(PlayerLightSource)
 SPATIAL_CONTENT = TypeAdapter(SpatialEffectContent)
 SHEET = TypeAdapter(PlayerCharacterSheet)
 
 # Categories of a view, in report order.
 # An object's members are exact only when its row is sent (D2): the client's `object_members` is "as of the
 # last row", so they are no current perceived value here.
-CATEGORIES = ('cells', 'member_cells', 'entities', 'object_contacts', 'effects', 'lights', 'tiles', 'objects',
+CATEGORIES = ('cells', 'seen', 'entities', 'object_contacts', 'effects', 'lights', 'tiles', 'objects',
               'connectors', 'actors')
 # Values as of an event, not current state: what the client folds them into (the body) is compared instead.
 EVENT_TIME_CONDITION_FIELDS = ('event_uuid', 'resulting_max_hp', 'resulting_ac', 'resulting_stats',
@@ -152,52 +154,74 @@ def _cells(senses: SensesSnapshot, visible: set[Position]) -> dict[str, Any]:
             for position in sorted(visible)}
 
 
-def _contacts(composed: Mapping[UUID, PerceivedContact], members: Mapping[UUID, SensesSnapshot], *,
-              objects: bool) -> dict[str, Any]:
-    """Each composed contact (position, visual) with the contact each member holds of it (Q1 attribution)."""
-    return {str(identity): {'position': list(contact.position), 'visual': contact.visual, 'members': {
-        str(member): CONTACT.dump_python(held, mode='json') for member, senses in members.items()
-        if (held := (senses.objects if objects else senses.entities).get(identity)) is not None}}
-        for identity, contact in composed.items()}
+def _seen(seen: CellMask) -> dict[str, Any]:
+    return {key(position): True for position in mask_positions(seen)}
+
+
+def _contacts(composed: Mapping[UUID, PerceivedContact], members: Mapping[UUID, list[str]]) -> dict[str, Any]:
+    """Each composed contact (position, visual) and the members holding a contact of it (Q1 (a))."""
+    return {str(identity): {'position': list(contact.position), 'visual': contact.visual,
+                            'members': members.get(identity, [])} for identity, contact in composed.items()}
 
 
 def _effect(effect: PerceivedSpatialEffect, positions: set[Position]) -> dict[str, Any]:
     data = EFFECT.dump_python(effect, mode='json')
-    data.pop('owner_revision')  # the seat's own numbering of the effect's changes (`_observe_spatial_revisions`)
+    data.pop('owner_revision')  # native numbering of the effect's changes, not sent
     data['positions'] = sorted(key(position) for position in positions)
+    data['upper_volume_surfaces'] = sorted(data['upper_volume_surfaces'], key=canonical)  # a set, by its cells
     return data
 
 
-def _effects(composed: Mapping[UUID, PerceivedSpatialEffect], members: Mapping[UUID, SensesSnapshot],
+def _effects(composed: Mapping[UUID, PerceivedSpatialEffect], members: Mapping[UUID, list[str]],
              visible: set[Position] | None) -> dict[str, Any]:
-    """The visible part of each composed effect: its cells each member sees now (plan §3.2), and the members.
-    With `visible` None (O4), every held cell."""
+    """The visible part of each composed effect (plan §3.2) and the members perceiving part of it. With `visible`
+    None (O4), every held cell; an effect only remembered (no member perceives it now) names no members."""
     result = {}
     for identity, effect in composed.items():
-        seen_by = {str(member): sorted(key(position) for position in held.positions
-                                       if visible is None or cell_in(senses.visible, position))
-            for member, senses in members.items() if (held := senses.spatial_effects.get(identity)) is not None}
         positions = {position for position in effect.positions if visible is None or position in visible}
         if positions:
-            result[str(identity)] = {**_effect(effect, positions), 'members': {
-                member: cells for member, cells in seen_by.items() if cells}}
+            result[str(identity)] = {**_effect(effect, positions),
+                                     **({'members': members[identity]} if identity in members else {})}
     return result
 
 
-def _lights(composed: Mapping[UUID, PerceivedLightSource], members: Mapping[UUID, SensesSnapshot],
-            visible: set[Position] | None) -> dict[str, Any]:
-    """Each composed light source with its footprint on visible cells, and the members holding it. With
-    `visible` None (O4), every held source with its whole footprint."""
-    names = {key(position) for position in visible} if visible is not None else None
-    result = {}
-    for identity, source in composed.items():
-        footprint = {cell: level for cell, level in source.affected_tiles.items() if names is None or cell in names}
-        if visible is None or footprint or tuple(source.position) in visible:
-            data = LIGHT.dump_python(source, mode='json')
-            data['affected_tiles'] = dict(sorted(footprint.items()))
-            data['members'] = sorted(str(member) for member, senses in members.items() if identity in senses.light_sources)
-            result[str(identity)] = data
-    return result
+def _lights(composed: Mapping[UUID, dict[str, Any]], visible: set[Position] | None) -> dict[str, Any]:
+    """Each perceived light source at a visible cell (dumped, without its native revision). With `visible` None
+    (O4), every held source. (A perceived source carries no footprint: the cells' light is their own value.)"""
+    return {str(identity): data for identity, data in composed.items()
+            if visible is None or tuple(data['position']) in visible}
+
+
+def _live_light(source: PerceivedLightSource) -> dict[str, Any]:
+    data = LIGHT.dump_python(source, mode='json')
+    data.pop('revision')
+    return data
+
+
+def _held_members(bits: Mapping[UUID, int], audience: PlayerAudience) -> dict[UUID, list[str]]:
+    """The client's member bitsets as member lists (bit i: the audience's `observers[i]`)."""
+    return {identity: sorted(str(member) for index, member in enumerate(audience.observers) if value >> index & 1)
+            for identity, value in bits.items()}
+
+
+def _live_holders(members: Mapping[UUID, SensesSnapshot], *, objects: bool) -> dict[UUID, list[str]]:
+    holders: dict[UUID, list[str]] = {}
+    for member, senses in sorted(members.items(), key=lambda row: str(row[0])):
+        for identity in (senses.objects if objects else senses.entities):
+            holders.setdefault(identity, []).append(str(member))
+    return holders
+
+
+def _live_effect_members(members: Mapping[UUID, SensesSnapshot]) -> dict[UUID, list[str]]:
+    """The members perceiving part of each effect now: a cell of their own row they see, a seen volume cell, or
+    an upper volume surface (the visible-part rule, plan §3.2)."""
+    holders: dict[UUID, list[str]] = {}
+    for member, senses in sorted(members.items(), key=lambda row: str(row[0])):
+        for identity, row in senses.spatial_effects.items():
+            if row.upper_volume_surfaces or any(cell_in(senses.visible, position)
+                    or position in row.visible_volume_positions for position in row.positions):
+                holders.setdefault(identity, []).append(str(member))
+    return holders
 
 
 def _condition(condition: ConditionMember) -> dict[str, Any]:
@@ -290,7 +314,6 @@ def client_view(state: PlayerState) -> View:
     if senses is None:
         return {category: {} for category in CATEGORIES}
     audience = state.viewing_audience
-    members = state.perception.members or {state.observer_uuid: senses}
     visible = _visible(senses)
     actors = {}
     for identity, visual in _perceived_bodies(senses.entities, audience):
@@ -310,12 +333,12 @@ def client_view(state: PlayerState) -> View:
                if placement_support_cells(obj.placement) & visible or identity in senses.objects}
     return {
         'cells': _cells(senses, visible),
-        'member_cells': {str(member): sorted(key(position) for position in mask_positions(held.visible))
-                         for member, held in members.items()},
-        'entities': _contacts(senses.entities, members, objects=False),
-        'object_contacts': _contacts(senses.objects, members, objects=True),
-        'effects': _effects(senses.spatial_effects, members, visible),
-        'lights': _lights(senses.light_sources, members, visible),
+        'seen': _seen(senses.seen),
+        'entities': _contacts(senses.entities, _held_members(state.entity_members, audience)),
+        'object_contacts': _contacts(senses.objects, _held_members(state.object_contact_members, audience)),
+        'effects': _effects(senses.spatial_effects, _held_members(state.effect_members, audience), visible),
+        'lights': _lights({identity: PLAYER_LIGHT.dump_python(source, mode='json')
+                           for identity, source in state.light_sources.items()}, visible),
         'tiles': {key(position): TILE.dump_python(state.tiles[position], mode='json')
                   if position in state.tiles else None for position in sorted(visible)},
         'objects': {str(identity): OBJECT.dump_python(_perceived_object(state.objects[identity], visible, in_view,
@@ -333,17 +356,24 @@ def held_view(state: PlayerState) -> View:
     bookkeeping, not knowledge: the fold's cursors and arbitration provenance (`reducer_cursor`,
     `spatial_commit_cursors`, the perception's cursors and absences) and the combat log (plan Q2, gated apart)."""
     senses = state.senses
-    members = state.perception.members or ({state.observer_uuid: senses} if senses is not None else {})
+    audience = state.viewing_audience
     hud = state.hud_snapshot
+    # Each held effect with its remembered cells (as last perceived where it is not perceived now).
+    effects = dict(state.remembered_effects)
+    for identity, effect in (senses.spatial_effects.items() if senses is not None else ()):
+        remembered = state.remembered_effects.get(identity)
+        effects[identity] = effect if remembered is None else effect.model_copy(update={
+            'positions': tuple(sorted({*effect.positions, *remembered.positions}))})
     return {
         'cells': _cells(senses, _visible(senses)) if senses is not None else {},
-        'seen': {key(position): True for position in mask_positions(senses.seen)} if senses is not None else {},
-        'member_cells': {str(member): sorted(key(position) for position in mask_positions(held.visible))
-                         for member, held in members.items()},
-        'entities': _contacts(senses.entities, members, objects=False) if senses is not None else {},
-        'object_contacts': _contacts(senses.objects, members, objects=True) if senses is not None else {},
-        'effects': _effects(senses.spatial_effects, members, None) if senses is not None else {},
-        'lights': _lights(senses.light_sources, members, None) if senses is not None else {},
+        'seen': _seen(senses.seen) if senses is not None else {},
+        'entities': _contacts(senses.entities, _held_members(state.entity_members, audience))
+                    if senses is not None else {},
+        'object_contacts': _contacts(senses.objects, _held_members(state.object_contact_members, audience))
+                           if senses is not None else {},
+        'effects': _effects(effects, _held_members(state.effect_members, audience), None),
+        'lights': _lights({identity: PLAYER_LIGHT.dump_python(source, mode='json')
+                           for identity, source in state.light_sources.items()}, None),
         'tiles': {key(position): TILE.dump_python(tile, mode='json') for position, tile in state.tiles.items()},
         'objects': {str(identity): OBJECT.dump_python(obj, mode='json') for identity, obj in state.objects.items()},
         'connectors': {str(row.connector_uuid): CONNECTOR.dump_python(row, mode='json')
@@ -439,11 +469,11 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
     """The reference: what the seat perceives now, read from the live engine and disclosed by the projector's
     functions. `client` supplies only identities: the seat's generation, stream observer and world bounds."""
     members = live_members(world.session, audience)
-    senses = audience_view(AudiencePerception(members=members), client.observer_uuid)
+    senses = composed_view(AudiencePerception(members=members), client.observer_uuid)
     if senses is None:
         return {category: {} for category in CATEGORIES}
-    # An effect's duration is disclosed to its owner's controllers only (the rule of `_public_occurrences`,
-    # applied to the live owner: the effect's condition's source).
+    # An effect's duration is disclosed to its owner's controllers only (the rule of the projector's `_sighting` and
+    # `_sighting_changes`, applied to the live owner: the effect's condition's source).
     senses = replace(senses, spatial_effects={identity: effect if audience.controls(_effect_owner(identity))
         else effect.model_copy(update={'duration': None}) for identity, effect in senses.spatial_effects.items()})
     visible = _visible(senses)
@@ -470,12 +500,12 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
             str(row.item_uuid): ITEM.dump_python(held.items[row.item_uuid], mode='json') for row in record.items})}
     return {
         'cells': _cells(senses, visible),
-        'member_cells': {str(member): sorted(key(position) for position in mask_positions(held.visible))
-                         for member, held in members.items()},
-        'entities': _contacts(senses.entities, members, objects=False),
-        'object_contacts': _contacts(senses.objects, members, objects=True),
-        'effects': _effects(senses.spatial_effects, members, visible),
-        'lights': _lights(senses.light_sources, members, visible),
+        'seen': _seen(mask_union(*(held.seen for held in members.values()))),
+        'entities': _contacts(senses.entities, _live_holders(members, objects=False)),
+        'object_contacts': _contacts(senses.objects, _live_holders(members, objects=True)),
+        'effects': _effects(senses.spatial_effects, _live_effect_members(members), visible),
+        'lights': _lights({identity: _live_light(source) for identity, source in senses.light_sources.items()},
+                          visible),
         'tiles': {key(position): TILE.dump_python(tile, mode='json') if (tile := _live_tile(world, position)) else None
                   for position in sorted(visible)},
         'objects': {str(identity): OBJECT.dump_python(disclosed_world_object(world.objects, senses, identity, observed),
@@ -610,19 +640,37 @@ def close_oracle(oracle: Oracle, manifest: dict[str, Any], states: Mapping[str, 
 
 
 def _schema16_view(view: View) -> View:
-    """A stored view in the schema-16 item shape (base recordings held item effects in the look)."""
+    """A stored view in the schema-16 shape: item effects out of the look; no light footprint (base recordings
+    carried a perceived source's always-empty `affected_tiles`), revision or members (D2); no member cells, and a
+    contact's or effect's members as the list of those perceiving it (Q1 (a): base recordings carried each member's
+    contact and seen cells); upper volume surfaces as a set."""
     for actor in view.get('actors', {}).values():
         for item in (actor or {}).get('items', {}).values():
             if item is not None:
                 _schema16_item(item)
+    for source in view.get('lights', {}).values():
+        source.pop('affected_tiles', None)
+        source.pop('revision', None)
+        source.pop('members', None)
+    view.pop('member_cells', None)
+    for category in ('entities', 'object_contacts', 'effects'):
+        for row in view.get(category, {}).values():
+            if 'members' in row:
+                row['members'] = sorted(row['members'])  # a base view's member map: its members
+    for row in view.get('effects', {}).values():
+        row['upper_volume_surfaces'] = sorted(row.get('upper_volume_surfaces', []), key=canonical)
     return view
 
 
-def _schema16_leaf(leaf: Leaf) -> Leaf:
-    """A stored O4 leaf in the schema-16 item shape."""
+def _schema16_leaf(leaf: Leaf) -> Leaf | None:
+    """A stored O4 leaf in the schema-16 shape (`_schema16_view`'s mapping); None for one it has no place for."""
     category, name, path, value = leaf
     if category == 'items' and path.startswith('look.item_effects'):
         return category, name, 'effects' + path[len('look.item_effects'):], value
+    if category == 'member_cells' or category == 'lights' and path.split('.')[0] in ('members[]', 'revision'):
+        return None
+    if category in ('entities', 'object_contacts', 'effects') and path.startswith('members.'):
+        return category, name, 'members[]', canonical(path.split('.')[1].removesuffix('[]'))
     return leaf
 
 
@@ -636,7 +684,8 @@ def _held_rows(directory: Path) -> dict[str, list[tuple[int, str, list[Leaf]]]]:
     with gzip.open(directory / 'held.jsonl.gz', 'rt') as source:
         for row in map(json.loads, source):
             rows.setdefault(row['seat'], []).append((row['operation'], row['kind'],
-                [_schema16_leaf((leaf[0], leaf[1], leaf[2], leaf[3])) for leaf in row['added']]))
+                [mapped for leaf in row['added'] if (mapped := _schema16_leaf((leaf[0], leaf[1], leaf[2], leaf[3])))
+                 is not None]))
     return rows
 
 
@@ -681,8 +730,10 @@ def compare_views(base: Path, new: Path) -> dict[str, Any]:
         if name not in before or name not in after:
             rows[f'{name[0]}:{name[1]}:{name[2]}'] = {'only_in': 'base' if name in before else 'new'}
         elif canonical(before[name]) != canonical(after[name]):
+            # Categories one of them lacks (recorded before the category existed) are not compared.
             found = differences(before[name], after[name])
-            rows[f'{name[0]}:{name[1]}:{name[2]}'] = {'classes': summarize(found), 'examples': examples(found)}
+            if found:
+                rows[f'{name[0]}:{name[1]}:{name[2]}'] = {'classes': summarize(found), 'examples': examples(found)}
     leaks = compare_knowledge(base, new)
     return {'equal': not rows, 'compared': len(before.keys() & after.keys()), 'differing': rows,
             'knowledge_bounded': not leaks, 'leaks': leaks}
