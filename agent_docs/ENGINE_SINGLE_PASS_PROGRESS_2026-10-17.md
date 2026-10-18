@@ -471,3 +471,13 @@ Hard rules:
     - Wall of Stone 172 → 161; Daylight 205 → 196.
   - Assumption recorded: the carried contact traces `template.source_entity_uuid` where the deleted call traced `self.uuid`. They were equal at every sampled site, but nothing enforces it.
   - Left: the AoE aim footprints (~16 ms) need a new kept per-cell PROPAGATION grid. The other single-origin callers feed a rule's own subjective contact, so they still repeat the admission check (169 per fighter menu).
+- 2026-10-18: **The wall FOV's 80-cell raise removed (human: "kinda unacceptable").**
+  - PV1a-4's solve raised past its kept 80-cell route table, so a light or area radius over 80, or an unbounded `compute_fov`, on a map wider than 80 cells would have crashed an action. The scalar solver it replaced answered any reach.
+  - The fix: `supercover_route_steps` is the one stepping rule. The kept table is its output within 80, and `wall_visibility` sizes its frame to the window, with batches beyond the table.
+  - Checks:
+    - the kept table is bit-identical;
+    - 3,000 long routes equal the scalar supercover line;
+    - FOV oracle 0 mismatches on 2 cases;
+    - new 200-cell corridor contract cases, which raised on the previous head.
+  - Integrator note: I logged this limit as "a decision for the human" at merge. It should have blocked the merge as a crash path.
+  - Perception reach itself stays 80 cells (400 ft), as in the base engine (`update_all_entities_senses(max_distance=80)`; `sense_radius_cells` clamps to it).
