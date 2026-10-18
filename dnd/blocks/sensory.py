@@ -893,10 +893,11 @@ class ContactTable:
 
 
 def _pack_cells(keys: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
-    """(key, x, y) as one exact int64: 21 bits per coordinate, the key above them."""
+    """(key, x, y) as one exact int64: 21 bits per coordinate, the key (an observer index, or 0;
+    0 <= key < 2^20) above them."""
     if xs.size and (np.abs(xs).max() >= CELL_PACK_LIMIT or np.abs(ys).max() >= CELL_PACK_LIMIT
                     or keys.max() >= 1 << 20):
-        raise ValueError("cell coordinates or target ids exceed the packed key range")
+        raise ValueError("cell coordinates or keys exceed the packed key range")
     return (keys << 42) | ((xs + CELL_PACK_LIMIT) << 21) | (ys + CELL_PACK_LIMIT)
 
 
@@ -1979,10 +1980,10 @@ class SpatialSensesSystem:
         resolved = is_changed(merged_obs, merged[:, 7], merged[:, 0])
         new_changed = np.zeros(merged.shape[0], dtype=bool)
         old_changed = np.zeros(previous_rows.shape[0], dtype=bool)
-        with_obs = np.column_stack((merged_obs, merged))
-        previous_with_obs = np.column_stack((previous_obs, previous_rows))
-        new_changed[resolved] = ~_rows_in(with_obs[resolved], previous_with_obs[compared])
-        old_changed[compared] = ~_rows_in(previous_with_obs[compared], with_obs[resolved])
+        now = _row_identity(merged_obs[resolved], merged[resolved])
+        before = _row_identity(previous_obs[compared], previous_rows[compared])
+        new_changed[resolved] = ~_rows_in(now, before)
+        old_changed[compared] = ~_rows_in(before, now)
         return _contact_maps(views, merged, merged_uuids, merged_obs, new_changed,
                              previous_rows, previous_uuids, previous_obs, old_changed, shared)
 
@@ -2617,6 +2618,16 @@ def _rows_in(rows: np.ndarray, others: np.ndarray) -> np.ndarray:
     found = np.empty(rows.shape[0], dtype=bool)
     found[order[~from_others]] = has_other[group[~from_others]]
     return found
+
+
+def _row_identity(obs: np.ndarray, rows: np.ndarray) -> np.ndarray:
+    """Each (observer, contact row) as two exact int64: the observer and cell; the target key, kind,
+    visual and senses. Two rows are equal exactly when their identities are: a target key names one
+    uuid and its class for as long as any field holds it (`SpatialSensesSystem._target_ids` is
+    append-only and cleared only with every field), so the uuid halves add nothing."""
+    kind_bits = max(ROW_ENTITY, ROW_OBJECT, ROW_SIDE, ROW_KNOWN).bit_length()
+    attributes = ((rows[:, 7] << kind_bits | rows[:, 0]) << 1 | rows[:, 5]) << len(SENSE_BITS)
+    return np.column_stack((_pack_cells(obs, rows[:, 3], rows[:, 4]), attributes | rows[:, 6]))
 
 
 def _first_rows(slot_of: np.ndarray, pairs: np.ndarray, is_touched: np.ndarray, slots: np.ndarray,
