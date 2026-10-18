@@ -22,6 +22,7 @@ from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.spells.content_metadata import srd_action_identity
 from dnd.spells.spell_utils import fire_heal_roll_result
+from dnd.core.base_object import empty_list
 
 
 @srd_action_identity(content_id="action.spell.goodberry.eat",display_name="Eat Goodberry",
@@ -74,7 +75,7 @@ class CreatedItemsLifetime(BaseCondition):
     tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
     description: str = "Owns exact temporary item UUIDs through native retirement."
     duration: Duration = Field(default_factory=lambda:Duration(duration_type=DurationType.UNTIL_LONG_REST))
-    item_uuids: list[UUID] = Field(default_factory=list)
+    item_uuids: list[UUID] = Field(default_factory=empty_list)
     retiring: bool = False
     _retirements: list[PreparedItemRetirement] = PrivateAttr(default=[])
 

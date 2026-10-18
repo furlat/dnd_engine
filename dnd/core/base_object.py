@@ -1,3 +1,4 @@
+import time
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Any, ClassVar, Dict, Final, List, Optional, Protocol
 from uuid import UUID, uuid4
@@ -24,6 +25,34 @@ class CreatesModels(Protocol):
 
     @classmethod
     def model_rebuild(cls) -> bool | None: ...
+
+
+# Default factories pydantic reads in play: those of every field of a model whose
+# schema is built after import (a `defer_build` action or condition, or an event
+# completed late, such as ConditionApplicationEvent with its inherited Event
+# fields), and of a field a `model_construct` call leaves out. Pydantic reads the
+# factory's signature at each such build or construction, and CPython reads a C
+# callable's signature (`list`, `set`, `frozenset`, `tuple`, `time.time`) by
+# defining a class: a reference cycle each time. A Python function's signature
+# makes none; `dict` has no text signature, so inspect raises before parsing.
+def empty_list() -> list[Any]:
+    return []
+
+
+def empty_set() -> set[Any]:
+    return set()
+
+
+def empty_frozenset() -> frozenset[Any]:
+    return frozenset()
+
+
+def empty_tuple() -> tuple[Any, ...]:
+    return ()
+
+
+def wall_clock() -> float:
+    return time.time()
 
 
 # Classes whose creatable closure is built. A built schema stays built for the

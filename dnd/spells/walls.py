@@ -29,6 +29,7 @@ from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
 from dnd.types.world import MovementMode, OccupancyLayer, SpatialChannel
+from dnd.core.base_object import empty_set
 
 
 HotSide = Literal["left", "right", "inside", "outside"]
@@ -57,8 +58,8 @@ class WallOfFireZone(AreaCondition):
     blocks_physical_optics: bool = True
     geometry: WallPresentationGeometry
     hot_side: HotSide
-    flame_positions: set[tuple[int, int]] = Field(default_factory=set)
-    heat_positions: set[tuple[int, int]] = Field(default_factory=set)
+    flame_positions: set[tuple[int, int]] = Field(default_factory=empty_set)
+    heat_positions: set[tuple[int, int]] = Field(default_factory=empty_set)
     damage_dice_count: int = Field(default=5, ge=5)
     spell_dc: int
     duration: Duration = Field(default_factory=lambda: Duration(duration=10, duration_type=DurationType.ROUNDS))

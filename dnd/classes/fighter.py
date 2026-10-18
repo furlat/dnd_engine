@@ -56,6 +56,7 @@ from dnd.actions import (
 from pydantic import Field
 from typing import Optional, List, Tuple
 from uuid import UUID, uuid4
+from dnd.core.base_object import empty_list
 
 
 def create_modified_dice_roll(original: DiceRoll, new_results: List[int]) -> DiceRoll:
@@ -726,7 +727,7 @@ class SecondWind(BaseAction):
     )
 
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Bonus-action and second-wind resource costs rebuilt after model initialization.",
     )
 
@@ -947,7 +948,7 @@ class ActionSurge(BaseAction):
     )
 
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Action-surge resource cost rebuilt after model initialization.",
     )
 
