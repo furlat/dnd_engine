@@ -1040,3 +1040,20 @@ Hard rules:
     - (a) Whether a record arrives unchanged or whole tells the seat it was written while unperceived, even if the value ends the same (a door opened and closed unseen). Before stamps, re-entry was always whole, so no such signal existed. The alternative that closes the channel is a digest of the disclosed value.
     - (b) A finer advance rule would save the "written while seen" re-sends: advance on a keyed change when the record's revision before that write is not after the stamp. This needs approval and a proof test.
   - **Follow-ups:** the plan's vector w15 was folded into w14 (an entered cell's unsent torch is dropped). The wire names are `tiles_unchanged`/`objects_unchanged` (the plan said `*_kept`).
+- 2026-10-18: **Digest stamps for re-entry, world part (codex/enp-revision-stamps; supersedes the revision-stamps entry above).** The human chose digests.
+  - **Stamp.** Per seat, a stable digest (SHA-256 of the record's JSON) of each world record as the seat holds it: sent whole, or confirmed unchanged. Objects add their faces, members and held placement.
+    - A keyed change keeps the stamp only while the record still digests to it, and drops it otherwise. The review's hole was a write folded but published to the seat late, under an observed source. It is now a test.
+    - Suppressions, item effects and concentration slots always travel whole.
+  - **Rule.** `world_stamps.unchanged_since(stamps, key, digest)`, for E3-bodies.
+  - **Side channel closed:** a record written and written back unseen re-enters unchanged.
+  - **Cache.** Tile digests are cached per value by the session (`world_digests`), and `_fold_version` forgets them on each write.
+  - **Restore.** `stamp_replay` refolds and redigests the received updates. It needs no numbering, and O2 requires equality.
+  - **Close-out gates** (at 362895a17 plus this entry; sleet_storm, darkness_daylight and room_reentry × G1/G2):
+    - Per record, every seat's client state digest equals the a4eb223b1 baseline's.
+    - O1 classes are equal; O3 equal and O4 bounded against the baseline.
+    - O2 6/6 with restore.
+    - Transcripts outside `world_updates` are byte-identical.
+    - tests/player: r29's set.
+    - pyright: 0 new.
+  - **KB, largest seat update, a4eb223b1 → digests (G1 | G2):** Sleet drop 77.6 → 73.9 | 104.1 → 80.4; Daylight 83.1 → 81.9 | 137.6 → 110.1; door_open 43.4 → 42.3 | 95.3 → 59.0.
+  - **Not done:** a stamp advance on keyed changes that change the value, which needs per-seat unpublished-write tracking and the human's approval. The unsound version of it measured Sleet/Daylight G2 world 21.8/31.5 → 10.1/10.4 KB.
