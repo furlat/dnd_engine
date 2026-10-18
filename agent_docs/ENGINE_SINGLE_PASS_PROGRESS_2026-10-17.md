@@ -831,3 +831,47 @@ Hard rules:
     - O1 on portal_plate: `cells:field:hazard` 6/90/21 → 0 on G1/G2/G3. `body.normal_hp` (E3-bodies) is counted at one more checkpoint, the published setup.
     - Test: `test_live_connector_edits_and_mechanism_installs_publish_to_every_seat`. It raised before the fix.
     - The 12 gallery cases are byte-identical apart from portal_plate's published updates (its setup is now published). The trap tests and tests/player, ai and architecture match r29.
+- 2026-10-18: **E3-world encoding follow-ups (codex/enp-e3-world-encoding, from e85b4af33: 26b4cd834, 85bc0cfcd, 11a37f971, 25cb86820; not merged).** Encoding only, no rule change.
+  - **1. Tile looks are content-addressed.** A tile's surface and name travel once per value per seat (`tile_looks`, keyed by a digest), and a tile's static row names its look. On its own this took mass_healing_word G2 from 382.7 to 312.5 KB: its 1,070 tile static rows share one look.
+  - **2. Object rows travel as columns** (`ObjectColumns`, `PlacementColumns`, `Column`: `rows` left out selects every row; a column with no non-default value is left out). Vectors (w13 added: placed and unplaced rows in one update) and the Godot note are updated. On small updates the per-column wrappers cost a little: Fireball's 11 object rows, spread over several updates, go 4.6 → 5.7 KB.
+  - **3. The missing tests.**
+    - **T6** (`tests/player/test_object_look_static.py`): a door opened, closed, damaged and destroyed; a chest looted with its contents; a Wall of Stone section cut by Disintegrate. Each scenario's completed versions are folded with `world_facts`, and every object's look stays its first.
+      - It failed on the cut: a construction's geometry (`removed_sections`) changes in place, so a seat kept drawing the uncut wall. As the brief's R3 prescribes, `construction_geometry` moved from `ObjectLook` to `ObjectState`. No gallery case cuts a wall, so O1 never saw it.
+    - **T8:** `world_placement.boundary_sides` is the one definition of a boundary's faces and incident cells. Publication, the fold's support cells and the seat oracle all use it. An architecture test forbids the direction tables in those modules; the only exception is world_facts iterating neighbours.
+      - The test covers the player modules, world_facts and the seat oracle. `dnd/core/gridmap.py` has a second definition, which it does not cover: `BOUNDARY_FACING` plus `contact_surface`, the cells a contact lands on. Replacing it touches gridmap and is left to the coordinator.
+      - The extended import rule `projection` ↛ `reduction` waits on E3-bodies. The projection still imports reduction's body fold: `apply_record_fact`, `change_membership`, `commit_current`, `fold_senses`, `observe_body`, `observed_actor`, `occurrence_order`.
+    - **T9:** O1 names an object kept at its old placement on a re-entered cell, and a stale suppressed cell on a re-entered cell.
+  - **4. Review fixes (antislop and anti-OOP).**
+    - Commit 3 had changed `placement_support_cells`: it added a boundary's own cell even when every band there was removed. The sweep caught this in `test_recorded_world_object_queries`. The rule is restored, and a test case now pins it.
+    - A column's `rows` is None for every row, so `RowBits` keeps its one meaning.
+    - Column schemas are named by their value type. Before, the TypeScript SDK numbered them `Column1…Column14` by order.
+    - `members` keeps its minimum of 1.
+    - The round-trip test sets every field, and a test checks that the columns cover every field.
+  - **Largest seat update, KB** (E0's base 60adf05eb → lane head e85b4af33 → 25cb86820; seeded oracle runs):
+    | Row | G1 | G2 | G3 |
+    |---|---|---|---|
+    | Sleet drop | 85.7 → 88.8 → 88.7 | 38.6 → 115.5 → 79.9 | 58.1 → 139.7 → 102.2 |
+    | Daylight | 83.7 → 92.3 → 92.2 | 45.0 → 139.9 → 102.7 | 65.5 → 95.4 → 84.3 |
+    | Fireball | 202.0 → 160.7 → 161.7 | 178.7 → 137.2 → 138.1 | 187.7 → 146.3 → 147.4 |
+    | mass_healing_word | 49.1 → 48.5 → 48.4 | 758.8 → 382.7 → 276.1 | 49.1 → 48.5 → 48.4 |
+    | room_reentry door_open | 42.1 → 43.6 → 43.4 | 27.8 → 87.6 → 69.2 | 28.0 → 30.1 → 29.3 |
+    - room_reentry's largest update over all its operations is door_open, except base G2 (48.7 KB, move_to_21_6).
+    - G2 and G3 are still about 2× the base on Sleet drop, Daylight and door_open; G1 is about even. What dominates now is re-entered walls.
+      - Sleet drop G2 (79.9 KB): the world part is 45.6 KB, the rest about the base's size. That 45.6 KB is object columns 23.5 (about 220 re-entered walls: uuids 8.3, placements 4.0, names 3.0, structure ids 2.6), tile columns 14.4 and residues 7.4.
+      - Daylight G2 (102.7 KB): objects 24.5, residues 18.1, tile columns 15.6.
+  - **Gates** at 25cb86820, against E0's base (60adf05eb, seeded), on 9 cases × G1/G2/G3:
+    - **O1:** no world class appears. Every class count equals the base's, apart from the lane's known differences: round_step_zones' Prone fix, and portal_plate's published setup.
+    - **O2:** 27 of 27 spool replays pass in a fresh process with hash seed 1.
+    - **O3/O4:** equal to and bounded by the base, except round_step_zones (the Prone fix) and portal_plate. portal_plate's setup is now published, so O4 names the setup's hazard cells and trap effects. Against the lane head, portal_plate's views are equal and its knowledge is bounded.
+    - **Member bits:** 18 runs on G1 and G3, 0 mismatches.
+    - **Transcripts** (`world-16`): events and logs are identical everywhere. Published updates outside `world_updates` are byte-identical to the base, except Fireball's renumbered nodes and portal_plate's setup. Against the lane head (Fireball, portal_plate), they are byte-identical.
+    - **Sweep:** 66 failures, the same set as the lane's (r29's 64, plus 2 `cr0_evidence` tests that need git).
+    - **pyright:** 0 new against e85b4af33.
+  - **Not done (reviewers' minors, left for the coordinator):**
+    - TypeScript column names keep pydantic's generic spelling (`ColumnInt_`, `ColumnTuple_CardinalDirection__________`). They are stable now, but clean names would need concrete column types per value kind or a schema rename hook.
+    - Each field's default is still written in the pack filter, the unpack default and the dataclass. The round-trip test pins them.
+    - `content_composition` and `projection` read column internals.
+    - `facts.py` still holds the column types; they could live in a module below it.
+    - The wire changed and the protocol digest with it, but `player_schema_version` stays 16. That is fine as long as no client consumes 16 yet.
+    - Commit 3 alone fails `test_recorded_world_object_queries` (commit 4 fixes it). Squash commit 4 into commits 1-3 if one commit per item matters at merge.
+    - `construction_geometry` as state is a public wire change. It fixes a bug merged with e85b4af33, which is also on codex/enp-e3-bodies: after a Disintegrate cut, a seat keeps drawing the uncut wall.
