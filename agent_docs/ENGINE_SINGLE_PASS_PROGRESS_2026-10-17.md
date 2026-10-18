@@ -680,6 +680,48 @@ Hard rules:
   - Projected after E3, quiet machine: Wall of Stone ≈98 and Fireball ≈103. What remains:
     - Wall of Stone: the formation settlement (PV1), the zone install with its relight (P7), and the escape Move.
     - Fireball: per-target rules (PR, PD1c), the settlement (PV1), and per-version event machinery (P6, P7b).
+- 2026-10-18: **The long-game case is real (c256ba3e8).**
+  - Setup: the `immune_party` roster, 50 of 50 human turns over 13–14 rounds, about 5 min wall time. The old setup now fails its ≥45-turn assertion.
+  - Per round, on a loaded machine:
+    - AI advances average 130–200 ms;
+    - Choices goes 62 → 110–124 ms over the game (to investigate);
+    - RSS grows ~105–123 MB per round (0.57 → 1.94 GB) with `cycles_found` 0 throughout, so it is retained state.
+  - Seeded runs reproduce the game exactly.
+- 2026-10-18: **Sense-modes key merged (c6f8a832c).** `sense_modes_hash` (a per-process `hash()`) becomes the stable `sense_modes_key` tuple, which fixes E0 O2 on turn_undead. Transcripts are byte-identical.
+- 2026-10-18: **Long-game Choices growth is world state, not history** (seeded game, c7ee71e6c).
+  - Choices ms ≈ 65 + 0.093 × candidate target rows (r = +0.59). Against events stored, registry size and combat log, r ≈ −0.15.
+  - Round 13 holds 32× round 1's events and is faster (56 vs 67 ms) at the same target count.
+  - The rows grow with movement budget (Haste and Dash: move and jump destinations 135 → 500) and with the crowd in reach.
+  - The cost is per-candidate admission: `discovery_admission` / `_requirements_contact` run once per (row × target).
+  - Scratch: `lgc/choices_prof.py`, `prof_diff.py`.
+- 2026-10-18: **AI-step part 1 merged (62764eb4c): an exact reach prefilter for weapon attacks on objects.** On the seeded long game, Choices is −8.3 % and AI advances −6.4 %.
+  - The premise was partly wrong. Ranged long range (a 600 ft longbow) covers the map, so most object candidates are in reach.
+  - An in-reach object costs ~135 µs per admission, and half of that is a duplicated contact trace: `weapon_reach` and then `_physical_access_contact` on subjective scans.
+  - **Next:**
+    - (A) drop the duplicate trace on subjective scans;
+    - (2) evaluate the candidate-independent Jump and move values once per discovery call;
+    - (1) an incremental AI fold, ~12–15 ms of ai_decision op 4.
+  - ai_decision op 4 is dominated by the per-step engine settlement: ~197 of 449 ms profiled.
+- 2026-10-18: **E0 merged into codex/event-native-deltas (8874757e2; branch head 60adf05eb).**
+  - **What it adds:**
+    - seat layouts G1 (faction), G2 (character) and G3 (batch:5);
+    - the room_reentry case;
+    - log and non-log bytes per seat;
+    - the O1–O4 seat oracles (devtools/performance/seat_oracle.py, spool_replay.py);
+    - tests/player/test_seat_oracle.py.
+  - **Harness changes that shift numbers:** setups are now published as one unmeasured op, and every record is client-folded outside the timed spans.
+  - **Base data, git-ignored, lost if the E0 worktree is removed:** /home/tommaso/.codex/worktrees/enp-e0/dnd_engine/.runtime/enp_e0_oracle/60adf05eb/ (t_<case>_F1|F2|F3, plus e0c_table.md and census_over_100k.txt).
+  - **The ms columns were recorded under load.** Bytes are deterministic. The E6 re-time runs on a quiet machine with lanes paused.
+  - **O1 classes on ad08ffa45 (G1 / G2 / G3):**
+    - body.normal_hp 456 / 21,253 / 2,964 and life_state – / 17 / 1: starting damage (E3-bodies);
+    - body.conditions 222 / 2,185 / 617: INTERNAL conditions (E3-bodies), plus the stale Prone from root overlap (fixed in E3-world by merged walk groups);
+    - cells.hazard on portal_plate 6 / 90 / 21: see below;
+    - the room_reentry ghost body 3 / 81 / 15 (E3-bodies H3).
+  - **O2:** 87 of 90 runs pass. The turn_undead failure is fixed by the sense-modes key (c6f8a832c).
+  - **Live-path bug found by O1:** `materialize_portal`, `materialize_pressure_plate` and `materialize_gas_vent` publish a bare `Event(BASE_ACTION)` root. Capture marks it UNSUPPORTED, and `capture_application_operation` raises "Unprojected committed state" (application.py ~82). Any mid-game trap materialization would therefore raise. This is the same class as E1's open connector-edit item; both go to E3-world.
+  - **Rows over 100 KB non-log on the head:**
+    - G1, G2 and G3: Fireball, choices_caster and Circle of Death (residues, combat log, spell facts);
+    - **G2 mass_healing_word: 758 KB.** It is ally 1's first sight of the lit hall after being down: world tiles 444 KB and objects 201 KB.
 - 2026-10-18: **E3-world Phase A and staging (codex/enp-e3-world, f597ad58d; not merged).**
   - **Phase A, byte-identical** (12 gallery cases: transcripts, every seat's PlayerUpdate and every startup record; tests/engine, ai, player and architecture failures = r29; pyright 0 new):
     - ab38e526a: the dead sensory `apply_world_fact` call goes; the server ends a departed contact through `audience.depart_contact`.
