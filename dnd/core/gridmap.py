@@ -3151,6 +3151,40 @@ class GridMap:
         return self.attack_object_contact(requester_uuid, object_uuid,
             range_feet=reach, access=access, subjective=subjective, origin=origin)
 
+    def manual_object_contact_origins(
+        self, requester_uuid: UUID, object_uuid: UUID, origins: AbstractSet[Tuple[int, int]], *,
+        subjective: bool = False,
+    ) -> Tuple[Tuple[int, int], ...]:
+        """The origins, sorted, from which `manual_object_contact` finds a surface.
+
+        Only origins within the object's reach of a surface cell by grid
+        distance are traced: support distance is never shorter than grid
+        distance, and the subjective surface is a subset of this one.
+        """
+        provider = BaseBlock.get(object_uuid)
+        placement = self._object_placements.get(object_uuid)
+        if provider is None or placement is None:
+            return ()
+        reach = provider.get_manual_contact_range()
+        steps = reach // 5
+        offsets = [(dx, dy) for dx in range(-steps, steps + 1) for dy in range(-steps, steps + 1)
+                   if grid_distance_feet((0, 0), (dx, dy)) <= reach]
+        near = {(x + dx, y + dy) for x, y in self._contact_surface(placement) for dx, dy in offsets}
+        return tuple(sorted(origin for origin in near.intersection(origins) if self.manual_object_contact(
+            requester_uuid, object_uuid, subjective=subjective, origin=origin) is not None))
+
+    @staticmethod
+    def _contact_surface(placement: WorldObjectPlacement) -> Set[Tuple[int, int]]:
+        """The cells a contact can land on: the supports, plus the cell a boundary placement faces."""
+        positions = set(placement.positions)
+        if placement.boundary_direction is not None:
+            dx, dy = {
+                CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
+                CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0),
+            }[placement.boundary_direction]
+            positions.add((placement.position[0] + dx, placement.position[1] + dy))
+        return positions
+
     def attack_object_contact(
         self, requester_uuid: UUID, object_uuid: UUID, *,
         range_feet: int, access: PhysicalAccess,
@@ -3169,13 +3203,7 @@ class GridMap:
         if origin is None or placement is None or origin not in self._tiles:
             return None
         source_tile = self._tiles[origin]
-        positions = set(placement.positions)
-        if placement.boundary_direction is not None:
-            dx, dy = {
-                CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
-                CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0),
-            }[placement.boundary_direction]
-            positions.add((placement.position[0] + dx, placement.position[1] + dy))
+        positions = self._contact_surface(placement)
 
         if subjective:
             senses = requester.get_senses() if requester is not None else None
