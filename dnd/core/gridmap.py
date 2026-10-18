@@ -5212,9 +5212,8 @@ class GridMap:
         values = np.zeros(layer.values.shape, dtype=bool)
         tiles = self._tiles
         xs, ys = np.nonzero(layer.values)
-        for i, j in zip(xs.tolist(), ys.tolist()):
-            tile = tiles.get((layer.x0 + i, layer.y0 + j))
-            values[i, j] = tile is not None and not tile.blocks_walking(mode=MovementMode.WALKING)
+        values[xs, ys] = [tile is not None and not tile.blocks_walking(mode=MovementMode.WALKING)
+                          for tile in map(tiles.get, zip((xs + layer.x0).tolist(), (ys + layer.y0).tolist()))]
         return CellLayer(layer.x0, layer.y0, values)
 
     def get_path(self, start: Tuple[int, int], end: Tuple[int, int],
