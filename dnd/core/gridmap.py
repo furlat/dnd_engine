@@ -681,17 +681,14 @@ class GridMap:
         self._set_light_footprint(source, {})
         self._light_slot_of.pop(source.uuid, None)
 
-    def light_slots_lit_within(self, visible: CellLayer) -> np.ndarray:
-        """The lit-slot words of the emitters whose lit cells include any visible cell of a bool layer."""
+    def light_slot_words(self, box: Box) -> np.ndarray:
+        """The lit-slot words of a non-empty box inside the cell box, (width, height, words) uint64: bit
+        `slot % 64` of word `slot // 64` is set where that emitter lights the cell (no words while no
+        emitter holds a slot)."""
         slots = self._cell_light_slots
-        if not self._light_slot_of or not visible.values.size:
-            return np.zeros(0, dtype=np.uint64)
-        lx0, ly0, lx1, ly1 = visible.box
-        sx0, sy0 = slots.x0, slots.y0
-        words = slots.values[lx0 - sx0:lx1 - sx0 + 1, ly0 - sy0:ly1 - sy0 + 1][visible.values]
-        if not words.size:
-            return np.zeros(slots.values.shape[2], dtype=np.uint64)
-        return np.bitwise_or.reduce(words, axis=0)
+        if not self._light_slot_of:
+            return np.zeros((box[2] - box[0] + 1, box[3] - box[1] + 1, 0), dtype=np.uint64)
+        return slots.values[box[0] - slots.x0:box[2] - slots.x0 + 1, box[1] - slots.y0:box[3] - slots.y0 + 1]
 
     def light_sources_in_slots(self, words: np.ndarray) -> Set[UUID]:
         """The emitters whose slot bit is set in lit-slot words."""
@@ -5403,7 +5400,7 @@ class GridMap:
 
         The renderer needs an emitter, not another per-cell illumination map; an
         observer is shown the emitters whose lit cells reach a visible cell
-        (`light_slots_lit_within`), never hidden inventory identities.
+        (`light_slot_words`), never hidden inventory identities.
         """
         rows = []
         for identity in set(self._light_sources):

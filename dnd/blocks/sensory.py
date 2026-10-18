@@ -1535,19 +1535,16 @@ class SpatialSensesSystem:
         effects = self._refresh_spatial_effects(views, sights, before_visible, affected, passives, contacts, stack)
         if diagnostic:
             record_action_timing("sensory.recompute.spatial_effects_ms", started)
+            started = time.perf_counter()
+        lights = self._refresh_light_sources(views, world, contacts, shared, stack)
+        if diagnostic:
+            record_action_timing("sensory.recompute.light_sources_ms", started)
         touched: Dict[UUID, Dict[UUID, Optional[PerceivedSpatialEffect]]] = {}
         grants: Dict[UUID, Optional[CellLayer]] = {}
-        light_diffs: Dict[int, Tuple[np.ndarray, np.ndarray, Tuple[UUID, ...]]] = {}
-        for view, (_, _, contact_rows, contact_uuids, contact_changes), (volumes, upper, volume_grants), effect_before \
-                in zip(views, contacts, sights, effects):
-            started = time.perf_counter() if diagnostic else 0.0
+        for view, (_, _, contact_rows, contact_uuids, contact_changes), (volumes, upper, volume_grants), effect_before, \
+                (light_inputs, light_values) in zip(views, contacts, sights, effects, lights):
             observer_uuid, field = view.owner.uuid, view.field
             grants[observer_uuid] = _granted_cells(view, volume_grants)
-            light_inputs, light_values = self._refresh_light_sources(observer_uuid, view.senses, world, field,
-                                                                     view.senses.cells.visible, contact_rows, shared,
-                                                                     light_diffs)
-            if diagnostic:
-                record_action_timing("sensory.recompute.light_sources_ms", started)
             self.fields[observer_uuid] = ObserverField(
                 field.origin, field.window, field.selection, field.optical_key, field.routes, field.felt_keys,
                 field.felt_rows, field.sight_inputs, field.sight, field.light, field.light_version, field.optical,
@@ -2436,107 +2433,149 @@ class SpatialSensesSystem:
 
     # ------------------------------------------------------------------ light sources and helpers
 
-    def _refresh_light_sources(self, observer_uuid: UUID, senses: Senses, world: SettlementWorld,
-                               field: ObserverField, visible: CellLayer, contact_rows: np.ndarray,
-                               shared: SharedValues, diffs: Dict[int, Tuple[np.ndarray, np.ndarray, Tuple[UUID, ...]]],
-                               ) -> Tuple[Tuple, Dict[UUID, Tuple]]:
-        """Compact emitter descriptors of the emitters lighting a visible cell; cell illumination has
-        its native events. An emitter's anchor is disclosed when the observer sees it (its contact
-        rows) or is it. The stage's inputs are the settlement's emitter table, the visible cells and
-        the targets of the visual contacts: while they hold, the published emitters stand; otherwise
-        only the emitters whose row, lighting or anchor disclosure changed are described again.
-        Returns those inputs with the per-emitter lighting and disclosure, and each published
-        emitter's descriptor inputs."""
+    def _refresh_light_sources(
+        self, views: Sequence[ObserverView], world: SettlementWorld,
+        resolved: Sequence[Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray, np.ndarray,
+                                 Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]]],
+        shared: SharedValues, stack: VisibleStack,
+    ) -> List[Tuple[Tuple, Dict[UUID, Tuple]]]:
+        """Every view's compact emitter descriptors: the emitters lighting a visible cell; cell
+        illumination has its native events. An emitter's anchor is disclosed when the observer sees it
+        (its contact rows) or is it. A view's inputs are the settlement's emitter table, its visible
+        cells and the targets of its visual contacts: while they hold, its published emitters stand;
+        otherwise only the emitters whose row, lighting or anchor disclosure changed are described
+        again. The lighting and disclosure of every view are one array pass (the stacked visible
+        cells read their lit-slot words in one gather, OR-ed per view). Returns, per view, those
+        inputs with the per-emitter lighting and disclosure, and each published emitter's
+        descriptor inputs."""
         grid = get_map()
         lights = world.light_sources
-        visual_keys = np.sort(contact_rows[contact_rows[:, 5] != 0, 7])
-        known = field.light_inputs
-        if known is not None and known[0] is lights and known[1] is visible and np.array_equal(known[2], visual_keys):
-            return known, field.light_values
-        words = grid.light_slots_lit_within(visible)
-        lit = np.zeros(lights.slots.size, dtype=bool)
-        slotted = (lights.slots >= 0) & (lights.slots // 64 < words.size)
-        if slotted.any():
-            slots = lights.slots[slotted]
-            lit[slotted] = ((words[slots // 64] >> (slots % 64).astype(np.uint64)) & np.uint64(1)) != 0
-        own = self._target_key(observer_uuid, True)
-        anchor_entity = (lights.anchor_entity_key >= 0) & (_in_sorted(lights.anchor_entity_key, visual_keys)
-                                                          | (lights.anchor_entity_key == own))
-        anchor_item = (lights.anchor_item_key >= 0) & _in_sorted(lights.anchor_item_key, visual_keys)
-        inputs = (lights, visible, visual_keys, lit, anchor_entity, anchor_item)
-        previous = senses.light_sources
-        previous_values = field.light_values
-        gone: Tuple[UUID, ...] = ()
-        if known is None:
-            check = np.ones(lit.size, dtype=bool)
-        else:
-            # The rows whose emitter, lighting or disclosure differ from what the published emitters read.
-            diff = diffs.get(id(known[0]))
-            if diff is None:
-                diff = diffs[id(known[0])] = _light_table_diff(known[0], lights)
-            previous_index, row_changed, gone = diff
+        results: List[Tuple[Tuple, Dict[UUID, Tuple]]] = [((), {})] * len(views)
+        pending: List[int] = []
+        visual_keys_of: List[np.ndarray] = []
+        for index, (view, contacts) in enumerate(zip(views, resolved)):
+            contact_rows = contacts[2]
+            visual_keys = np.sort(contact_rows[contact_rows[:, 5] != 0, 7])
+            known = view.field.light_inputs
+            if (known is not None and known[0] is lights and known[1] is view.senses.cells.visible
+                    and np.array_equal(known[2], visual_keys)):
+                results[index] = (known, view.field.light_values)
+                continue
+            pending.append(index)
+            visual_keys_of.append(visual_keys)
+        if not pending:
+            return results
+        count, emitters = len(pending), lights.slots.size
+        lit = np.zeros((count, emitters), dtype=bool)
+        if stack.after.size:
+            words = grid.light_slot_words(stack.box)
+            slotted = (lights.slots >= 0) & (lights.slots // 64 < words.shape[2])
+            if slotted.any():
+                # Each view's words OR-ed over its visible cells.
+                visible = stack.after[np.array(pending, dtype=np.int64)]
+                lit_words = np.bitwise_or.reduce(np.where(visible[..., None], words[None], np.uint64(0)), axis=(1, 2))
+                slots = lights.slots[slotted]
+                lit[:, slotted] = ((lit_words[:, slots // 64] >> (slots % 64).astype(np.uint64)) & np.uint64(1)) != 0
+        # Each view's own key, in view order (as each view's stage assigned it).
+        own = np.array([self._target_key(views[index].owner.uuid, True) for index in pending], dtype=np.int64)
+        key_space = int(max(lights.anchor_entity_key.max(initial=0), lights.anchor_item_key.max(initial=0),
+                            own.max(initial=0), max((int(keys.max(initial=0)) for keys in visual_keys_of)))) + 1
+        visual_pairs = np.concatenate([order * key_space + keys for order, keys in enumerate(visual_keys_of)])
+        orders = np.arange(count, dtype=np.int64)[:, None] * key_space
+        anchor_entity = (lights.anchor_entity_key >= 0)[None, :] & (
+            _in_sorted(orders + lights.anchor_entity_key[None, :], visual_pairs)
+            | (lights.anchor_entity_key[None, :] == own[:, None]))
+        anchor_item = (lights.anchor_item_key >= 0)[None, :] & _in_sorted(orders + lights.anchor_item_key[None, :],
+                                                                           visual_pairs)
+        # The rows whose emitter, lighting or disclosure differ from what each view's published emitters
+        # read, for the views that published from one previous table at once.
+        check = np.ones((count, emitters), dtype=bool)
+        gone_of: List[Tuple[UUID, ...]] = [()] * count
+        tables: Dict[int, List[Tuple[int, Tuple]]] = {}
+        for order, index in enumerate(pending):
+            known = views[index].field.light_inputs
+            if known is not None:
+                tables.setdefault(id(known[0]), []).append((order, known))
+        for published in tables.values():
+            members = [order for order, _ in published]
+            previous_index, row_changed, gone = _light_table_diff(published[0][1][0], lights)
             present = previous_index >= 0
 
-            def before(flags: np.ndarray) -> np.ndarray:
-                values = np.zeros(previous_index.size, dtype=bool)
-                values[present] = flags[previous_index[present]]
+            def before(position: int) -> np.ndarray:
+                values = np.zeros((len(published), emitters), dtype=bool)
+                values[:, present] = np.stack([known[position] for _, known in published]).reshape(
+                    len(published), -1)[:, previous_index[present]]
                 return values
-            check = (row_changed | (lit != before(known[3])) | (anchor_entity != before(known[4]))
-                     | (anchor_item != before(known[5])))
-            if not gone and not check.any():
-                return inputs, previous_values
-        # A first view describes every lit emitter afresh; a settled one starts from what it published.
-        sources = dict(previous) if known is not None else {}
-        values_of = dict(previous_values) if known is not None else {}
-        membership = known is None
-        replaced = False
-        # Emitters gone from the table are no longer lit.
-        for identity in gone:
-            membership = sources.pop(identity, None) is not None or membership
-            values_of.pop(identity, None)
-        for row, row_lit, entity_seen, item_seen in zip(
-                [lights.rows[index] for index in np.flatnonzero(check).tolist()], lit[check].tolist(),
-                anchor_entity[check].tolist(), anchor_item[check].tolist()):
-            identity = row.identity
-            if not row_lit:
+            check[members] = (row_changed[None, :] | (lit[members] != before(3))
+                              | (anchor_entity[members] != before(4)) | (anchor_item[members] != before(5)))
+            for order in members:
+                gone_of[order] = gone
+        for order, index in enumerate(pending):
+            senses, field = views[index].senses, views[index].field
+            known = field.light_inputs
+            row_check, gone = check[order], gone_of[order]
+            inputs = (lights, senses.cells.visible, visual_keys_of[order], lit[order].copy(),
+                      anchor_entity[order].copy(), anchor_item[order].copy())
+            previous = senses.light_sources
+            previous_values = field.light_values
+            if known is not None and not gone and not row_check.any():
+                results[index] = (inputs, previous_values)
+                continue
+            check_rows, lit_rows = np.flatnonzero(row_check).tolist(), lit[order, row_check].tolist()
+            entity_rows, item_rows = anchor_entity[order, row_check].tolist(), anchor_item[order, row_check].tolist()
+            # A first view describes every lit emitter afresh; a settled one starts from what it published.
+            sources = dict(previous) if known is not None else {}
+            values_of = dict(previous_values) if known is not None else {}
+            membership = known is None
+            replaced = False
+            # Emitters gone from the table are no longer lit.
+            for identity in gone:
                 membership = sources.pop(identity, None) is not None or membership
                 values_of.pop(identity, None)
+            for row, row_lit, entity_seen, item_seen in zip(
+                    [lights.rows[row_index] for row_index in check_rows], lit_rows, entity_rows, item_rows):
+                identity = row.identity
+                if not row_lit:
+                    membership = sources.pop(identity, None) is not None or membership
+                    values_of.pop(identity, None)
+                    continue
+                values = row.values + (row.anchor_uuid if entity_seen else None, row.anchor_uuid if item_seen else None)
+                old = previous.get(identity)
+                if old is not None and not old.affected_tiles and previous_values.get(identity) == values:
+                    sources[identity] = old
+                else:
+                    key = ("light", identity, values)
+                    descriptor = shared.get(key)
+                    if descriptor is None:
+                        revision, position, height, appearance, very_bright, bright, dim, actor_anchored, \
+                            anchor_entity_uuid, anchor_item_uuid = values
+                        descriptor = shared[key] = PerceivedLightSource(
+                            source_uuid=identity, revision=revision, position=position, base_height_steps=height,
+                            appearance=appearance, very_bright_radius_feet=very_bright, bright_radius_feet=bright,
+                            dim_radius_feet=dim, actor_anchored=actor_anchored, anchor_entity_uuid=anchor_entity_uuid,
+                            anchor_item_uuid=anchor_item_uuid)
+                    sources[identity] = descriptor
+                current = previous.get(identity)
+                membership = membership or current is None
+                replaced = replaced or (current is not None and current is not sources[identity])
+                values_of[identity] = values
+            if not membership and not replaced:
+                results[index] = (inputs, values_of)
                 continue
-            values = row.values + (row.anchor_uuid if entity_seen else None, row.anchor_uuid if item_seen else None)
-            old = previous.get(identity)
-            if old is not None and not old.affected_tiles and previous_values.get(identity) == values:
-                sources[identity] = old
-            else:
-                key = ("light", identity, values)
-                descriptor = shared.get(key)
-                if descriptor is None:
-                    revision, position, height, appearance, very_bright, bright, dim, actor_anchored, \
-                        anchor_entity_uuid, anchor_item_uuid = values
-                    descriptor = shared[key] = PerceivedLightSource(
-                        source_uuid=identity, revision=revision, position=position, base_height_steps=height,
-                        appearance=appearance, very_bright_radius_feet=very_bright, bright_radius_feet=bright,
-                        dim_radius_feet=dim, actor_anchored=actor_anchored, anchor_entity_uuid=anchor_entity_uuid,
-                        anchor_item_uuid=anchor_item_uuid)
-                sources[identity] = descriptor
-            current = previous.get(identity)
-            membership = membership or current is None
-            replaced = replaced or (current is not None and current is not sources[identity])
-            values_of[identity] = values
-        if not membership and not replaced:
-            return inputs, values_of
-        if membership:
-            # Published in table order; a replaced descriptor keeps its place.
-            order = [row.identity for row in lights.rows if row.identity in sources]
-            sources = {identity: sources[identity] for identity in order}
-            values_of = {identity: values_of[identity] for identity in order}
-            for identity in previous:
-                if identity not in sources:
-                    senses.light_source_removals[identity] = max(previous[identity].revision,
-                        grid.light_source_revision(identity))
-            for identity in sources:
-                senses.light_source_removals.pop(identity, None)
-        senses.light_sources = sources
-        return inputs, values_of
+            if membership:
+                # Published in table order; a replaced descriptor keeps its place.
+                listed = [row.identity for row in lights.rows if row.identity in sources]
+                sources = {identity: sources[identity] for identity in listed}
+                values_of = {identity: values_of[identity] for identity in listed}
+                for identity in previous:
+                    if identity not in sources:
+                        senses.light_source_removals[identity] = max(previous[identity].revision,
+                            grid.light_source_revision(identity))
+                for identity in sources:
+                    senses.light_source_removals.pop(identity, None)
+            senses.light_sources = sources
+            results[index] = (inputs, values_of)
+        return results
 
     @staticmethod
     def _residue_tile(event: Event) -> Optional[Tile]:
