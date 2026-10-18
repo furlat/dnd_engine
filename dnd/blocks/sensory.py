@@ -893,10 +893,11 @@ class ContactTable:
 
 
 def _pack_cells(keys: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
-    """(key, x, y) as one exact int64: 21 bits per coordinate, the key above them."""
+    """(key, x, y) as one exact int64: 21 bits per coordinate, the key (an observer index, or 0;
+    0 <= key < 2^20) above them."""
     if xs.size and (np.abs(xs).max() >= CELL_PACK_LIMIT or np.abs(ys).max() >= CELL_PACK_LIMIT
                     or keys.max() >= 1 << 20):
-        raise ValueError("cell coordinates or target ids exceed the packed key range")
+        raise ValueError("cell coordinates or keys exceed the packed key range")
     return (keys << 42) | ((xs + CELL_PACK_LIMIT) << 21) | (ys + CELL_PACK_LIMIT)
 
 
@@ -2025,96 +2026,12 @@ class SpatialSensesSystem:
         resolved = is_changed(merged_obs, merged[:, 7], merged[:, 0])
         new_changed = np.zeros(merged.shape[0], dtype=bool)
         old_changed = np.zeros(previous_rows.shape[0], dtype=bool)
-        with_obs = np.column_stack((merged_obs, merged))
-        previous_with_obs = np.column_stack((previous_obs, previous_rows))
-        new_changed[resolved] = ~_rows_in(with_obs[resolved], previous_with_obs[compared])
-        old_changed[compared] = ~_rows_in(previous_with_obs[compared], with_obs[resolved])
-        moved = np.zeros(count, dtype=bool)
-        moved[merged_obs[new_changed]] = True
-        moved[previous_obs[old_changed]] = True
-        bounds = np.searchsorted(merged_obs, np.arange(count + 1))
-        previous_bounds = np.searchsorted(previous_obs, np.arange(count + 1))
-        results = []
-        for obs, view in enumerate(views):
-            rows = merged[bounds[obs]:bounds[obs + 1]]
-            row_uuids = merged_uuids[bounds[obs]:bounds[obs + 1]]
-            senses = view.senses
-            start_entities, start_objects = (senses.entities, senses.objects) if view.published else ({}, {})
-            if view.published and not moved[obs]:
-                results.append((start_entities, start_objects, rows, row_uuids, (frozenset(), frozenset())))
-                continue
-            row_changed = new_changed[bounds[obs]:bounds[obs + 1]]
-            old = slice(previous_bounds[obs], previous_bounds[obs + 1])
-            results.append(self._changed_contacts(view, rows, row_uuids, row_changed, previous_rows[old],
-                                                  previous_uuids[old], old_changed[old], start_entities,
-                                                  start_objects, shared))
-        return results
-
-    @staticmethod
-    def _changed_contacts(view: ObserverView, rows: np.ndarray, row_uuids: np.ndarray, row_changed: np.ndarray,
-                          previous_rows: np.ndarray, previous_uuids: np.ndarray, previous_changed: np.ndarray,
-                          start_entities: Dict[UUID, PerceivedContact], start_objects: Dict[UUID, PerceivedContact],
-                          shared: SharedValues,
-                          ) -> ResolvedContacts:
-        """One view's contacts from its evidence rows: the targets with a changed row are resolved
-        again, every other contact is kept."""
-        origin = view.origin
-        touched = np.unique(np.concatenate((rows[row_changed, 7], previous_rows[previous_changed, 7])))
-        entity_touched: Set[UUID] = set()
-        object_touched: Set[UUID] = set()
-        for kind, identity in zip(previous_rows[previous_changed, 0].tolist() + rows[row_changed, 0].tolist(),
-                                  previous_uuids[previous_changed].tolist() + row_uuids[row_changed].tolist()):
-            (entity_touched if kind == ROW_ENTITY else object_touched).add(identity)
-        selected = np.isin(rows[:, 7], touched)
-
-        def contact(position: Position, visual: bool, mask: int, previous: Optional[PerceivedContact],
-                    ) -> PerceivedContact:
-            special = SENSES_BY_VALUE[mask]
-            if (previous is not None and previous.position == position and previous.visual == visual
-                    and previous.special_senses == special):
-                return previous
-            key = ("contact", position, visual, special)
-            value = shared.get(key)
-            if value is None:
-                value = shared[key] = PerceivedContact(position=position, visual=visual, special_senses=special)
-            return value
-
-        # The touched targets' contacts, resolved from their rows in evidence order.
-        fresh_entities: Dict[UUID, PerceivedContact] = {}
-        fresh_objects: Dict[UUID, PerceivedContact] = {}
-        for (kind, _, _, x, y, visual, mask, _), identity in zip(rows[selected].tolist(), row_uuids[selected].tolist()):
-            visual = bool(visual)
-            if kind == ROW_ENTITY:
-                fresh_entities[identity] = contact((x, y), visual, mask, start_entities.get(identity))
-                continue
-            if kind == ROW_KNOWN:
-                if identity not in fresh_objects:
-                    fresh_objects[identity] = contact((x, y), False, 0, start_objects.get(identity))
-                continue
-            found = fresh_objects.get(identity)
-            if kind == ROW_SIDE or found is None:
-                fresh_objects[identity] = contact((x, y), visual, mask, start_objects.get(identity))
-                continue
-            # A multi-cell object: the best evidence, the union of its senses in enum order.
-            chosen_position = min(((not found.visual, _distance_feet(origin, found.position), found.position),
-                                   (not visual, _distance_feet(origin, (x, y)), (x, y))))[2]
-            established = 0
-            for sense in found.special_senses:
-                established |= SENSE_BITS[sense]
-            key = ("contact", chosen_position, found.visual or visual, SENSES_BY_ENUM[established | mask])
-            merged = shared.get(key)
-            if merged is None:
-                merged = shared[key] = PerceivedContact(position=chosen_position, visual=key[2], special_senses=key[3])
-            fresh_objects[identity] = merged
-        # Contacts are listed in evidence order (cells x-major, construction knowledge in placement
-        # order, sides), each at its first row, whatever the history of the recomputes: while the
-        # order of the targets held, the touched ones are replaced in place.
-        entities = _listed(rows, row_uuids, rows[:, 0] == ROW_ENTITY, previous_rows, previous_rows[:, 0] == ROW_ENTITY,
-                           start_entities, entity_touched, fresh_entities)
-        objects = _listed(rows, row_uuids, rows[:, 0] != ROW_ENTITY, previous_rows, previous_rows[:, 0] != ROW_ENTITY,
-                          start_objects, object_touched, fresh_objects)
-        return (entities, objects, rows, row_uuids,
-                (frozenset(entity_touched), frozenset(object_touched)) if view.published else None)
+        now = _row_identity(merged_obs[resolved], merged[resolved])
+        before = _row_identity(previous_obs[compared], previous_rows[compared])
+        new_changed[resolved] = ~_rows_in(now, before)
+        old_changed[compared] = ~_rows_in(before, now)
+        return _contact_maps(views, merged, merged_uuids, merged_obs, new_changed,
+                             previous_rows, previous_uuids, previous_obs, old_changed, shared)
 
     @staticmethod
     def _open_channels(grid, position: Position, direction: CardinalDirection) -> Tuple[WorldEdgeChannel, ...]:
@@ -2749,28 +2666,132 @@ def _rows_in(rows: np.ndarray, others: np.ndarray) -> np.ndarray:
     return found
 
 
-def _target_order(rows: np.ndarray, of_class: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """The targets of a class of evidence rows in order of their first row: their keys and rows."""
-    keys = rows[of_class, 7]
-    _, first = np.unique(keys, return_index=True)
-    first.sort()
-    return keys[first], np.flatnonzero(of_class)[first]
+def _row_identity(obs: np.ndarray, rows: np.ndarray) -> np.ndarray:
+    """Each (observer, contact row) as two exact int64: the observer and cell; the target key, kind,
+    visual and senses. Two rows are equal exactly when their identities are: a target key names one
+    uuid and its class for as long as any field holds it (`SpatialSensesSystem._target_ids` is
+    append-only and cleared only with every field), so the uuid halves add nothing."""
+    kind_bits = max(ROW_ENTITY, ROW_OBJECT, ROW_SIDE, ROW_KNOWN).bit_length()
+    attributes = ((rows[:, 7] << kind_bits | rows[:, 0]) << 1 | rows[:, 5]) << len(SENSE_BITS)
+    return np.column_stack((_pack_cells(obs, rows[:, 3], rows[:, 4]), attributes | rows[:, 6]))
 
 
-def _listed(rows: np.ndarray, uuids: np.ndarray, of_class: np.ndarray, previous_rows: np.ndarray,
-            previous_class: np.ndarray, published: Dict[UUID, PerceivedContact], touched: Set[UUID],
-            fresh: Dict[UUID, PerceivedContact]) -> Dict[UUID, PerceivedContact]:
-    """One class's contacts in evidence order: the published mapping when untouched, updated in
-    place while the targets' order held, rebuilt otherwise."""
-    if not touched:
-        return published
-    order, first = _target_order(rows, of_class)
-    if published and np.array_equal(order, _target_order(previous_rows, previous_class)[0]):
-        listed = dict(published)
-        listed.update(fresh)
-        return listed
-    return {identity: fresh[identity] if identity in fresh else published[identity]
-            for identity in uuids[first].tolist()}
+def _first_rows(slot_of: np.ndarray, pairs: np.ndarray, is_touched: np.ndarray, slots: np.ndarray,
+                ) -> Tuple[np.ndarray, List[int]]:
+    """The first row of each (observer, target) pair on a touched slot, ordered by slot and then by
+    row, and each slot's bounds in that order."""
+    in_touched = np.flatnonzero(is_touched[slot_of])
+    _, first = np.unique(pairs[in_touched], return_index=True)
+    first = in_touched[np.sort(first)]
+    first = first[np.argsort(slot_of[first], kind="stable")]
+    return first, np.searchsorted(slot_of[first], slots).tolist()
+
+
+def _contact_maps(views: Sequence[ObserverView], rows: np.ndarray, uuids: np.ndarray, obs: np.ndarray,
+                  changed: np.ndarray, previous_rows: np.ndarray, previous_uuids: np.ndarray,
+                  previous_obs: np.ndarray, previous_changed: np.ndarray, shared: SharedValues,
+                  ) -> List[ResolvedContacts]:
+    """Every view's entity and object contacts from the evidence rows of all views (in evidence order,
+    grouped by view, with whether each row changed) and their published rows: the targets with a
+    changed row are resolved again from their rows, every other contact is kept. Python runs per
+    touched row and per view.
+
+    Contacts are listed in evidence order, each at its first row, whatever the history of the
+    recomputes: while the order of a class's targets held, the map is a copy of the published one
+    with the touched contacts replaced in place. A published map is never mutated
+    (`published_senses` holds it by reference)."""
+    count = len(views)
+    key_space = int(max(rows[:, 7].max(initial=0), previous_rows[:, 7].max(initial=0))) + 1
+    # (observer, target) pairs and (observer, class) slots: class 0 entities, 1 objects.
+    pair, previous_pair = obs * key_space + rows[:, 7], previous_obs * key_space + previous_rows[:, 7]
+    slot = obs * 2 + (rows[:, 0] != ROW_ENTITY)
+    previous_slot = previous_obs * 2 + (previous_rows[:, 0] != ROW_ENTITY)
+    slots = np.arange(2 * count + 1)
+    # The targets with a changed row, and per slot their uuids: the published rows' first, then the
+    # new rows', each in row order (a touched set's iteration order reaches the removed contacts).
+    touched_pairs = np.unique(np.concatenate((previous_pair[previous_changed], pair[changed])))
+    touched_slot = np.concatenate((previous_slot[previous_changed], slot[changed]))
+    by_slot = np.argsort(touched_slot, kind="stable")
+    touched_bounds = np.searchsorted(touched_slot[by_slot], slots).tolist()
+    touched_uuids = np.concatenate((previous_uuids[previous_changed], uuids[changed]))[by_slot].tolist()
+    starts: List[Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact]]] = [
+        (view.senses.entities, view.senses.objects) if view.published else ({}, {}) for view in views]
+
+    def contact(position: Position, visual: bool, mask: int, previous: Optional[PerceivedContact],
+                ) -> PerceivedContact:
+        special = SENSES_BY_VALUE[mask]
+        if (previous is not None and previous.position == position and previous.visual == visual
+                and previous.special_senses == special):
+            return previous
+        key = ("contact", position, visual, special)
+        value = shared.get(key)
+        if value is None:
+            value = shared[key] = PerceivedContact(position=position, visual=visual, special_senses=special)
+        return value
+
+    # The touched targets' contacts, resolved from their rows in evidence order.
+    fresh: List[Dict[UUID, PerceivedContact]] = [{} for _ in range(2 * count)]
+    selected = _in_sorted(pair, touched_pairs)
+    for observer, (kind, _, _, x, y, visual, mask, _), identity in zip(
+            obs[selected].tolist(), rows[selected].tolist(), uuids[selected].tolist()):
+        visual = bool(visual)
+        start_entities, start_objects = starts[observer]
+        if kind == ROW_ENTITY:
+            fresh[2 * observer][identity] = contact((x, y), visual, mask, start_entities.get(identity))
+            continue
+        fresh_objects = fresh[2 * observer + 1]
+        if kind == ROW_KNOWN:
+            if identity not in fresh_objects:
+                fresh_objects[identity] = contact((x, y), False, 0, start_objects.get(identity))
+            continue
+        found = fresh_objects.get(identity)
+        if kind == ROW_SIDE or found is None:
+            fresh_objects[identity] = contact((x, y), visual, mask, start_objects.get(identity))
+            continue
+        # A multi-cell object: the best evidence, the union of its senses in enum order.
+        origin = views[observer].origin
+        chosen_position = min(((not found.visual, _distance_feet(origin, found.position), found.position),
+                               (not visual, _distance_feet(origin, (x, y)), (x, y))))[2]
+        established = 0
+        for sense in found.special_senses:
+            established |= SENSE_BITS[sense]
+        key = ("contact", chosen_position, found.visual or visual, SENSES_BY_ENUM[established | mask])
+        merged = shared.get(key)
+        if merged is None:
+            merged = shared[key] = PerceivedContact(position=chosen_position, visual=key[2], special_senses=key[3])
+        fresh_objects[identity] = merged
+    # Each touched slot's targets at their first row, now and as published.
+    is_touched = np.zeros(2 * count, dtype=bool)
+    is_touched[touched_slot] = True
+    first, listed_bounds = _first_rows(slot, pair, is_touched, slots)
+    previous_first, previous_bounds = _first_rows(previous_slot, previous_pair, is_touched, slots)
+    listed_keys, previous_keys = rows[first, 7].tolist(), previous_rows[previous_first, 7].tolist()
+    listed_uuids = uuids[first].tolist()
+    view_bounds = np.searchsorted(obs, np.arange(count + 1)).tolist()
+    results: List[ResolvedContacts] = []
+    for observer, view in enumerate(views):
+        maps: List[Dict[UUID, PerceivedContact]] = []
+        touched_sets: List[FrozenSet[UUID]] = []
+        for class_index, published in enumerate(starts[observer]):
+            at = 2 * observer + class_index
+            # set() first: its insertion order fixes the frozen set's iteration order, which reaches
+            # the removed contacts of the sensory event.
+            touched_set = frozenset(set(touched_uuids[touched_bounds[at]:touched_bounds[at + 1]]))
+            listed = slice(listed_bounds[at], listed_bounds[at + 1])
+            if not touched_set:
+                maps.append(published)
+            elif published and listed_keys[listed] == previous_keys[previous_bounds[at]:previous_bounds[at + 1]]:
+                updated = dict(published)
+                updated.update(fresh[at])
+                maps.append(updated)
+            else:
+                maps.append({identity: fresh[at][identity] if identity in fresh[at] else published[identity]
+                             for identity in listed_uuids[listed]})
+            touched_sets.append(touched_set)
+        results.append((maps[0], maps[1], rows[view_bounds[observer]:view_bounds[observer + 1]],
+                        uuids[view_bounds[observer]:view_bounds[observer + 1]],
+                        (touched_sets[0], touched_sets[1]) if view.published else None))
+    return results
 
 
 def _gather(mask: np.ndarray, box: Box, positions: Sequence[Position] | np.ndarray) -> np.ndarray:

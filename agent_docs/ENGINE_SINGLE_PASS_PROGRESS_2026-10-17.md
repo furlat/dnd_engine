@@ -576,3 +576,10 @@ Hard rules:
     - D3: per-member deltas, or a server-composed seat view;
     - D4: HUD event-native, or a per-actor previous sheet;
     - D5: is objective resolved light needed on the wire.
+- 2026-10-18: **Contact fan-out as arrays merged into codex/event-native-deltas (109b87268, 82d823820).**
+  - `_contact_maps` builds every view's contact maps in one batch, and rows are matched as packed int64 pairs.
+  - Gates (agent, vs 55bf034cc): recorder 0 differences on 8 cases; transcripts byte-identical; in-process A/B 0 mismatches over 38,323 test-suite settlements; sweep = r21; pyright 0 new.
+  - `_contacts` time: SG moves 8.9–13.6 → 6.1–10.3 ms; Wall of Stone 10.1 → 6.8; AI decision 4 22.5 → 18.3.
+  - Op totals moved 2–4 ms. Every op that was over 100 ms still is: the budget is decided by publication (~40 ms per SG move) and Wall of Stone's light work.
+  - Branches never hit by the gallery or the tests: multi-row entities, and side rows over cell rows.
+  - `_target_ids` is listed in RULE_VIOLATIONS (append-only intern map).
