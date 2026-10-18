@@ -687,3 +687,4 @@ Hard rules:
     - Choices goes 62 → 110–124 ms over the game (to investigate);
     - RSS grows ~105–123 MB per round (0.57 → 1.94 GB) with `cycles_found` 0 throughout, so it is retained state.
   - Seeded runs reproduce the game exactly.
+- 2026-10-18: **Sense-modes key merged (c6f8a832c).** `sense_modes_hash` (a per-process `hash()`) becomes the stable `sense_modes_key` tuple, which fixes E0 O2 on turn_undead. Transcripts are byte-identical.
