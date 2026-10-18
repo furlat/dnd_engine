@@ -32,9 +32,10 @@ from dnd.core.cells import mask_from_positions, values_from_items
 from dnd.core.traversal_connectors import ConnectorProvocationPolicy, TraversalConnectorKind
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.player.facts import (BoundaryStructureStatic, ContainedItem, ContainerContents, ContentsChange, ContributionRow,
-    FloorItem, ObjectRow, ResidueKey, ResidueMaterial, ResidueRow, TileConditions, TileFieldUpdate, TileStatic,
+    FloorItem, ObjectColumns, ObjectRow, ResidueKey, ResidueMaterial, ResidueRow, TileConditions, TileFieldUpdate, TileLook, TileStatic,
     WorldUpdate)
-from dnd.player.world_columns import pack_placement, pack_tile_columns, split_floor_item, structure_id
+from dnd.player.world_columns import (pack_object_rows, pack_placement, pack_tile_columns, split_floor_item, structure_id,
+    tile_look_id)
 from dnd.types.event_facts import WorldConnectorState, WorldTileState
 from dnd.types.materials import Material, TileSurface
 from dnd.types.residues import ObjectResidueState, ResidueContribution, ResidueEllipse
@@ -78,8 +79,19 @@ def tile(position: Position, *, generation: int = 0, light: LightLevel = LightLe
         surface_kind=ElevationSurfaceKind.ORDINARY, default_light=light, resolved_light=light)
 
 
+def rows(*objects: ObjectRow) -> ObjectColumns | None:
+    """An update's object rows, as the wire carries them (columns)."""
+    return pack_object_rows(objects)
+
+
 def static(row: WorldTileState) -> TileStatic:
-    return TileStatic(position=row.position, tile_uuid=row.tile_uuid, surface=row.surface, name=row.name)
+    return TileStatic(position=row.position, tile_uuid=row.tile_uuid, look=tile_look_id(row.surface, row.name))
+
+
+def tile_looks(rows: tuple[WorldTileState, ...]) -> tuple[TileLook, ...]:
+    """The distinct looks of these tiles, once each."""
+    looks = {tile_look_id(row.surface, row.name): row for row in rows}
+    return tuple(TileLook(look_id=identity, surface=row.surface, name=row.name) for identity, row in looks.items())
 
 
 def placement(identity: UUID, position: Position, direction: CardinalDirection | None = None) -> WorldObjectPlacement:
@@ -114,10 +126,12 @@ def connector(identity: UUID, endpoints: tuple[Position, Position]) -> WorldConn
 
 
 def entering(occurrence: int, tiles: tuple[WorldTileState, ...], *, statics: tuple[WorldTileState, ...] | None = None,
-             cells: tuple[Position, ...] = (), **rows) -> WorldUpdate:
-    """An update entering these cells: their tiles (static rows for `statics`, default all) and the given rows."""
+             looks: tuple[WorldTileState, ...] | None = None, cells: tuple[Position, ...] = (), **rows) -> WorldUpdate:
+    """An update entering these cells: their tiles (static rows for `statics`, default all; look rows for the
+    looks of `looks`, default those statics') and the given rows."""
+    statics = tiles if statics is None else statics
     return WorldUpdate(occurrence=occurrence, entered=mask_from_positions(cells or tuple(row.position for row in tiles)),
-        tile_statics=tuple(static(row) for row in (tiles if statics is None else statics)),
+        tile_looks=tile_looks(statics if looks is None else looks), tile_statics=tuple(static(row) for row in statics),
         tile_columns=pack_tile_columns({row.position: row for row in tiles}), **rows)
 
 
@@ -209,11 +223,13 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
               look_and_row(item(SIGN, "Sign", visual_item_name="Sign"), sign_at),
               look_and_row(item(BANNER, "Banner"), banner_at),
               look_and_row(walled, wall_at), look_and_row(replace(walled, item_uuid=EAST_WALL), east_wall_at))
+    # w13: a closed chest opens in view while a torch is placed: one update's rows, the chest's without a placement.
+    _, closed_row = look_and_row(replace(chest, is_open=False), chest_at)
     return {
         "w1_an_object_moved_unseen_is_dropped_when_its_cell_reenters": (
             "Entered cells are authoritative: an object the client holds on a cell entering view without it is gone.",
             (A,), [
-            Step(entering(0, tuple(floor.values()), object_looks=(box_look,), objects=(box_at_1,)),
+            Step(entering(0, tuple(floor.values()), object_looks=(box_look,), objects=rows(box_at_1,)),
                  view(t, {str(BOX): object_view(box_at, name="Box")})),
             # The box is moved while the seat sees neither cell: nothing is sent, the client keeps its last sight.
             Step(WorldUpdate(occurrence=1), view(t, {str(BOX): object_view(box_at, name="Box")})),
@@ -222,14 +238,14 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
         "w2_an_object_seen_gone_is_removed": (
             "A seat that sees an object's support without it is told so; other objects stay.",
             (A,), [
-            Step(entering(0, tuple(floor.values()), object_looks=(box_look, torch_look), objects=(box_at_1, torch_row)),
+            Step(entering(0, tuple(floor.values()), object_looks=(box_look, torch_look), objects=rows(box_at_1, torch_row)),
                  view(t, {str(BOX): object_view(box_at, name="Box"), str(TORCH): object_view(torch_at, name="Torch")})),
             Step(WorldUpdate(occurrence=1, objects_removed=(TORCH,)), view(t, {str(BOX): object_view(box_at, name="Box")})),
         ]),
         "w3_leaving_view_keeps_memory": (
             "Leaving view sends nothing: tiles, objects, contents and connectors stay as last seen.",
             (A,), [
-            Step(entering(0, tuple(floor.values()), object_looks=(chest_look, potion_look), objects=(chest_row,),
+            Step(entering(0, tuple(floor.values()), object_looks=(chest_look, potion_look), objects=rows(chest_row,),
                           contents=(ContainerContents(container_uuid=CHEST,
                               items=(ContainedItem(item_uuid=POTION, state=potion_state),)),),
                           connectors=(connector(LADDER, ((0, 0), (1, 0))),)),
@@ -243,20 +259,20 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
             "A wall's residues are authoritative for the faces seen now; the others keep their last sight, and a "
             "face cleaned in view goes.",
             (A,), [
-            Step(entering(0, (floor[(0, 0)],), object_looks=(wall_look,), objects=(look_and_row(replace(wall,
+            Step(entering(0, (floor[(0, 0)],), object_looks=(wall_look,), objects=rows(look_and_row(replace(wall,
                      surface_residues=(wall_residue(BLOOD_ON_WALL, "residue.blood", CardinalDirection.SOUTH),)),
                      wall_at, faces=(CardinalDirection.SOUTH,))[1],)),
                  view({"0,0": tile_view(floor[(0, 0)])}, {str(WALL): object_view(wall_at, name="Wall",
                      faces={str(BLOOD_ON_WALL): ["south"]})})),
             # The far side comes into view: its soot is seen there, the blood on the near face is not seen now.
-            Step(entering(1, (north_cell,), objects=(look_and_row(replace(wall, surface_residues=(
+            Step(entering(1, (north_cell,), looks=(), objects=rows(look_and_row(replace(wall, surface_residues=(
                      wall_residue(SOOT_ON_WALL, "residue.soot", CardinalDirection.NORTH),)),
                      None, faces=(CardinalDirection.NORTH,))[1],)),
                  view({"0,0": tile_view(floor[(0, 0)]), "0,1": tile_view(north_cell)},
                       {str(WALL): object_view(wall_at, name="Wall",
                           faces={str(BLOOD_ON_WALL): ["south"], str(SOOT_ON_WALL): ["north"]})})),
             # The near face is washed while both faces are seen: its blood goes, the soot stays.
-            Step(WorldUpdate(occurrence=2, objects=(look_and_row(replace(wall, surface_residues=(
+            Step(WorldUpdate(occurrence=2, objects=rows(look_and_row(replace(wall, surface_residues=(
                      wall_residue(SOOT_ON_WALL, "residue.soot", CardinalDirection.NORTH),)),
                      None, faces=(CardinalDirection.NORTH, CardinalDirection.SOUTH))[1],)),
                  view({"0,0": tile_view(floor[(0, 0)]), "0,1": tile_view(north_cell)},
@@ -266,12 +282,12 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
             "A construction's suppressed cells entering view without it are retired; its provider's row replaces "
             "its own when perceived.",
             (A,), [
-            Step(entering(0, tuple(floor.values()), object_looks=(construction_look,), objects=(construction_row,)),
+            Step(entering(0, tuple(floor.values()), object_looks=(construction_look,), objects=rows(construction_row,)),
                  view(t, {str(STONE_WALL): object_view(construction_at, name="Stone wall",
                      suppressions={str(FOG): [[2, 0], [3, 0]]})})),
             Step(entering(1, (floor[(3, 0)],), statics=()),
                  view(t, {str(STONE_WALL): object_view(construction_at, name="Stone wall", suppressions={str(FOG): [[2, 0]]})})),
-            Step(WorldUpdate(occurrence=2, objects=(look_and_row(replace(construction, construction_suppressions=(
+            Step(WorldUpdate(occurrence=2, objects=rows(look_and_row(replace(construction, construction_suppressions=(
                      SpellSuppression(provider_uuid=FOG, positions=((1, 0),)),)), None)[1],)),
                  view(t, {str(STONE_WALL): object_view(construction_at, name="Stone wall", suppressions={str(FOG): [[1, 0]]})})),
         ]),
@@ -298,7 +314,7 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
                  view({**t, "1,0": tile_view(tile((1, 0), light=LightLevel.DIM_LIGHT).model_copy(update={
                      "walking_cost": 2, "resolved_light": LightLevel.BRIGHT_LIGHT}),
                      conditions=("Difficult terrain",))})),
-            Step(entering(3, (replaced,)), view({**t, "1,0": tile_view(replaced)})),
+            Step(entering(3, (replaced,), looks=()), view({**t, "1,0": tile_view(replaced)})),
         ]),
         "w8_residues_are_keyed_by_cell_and_material": (
             "A new material arrives whole; a known one changes its amount and the contributions it set or appended; "
@@ -322,7 +338,7 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
             "A container's contents arrive whole when the seat sees into it, change by item while it does, stay as "
             "last seen when it no longer does, and arrive whole again when it does.",
             (A,), [
-            Step(entering(0, tuple(floor.values()), object_looks=(chest_look, potion_look), objects=(chest_row,),
+            Step(entering(0, tuple(floor.values()), object_looks=(chest_look, potion_look), objects=rows(chest_row,),
                           contents=(ContainerContents(container_uuid=CHEST,
                               items=(ContainedItem(item_uuid=POTION, state=potion_state),)),)),
                  view(t, {str(CHEST): object_view(chest_at, name="Chest", is_open=True, contents=[str(POTION)])})),
@@ -331,9 +347,9 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
                      removed=(POTION,)),)),
                  view(t, {str(CHEST): object_view(chest_at, name="Chest", is_open=True, contents=[str(ROPE)])})),
             # The chest closes: the seat sees it close, its contents stay as last seen.
-            Step(WorldUpdate(occurrence=2, objects=(look_and_row(replace(chest, is_open=False), None)[1],)),
+            Step(WorldUpdate(occurrence=2, objects=rows(look_and_row(replace(chest, is_open=False), None)[1],)),
                  view(t, {str(CHEST): object_view(chest_at, name="Chest", is_open=False, contents=[str(ROPE)])})),
-            Step(WorldUpdate(occurrence=3, objects=(chest_row,), contents=(ContainerContents(container_uuid=CHEST,
+            Step(WorldUpdate(occurrence=3, objects=rows(chest_row,), contents=(ContainerContents(container_uuid=CHEST,
                      items=(ContainedItem(item_uuid=POTION, state=potion_state),)),)),
                  view(t, {str(CHEST): object_view(chest_at, name="Chest", is_open=True, contents=[str(POTION)])})),
         ]),
@@ -342,11 +358,11 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
             "that row.",
             (A, B), [
             Step(entering(0, tuple(floor.values()), object_looks=(box_look,),
-                          objects=(replace(box_at_1, members=0b01),)),
+                          objects=rows(replace(box_at_1, members=0b01),)),
                  view(t, {str(BOX): object_view(box_at, members=1, name="Box")})),
-            Step(WorldUpdate(occurrence=1, objects=(replace(box_at_1, members=0b11, placement=None),)),
+            Step(WorldUpdate(occurrence=1, objects=rows(replace(box_at_1, members=0b11, placement=None),)),
                  view(t, {str(BOX): object_view(box_at, members=3, name="Box")})),
-            Step(WorldUpdate(occurrence=2, objects=(replace(box_at_1, members=0b10, placement=None),)),
+            Step(WorldUpdate(occurrence=2, objects=rows(replace(box_at_1, members=0b10, placement=None),)),
                  view(t, {str(BOX): object_view(box_at, members=2, name="Box")})),
         ]),
         "w12_tile_columns_carry_every_scalar": (
@@ -357,6 +373,19 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
             Step(entering(0, varied), view({f"{x},{y}": tile_view(row) for (x, y), row in
                                             ((row.position, row) for row in varied)})),
         ]),
+        "w13_one_update_mixes_placed_and_unplaced_rows": (
+            "An update's placements are columns over the rows carrying one, and a sparse column holds only the rows "
+            "whose value is not the default: a row without a placement keeps the held one.",
+            (A,), [
+            Step(entering(0, tuple(floor.values()), object_looks=(box_look, chest_look), objects=rows(box_at_1, closed_row)),
+                 view(t, {str(BOX): object_view(box_at, name="Box"),
+                          str(CHEST): object_view(chest_at, name="Chest", is_open=False)})),
+            Step(WorldUpdate(occurrence=1, object_looks=(torch_look,),
+                             objects=rows(replace(chest_row, placement=None), torch_row)),
+                 view(t, {str(BOX): object_view(box_at, name="Box"),
+                          str(CHEST): object_view(chest_at, name="Chest", is_open=True),
+                          str(TORCH): object_view(torch_at, name="Torch")})),
+        ]),
         "w11_placements_and_structures_decode_exactly": (
             "A placement leaves out its object, its anchor tile when the client holds that cell's static row, its "
             "lone anchor support, its kind and its defaults; anything else travels. A boundary structure is a static "
@@ -365,7 +394,7 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
             Step(entering(0, tuple(floor.values()), object_looks=tuple(look for look, _ in placed),
                           boundary_structures=(BoundaryStructureStatic(structure_id=structure_id(STONE_WALL_STRUCTURE),
                               structure=STONE_WALL_STRUCTURE),),
-                          objects=tuple(row for _, row in sorted(placed, key=lambda pair: str(pair[1].item_uuid)))),
+                          objects=rows(*(row for _, row in sorted(placed, key=lambda pair: str(pair[1].item_uuid))))),
                  view(t, {str(CRATE): object_view(crate_at, name="Crate"),
                           str(CART): object_view(cart_at, name="Cart"),
                           str(SIGN): object_view(sign_at, name="Sign", visual="Sign"),

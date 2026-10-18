@@ -19,7 +19,7 @@ from uuid import UUID
 from dnd.core.cells import mask_positions, values_items
 from dnd.player.facts import (ContainedItem, FloorItem, ObjectRow, PlayerObject, PlayerState, StaticStore,
     WorldUpdate)
-from dnd.player.world_columns import join_floor_item, unpack_placement, unpack_tile_columns
+from dnd.player.world_columns import join_floor_item, unpack_object_rows, unpack_placement, unpack_tile_columns
 from dnd.types.event_facts import WorldTileState, tile_own_condition_names
 from dnd.types.residues import ObjectResidueState, TileResidueState
 from dnd.types.spell_suppression import SpellSuppression
@@ -38,6 +38,9 @@ def _members(row: ObjectRow, observers: int) -> int:
 def fold_static_rows(static: StaticStore, update: WorldUpdate) -> None:
     """The update's static rows into the client's store, which never prunes them; a static row never changes for
     its id (a tile's static row is the latest for its cell)."""
+    for row in update.tile_looks:
+        if static.tile_looks.setdefault(row.look_id, row) != row:
+            raise ValueError("A tile look's content id names another value")
     for row in update.tile_statics:
         static.tiles[row.position] = row
     for row in update.residue_materials:
@@ -56,11 +59,11 @@ def _reset_entered(memory: PlayerState, update: WorldUpdate, entered: frozenset[
     for position in entered:
         memory.tiles.pop(position, None)
     if update.tile_columns is not None:
-        tiles = unpack_tile_columns(update.tile_columns, memory.static.tiles)
+        tiles = unpack_tile_columns(update.tile_columns, memory.static.tiles, memory.static.tile_looks)
         if not tiles.keys() <= entered:
             raise ValueError("Tile columns describe entered cells only")
         memory.tiles.update(tiles)
-    resent = {row.item_uuid for row in update.objects}
+    resent = set(update.objects.item_uuids) if update.objects is not None else set()
     for identity, held in tuple(memory.objects.items()):
         if identity not in resent and placement_support_cells(held.placement) & entered:
             del memory.objects[identity]
@@ -228,7 +231,7 @@ def fold_world_update(memory: PlayerState, update: WorldUpdate) -> None:
     if entered:
         _reset_entered(memory, update, entered)
     observers = len(memory.viewing_audience.observers)
-    for row in update.objects:
+    for row in unpack_object_rows(update.objects):
         _object(memory, row, observers)
     _contents(memory, update)
     _tiles(memory, update)

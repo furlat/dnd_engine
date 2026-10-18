@@ -15,6 +15,17 @@
      "height": 1,
      "bits": "Dw=="
     },
+    "tile_looks": [
+     {
+      "look_id": "652de935c25693e0",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     }
+    ],
     "tile_statics": [
      {
       "position": [
@@ -22,12 +33,7 @@
        0
       ],
       "tile_uuid": "00000000-0000-4000-8000-000100000000",
-      "surface": {
-       "base_material": "stone",
-       "layers": [],
-       "description": ""
-      },
-      "name": "Stone floor"
+      "look": "652de935c25693e0"
      },
      {
       "position": [
@@ -35,12 +41,7 @@
        0
       ],
       "tile_uuid": "00000000-0000-4000-8000-000100001000",
-      "surface": {
-       "base_material": "stone",
-       "layers": [],
-       "description": ""
-      },
-      "name": "Stone floor"
+      "look": "652de935c25693e0"
      },
      {
       "position": [
@@ -48,12 +49,7 @@
        0
       ],
       "tile_uuid": "00000000-0000-4000-8000-000100002000",
-      "surface": {
-       "base_material": "stone",
-       "layers": [],
-       "description": ""
-      },
-      "name": "Stone floor"
+      "look": "652de935c25693e0"
      },
      {
       "position": [
@@ -61,12 +57,7 @@
        0
       ],
       "tile_uuid": "00000000-0000-4000-8000-000100003000",
-      "surface": {
-       "base_material": "stone",
-       "layers": [],
-       "description": ""
-      },
-      "name": "Stone floor"
+      "look": "652de935c25693e0"
      }
     ],
     "tile_columns": {
@@ -97,24 +88,38 @@
       "contact_passage": "structural"
      }
     ],
-    "objects": [
-     {
-      "item_uuid": "00000000-0000-4000-8000-000000002004",
-      "state": {
-       "name": "Chest",
-       "visual_item_name": "chest",
-       "map_char": "C",
-       "is_open": true
-      },
-      "placement": {
-       "position": [
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000002004"
+     ],
+     "name": [
+      "Chest"
+     ],
+     "visual_item_name": {
+      "values": [
+       "chest"
+      ]
+     },
+     "map_char": [
+      "C"
+     ],
+     "is_open": {
+      "values": [
+       true
+      ]
+     },
+     "placements": {
+      "position": [
+       [
         3,
         0
-       ],
-       "top_height_steps": 2
-      }
+       ]
+      ],
+      "top_height_steps": [
+       2
+      ]
      }
-    ],
+    },
     "contents": [
      {
       "container_uuid": "00000000-0000-4000-8000-000000002004",

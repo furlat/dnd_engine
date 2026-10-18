@@ -124,18 +124,30 @@ class WorldObjectPlacement(BaseModel):
         return self
 
 
+def boundary_sides(placement: WorldObjectPlacement) -> tuple[tuple[CardinalDirection, tuple[int, int]], ...]:
+    """A boundary's two faces, each with the cell it is seen from: the face opposite its direction from its own
+    cell, and its direction's face from the opposite incident cell. A center object has none.
+
+    The one rule for a boundary's incident cells: the cells it touches, the faces a seat sees, and whether a seat
+    sees it through a cell.
+    """
+    direction = placement.boundary_direction
+    if direction is None:
+        return ()
+    x, y = placement.position
+    dx, dy = CARDINAL_DELTAS[direction]
+    return ((OPPOSITE_DIRECTION[direction], (x, y)), (direction, (x + dx, y + dy)))
+
+
 def placement_support_cells(placement: WorldObjectPlacement) -> frozenset[tuple[int, int]]:
-    """The cells an object touches: its banded supports and, for a boundary, the opposite incident support.
+    """The cells an object touches: its banded supports and, for a boundary, the opposite incident support
+    (its far side's cell in `boundary_sides`).
 
     The one rule for the world fold's membership index, the seat's entering snapshot, the client's reset of
     entered cells and the seat oracle.
     """
-    cells = set(placement.positions)
-    if placement.kind is WorldPlacementKind.BOUNDARY:
-        assert placement.boundary_direction is not None
-        dx, dy = CARDINAL_DELTAS[placement.boundary_direction]
-        cells.add((placement.position[0] + dx, placement.position[1] + dy))
-    return frozenset(cells)
+    far = (cell for _, cell in boundary_sides(placement) if cell != placement.position)
+    return frozenset((*placement.positions, *far))
 
 
 class BoundaryStructureKind(StrEnum):

@@ -2294,13 +2294,16 @@ export type Y0 = number;
 export type Width1 = number;
 export type Height1 = number;
 export type Bits1 = string;
+export type LookId = string;
+export type Name12 = string;
+export type TileLooks = TileLook[];
 /**
  * @minItems 2
  * @maxItems 2
  */
 export type Position9 = [number, number];
 export type TileUuid3 = string;
-export type Name12 = string;
+export type Look = string;
 export type TileStatics = TileStatic[];
 export type WalkingCost1 = string;
 export type FlyingCost1 = string;
@@ -2364,24 +2367,44 @@ export type SupportedByUuid3 = string | null;
 export type MaximumHitPoints3 = number | null;
 export type ConcentrationCapacity3 = number;
 export type ConstructionOwnerUuid3 = string | null;
-export type ConstructionGeometry3 =
-  | (
-      | SpherePresentationGeometry
-      | ConePresentationGeometry
-      | LinePresentationGeometry
-      | CubePresentationGeometry
-      | CylinderPresentationGeometry
-      | WallPresentationGeometry
-      | WallAssemblyPresentationGeometry
-    )
-  | null;
 export type KnownToCreator3 = boolean;
 export type ObjectLooks = ObjectLook[];
+export type ItemUuids = string[];
+export type MemberBits = number;
+export type Values1 = MemberBits[];
+export type Values2 = CardinalDirection[][];
+export type Name14 = string[];
+export type Values3 = string[];
+export type MapChar3 = string[];
+export type Values4 = boolean[];
+export type Values5 = number[];
+export type Values6 = ItemEffectPresentationState[][];
+export type Values7 = ObjectResidueState[][];
+export type Values8 = ItemConcentrationSlot[][];
+export type Values9 = ItemRemnantState[];
+export type Values10 = ItemIntegrity1[];
+export type ConstructionGeometry3 =
+  | SpherePresentationGeometry
+  | ConePresentationGeometry
+  | LinePresentationGeometry
+  | CubePresentationGeometry
+  | CylinderPresentationGeometry
+  | WallPresentationGeometry
+  | WallAssemblyPresentationGeometry;
+export type Values11 = ConstructionGeometry3[];
+export type Values12 = SpellSuppression[][];
+export type Position14 = [number, number][];
+export type TopHeightSteps1 = number[];
+export type Values13 = CardinalDirection[];
+export type Values14 = string[];
+export type Values15 = WorldObjectSupport[][];
+export type Values16 = [number, number, number][][];
+export type ObjectsRemoved = string[];
+export type ContainerUuid = string;
 export type ItemUuid7 = string;
-export type Members = number | null;
-export type Name14 = string;
+export type Name15 = string;
 export type VisualItemName3 = string | null;
-export type MapChar3 = string;
+export type MapChar4 = string;
 export type BoundaryStructure1 = string | null;
 export type IsOpen3 = boolean | null;
 export type IsLit4 = boolean | null;
@@ -2401,23 +2424,18 @@ export type ConcentrationSlots4 = ItemConcentrationSlot[];
  */
 export type ItemIntegrity3 = "intact" | "destroyed";
 export type DestructionOutcome4 = string | null;
+export type ConstructionGeometry4 =
+  | (
+      | SpherePresentationGeometry
+      | ConePresentationGeometry
+      | LinePresentationGeometry
+      | CubePresentationGeometry
+      | CylinderPresentationGeometry
+      | WallPresentationGeometry
+      | WallAssemblyPresentationGeometry
+    )
+  | null;
 export type ConstructionSuppressions3 = SpellSuppression[];
-/**
- * @minItems 2
- * @maxItems 2
- */
-export type Position14 = [number, number];
-export type TopHeightSteps1 = number;
-export type TileUuid4 = string | null;
-export type CoveredSupports1 = WorldObjectSupport[];
-export type OccupiesBands1 = boolean;
-export type BaseHeightSteps6 = number;
-export type RemovedBands1 = [number, number, number][];
-export type ObservedFaces = CardinalDirection[];
-export type Objects = ObjectRow[];
-export type ObjectsRemoved = string[];
-export type ContainerUuid = string;
-export type ItemUuid8 = string;
 export type Items2 = ContainedItem[];
 export type Contents = ContainerContents[];
 export type ContainerUuid1 = string;
@@ -2480,7 +2498,7 @@ export type FlexibleAbilityBonuses = [
   number
 ][];
 export type ChoiceId = string;
-export type Values1 = string[];
+export type Values17 = string[];
 export type Choices = OriginChoiceSelection[];
 export type StepId = string;
 export type CharacterLevel = number;
@@ -2495,7 +2513,7 @@ export type CharacterSubclass =
   | "subclass.paladin.oath_of_devotion"
   | "subclass.wizard.school_of_evocation";
 export type ChoiceId1 = string;
-export type Values2 = string[];
+export type Values18 = string[];
 export type Choices1 = ClassChoiceSelection[];
 export type ClassLevels = AppliedClassLevel[];
 export type Abilities = ["strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma", number][];
@@ -2512,7 +2530,7 @@ export type CompatibleItemSlots = [string, string[]][];
 /**
  * Handler display name.
  */
-export type Name15 = string;
+export type Name16 = string;
 /**
  * Primitive handler-rule identity.
  */
@@ -2596,7 +2614,7 @@ export type Revision1 = number;
  * @maxItems 2
  */
 export type Position16 = [number, number];
-export type BaseHeightSteps7 = number;
+export type BaseHeightSteps6 = number;
 export type VeryBrightRadiusFeet4 = number;
 export type BrightRadiusFeet4 = number;
 export type DimRadiusFeet4 = number;
@@ -2626,7 +2644,7 @@ export type CorrelationId1 = string;
 export type ForceAttack1 = boolean;
 export type Uuid2 = string;
 export type Kind65 = "creature" | "object";
-export type Name16 = string | null;
+export type Name17 = string | null;
 export type Subjects = ChoiceSubject[];
 export type Positions3 = [number, number][];
 export type Index2 = number;
@@ -2777,7 +2795,7 @@ export type RestrictedActionBudget = string | null;
 /**
  * Human-readable cost label.
  */
-export type Name17 = string;
+export type Name18 = string;
 /**
  * Action economy bucket consumed by this cost.
  */
@@ -3167,7 +3185,7 @@ export type ItemChargeCost = number;
 /**
  * Human-readable cost label.
  */
-export type Name18 = string;
+export type Name19 = string;
 /**
  * Action economy bucket consumed by this cost.
  */
@@ -3361,7 +3379,7 @@ export type Kind73 = "execute_selection";
 export type DiscoveryGeneration3 = number;
 export type Kind74 = "end_turn";
 export type Kind75 = "equip";
-export type ItemUuid9 = string;
+export type ItemUuid8 = string;
 export type Slot1 = WeaponSlot | BodyPart | RingSlot;
 /**
  * Body positions that may hold armor or accessories.
@@ -5515,6 +5533,7 @@ export interface PerceivedContact {
 export interface WorldUpdate {
   occurrence: Occurrence2;
   entered?: CellMask;
+  tile_looks?: TileLooks;
   tile_statics?: TileStatics;
   tile_columns?: TileColumns | null;
   tile_conditions?: TileConditions;
@@ -5525,7 +5544,7 @@ export interface WorldUpdate {
   residues?: Residues1;
   residues_removed?: ResiduesRemoved;
   object_looks?: ObjectLooks;
-  objects?: Objects;
+  objects?: ObjectColumns | null;
   objects_removed?: ObjectsRemoved;
   contents?: Contents;
   contents_changed?: ContentsChanged;
@@ -5544,14 +5563,21 @@ export interface CellMask {
   bits: Bits1;
 }
 /**
+ * A tile's surface and name, sent once per seat under its content id (a digest of the value).
+ */
+export interface TileLook {
+  look_id: LookId;
+  surface: TileSurface;
+  name: Name12;
+}
+/**
  * A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new
- * uuid).
+ * uuid). `look` is its surface and name's `TileLook` content id.
  */
 export interface TileStatic {
   position: Position9;
   tile_uuid: TileUuid3;
-  surface: TileSurface;
-  name: Name12;
+  look: Look;
 }
 /**
  * The changeable scalars of the entered cells that hold a tile, one byte per cell per column in `cells` order
@@ -5659,8 +5685,9 @@ export interface ResidueKey {
   residue_id: ResidueId4;
 }
 /**
- * A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid (a census of
- * every gallery case's world fold; a broken object's visual name changes, so it is state).
+ * A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid
+ * (`test_object_look_static` and a census of every gallery case's world fold; a broken object's visual name and a
+ * cut construction's geometry change, so they are state).
  */
 export interface ObjectLook {
   item_uuid: ItemUuid6;
@@ -5673,23 +5700,204 @@ export interface ObjectLook {
   maximum_hit_points?: MaximumHitPoints3;
   concentration_capacity?: ConcentrationCapacity3;
   construction_owner_uuid?: ConstructionOwnerUuid3;
-  construction_geometry?: ConstructionGeometry3;
   known_to_creator?: KnownToCreator3;
 }
 /**
- * A world object the seat observes, at an occurrence.
- *
- * An entering row carries its state, placement and the faces its residues are authoritative for (those whose
- * viewing cell some member sees); a perceived object's change carries its state, and its placement when the
- * occurrence wrote one. `members`: bit i is the audience's `observers[i]`, exact as of this row; a seat with one
- * observer leaves it out.
+ * An update's `ObjectRow`s as columns, one entry per row in row order (field names once per update): the
+ * rows' uuids, members, observed faces, every `ObjectState` field and their placements. A sparse column holds
+ * the rows whose value is not the field's default.
  */
-export interface ObjectRow {
+export interface ObjectColumns {
+  item_uuids: ItemUuids;
+  members?: Column_MemberBits_ | null;
+  observed_faces?: ColumnTuple_CardinalDirection__________ | null;
+  name: Name14;
+  visual_item_name?: ColumnStr_ | null;
+  map_char: MapChar3;
+  boundary_structure?: ColumnStr_ | null;
+  is_open?: ColumnBool_ | null;
+  is_lit?: ColumnBool_ | null;
+  very_bright_radius_feet?: ColumnInt_ | null;
+  bright_radius_feet?: ColumnInt_ | null;
+  dim_radius_feet?: ColumnInt_ | null;
+  stack_count?: ColumnInt_ | null;
+  is_pickable?: ColumnBool_ | null;
+  item_effects?: ColumnTuple_ItemEffectPresentationState__________ | null;
+  blocks_propagation?: ColumnBool_ | null;
+  is_engaged?: ColumnBool_ | null;
+  surface_residues?: ColumnTuple_ObjectResidueState__________ | null;
+  current_hit_points?: ColumnInt_ | null;
+  concentration_slots?: ColumnTuple_ItemConcentrationSlot__________ | null;
+  remnant_state?: Column_ItemRemnantState_ | null;
+  integrity?: Column_ItemIntegrity_ | null;
+  destruction_outcome?: ColumnStr_ | null;
+  construction_geometry?: Column_ConstructionGeometry_ | null;
+  construction_suppressions?: ColumnTuple_SpellSuppression__________ | null;
+  placements?: PlacementColumns | null;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column_MemberBits_ {
+  rows?: RowBits5 | null;
+  values: Values1;
+}
+/**
+ * A subset of a row table: row 8 * start + i belongs to it iff bit i of `bits` is set
+ * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
+ * nonzero byte, and the empty subset is start 0, no bits.
+ */
+export interface RowBits5 {
+  start?: Start1;
+  bits?: Bits;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface ColumnTuple_CardinalDirection__________ {
+  rows?: RowBits5 | null;
+  values: Values2;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface ColumnStr_ {
+  rows?: RowBits5 | null;
+  values: Values3;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface ColumnBool_ {
+  rows?: RowBits5 | null;
+  values: Values4;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface ColumnInt_ {
+  rows?: RowBits5 | null;
+  values: Values5;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface ColumnTuple_ItemEffectPresentationState__________ {
+  rows?: RowBits5 | null;
+  values: Values6;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface ColumnTuple_ObjectResidueState__________ {
+  rows?: RowBits5 | null;
+  values: Values7;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface ColumnTuple_ItemConcentrationSlot__________ {
+  rows?: RowBits5 | null;
+  values: Values8;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column_ItemRemnantState_ {
+  rows?: RowBits5 | null;
+  values: Values9;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column_ItemIntegrity_ {
+  rows?: RowBits5 | null;
+  values: Values10;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column_ConstructionGeometry_ {
+  rows?: RowBits5 | null;
+  values: Values11;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface ColumnTuple_SpellSuppression__________ {
+  rows?: RowBits5 | null;
+  values: Values12;
+}
+/**
+ * The `ObjectPlacement`s of an update's object rows, as columns over the rows `rows` selects (left out:
+ * every row).
+ */
+export interface PlacementColumns {
+  rows?: RowBits5 | null;
+  position: Position14;
+  top_height_steps: TopHeightSteps1;
+  boundary_direction?: Column_CardinalDirection_ | null;
+  tile_uuid?: Column_UUID_ | null;
+  covered_supports?: ColumnTuple_WorldObjectSupport__________ | null;
+  occupies_bands?: ColumnBool_ | null;
+  base_height_steps?: ColumnInt_ | null;
+  orientation?: Column_CardinalDirection_ | null;
+  removed_bands?: ColumnTupleTupleInt_Int_Int___________ | null;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column_CardinalDirection_ {
+  rows?: RowBits5 | null;
+  values: Values13;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface Column_UUID_ {
+  rows?: RowBits5 | null;
+  values: Values14;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface ColumnTuple_WorldObjectSupport__________ {
+  rows?: RowBits5 | null;
+  values: Values15;
+}
+/**
+ * One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+ * every row; a column with no value is left out of its group, and each row it skips holds the field's default.
+ */
+export interface ColumnTupleTupleInt_Int_Int___________ {
+  rows?: RowBits5 | null;
+  values: Values16;
+}
+/**
+ * A container's whole contents, on gaining sight of them (looks once, through `object_looks`).
+ */
+export interface ContainerContents {
+  container_uuid: ContainerUuid;
+  items?: Items2;
+}
+export interface ContainedItem {
   item_uuid: ItemUuid7;
-  members?: Members;
   state: ObjectState;
-  placement?: ObjectPlacement | null;
-  observed_faces?: ObservedFaces;
 }
 /**
  * A floor item's changeable part, its value at the occurrence; a field holding its default is left out.
@@ -5697,9 +5905,9 @@ export interface ObjectRow {
  * id.
  */
 export interface ObjectState {
-  name: Name14;
+  name: Name15;
   visual_item_name?: VisualItemName3;
-  map_char: MapChar3;
+  map_char: MapChar4;
   boundary_structure?: BoundaryStructure1;
   is_open?: IsOpen3;
   is_lit?: IsLit4;
@@ -5717,35 +5925,8 @@ export interface ObjectState {
   remnant_state?: ItemRemnantState | null;
   integrity?: ItemIntegrity3;
   destruction_outcome?: DestructionOutcome4;
+  construction_geometry?: ConstructionGeometry4;
   construction_suppressions?: ConstructionSuppressions3;
-}
-/**
- * An object's placement on the wire: every field its `WorldObjectPlacement` holds that is neither derivable
- * nor its default. The object is the row's `item_uuid`; its kind is a boundary exactly when it has a boundary
- * direction; `tile_uuid`, left out, is the client's static tile row at `position`; `covered_supports`, left
- * out, is that anchor support alone.
- */
-export interface ObjectPlacement {
-  position: Position14;
-  top_height_steps: TopHeightSteps1;
-  boundary_direction?: CardinalDirection | null;
-  tile_uuid?: TileUuid4;
-  covered_supports?: CoveredSupports1;
-  occupies_bands?: OccupiesBands1;
-  base_height_steps?: BaseHeightSteps6;
-  orientation?: CardinalDirection | null;
-  removed_bands?: RemovedBands1;
-}
-/**
- * A container's whole contents, on gaining sight of them (looks once, through `object_looks`).
- */
-export interface ContainerContents {
-  container_uuid: ContainerUuid;
-  items?: Items2;
-}
-export interface ContainedItem {
-  item_uuid: ItemUuid8;
-  state: ObjectState;
 }
 /**
  * A seen container's contents changing while the seat sees them.
@@ -5830,7 +6011,7 @@ export interface AppliedOriginState {
  */
 export interface OriginChoiceSelection {
   choice_id: ChoiceId;
-  values: Values1;
+  values: Values17;
 }
 /**
  * One ordered class-level step installed on an Entity.
@@ -5848,7 +6029,7 @@ export interface AppliedClassLevel {
  */
 export interface ClassChoiceSelection {
   choice_id: ChoiceId1;
-  values: Values2;
+  values: Values18;
 }
 /**
  * One spendable channel or resource row of a sheet; its label is fixed by its key.
@@ -5863,7 +6044,7 @@ export interface PlayerResource {
  * Player-toggleable event handler exposed with available actions.
  */
 export interface AvailableHandlerInfo {
-  name: Name15;
+  name: Name16;
   behavior_id: BehaviorId8;
   provided_by_id: ProvidedById1;
   origin_root_id?: OriginRootId1;
@@ -5909,7 +6090,7 @@ export interface SensoryRows {
   uuids?: Uuids;
   contact_uuid_index?: ContactUuidIndex;
   contact_positions?: ContactPositions;
-  contact_visual?: RowBits5;
+  contact_visual?: RowBits6;
   contact_special_senses?: ContactSpecialSenses;
   sighting_uuid_index?: SightingUuidIndex;
   sightings?: Sightings;
@@ -5925,7 +6106,7 @@ export interface SensoryRows {
  * (least significant bit first within each byte). Canonical: `bits` starts and ends with a
  * nonzero byte, and the empty subset is start 0, no bits.
  */
-export interface RowBits5 {
+export interface RowBits6 {
   start?: Start1;
   bits?: Bits;
 }
@@ -5993,7 +6174,7 @@ export interface LightRow {
   source: Source1;
   revision: Revision1;
   position: Position16;
-  base_height_steps?: BaseHeightSteps7;
+  base_height_steps?: BaseHeightSteps6;
   very_bright_radius_feet: VeryBrightRadiusFeet4;
   bright_radius_feet: BrightRadiusFeet4;
   dim_radius_feet: DimRadiusFeet4;
@@ -6076,7 +6257,7 @@ export interface PlayerChoices {
 export interface ChoiceSubject {
   uuid: Uuid2;
   kind: Kind65;
-  name?: Name16;
+  name?: Name17;
 }
 export interface SubjectBinding {
   index: Index2;
@@ -6248,7 +6429,7 @@ export interface PositionRegion {
  * Serializable action cost without executable callbacks.
  */
 export interface BaseCost {
-  name?: Name17;
+  name?: Name18;
   cost_type: CostType1;
   cost: Cost;
   resource_name?: ResourceName;
@@ -6391,7 +6572,7 @@ export interface TopologyEffectProfile {
  * A published cost paid only when the declared trigger occurs.
  */
 export interface ConditionalCost {
-  name?: Name18;
+  name?: Name19;
   cost_type: CostType2;
   cost: Cost1;
   resource_name?: ResourceName1;
@@ -6544,7 +6725,7 @@ export interface EquipIntent {
   item: EquipItem;
 }
 export interface EquipItem {
-  item_uuid: ItemUuid9;
+  item_uuid: ItemUuid8;
   slot: Slot1;
 }
 export interface UnequipIntent {
@@ -6692,7 +6873,7 @@ export interface SensoryRows1 {
   uuids?: Uuids;
   contact_uuid_index?: ContactUuidIndex;
   contact_positions?: ContactPositions;
-  contact_visual?: RowBits5;
+  contact_visual?: RowBits6;
   contact_special_senses?: ContactSpecialSenses;
   sighting_uuid_index?: SightingUuidIndex;
   sightings?: Sightings;
