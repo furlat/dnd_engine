@@ -183,6 +183,23 @@ def _compute_identified_entity_observers(
     return grants
 
 
+@contextmanager
+def setup_identity_grants() -> Iterator[None]:
+    """Event identity and location grants for setup applied before any encounter starts.
+
+    `start_encounter` installs the grants for the encounter's lifetime. Roster setup
+    (starting damage and conditions) runs earlier, after deployment, while observers
+    already hold their contacts: its facts are granted by the same rule.
+    """
+    if Encounter.get_active() is not None:
+        raise ValueError("an active encounter already grants its events")
+    EventQueue.set_identified_entity_observer_computer(_compute_identified_entity_observers)
+    try:
+        yield
+    finally:
+        EventQueue.set_identified_entity_observer_computer(None)
+
+
 class EncounterState(str, Enum):
     """Current state of the encounter."""
     NOT_STARTED = "not_started"

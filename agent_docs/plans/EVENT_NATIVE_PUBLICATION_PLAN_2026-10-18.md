@@ -224,8 +224,15 @@ The revision-2 plan gets one confirming pass from each reviewer, on whether the 
   - Still open: whether teammates see each other's controller-only details (inventory, slots). O4 guards anything not decided.
   - Measurement layout "character-shared": one seat per character, with `observers` = the faction.
   - Publication is then computed once per distinct audience, with the per-seat part on top.
-- **Q6: revision stamps for re-entry (human, 2026-10-18): approved.** Per seat, the last revision sent per record. Knowledge only, never values. A re-entering record is re-sent only if its revision changed. Restore rebuilds the stamps from the seat's spool; the fallback is a full send.
+- **Q6: stamps for re-entry (human, 2026-10-18): approved, as VALUE DIGESTS ("ok for digest").** Per seat, a stable digest of each record as last sent; a re-entering record travels whole only if its current digest differs. This closes the "written while unseen" side channel that revision stamps had, and also skips records changed while watching but now equal. Originally drafted as: Per seat, the last revision sent per record. Knowledge only, never values. A re-entering record is re-sent only if its revision changed. Restore rebuilds the stamps from the seat's spool; the fallback is a full send.
 - **Q7: settlement fast path (human principle, 2026-10-18):** "decide what objectively happened for everyone --> what each one has seen of that". The objective change is computed once per settlement. An observer whose own sight inputs held derives its change from it; every other observer takes the full path. Lane codex/settle-fast, exact.
+
+- **Q8: combat log built once, anonymized per seat before transmission (human, 2026-10-18):** "let's do it only once then anonymize before transmission".
+  - Each native log entry is projected once per event, with identity placeholders.
+  - Each seat fills or hides names from what it knows, as a cheap lookup.
+  - The text stays identical (gate: log entries identical). Log bytes stay deferred.
+  - It runs after E3-bodies' admissions follow-up (names table at births).
+- **Leadership "understand" (human: "whatever"):** keep "hear only"; the language gate is logged as a gap until languages are authored.
 
 ## 9. Review findings → resolution
 

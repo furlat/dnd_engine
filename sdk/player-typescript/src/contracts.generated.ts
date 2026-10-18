@@ -204,9 +204,7 @@ export type Fact =
       | TemporaryHitPointsFact
       | LifeFact
       | DeathSaveFact
-      | EquipmentFact
-      | ConditionChangeFact
-      | ItemEffectChangeFact
+      | ActorChangeFact
       | SpatialFact
       | FactionFact
       | TurnFact
@@ -597,80 +595,34 @@ export type Kind19 = "death_save";
 export type EntityUuid2 = string;
 export type NaturalRoll = number | null;
 export type Succeeded1 = boolean;
-export type Kind20 = "equipment";
-export type SourceEntityUuid9 = string;
-export type Name2 = string;
-export type CharacterBodyId = string | null;
-export type CreatureContentRef = string | null;
+export type Kind20 = "actor_change";
+export type ActorUuid = string;
+export type Field = "normal_hp" | "maximum_hp" | "temporary_hp" | "armor_class";
+export type Value = number;
+export type Field1 = "temporary_hp_grant";
+export type Field2 = "resolved_size";
 /**
- * Stable authored-portrait key assigned by scenario composition.
+ * Mechanical creature size category.
  */
-export type PortraitKey1 = string | null;
-/**
- * Renderer strategy for the actor body while full-entity assets are introduced.
- */
-export type PresentationKind = "layered" | "placeholder";
-/**
- * Presentation-only uniform actor scale independent of the creature's rules size.
- */
-export type VisualScale = number;
-/**
- * Presentation-only horizontal actor multiplier independent of the creature's rules size.
- */
-export type VisualScaleX = number;
-/**
- * RGB body tint used when presentation_kind is placeholder.
- */
-export type PlaceholderTint = number;
-/**
- * Renderer body taxonomy key used for the base creature layer.
- */
-export type BodyCategory = "NakedBody" | "NakedBody2" | "NakedBody3";
-/**
- * RGB tint applied to exposed skin or body material.
- */
-export type SkinTint = number;
-/**
- * Optional renderer head taxonomy key for hair-capable heads.
- */
-export type HeadCategory = ("Head1" | "Head9" | "Head10" | "Head16" | "Head17" | "Head22") | null;
-/**
- * RGB tint applied to hair layers when a head supports hair.
- */
-export type HairTint = number;
-/**
- * Whether the renderer should include the beard overlay.
- */
-export type HasBeard = boolean;
-/**
- * RGB tint applied to the beard overlay when present.
- */
-export type BeardTint = number;
+export type Size = "Tiny" | "Small" | "Medium" | "Large" | "Huge" | "Gargantuan";
+export type Field3 = "spatial_disposition";
+export type SpatialDisposition = "present" | "absent" | "return_pending" | "home_plane";
+export type Field4 = "active_weapon_set";
 /**
  * Engine-owned weapon stance selected by accepted gameplay transitions.
  */
 export type WeaponSet = "none" | "melee" | "ranged";
-export type Slot = string;
-export type ItemUuid = string;
-export type ItemId = string;
-export type IsLit = boolean | null;
-export type Layers = VisualItem[];
-export type NormalHp = number;
-export type MaximumHp = number;
-export type TemporaryHp = number;
-export type ArmorClass = number;
-export type EventUuid = string | null;
+export type Field5 = "condition";
 export type ConditionUuid1 = string;
-export type Name3 = string;
+export type ConditionUuid2 = string;
+export type Name2 = string;
 /**
  * Broad condition category used by logs, reducers, and cleanup policy.
  */
 export type ConditionCategory = "condition" | "status" | "internal";
 export type BehaviorId4 = string | null;
-export type ResultingMaxHp = number | null;
-export type ResultingAc = number | null;
-export type ConditionUuid2 = string;
-export type Name4 = string;
+export type ConditionUuid3 = string;
+export type Name3 = string;
 export type SemanticKey = string;
 export type BehaviorId5 = string | null;
 /**
@@ -712,202 +664,40 @@ export type CastLineageUuid = string | null;
 export type SpellId = string | null;
 export type SpellName = string;
 export type ConcentrationSlots = ItemConcentrationSlot[];
-export type NormalHp1 = number;
-export type MaximumHp1 = number;
-export type TemporaryHp1 = number;
-export type ArmorClass1 = number;
-export type HealingBlocked = boolean;
-export type DamageAffinities = [string, string][];
-/**
- * Mechanical creature size category.
- */
-export type Size = "Tiny" | "Small" | "Medium" | "Large" | "Huge" | "Gargantuan";
-export type NativePlaneId = string;
-export type CurrentPlaneId = string;
-export type SpatialDisposition = "present" | "absent" | "return_pending" | "home_plane";
-export type TileUuid = string;
-/**
- * @minItems 2
- * @maxItems 2
- */
-export type Position3 = [number, number];
-/**
- * Authored materials used by world builders and physical content.
- */
-export type Material =
-  "earth" | "sand" | "stone" | "wood" | "metal" | "fabric" | "glass" | "water" | "ice" | "vegetation";
-export type Description2 = string;
-export type Layers1 = SurfaceLayer[];
-export type Description3 = string;
-export type Name5 = string;
-export type BlocksOptics = boolean;
-export type BlocksPropagation = boolean;
-export type WalkingCost = number;
-export type FlyingCost = number;
-export type SwimmingCost = number;
-export type BurrowingCost = number;
-export type ElevationSteps1 = number;
-/**
- * Authored support-surface behavior for ordinary walking.
- */
-export type ElevationSurfaceKind = "ordinary" | "stairs" | "ramp";
-/**
- * Cardinal axis along which a progressive surface changes height.
- */
-export type SlopeAxis = "north_south" | "east_west";
-/**
- * Objective light levels ordered from most obscuring to brightest.
- */
-export type LightLevel = 0 | 1 | 2 | 3 | 4;
-export type ConditionNames = string[];
-export type ConditionUuid3 = string;
-export type ResidueId = string;
-export type Description4 = string;
-export type Amount = number;
-export type MaxAmount = number;
-export type Ellipses = ResidueEllipse[];
-export type Amount1 = number;
-export type DepositUuid = string;
-/**
- * @minItems 2
- * @maxItems 2
- */
-export type Origin3 = [number, number];
-export type RadiusCells = number;
-export type Contributions = ResidueContribution[];
-export type Residues = TileResidueState[];
-/**
- * Stable item instance identity.
- */
+export type Consumed = boolean;
+export type Field6 = "condition_duration" | "item_effect_duration";
+export type Key = string;
+export type ItemUuid = string | null;
+export type Field7 = "layer";
+export type Slot = string;
+export type Slot1 = string;
 export type ItemUuid1 = string;
-/**
- * Direct authored item species identity.
- */
-export type ItemId1 = string;
-/**
- * Human-readable item name.
- */
-export type Name6 = string;
-/**
- * Optional rules/UI description.
- */
-export type Description5 = string | null;
-/**
- * Renderer/UI item family.
- */
-export type ItemPresentationKind = "item" | "usable" | "weapon" | "armor" | "shield";
-/**
- * Item rarity.
- */
-export type ItemRarity = "common" | "uncommon" | "rare" | "very_rare" | "legendary";
-/**
- * Weight of one represented item in pounds.
- */
-export type Weight = number;
-/**
- * Value in gold pieces.
- */
-export type Value = number;
-/**
- * Stable item query tags.
- */
-export type Tags2 = string[];
-export type IsPickable = boolean;
-export type IsEquippable = boolean;
-export type IsUsable = boolean;
-export type IsTargetable = boolean;
-export type DoorMechanism = "single_hinged" | "double_hinged" | "lift";
-export type DoorSwing = "inward" | "outward";
-export type DoorOpen = boolean | null;
-/**
- * Mechanical mode of an installed device, independent of discovery.
- */
-export type TrapState = "ready" | "activated" | "deactivated";
-export type IntactSupportedItems = string[];
+export type ItemId = string;
+export type IsLit = boolean | null;
+export type Field8 = "inventory";
+export type ItemUuid2 = string;
+export type Held = boolean;
+export type Field9 = "item_effects";
+export type ItemUuid3 = string;
+export type Effects = ItemEffectPresentationState[];
+export type Field10 = "item_state";
+export type ItemUuid4 = string;
+export type StackCount = number;
+export type Charges = number | null;
 /**
  * Physical state, independent of inventory or world placement.
  */
 export type ItemIntegrity = "intact" | "destroyed";
 export type DestructionOutcome = string | null;
-export type StackId = string | null;
+export type DoorOpen = boolean | null;
+export type DoorSwing = "inward" | "outward";
 /**
- * Renderer item-catalog key.
+ * Mechanical mode of an installed device, independent of discovery.
  */
-export type VisualItemName = string;
-/**
- * Renderer variant key.
- */
-export type VisualVariantId = string | null;
-export type ItemEffects1 = ItemEffectPresentationState[];
-/**
- * Whether the equipped item contributes its own actor layer.
- */
-export type EquippedVisualPolicy = "visible" | "hidden";
-/**
- * Weapon damage dice label.
- */
-export type DamageDice = string | null;
-/**
- * Weapon damage type label.
- */
-export type DamageType1 = string | null;
-/**
- * Weapon properties in definition order.
- */
-export type WeaponProperties = string[];
-/**
- * Armor weight category.
- */
-export type ArmorType = string | null;
-/**
- * Armor base AC.
- */
-export type ArmorAc = number | null;
-/**
- * Shield AC bonus.
- */
-export type ShieldAcBonus = number | null;
-/**
- * Current charges; -1 is unlimited.
- */
-export type Charges = number | null;
-/**
- * Maximum charges; -1 is unlimited.
- */
-export type MaxCharges = number | null;
-/**
- * Copies represented after the fact.
- */
-export type StackCount = number;
-/**
- * Maximum mergeable copies.
- */
-export type MaxStack = number;
-/**
- * Whether successful use consumes a charge/item.
- */
-export type IsConsumable = boolean;
-/**
- * Text-map presentation glyph.
- */
-export type MapChar = string;
-export type IncludeInSensesObjects = boolean;
-export type IncludeInAdjacentSensesObjects = boolean;
-export type IncludeInAvailableObjectActions = boolean;
+export type TrapState = "ready" | "activated" | "deactivated";
+export type IntactSupportedItems = string[];
 export type CurrentHitPoints = number | null;
-export type MaximumHitPoints = number | null;
-export type ConcentrationCapacity = number;
 export type ConcentrationSlots1 = ItemConcentrationSlot[];
-/**
- * Semantic kind of an authored cardinal boundary structure.
- */
-export type BoundaryStructureKind = "cliff" | "embankment" | "retaining_wall" | "wall" | "door" | "fence";
-/**
- * Objective structural channel blocked by one contribution.
- */
-export type WorldEdgeChannel = "movement" | "optical" | "propagation";
-export type BlockedChannels = WorldEdgeChannel[];
-export type ContactPassage = "structural" | "clear" | "blocked" | "light_weapons" | "hand_and_light_weapons";
 export type ConstructionOwnerUuid = string | null;
 export type ConstructionGeometry =
   | (
@@ -923,10 +713,10 @@ export type ConstructionGeometry =
 export type ConstructionSuppressions = SpellSuppression[];
 export type KnownToCreator = boolean;
 export type SupportedByUuid = string | null;
-export type ContactPassage1 = "structural" | "clear" | "blocked" | "light_weapons" | "hand_and_light_weapons";
+export type ContactPassage = "structural" | "clear" | "blocked" | "light_weapons" | "hand_and_light_weapons";
 export type ConditionUuid4 = string;
-export type ResidueId1 = string;
-export type Description6 = string;
+export type ResidueId = string;
+export type Description2 = string;
 /**
  * Cardinal grid direction used by authored structures.
  */
@@ -937,75 +727,85 @@ export type LinkedSpatialConditionUuid = string | null;
 export type IsOpen = boolean | null;
 export type IsEngaged = boolean | null;
 export type BlocksMovement = boolean;
-export type BlocksOptics1 = boolean;
-export type BlocksPropagation1 = boolean;
+export type BlocksOptics = boolean;
+export type BlocksPropagation = boolean;
 export type IsLit1 = boolean | null;
-export type VeryBrightRadiusFeet = number | null;
-export type BrightRadiusFeet = number | null;
-export type DimRadiusFeet = number | null;
-export type Consumed = boolean;
-export type Conditions = ConditionFact[];
-export type LastVisualPosition = [number, number] | null;
-export type ControlledItems = string[] | null;
-export type SummonManifestation = "spell_construct" | "natural" | "fey_spirit" | "fiend";
-export type Faction = string | null;
-export type Present = boolean;
-/**
- * Committed physical remains, independent of whether death was requested.
- */
-export type RemainsDisposition1 = "intact" | "disintegrated";
-export type SpatialDisposition1 = "present" | "absent" | "return_pending" | "home_plane";
-export type ItemUuid2 = string;
-export type ItemId2 = string;
+export type Rows = (
+  | NumberRow
+  | GrantRow
+  | SizeRow
+  | DispositionRow
+  | WeaponSetRow
+  | ConditionRow
+  | DurationRow
+  | LayerRow
+  | InventoryRow
+  | ItemEffectsRow
+  | ItemStateRow
+)[];
+export type Actors = ActorRows[];
+export type ItemUuid5 = string;
+export type ItemId1 = string;
 /**
  * Small renderer/UI-facing item family classification.
  */
-export type ItemPresentationKind1 = "item" | "usable" | "weapon" | "armor" | "shield";
-export type VisualItemName1 = string;
-export type VisualVariantId1 = string | null;
+export type ItemPresentationKind = "item" | "usable" | "weapon" | "armor" | "shield";
+export type VisualItemName = string;
+export type VisualVariantId = string | null;
 /**
  * Whether equipped gear contributes a separate actor-rendering layer.
  */
-export type EquippedVisualPolicy1 = "visible" | "hidden";
-export type ItemEffects2 = ItemEffectPresentationState[];
-export type VeryBrightRadiusFeet1 = number | null;
-export type BrightRadiusFeet1 = number | null;
-export type DimRadiusFeet1 = number | null;
-export type Name7 = string;
-export type Description7 = string | null;
+export type EquippedVisualPolicy = "visible" | "hidden";
+export type VeryBrightRadiusFeet = number | null;
+export type BrightRadiusFeet = number | null;
+export type DimRadiusFeet = number | null;
+export type Name4 = string;
+export type Description3 = string | null;
 /**
  * Stable rarity labels carried by item definitions and presentation facts.
  */
-export type ItemRarity1 = "common" | "uncommon" | "rare" | "very_rare" | "legendary";
-export type Weight1 = number;
+export type ItemRarity = "common" | "uncommon" | "rare" | "very_rare" | "legendary";
+export type Weight = number;
 export type Value1 = number;
-export type Tags3 = string[];
-export type IsPickable1 = boolean;
-export type IsEquippable1 = boolean;
-export type IsUsable1 = boolean;
-export type IsTargetable1 = boolean;
-export type StackId1 = string | null;
-export type DamageDice1 = string | null;
-export type DamageType2 = string | null;
-export type WeaponProperties1 = string[];
-export type ArmorType1 = string | null;
-export type ArmorAc1 = number | null;
-export type ShieldAcBonus1 = number | null;
-export type MaxCharges1 = number | null;
-export type MaxStack1 = number;
-export type IsConsumable1 = boolean;
-export type MapChar1 = string;
-export type IncludeInSensesObjects1 = boolean;
-export type IncludeInAdjacentSensesObjects1 = boolean;
-export type IncludeInAvailableObjectActions1 = boolean;
-export type MaximumHitPoints1 = number | null;
-export type ConcentrationCapacity1 = number;
+export type Tags2 = string[];
+export type IsPickable = boolean;
+export type IsEquippable = boolean;
+export type IsUsable = boolean;
+export type IsTargetable = boolean;
+export type DoorMechanism = "single_hinged" | "double_hinged" | "lift";
+export type StackId = string | null;
+export type DamageDice = string | null;
+export type DamageType1 = string | null;
+export type WeaponProperties = string[];
+export type ArmorType = string | null;
+export type ArmorAc = number | null;
+export type ShieldAcBonus = number | null;
+export type MaxCharges = number | null;
+export type MaxStack = number;
+export type IsConsumable = boolean;
+export type MapChar = string;
+export type IncludeInSensesObjects = boolean;
+export type IncludeInAdjacentSensesObjects = boolean;
+export type IncludeInAvailableObjectActions = boolean;
+export type MaximumHitPoints = number | null;
+export type ConcentrationCapacity = number;
+/**
+ * Semantic kind of an authored cardinal boundary structure.
+ */
+export type BoundaryStructureKind = "cliff" | "embankment" | "retaining_wall" | "wall" | "door" | "fence";
+/**
+ * Authored materials used by world builders and physical content.
+ */
+export type Material =
+  "earth" | "sand" | "stone" | "wood" | "metal" | "fabric" | "glass" | "water" | "ice" | "vegetation";
+/**
+ * Objective structural channel blocked by one contribution.
+ */
+export type WorldEdgeChannel = "movement" | "optical" | "propagation";
+export type BlockedChannels = WorldEdgeChannel[];
+export type ContactPassage1 = "structural" | "clear" | "blocked" | "light_weapons" | "hand_and_light_weapons";
 export type StackCount1 = number;
 export type Charges1 = number | null;
-/**
- * Physical state, independent of inventory or world placement.
- */
-export type ItemIntegrity1 = "intact" | "destroyed";
 export type DestructionOutcome1 = string | null;
 export type CurrentHitPoints1 = number | null;
 export type ConcentrationSlots2 = ItemConcentrationSlot[];
@@ -1024,18 +824,51 @@ export type ConstructionGeometry1 =
 export type ConstructionSuppressions1 = SpellSuppression[];
 export type KnownToCreator1 = boolean;
 export type SupportedByUuid1 = string | null;
-export type ContactPassage2 = "structural" | "clear" | "blocked" | "light_weapons" | "hand_and_light_weapons";
 export type SurfaceResidues1 = ObjectResidueState[];
 export type LinkedSpatialConditionUuid1 = string | null;
 export type IsOpen1 = boolean | null;
 export type IsEngaged1 = boolean | null;
 export type BlocksMovement1 = boolean;
-export type BlocksOptics2 = boolean;
-export type BlocksPropagation2 = boolean;
+export type BlocksOptics1 = boolean;
+export type BlocksPropagation1 = boolean;
 export type IsLit2 = boolean | null;
-export type Items = ItemPatch[];
-export type Kind21 = "condition";
-export type TargetEntityUuid8 = string;
+export type Effects1 = ItemEffectPresentationState[];
+export type Items = ItemRecord[];
+export type Kind21 = "spatial";
+/**
+ * Types of spatial changes that can occur.
+ */
+export type SpatialChangeType =
+  | "entity_entered"
+  | "entity_left"
+  | "tile_changed"
+  | "tiles_changed"
+  | "tile_created"
+  | "tile_removed"
+  | "object_placed"
+  | "object_removed"
+  | "perceivability_changed"
+  | "light_changed"
+  | "light_sources_changed"
+  | "object_changed"
+  | "movement_collision";
+export type EntityUuid3 = string | null;
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position3 = [number, number];
+export type ObjectUuid = string | null;
+export type CommitOccurrence = number | null;
+export type TerminalDeparture = boolean;
+export type SummonDepartureCause = "expired" | "dismissed" | "defeated" | "sustain_lost" | "closed";
+export type BirthOccurrence = number;
+export type SummonManifestation = "spell_construct" | "natural" | "fey_spirit" | "fiend";
+export type Kind22 = "faction";
+export type EntityUuid4 = string;
+export type FactionAfter = string | null;
+export type ControlLost = boolean;
+export type Kind23 = "turn";
 /**
  * Kinds of state transitions that handlers and logs can subscribe to.
  */
@@ -1134,51 +967,13 @@ export type EventType =
   | "death_save"
   | "instant_death"
   | "death";
-export type Consumed1 = boolean;
-export type Kind22 = "item_effect";
-export type ItemUuid3 = string;
-export type EffectUuid1 = string;
-export type Kind23 = "spatial";
-/**
- * Types of spatial changes that can occur.
- */
-export type SpatialChangeType =
-  | "entity_entered"
-  | "entity_left"
-  | "tile_changed"
-  | "tiles_changed"
-  | "tile_created"
-  | "tile_removed"
-  | "object_placed"
-  | "object_removed"
-  | "perceivability_changed"
-  | "light_changed"
-  | "light_sources_changed"
-  | "object_changed"
-  | "movement_collision";
-export type EntityUuid3 = string | null;
-/**
- * @minItems 2
- * @maxItems 2
- */
-export type Position4 = [number, number];
-export type ObjectUuid = string | null;
-export type CommitOccurrence = number | null;
-export type TerminalDeparture = boolean;
-export type SummonDepartureCause = "expired" | "dismissed" | "defeated" | "sustain_lost" | "closed";
-export type BirthOccurrence = number;
-export type Kind24 = "faction";
-export type EntityUuid4 = string;
-export type FactionAfter = string | null;
-export type ControlLost = boolean;
-export type Kind25 = "turn";
 export type EntityUuid5 = string | null;
 export type RoundNumber = number | null;
-export type Kind26 = "action";
-export type SourceEntityUuid10 = string;
-export type TargetEntityUuid9 = string | null;
+export type Kind24 = "action";
+export type SourceEntityUuid9 = string;
+export type TargetEntityUuid8 = string | null;
 export type BehaviorId6 = string | null;
-export type Name8 = string | null;
+export type Name5 = string | null;
 export type SourceItemUuid2 = string | null;
 export type TriggeredLineage = number | null;
 export type Succeeded2 = boolean;
@@ -1187,7 +982,7 @@ export type Direction3 = "slot_to_points" | "points_to_slot";
 export type SlotLevel = number | null;
 export type SorceryPointsDelta = number | null;
 export type SpellSlotsDelta = number | null;
-export type Kind27 = "sensory";
+export type Kind25 = "sensory";
 export type Observer = number;
 export type Initial = boolean;
 /**
@@ -1219,14 +1014,14 @@ export type VisualAccessChanged = boolean;
 export type VisualAccess = number | null;
 export type PathsDirty = boolean;
 export type SpatialEffectSightings = number[];
-export type Name9 = string;
-export type Description8 = string;
+export type Name6 = string;
+export type Description4 = string;
 export type SpatialEffectsRemoved = number[];
 export type LightSourcesChanged = number[];
 export type LightSourcesRemoved = number[];
-export type Kind28 = "item_charge";
-export type SourceEntityUuid11 = string;
-export type ItemUuid4 = string;
+export type Kind26 = "item_charge";
+export type SourceEntityUuid10 = string;
+export type ItemUuid6 = string;
 export type ChargesAfter = number;
 export type StackCountAfter = number;
 export type ItemDestroyed = boolean;
@@ -1234,7 +1029,7 @@ export type ItemDestroyed = boolean;
  * Operation in the existing finite-item resource event family.
  */
 export type ItemResourceChange = "consume" | "recharge";
-export type Kind29 = "spatial_effect_state";
+export type Kind27 = "spatial_effect_state";
 export type SpatialEffectUuid1 = string;
 export type Positions2 = [number, number][];
 export type PreviousPressed = boolean | null;
@@ -1250,20 +1045,20 @@ export type SpatialEffectChangeOperation =
 export type SpatialEffectInteractionOperation =
   "ignite" | "douse" | "freeze" | "electrify" | "vaporize" | "disperse" | "dry";
 export type RemovedPositions = [number, number][];
-export type Kind30 = "object_damage";
+export type Kind28 = "object_damage";
 export type ObjectUuid1 = string;
 export type AppliedDamage1 = number;
 export type ResultingHp = number;
-export type Kind31 = "object_destroyed";
+export type Kind29 = "object_destroyed";
 export type ObjectUuid2 = string;
 export type ReplacementUuid = string | null;
 export type ObjectUuid3 = string;
-export type TileUuid1 = string;
+export type TileUuid = string;
 /**
  * @minItems 2
  * @maxItems 2
  */
-export type Position5 = [number, number];
+export type Position4 = [number, number];
 /**
  * Whether a world object is placed at a Tile center or boundary.
  */
@@ -1275,43 +1070,43 @@ export type TopHeightSteps = number;
  * @minItems 2
  * @maxItems 2
  */
-export type Position6 = [number, number];
-export type TileUuid2 = string;
+export type Position5 = [number, number];
+export type TileUuid1 = string;
 export type CoveredSupports = WorldObjectSupport[];
 export type RemovedBands = [number, number, number][];
-export type ItemId3 = string;
+export type ItemId2 = string;
 export type DestructionOutcome2 = string | null;
 /**
  * Committed physical remains, independent of whether death was requested.
  */
-export type RemainsDisposition2 = "intact" | "disintegrated";
-export type ItemUuid5 = string;
-export type ItemId4 = string;
-export type Name10 = string;
-export type VisualItemName2 = string;
-export type VisualVariantId2 = string | null;
-export type MapChar2 = string;
+export type RemainsDisposition1 = "intact" | "disintegrated";
+export type ItemUuid7 = string;
+export type ItemId3 = string;
+export type Name7 = string;
+export type VisualItemName1 = string;
+export type VisualVariantId1 = string | null;
+export type MapChar1 = string;
 export type IsOpen2 = boolean | null;
 export type IsLit3 = boolean | null;
-export type VeryBrightRadiusFeet2 = number | null;
-export type BrightRadiusFeet2 = number | null;
-export type DimRadiusFeet2 = number | null;
+export type VeryBrightRadiusFeet1 = number | null;
+export type BrightRadiusFeet1 = number | null;
+export type DimRadiusFeet1 = number | null;
 export type StackCount2 = number;
-export type IsPickable2 = boolean;
-export type ItemEffects3 = ItemEffectPresentationState[];
-export type BlocksPropagation3 = boolean;
-export type ContactPassage3 = "structural" | "clear" | "blocked" | "light_weapons" | "hand_and_light_weapons";
+export type IsPickable1 = boolean;
+export type ItemEffects1 = ItemEffectPresentationState[];
+export type BlocksPropagation2 = boolean;
+export type ContactPassage2 = "structural" | "clear" | "blocked" | "light_weapons" | "hand_and_light_weapons";
 export type SupportedByUuid2 = string | null;
 export type IsEngaged2 = boolean | null;
 export type SurfaceResidues2 = ObjectResidueState[];
 export type CurrentHitPoints2 = number | null;
-export type MaximumHitPoints2 = number | null;
-export type ConcentrationCapacity2 = number;
+export type MaximumHitPoints1 = number | null;
+export type ConcentrationCapacity1 = number;
 export type ConcentrationSlots3 = ItemConcentrationSlot[];
 /**
  * Physical state, independent of inventory or world placement.
  */
-export type ItemIntegrity2 = "intact" | "destroyed";
+export type ItemIntegrity1 = "intact" | "destroyed";
 export type DestructionOutcome3 = string | null;
 export type ConstructionOwnerUuid2 = string | null;
 export type ConstructionGeometry2 =
@@ -1327,10 +1122,10 @@ export type ConstructionGeometry2 =
   | null;
 export type ConstructionSuppressions2 = SpellSuppression[];
 export type KnownToCreator2 = boolean;
-export type Kind32 = "mechanism_activation";
+export type Kind30 = "mechanism_activation";
 export type MechanismUuid = string | null;
 export type MechanismContentId = string;
-export type TargetEntityUuid10 = string | null;
+export type TargetEntityUuid9 = string | null;
 export type OriginPosition = [number, number] | null;
 /**
  * @minItems 2
@@ -1340,8 +1135,8 @@ export type Direction4 = [number, number];
 export type AffectedPositions = [number, number][];
 export type EndPosition3 = [number, number] | null;
 export type Committed2 = boolean;
-export type Kind33 = "saving_throw";
-export type TargetEntityUuid11 = string;
+export type Kind31 = "saving_throw";
+export type TargetEntityUuid10 = string;
 export type AbilityName = "strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma";
 export type Succeeded3 = boolean;
 export type EffectId2 = string | null;
@@ -1411,7 +1206,7 @@ export type Data =
   | UnknownMovementLogData
   | SpatialChangeLogData
   | SpatialInteractionLogData;
-export type Kind34 = "attack";
+export type Kind32 = "attack";
 /**
  * Display name of the attacking entity.
  */
@@ -1467,7 +1262,7 @@ export type AdvantageStatus = string | null;
 /**
  * Human-readable modifier name (e.g., 'Prof', 'DEX')
  */
-export type Name11 = string;
+export type Name8 = string;
 /**
  * The modifier value (+2, -1, etc.)
  */
@@ -1519,7 +1314,7 @@ export type Total1 = number;
 /**
  * Type of damage (slashing, fire, etc.)
  */
-export type DamageType3 = string;
+export type DamageType2 = string;
 /**
  * Breakdown of damage bonus modifiers
  */
@@ -1602,7 +1397,7 @@ export type ControllerRevalidation = boolean;
  * Typed subjective change that required controller revalidation.
  */
 export type ControllerRevalidationReason = string | null;
-export type Kind35 = "movement";
+export type Kind33 = "movement";
 /**
  * Display name of the moving entity.
  */
@@ -1653,7 +1448,7 @@ export type ControllerRevalidation1 = boolean;
  * Typed subjective change that required controller revalidation.
  */
 export type ControllerRevalidationReason1 = string | null;
-export type Kind36 = "jump_movement";
+export type Kind34 = "jump_movement";
 export type MovementType = "jump";
 /**
  * @minItems 2
@@ -1713,7 +1508,7 @@ export type ControllerRevalidation2 = boolean;
  * Typed subjective change that required controller revalidation.
  */
 export type ControllerRevalidationReason2 = string | null;
-export type Kind37 = "connector_movement";
+export type Kind35 = "connector_movement";
 export type MovementType1 = "connector";
 /**
  * @minItems 2
@@ -1734,7 +1529,7 @@ export type ConnectorPresentationKey1 = string;
  * Whether transfer exposes the real source-exit reaction boundary.
  */
 export type ConnectorProvocationPolicy = "provokes_source_exit" | "does_not_provoke";
-export type Kind38 = "saving_throw";
+export type Kind36 = "saving_throw";
 /**
  * Display name of the saving entity.
  */
@@ -1767,7 +1562,7 @@ export type Success = boolean;
  * Display name of the effect that requested the save.
  */
 export type SourceName1 = string | null;
-export type Kind39 = "spell_save";
+export type Kind37 = "spell_save";
 /**
  * Display name of the spellcaster.
  */
@@ -1827,12 +1622,12 @@ export type FinalDamage = number;
 /**
  * Damage type label.
  */
-export type DamageType4 = string;
+export type DamageType3 = string;
 /**
  * Target HP after spell resolution, if known.
  */
 export type TargetHpAfter = number | null;
-export type Kind40 = "spell_interruption";
+export type Kind38 = "spell_interruption";
 /**
  * Stable reaction outcome identity.
  */
@@ -1881,7 +1676,7 @@ export type CheckDc = number | null;
  * Whether the reaction interrupted the incoming spell.
  */
 export type Succeeded5 = boolean;
-export type Kind41 = "skill_check";
+export type Kind39 = "skill_check";
 /**
  * Display name of the checking entity.
  */
@@ -1910,7 +1705,7 @@ export type AdvantageBreakdown2 = ModifierBreakdown[];
  * Whether the check succeeded, when a DC exists.
  */
 export type Success1 = boolean | null;
-export type Kind42 = "entity_spotted";
+export type Kind40 = "entity_spotted";
 /**
  * Display name of the observer.
  */
@@ -1939,7 +1734,7 @@ export type PassivePerception1 = number;
  * Stealth DC that was beaten.
  */
 export type StealthDc = number;
-export type Kind43 = "hazard_detected";
+export type Kind41 = "hazard_detected";
 /**
  * Display name of the observer.
  */
@@ -1955,7 +1750,7 @@ export type HazardName = string;
 /**
  * Admitted hazard position, or unknown.
  */
-export type Position7 = [number, number] | null;
+export type Position6 = [number, number] | null;
 /**
  * Passive Perception score that detected the hazard.
  */
@@ -1964,7 +1759,7 @@ export type PassivePerception2 = number;
  * Stealth DC that was beaten.
  */
 export type StealthDc1 = number;
-export type Kind44 = "damage_taken";
+export type Kind42 = "damage_taken";
 /**
  * Display name of the damaged entity.
  */
@@ -1976,7 +1771,7 @@ export type Damage = number;
 /**
  * Damage type label.
  */
-export type DamageType5 = string;
+export type DamageType4 = string;
 /**
  * Display name of the damage source.
  */
@@ -1993,7 +1788,7 @@ export type Blocked = boolean | null;
  * Human-readable reason the damage was blocked.
  */
 export type BlockedReason = string | null;
-export type Kind45 = "heal";
+export type Kind43 = "heal";
 /**
  * Display name of the healed entity.
  */
@@ -2005,12 +1800,12 @@ export type EntityUuid11 = string;
 /**
  * Healing amount.
  */
-export type Amount2 = number;
+export type Amount = number;
 /**
  * Description of the healing source.
  */
 export type SourceDescription = string;
-export type Kind46 = "action";
+export type Kind44 = "action";
 /**
  * Display name of the acting entity.
  */
@@ -2035,7 +1830,7 @@ export type TargetName5 = string | null;
  * UUID string of the target, if any.
  */
 export type TargetUuid4 = string | null;
-export type Kind47 = "turn";
+export type Kind45 = "turn";
 /**
  * Display name of the turn entity.
  */
@@ -2052,7 +1847,7 @@ export type RoundNumber1 = number;
  * Admitted initiative index, or unknown.
  */
 export type TurnIndex = number | null;
-export type Kind48 = "multi_entity_action";
+export type Kind46 = "multi_entity_action";
 /**
  * Display name of the action.
  */
@@ -2097,7 +1892,7 @@ export type AoeShape = string | null;
  * Area-of-effect origin or center, if applicable.
  */
 export type AoeCenter = [number, number] | null;
-export type Kind49 = "roll_modification";
+export type Kind47 = "roll_modification";
 /**
  * Mechanical roll category whose result changed.
  */
@@ -2140,19 +1935,19 @@ export type PacketDamageType = string | null;
  * Dice expression for an affected damage packet.
  */
 export type PacketDice = string | null;
-export type Kind50 = "empty";
-export type Kind51 = "condition_removed";
+export type Kind48 = "empty";
+export type Kind49 = "condition_removed";
 export type ConditionName = string;
 export type RevealsTarget = boolean;
-export type Kind52 = "death";
+export type Kind50 = "death";
 export type EntityName8 = string;
 export type FinalHp = number;
-export type Kind53 = "spell_damage";
+export type Kind51 = "spell_damage";
 export type SpellName3 = string;
 export type TargetName6 = string;
 export type Damage1 = number;
-export type DamageType6 = string;
-export type Kind54 = "death_save";
+export type DamageType5 = string;
+export type Kind52 = "death_save";
 export type EntityName9 = string;
 export type EntityUuid14 = string;
 export type Roll = number;
@@ -2163,7 +1958,7 @@ export type Failures = number;
 export type BecameStable = boolean;
 export type RegainedHitPoint = boolean;
 export type Died = boolean;
-export type Kind55 = "shove";
+export type Kind53 = "shove";
 export type ActionType = "shove";
 export type TargetWeight = number;
 export type MaxShoveWeight = number;
@@ -2178,7 +1973,7 @@ export type EndPosition7 = [number, number] | null;
 export type KnockedProne1 = boolean;
 export type BlockedBy = string | null;
 export type IsAlly = boolean;
-export type Kind56 = "step_movement";
+export type Kind54 = "step_movement";
 export type Type = "step_movement";
 /**
  * @minItems 2
@@ -2196,7 +1991,7 @@ export type DisclosedPath2 = [number, number][];
 export type FromElevationFeet1 = number;
 export type ToElevationFeet1 = number;
 export type Committed3 = boolean;
-export type Kind57 = "forced_movement";
+export type Kind55 = "forced_movement";
 export type Type1 = "forced_movement";
 export type Cause = string;
 /**
@@ -2210,7 +2005,7 @@ export type Blocked1 = boolean;
 export type BlockedBy1 = string | null;
 export type StartPosition6 = [number, number] | null;
 export type EndPosition8 = [number, number] | null;
-export type Kind58 = "observed_movement";
+export type Kind56 = "observed_movement";
 export type Type2 = "movement";
 export type EntityName10 = string;
 export type EntityUuid15 = string;
@@ -2223,13 +2018,13 @@ export type EndPosition9 = [number, number] | null;
 export type Path6 = [number, number][];
 export type DistanceFeet3 = number | null;
 export type MovementCost4 = number | null;
-export type Kind59 = "unlocated_movement";
+export type Kind57 = "unlocated_movement";
 export type Type3 = "movement";
 export type ObservationComplete1 = false;
-export type Kind60 = "unknown_movement";
+export type Kind58 = "unknown_movement";
 export type Type4 = "movement";
 export type Observed = true;
-export type Kind61 = "spatial_change";
+export type Kind59 = "spatial_change";
 /**
  * Observable lifecycle operations for a spatial condition.
  */
@@ -2241,7 +2036,7 @@ export type ContentIdentity = string;
  */
 export type SpatialEffectLayer = "ground_surface" | "cloud" | "field";
 export type AffectedPositions1 = [number, number][];
-export type Kind62 = "spatial_interaction";
+export type Kind60 = "spatial_interaction";
 export type Intensity = "minor" | "moderate" | "strong";
 export type AffectedPositions2 = [number, number][];
 export type SourceItemId1 = string | null;
@@ -2251,7 +2046,7 @@ export type Role = "behavior" | "source_item" | "effective_handler";
 export type BehaviorId7 = string;
 export type ProvidedById = string | null;
 export type OriginRootId = string | null;
-export type SourceEntityUuid12 = string | null;
+export type SourceEntityUuid11 = string | null;
 export type TriggeringOccurrence = number | null;
 export type TriggeringLineage = number | null;
 export type EmittedLineages = number[];
@@ -2267,28 +2062,69 @@ export type Occurrences = number[];
 export type Lineages = number[];
 export type EndCursor = number;
 export type Occurrence1 = number;
-export type ActorUuid = string;
+export type ActorUuid1 = string;
+export type Name9 = string;
+export type CharacterBodyId = string | null;
+export type CreatureContentRef = string | null;
 /**
- * Observed grid position.
- *
- * @minItems 2
- * @maxItems 2
+ * Stable authored-portrait key assigned by scenario composition.
  */
-export type Position8 = [number, number];
+export type PortraitKey1 = string | null;
 /**
- * Whether a visual route establishes this contact.
+ * Renderer strategy for the actor body while full-entity assets are introduced.
  */
-export type Visual = boolean;
+export type PresentationKind = "layered" | "placeholder";
 /**
- * Special sense categories supported by the perception pipeline.
+ * Presentation-only uniform actor scale independent of the creature's rules size.
  */
-export type SensesType1 = "Blindsight" | "Darkvision" | "Tremorsense" | "Truesight" | "Devils Sight" | "See Invisible";
+export type VisualScale = number;
 /**
- * Special senses which independently establish this contact.
+ * Presentation-only horizontal actor multiplier independent of the creature's rules size.
  */
-export type SpecialSenses = SensesType1[];
-export type Items1 = ItemPatch[];
-export type Observations = PlayerObservation[];
+export type VisualScaleX = number;
+/**
+ * RGB body tint used when presentation_kind is placeholder.
+ */
+export type PlaceholderTint = number;
+/**
+ * Renderer body taxonomy key used for the base creature layer.
+ */
+export type BodyCategory = "NakedBody" | "NakedBody2" | "NakedBody3";
+/**
+ * RGB tint applied to exposed skin or body material.
+ */
+export type SkinTint = number;
+/**
+ * Optional renderer head taxonomy key for hair-capable heads.
+ */
+export type HeadCategory = ("Head1" | "Head9" | "Head10" | "Head16" | "Head17" | "Head22") | null;
+/**
+ * RGB tint applied to hair layers when a head supports hair.
+ */
+export type HairTint = number;
+/**
+ * Whether the renderer should include the beard overlay.
+ */
+export type HasBeard = boolean;
+/**
+ * RGB tint applied to the beard overlay when present.
+ */
+export type BeardTint = number;
+export type Layers = VisualItem[];
+export type NormalHp = number;
+export type MaximumHp = number;
+export type TemporaryHp = number;
+export type ArmorClass = number;
+export type Conditions = ConditionMember[];
+export type ControlledItems = string[] | null;
+export type Faction = string | null;
+/**
+ * Committed physical remains, independent of whether death was requested.
+ */
+export type RemainsDisposition2 = "intact" | "disintegrated";
+export type SpatialDisposition1 = "present" | "absent" | "return_pending" | "home_plane";
+export type Items1 = ItemRecord[];
+export type Bodies = BodyRecord[];
 export type Occurrence2 = number;
 export type X0 = number;
 export type Y0 = number;
@@ -2296,49 +2132,64 @@ export type Width1 = number;
 export type Height1 = number;
 export type Bits1 = string;
 export type LookId = string;
-export type Name12 = string;
+export type Description5 = string;
+export type Layers1 = SurfaceLayer[];
+export type Description6 = string;
+export type Name10 = string;
 export type TileLooks = TileLook[];
 /**
  * @minItems 2
  * @maxItems 2
  */
-export type Position9 = [number, number];
-export type TileUuid3 = string;
+export type Position7 = [number, number];
+export type TileUuid2 = string;
 export type Look = string;
 export type TileStatics = TileStatic[];
-export type WalkingCost1 = string;
-export type FlyingCost1 = string;
-export type SwimmingCost1 = string;
-export type BurrowingCost1 = string;
+export type WalkingCost = string;
+export type FlyingCost = string;
+export type SwimmingCost = string;
+export type BurrowingCost = string;
 export type Flags = string;
 export type DefaultLight = string;
 export type ResolvedLight = string;
-export type ElevationSteps2 = number[];
+export type ElevationSteps1 = number[];
 /**
  * @minItems 2
  * @maxItems 2
  */
-export type Position10 = [number, number];
+export type Position8 = [number, number];
 export type Names = string[];
 export type TileConditions = TileConditions1[];
 /**
  * @minItems 2
  * @maxItems 2
  */
-export type Position11 = [number, number];
-export type BlocksOptics3 = boolean;
-export type BlocksPropagation4 = boolean;
-export type WalkingCost2 = number;
-export type FlyingCost2 = number;
-export type SwimmingCost2 = number;
-export type BurrowingCost2 = number;
-export type ElevationSteps3 = number;
+export type Position9 = [number, number];
+export type BlocksOptics2 = boolean;
+export type BlocksPropagation3 = boolean;
+export type WalkingCost1 = number;
+export type FlyingCost1 = number;
+export type SwimmingCost1 = number;
+export type BurrowingCost1 = number;
+export type ElevationSteps2 = number;
+/**
+ * Authored support-surface behavior for ordinary walking.
+ */
+export type ElevationSurfaceKind = "ordinary" | "stairs" | "ramp";
+/**
+ * Cardinal axis along which a progressive surface changes height.
+ */
+export type SlopeAxis = "north_south" | "east_west";
+/**
+ * Objective light levels ordered from most obscuring to brightest.
+ */
+export type LightLevel = 0 | 1 | 2 | 3 | 4;
 export type TileChanges = TileFieldUpdate[];
 export type Values = string;
-export type ResidueId2 = string;
-export type Name13 = string;
-export type Description9 = string;
-export type MaxAmount1 = number;
+export type ResidueId1 = string;
+export type Name11 = string;
+export type Description7 = string;
+export type MaxAmount = number;
 export type ResidueMaterials = ResidueMaterial[];
 export type StructureId = string;
 export type BoundaryStructures = BoundaryStructureStatic[];
@@ -2346,27 +2197,36 @@ export type BoundaryStructures = BoundaryStructureStatic[];
  * @minItems 2
  * @maxItems 2
  */
-export type Position12 = [number, number];
-export type ResidueId3 = string;
+export type Position10 = [number, number];
+export type ResidueId2 = string;
 export type ConditionUuid6 = string | null;
-export type Amount3 = number | null;
+export type Amount1 = number | null;
 export type Index1 = number;
-export type Contributions1 = ContributionRow[];
-export type Residues1 = ResidueRow[];
+export type Ellipses = ResidueEllipse[];
+export type Amount2 = number;
+export type DepositUuid = string;
 /**
  * @minItems 2
  * @maxItems 2
  */
-export type Position13 = [number, number];
-export type ResidueId4 = string;
+export type Origin3 = [number, number];
+export type RadiusCells = number;
+export type Contributions = ContributionRow[];
+export type Residues = ResidueRow[];
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position11 = [number, number];
+export type ResidueId3 = string;
 export type ResiduesRemoved = ResidueKey[];
-export type ItemUuid6 = string;
-export type ItemId5 = string;
-export type VisualVariantId3 = string | null;
-export type ContactPassage4 = "structural" | "clear" | "blocked" | "light_weapons" | "hand_and_light_weapons";
+export type ItemUuid8 = string;
+export type ItemId4 = string;
+export type VisualVariantId2 = string | null;
+export type ContactPassage3 = "structural" | "clear" | "blocked" | "light_weapons" | "hand_and_light_weapons";
 export type SupportedByUuid3 = string | null;
-export type MaximumHitPoints3 = number | null;
-export type ConcentrationCapacity3 = number;
+export type MaximumHitPoints2 = number | null;
+export type ConcentrationCapacity2 = number;
 export type ConstructionOwnerUuid3 = string | null;
 export type KnownToCreator3 = boolean;
 export type ObjectLooks = ObjectLook[];
@@ -2374,16 +2234,16 @@ export type ItemUuids = string[];
 export type MemberBits = number;
 export type Values1 = MemberBits[];
 export type Values2 = CardinalDirection[][];
-export type Name14 = string[];
+export type Name12 = string[];
 export type Values3 = string[];
-export type MapChar3 = string[];
+export type MapChar2 = string[];
 export type Values4 = boolean[];
 export type Values5 = number[];
 export type Values6 = ItemEffectPresentationState[][];
 export type Values7 = ObjectResidueState[][];
 export type Values8 = ItemConcentrationSlot[][];
 export type Values9 = ItemRemnantState[];
-export type Values10 = ItemIntegrity1[];
+export type Values10 = ItemIntegrity[];
 export type ConstructionGeometry3 =
   | SpherePresentationGeometry
   | ConePresentationGeometry
@@ -2394,7 +2254,7 @@ export type ConstructionGeometry3 =
   | WallAssemblyPresentationGeometry;
 export type Values11 = ConstructionGeometry3[];
 export type Values12 = SpellSuppression[][];
-export type Position14 = [number, number][];
+export type Position12 = [number, number][];
 export type TopHeightSteps1 = number[];
 export type Values13 = CardinalDirection[];
 export type Values14 = string[];
@@ -2402,20 +2262,20 @@ export type Values15 = WorldObjectSupport[][];
 export type Values16 = [number, number, number][][];
 export type ObjectsRemoved = string[];
 export type ContainerUuid = string;
-export type ItemUuid7 = string;
-export type Name15 = string;
-export type VisualItemName3 = string | null;
-export type MapChar4 = string;
+export type ItemUuid9 = string;
+export type Name13 = string;
+export type VisualItemName2 = string | null;
+export type MapChar3 = string;
 export type BoundaryStructure1 = string | null;
 export type IsOpen3 = boolean | null;
 export type IsLit4 = boolean | null;
-export type VeryBrightRadiusFeet3 = number | null;
-export type BrightRadiusFeet3 = number | null;
-export type DimRadiusFeet3 = number | null;
+export type VeryBrightRadiusFeet2 = number | null;
+export type BrightRadiusFeet2 = number | null;
+export type DimRadiusFeet2 = number | null;
 export type StackCount3 = number;
-export type IsPickable3 = boolean;
-export type ItemEffects4 = ItemEffectPresentationState[];
-export type BlocksPropagation5 = boolean;
+export type IsPickable2 = boolean;
+export type ItemEffects2 = ItemEffectPresentationState[];
+export type BlocksPropagation4 = boolean;
 export type IsEngaged3 = boolean | null;
 export type SurfaceResidues3 = ObjectResidueState[];
 export type CurrentHitPoints3 = number | null;
@@ -2423,7 +2283,7 @@ export type ConcentrationSlots4 = ItemConcentrationSlot[];
 /**
  * Physical state, independent of inventory or world placement.
  */
-export type ItemIntegrity3 = "intact" | "destroyed";
+export type ItemIntegrity2 = "intact" | "destroyed";
 export type DestructionOutcome4 = string | null;
 export type ConstructionGeometry4 =
   | (
@@ -2473,7 +2333,7 @@ export type Connectors = WorldConnectorState[];
 export type ConnectorsRemoved = string[];
 export type WorldUpdates = WorldUpdate[];
 export type Initiative = string[] | null;
-export type ActorUuid1 = string;
+export type ActorUuid2 = string;
 export type Species =
   | "species.dragonborn"
   | "species.dwarf"
@@ -2522,7 +2382,7 @@ export type Skills = string[];
 export type Expertise = string[];
 export type Saves = string[];
 export type ProficiencyBonus = number;
-export type Key = string;
+export type Key1 = string;
 export type Label = string;
 export type Current = number;
 export type Maximum = number;
@@ -2531,7 +2391,7 @@ export type CompatibleItemSlots = [string, string[]][];
 /**
  * Handler display name.
  */
-export type Name16 = string;
+export type Name14 = string;
 /**
  * Primitive handler-rule identity.
  */
@@ -2562,7 +2422,7 @@ export type PermanentFeatureUses = string[];
 export type SourceId1 = string;
 export type SpellIds = string[];
 export type PreparedSpellSelections = PreparedSpellSelection[];
-export type Key1 = string;
+export type Key2 = string;
 export type Current1 = number;
 export type Maximum1 = number;
 export type ResourceValues = PlayerResourceValue[];
@@ -2570,6 +2430,10 @@ export type Sheets = SheetPatch[];
 export type Uuids = string[];
 export type ContactUuidIndex = number[];
 export type ContactPositions = [number, number][];
+/**
+ * Special sense categories supported by the perception pipeline.
+ */
+export type SensesType1 = "Blindsight" | "Darkvision" | "Tremorsense" | "Truesight" | "Devils Sight" | "See Invisible";
 export type ContactSpecialSenses = SensesType1[][];
 export type SightingUuidIndex = number[];
 export type OwnerRevision = number | null;
@@ -2600,7 +2464,7 @@ export type AreaPropagation1 = ("line_of_effect" | "connected" | "ignore_barrier
  * @minItems 2
  * @maxItems 2
  */
-export type Position15 = [number, number];
+export type Position13 = [number, number];
 /**
  * @minItems 1
  */
@@ -2614,11 +2478,11 @@ export type Revision1 = number;
  * @minItems 2
  * @maxItems 2
  */
-export type Position16 = [number, number];
+export type Position14 = [number, number];
 export type BaseHeightSteps6 = number;
-export type VeryBrightRadiusFeet4 = number;
-export type BrightRadiusFeet4 = number;
-export type DimRadiusFeet4 = number;
+export type VeryBrightRadiusFeet3 = number;
+export type BrightRadiusFeet3 = number;
+export type DimRadiusFeet3 = number;
 export type Appearance = "torch" | "neutral";
 export type ActorAnchored = boolean;
 export type AnchorEntity = number | null;
@@ -2631,21 +2495,21 @@ export type Hazards = CellValues2[];
 export type Lineage2 = number;
 export type ApplicationId2 = string | null;
 export type Resolutions = PlayerResolution[];
-export type Kind63 = "ack";
-export type ActorUuid2 = string;
+export type Kind61 = "ack";
+export type ActorUuid3 = string;
 export type StateRevision1 = string;
 export type ForceAttack = boolean;
 export type CorrelationId = string;
 export type GameId2 = string;
 export type GameEpoch2 = string;
 export type AudienceId2 = string;
-export type Kind64 = "choices";
+export type Kind62 = "choices";
 export type StateRevision2 = string;
 export type CorrelationId1 = string;
 export type ForceAttack1 = boolean;
 export type Uuid2 = string;
-export type Kind65 = "creature" | "object";
-export type Name17 = string | null;
+export type Kind63 = "creature" | "object";
+export type Name15 = string | null;
 export type Subjects = ChoiceSubject[];
 export type Positions3 = [number, number][];
 export type Index2 = number;
@@ -2663,9 +2527,9 @@ export type FromPosition2 = number;
 export type ToPosition2 = number;
 export type OpportunityAttackExposures = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures = ChoiceExposure[];
-export type Kind66 = "subject";
+export type Kind64 = "subject";
 export type Subject = number;
-export type Position17 = number | null;
+export type Position15 = number | null;
 export type Index3 = number;
 export type Distance1 = number | null;
 export type PathCost1 = number | null;
@@ -2677,8 +2541,8 @@ export type Path8 = number[] | null;
 export type SafePath1 = number[] | null;
 export type OpportunityAttackExposures1 = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures1 = ChoiceExposure[];
-export type Kind67 = "position";
-export type Position18 = number;
+export type Kind65 = "position";
+export type Position16 = number;
 export type Index4 = number;
 export type Distance2 = number | null;
 export type PathCost2 = number | null;
@@ -2690,7 +2554,7 @@ export type Path9 = number[] | null;
 export type SafePath2 = number[] | null;
 export type OpportunityAttackExposures2 = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures2 = ChoiceExposure[];
-export type Kind68 = "self";
+export type Kind66 = "self";
 export type TargetSets = (SubjectBinding | PositionBinding | SelfBinding)[][];
 export type DiscoveryGeneration = number;
 export type EntityUuid16 = string;
@@ -2738,13 +2602,13 @@ export type TargetType =
  * Position input required after choosing a discovery target.
  */
 export type PositionSelection = (SinglePositionSelection | PositionPathSelection | EntityDestinationSelection) | null;
-export type Kind69 = "single";
-export type Kind70 = "path";
+export type Kind67 = "single";
+export type Kind68 = "path";
 export type MaxLengthFeet = number;
 export type MaxSegments = number;
 export type AllowOriginStart = boolean;
 export type OriginStartOffsetCells = number;
-export type Kind71 = "entity_destination";
+export type Kind69 = "entity_destination";
 export type RangeFeet1 = number | null;
 export type CandidateSource = "visible" | "reachable";
 export type RequiresUnoccupied = boolean;
@@ -2767,7 +2631,7 @@ export type DisplayName2 = string;
 /**
  * Action description
  */
-export type Description10 = string;
+export type Description8 = string;
 /**
  * Type of cost (actions, bonus_actions, etc.)
  */
@@ -2796,7 +2660,7 @@ export type RestrictedActionBudget = string | null;
 /**
  * Human-readable cost label.
  */
-export type Name18 = string;
+export type Name16 = string;
 /**
  * Action economy bucket consumed by this cost.
  */
@@ -2873,7 +2737,7 @@ export type FlatBonus = number;
 /**
  * Damage type applied to this component.
  */
-export type DamageType7 = string;
+export type DamageType6 = string;
 /**
  * Optional on-hit save gating this packet.
  */
@@ -3186,7 +3050,7 @@ export type ItemChargeCost = number;
 /**
  * Human-readable cost label.
  */
-export type Name19 = string;
+export type Name17 = string;
 /**
  * Action economy bucket consumed by this cost.
  */
@@ -3223,7 +3087,7 @@ export type ConditionalCosts = ConditionalCost[];
  */
 export type FixedHealing = number | null;
 export type AllocationCompletion = "selected_only" | "fill_primary";
-export type Key2 =
+export type Key3 =
   "form" | "side" | "radius" | "ability" | "damage_type" | "movement" | "width" | "rank" | "resistance";
 export type Value3 = string;
 export type Label1 = string;
@@ -3284,7 +3148,7 @@ export type RemainingMovement = number;
 export type SubjectUuid = string;
 export type BehaviorId10 = string;
 export type Label2 = string;
-export type Description11 = string;
+export type Description9 = string;
 export type DefaultPriority1 = number;
 export type ContactPositions1 = [number, number][];
 export type ConnectorUuid3 = string | null;
@@ -3293,7 +3157,7 @@ export type VariantFacets1 = ActionVariantFacet[];
 export type Reason2 = string | null;
 export type WorldInteractions = AvailableWorldInteraction[];
 export type HandlerDetails1 = AvailableHandlerInfo[];
-export type ActorUuid3 = string;
+export type ActorUuid4 = string;
 export type StateRevision3 = string;
 export type DiscoveryGeneration2 = number;
 export type CorrelationId2 = string;
@@ -3305,7 +3169,7 @@ export type CastAtLevel1 = number | null;
 export type GameId3 = string;
 export type GameEpoch3 = string;
 export type AudienceId3 = string;
-export type Kind72 = "preview";
+export type Kind70 = "preview";
 export type StateRevision4 = string;
 export type Subjects1 = ChoiceSubject[];
 export type Positions4 = [number, number][];
@@ -3366,7 +3230,7 @@ export type ToPosition3 = [number, number];
 export type OpportunityAttackExposures3 = OpportunityAttackExposure[];
 export type IsHazardous = boolean;
 export type CommandNumber = number;
-export type ActorUuid4 = string;
+export type ActorUuid5 = string;
 export type StateRevision5 = string;
 export type Intent =
   | ExecuteSelectionIntent
@@ -3376,12 +3240,12 @@ export type Intent =
   | ToggleHandlerIntent
   | PrepareSpellsIntent
   | StudySpellMasteryIntent;
-export type Kind73 = "execute_selection";
+export type Kind71 = "execute_selection";
 export type DiscoveryGeneration3 = number;
-export type Kind74 = "end_turn";
-export type Kind75 = "equip";
-export type ItemUuid8 = string;
-export type Slot1 = WeaponSlot | BodyPart | RingSlot;
+export type Kind72 = "end_turn";
+export type Kind73 = "equip";
+export type ItemUuid10 = string;
+export type Slot2 = WeaponSlot | BodyPart | RingSlot;
 /**
  * Body positions that may hold armor or accessories.
  */
@@ -3390,35 +3254,35 @@ export type BodyPart = "Head" | "Body" | "Hands" | "Legs" | "Feet" | "Amulet" | 
  * Concrete ring positions for items whose body part is ``RING``.
  */
 export type RingSlot = "Left Ring" | "Right Ring";
-export type Kind76 = "unequip";
-export type Slot2 = WeaponSlot | BodyPart | RingSlot;
-export type Kind77 = "toggle_handler";
+export type Kind74 = "unequip";
+export type Slot3 = WeaponSlot | BodyPart | RingSlot;
+export type Kind75 = "toggle_handler";
 export type DiscoveryGeneration4 = number;
 export type HandlerUuid = string;
 export type Enabled2 = boolean;
-export type Kind78 = "prepare_spells";
-export type Kind79 = "study_spell_mastery";
+export type Kind76 = "prepare_spells";
+export type Kind77 = "study_spell_mastery";
 export type RankOneSpellId = string;
 export type RankTwoSpellId = string;
 export type Hours = number;
-export type Kind80 = "receipt";
+export type Kind78 = "receipt";
 export type Receipt =
   PendingReceipt | CommittedReceipt | RejectedReceipt | IndeterminateReceipt | ExpiredReceipt | UnknownReceipt;
 export type GameId4 = string;
 export type GameEpoch4 = string;
 export type AudienceId4 = string;
 export type CommandNumber1 = number;
-export type Kind81 = "pending";
+export type Kind79 = "pending";
 export type GameId5 = string;
 export type GameEpoch5 = string;
 export type AudienceId5 = string;
 export type CommandNumber2 = number;
-export type Kind82 = "committed";
+export type Kind80 = "committed";
 export type GameId6 = string;
 export type GameEpoch6 = string;
 export type AudienceId6 = string;
 export type CommandNumber3 = number;
-export type Kind83 = "rejected";
+export type Kind81 = "rejected";
 export type Reason4 =
   | "stale_state"
   | "stale_discovery"
@@ -3433,23 +3297,23 @@ export type GameId7 = string;
 export type GameEpoch7 = string;
 export type AudienceId7 = string;
 export type CommandNumber4 = number;
-export type Kind84 = "indeterminate";
+export type Kind82 = "indeterminate";
 export type IncidentId1 = string;
 export type GameId8 = string;
 export type GameEpoch8 = string;
 export type AudienceId8 = string;
 export type CommandNumber5 = number;
-export type Kind85 = "expired";
+export type Kind83 = "expired";
 export type GameId9 = string;
 export type GameEpoch9 = string;
 export type AudienceId9 = string;
 export type CommandNumber6 = number;
-export type Kind86 = "unknown";
-export type Kind87 = "content";
+export type Kind84 = "unknown";
+export type Kind85 = "content";
 export type Revision2 = string;
 export type Descriptors = ContentDescriptor[];
-export type Kind88 = "ready";
-export type Kind89 = "stream_status";
+export type Kind86 = "ready";
+export type Kind87 = "stream_status";
 export type Generation1 = string;
 export type ObserverUuid3 = string;
 export type Lineage3 = number;
@@ -3457,7 +3321,7 @@ export type Root = number | null;
 export type Events = PlayerNode[];
 export type StartCursor = number;
 export type EndCursor1 = number;
-export type Observations1 = PlayerObservation[];
+export type Bodies1 = BodyRecord[];
 export type WorldUpdates1 = WorldUpdate[];
 export type Resolutions1 = PlayerResolution[];
 export type Lineages1 = PlayerLineage[];
@@ -3467,7 +3331,7 @@ export type EncounterLogIndex = number;
 export type OperationEndCursor = number;
 export type CombatLogAppends = CombatLogAppend[];
 export type ContentAdditions1 = ContentDescriptor[];
-export type Kind90 = "operation";
+export type Kind88 = "operation";
 export type StateRevision6 = string;
 export type CommandNumber7 = number | null;
 export type ApiError =
@@ -3498,140 +3362,140 @@ export type ApiError =
   | ErrorGameFailed
   | ErrorGameClosed
   | ErrorInternalFailure;
-export type Kind91 = "error";
+export type Kind89 = "error";
 export type IncidentId2 = string | null;
 export type Code = "invalid_request";
 export type HttpStatus = 400;
 export type Retryable = false;
-export type Kind92 = "error";
+export type Kind90 = "error";
 export type IncidentId3 = string | null;
 export type Code1 = "unauthenticated";
 export type HttpStatus1 = 401;
 export type Retryable1 = false;
-export type Kind93 = "error";
+export type Kind91 = "error";
 export type IncidentId4 = string | null;
 export type Code2 = "forbidden";
 export type HttpStatus2 = 403;
 export type Retryable2 = false;
-export type Kind94 = "error";
+export type Kind92 = "error";
 export type IncidentId5 = string | null;
 export type Code3 = "game_not_found";
 export type HttpStatus3 = 404;
 export type Retryable3 = false;
-export type Kind95 = "error";
+export type Kind93 = "error";
 export type IncidentId6 = string | null;
 export type Code4 = "epoch_mismatch";
 export type HttpStatus4 = 409;
 export type Retryable4 = false;
-export type Kind96 = "error";
+export type Kind94 = "error";
 export type IncidentId7 = string | null;
 export type Code5 = "audience_mismatch";
 export type HttpStatus5 = 403;
 export type Retryable5 = false;
-export type Kind97 = "error";
+export type Kind95 = "error";
 export type IncidentId8 = string | null;
 export type Code6 = "attachment_replaced";
 export type HttpStatus6 = 409;
 export type Retryable6 = false;
-export type Kind98 = "error";
+export type Kind96 = "error";
 export type IncidentId9 = string | null;
 export type Code7 = "attachment_conflict";
 export type HttpStatus7 = 409;
 export type Retryable7 = false;
-export type Kind99 = "error";
+export type Kind97 = "error";
 export type IncidentId10 = string | null;
 export type Code8 = "command_conflict";
 export type HttpStatus8 = 409;
 export type Retryable8 = false;
-export type Kind100 = "error";
+export type Kind98 = "error";
 export type IncidentId11 = string | null;
 export type Code9 = "command_number";
 export type HttpStatus9 = 409;
 export type Retryable9 = false;
-export type Kind101 = "error";
+export type Kind99 = "error";
 export type IncidentId12 = string | null;
 export type Code10 = "stale_state";
 export type HttpStatus10 = 409;
 export type Retryable10 = false;
-export type Kind102 = "error";
+export type Kind100 = "error";
 export type IncidentId13 = string | null;
 export type Code11 = "stale_discovery";
 export type HttpStatus11 = 409;
 export type Retryable11 = false;
-export type Kind103 = "error";
+export type Kind101 = "error";
 export type IncidentId14 = string | null;
 export type Code12 = "not_your_turn";
 export type HttpStatus12 = 409;
 export type Retryable12 = false;
-export type Kind104 = "error";
+export type Kind102 = "error";
 export type IncidentId15 = string | null;
 export type Code13 = "catch_up_required";
 export type HttpStatus13 = 409;
 export type Retryable13 = false;
-export type Kind105 = "error";
+export type Kind103 = "error";
 export type IncidentId16 = string | null;
 export type Code14 = "query_superseded";
 export type HttpStatus14 = 409;
 export type Retryable14 = false;
-export type Kind106 = "error";
+export type Kind104 = "error";
 export type IncidentId17 = string | null;
 export type Code15 = "invalid_cursor";
 export type HttpStatus15 = 400;
 export type Retryable15 = false;
-export type Kind107 = "error";
+export type Kind105 = "error";
 export type IncidentId18 = string | null;
 export type Code16 = "resume_unavailable";
 export type HttpStatus16 = 410;
 export type Retryable16 = false;
-export type Kind108 = "error";
+export type Kind106 = "error";
 export type IncidentId19 = string | null;
 export type Code17 = "protocol_mismatch";
 export type HttpStatus17 = 409;
 export type Retryable17 = false;
-export type Kind109 = "error";
+export type Kind107 = "error";
 export type IncidentId20 = string | null;
 export type Code18 = "request_too_large";
 export type HttpStatus18 = 413;
 export type Retryable18 = false;
-export type Kind110 = "error";
+export type Kind108 = "error";
 export type IncidentId21 = string | null;
 export type Code19 = "response_too_large";
 export type HttpStatus19 = 500;
 export type Retryable19 = false;
-export type Kind111 = "error";
+export type Kind109 = "error";
 export type IncidentId22 = string | null;
 export type Code20 = "busy";
 export type HttpStatus20 = 429;
 export type Retryable20 = true;
 export type RetryAfterMs = number;
-export type Kind112 = "error";
+export type Kind110 = "error";
 export type IncidentId23 = string | null;
 export type Code21 = "starting";
 export type HttpStatus21 = 503;
 export type Retryable21 = true;
 export type RetryAfterMs1 = number;
-export type Kind113 = "error";
+export type Kind111 = "error";
 export type IncidentId24 = string | null;
 export type Code22 = "recording_capacity";
 export type HttpStatus22 = 503;
 export type Retryable22 = true;
 export type RetryAfterMs2 = number;
-export type Kind114 = "error";
+export type Kind112 = "error";
 export type IncidentId25 = string | null;
 export type Code23 = "game_terminal";
 export type HttpStatus23 = 409;
 export type Retryable23 = false;
-export type Kind115 = "error";
+export type Kind113 = "error";
 export type IncidentId26 = string | null;
 export type Code24 = "game_failed";
 export type HttpStatus24 = 503;
 export type Retryable24 = false;
-export type Kind116 = "error";
+export type Kind114 = "error";
 export type IncidentId27 = string | null;
 export type Code25 = "game_closed";
 export type HttpStatus25 = 410;
 export type Retryable25 = false;
-export type Kind117 = "error";
+export type Kind115 = "error";
 export type IncidentId28 = string | null;
 export type Code26 = "internal_failure";
 export type HttpStatus26 = 500;
@@ -3767,7 +3631,7 @@ export interface PlayerInitialization {
   nodes: Nodes;
   version_rows: VersionRows;
   end_cursor: EndCursor;
-  observations: Observations;
+  bodies?: Bodies;
   world_updates: WorldUpdates;
   hud?: PlayerHUDPatch | null;
   audience?: PlayerAudience | null;
@@ -4184,93 +4048,66 @@ export interface DeathSaveFact {
   succeeded: Succeeded1;
 }
 /**
- * A holder's equipment change: its body patch (loadout, armor class, inventory) and its items' patches.
+ * An event's change to the bodies a seat perceives: each actor's rows, after the items entering its view.
  */
-export interface EquipmentFact {
+export interface ActorChangeFact {
   kind?: Kind20;
-  source_entity_uuid: SourceEntityUuid9;
-  changes: ActorChanges;
+  actors: Actors;
   items?: Items;
 }
 /**
- * Present fields replace the seat's known body values; omitted fields are unchanged.
- *
- * Against an absent body (first acquisition) every field is present.
+ * One actor's disclosed change rows, in the engine's order.
  */
-export interface ActorChanges {
-  name?: Name2;
-  character_body_id?: CharacterBodyId;
-  creature_content_ref?: CreatureContentRef;
-  appearance?: AppearanceConfig;
-  visual_loadout?: VisualLoadout;
-  normal_hp?: NormalHp;
-  maximum_hp?: MaximumHp;
-  temporary_hp?: TemporaryHp;
-  life_state?: LifeState;
-  armor_class?: ArmorClass;
-  conditions?: Conditions;
-  last_visual_position?: LastVisualPosition;
-  controlled_items?: ControlledItems;
-  occupancy_layer?: OccupancyLayer | null;
-  temporary_hp_grant?: TemporaryHitPointsGrant | null;
-  resolved_size?: Size | null;
-  structural_base_size?: Size | null;
-  manifestation?: SummonManifestation | null;
-  faction?: Faction;
-  present?: Present;
-  remains_disposition?: RemainsDisposition1;
-  spatial_disposition?: SpatialDisposition1;
+export interface ActorRows {
+  actor_uuid: ActorUuid;
+  rows: Rows;
 }
-export interface AppearanceConfig {
-  portrait_key?: PortraitKey1;
-  presentation_kind?: PresentationKind;
-  visual_scale?: VisualScale;
-  visual_scale_x?: VisualScaleX;
-  placeholder_tint?: PlaceholderTint;
-  body_category?: BodyCategory;
-  skin_tint?: SkinTint;
-  head_category?: HeadCategory;
-  hair_tint?: HairTint;
-  has_beard?: HasBeard;
-  beard_tint?: BeardTint;
+export interface NumberRow {
+  field: Field;
+  value: Value;
 }
-export interface VisualLoadout {
-  active_weapon_set: WeaponSet;
-  layers: Layers;
+export interface GrantRow {
+  field?: Field1;
+  value: TemporaryHitPointsGrant | null;
+}
+export interface SizeRow {
+  field?: Field2;
+  value: Size | null;
+}
+export interface DispositionRow {
+  field?: Field3;
+  value: SpatialDisposition;
+}
+export interface WeaponSetRow {
+  field?: Field4;
+  value: WeaponSet;
 }
 /**
- * One equipped layer; the item's look is in the seat's record of `item_uuid`.
+ * A membership set (applied or changed) or, without a member, ended; `consumed` tells how it ended.
  */
-export interface VisualItem {
-  slot: Slot;
-  item_uuid: ItemUuid;
-  item_id: ItemId;
-  is_lit?: IsLit;
-}
-/**
- * A condition's presentation facts, without its live rules/ownership graph.
- */
-export interface ConditionFact {
-  event_uuid: EventUuid;
+export interface ConditionRow {
+  field?: Field5;
   condition_uuid: ConditionUuid1;
-  name: Name3;
+  member?: ConditionMember | null;
+  consumed?: Consumed;
+}
+/**
+ * A condition an actor holds: its identity and committed state, without any event's change payload.
+ */
+export interface ConditionMember {
+  condition_uuid: ConditionUuid2;
+  name: Name2;
   category: ConditionCategory;
   behavior_id: BehaviorId4;
-  resulting_max_hp: ResultingMaxHp;
-  resulting_ac: ResultingAc;
   state?: ConditionState | null;
-  resulting_stats?: EntityStatsState | null;
-  resulting_tile?: WorldTileState | null;
-  resulting_item?: ItemPresentationState | null;
-  consumed?: Consumed;
 }
 /**
  * Committed condition semantics without its executable runtime owner.
  */
 export interface ConditionState {
   duration?: ConditionDurationSummary | null;
-  condition_uuid: ConditionUuid2;
-  name: Name4;
+  condition_uuid: ConditionUuid3;
+  name: Name3;
   category: ConditionCategory;
   semantic_key: SemanticKey;
   behavior_id?: BehaviorId5;
@@ -4304,154 +4141,77 @@ export interface ItemConcentrationSlot {
   spell_name: SpellName;
 }
 /**
- * Native evaluated actor after-values; consumers do not reevaluate modifiers.
+ * The new duration of a held condition (`key` its uuid) or of an item's effect (`key` the effect, of `item_uuid`).
  */
-export interface EntityStatsState {
-  normal_hp: NormalHp1;
-  maximum_hp: MaximumHp1;
-  temporary_hp: TemporaryHp1;
-  temporary_hp_grant?: TemporaryHitPointsGrant | null;
-  armor_class: ArmorClass1;
-  healing_blocked: HealingBlocked;
-  damage_affinities: DamageAffinities;
-  resolved_size?: Size | null;
-  native_plane_id?: NativePlaneId;
-  current_plane_id?: CurrentPlaneId;
-  spatial_disposition?: SpatialDisposition;
+export interface DurationRow {
+  field: Field6;
+  key: Key;
+  item_uuid?: ItemUuid;
+  duration: ConditionDurationSummary | null;
 }
 /**
- * Complete renderer-neutral state of one admitted support Tile.
+ * The equipped layer of `slot`, or without a layer the slot emptied.
  */
-export interface WorldTileState {
-  tile_uuid: TileUuid;
-  position: Position3;
-  surface: TileSurface;
-  name: Name5;
-  blocks_optics: BlocksOptics;
-  blocks_propagation: BlocksPropagation;
-  walking_cost: WalkingCost;
-  flying_cost: FlyingCost;
-  swimming_cost: SwimmingCost;
-  burrowing_cost: BurrowingCost;
-  elevation_steps: ElevationSteps1;
-  surface_kind: ElevationSurfaceKind;
-  slope_axis?: SlopeAxis | null;
-  default_light: LightLevel;
-  resolved_light: LightLevel;
-  condition_names?: ConditionNames;
-  residues?: Residues;
+export interface LayerRow {
+  field?: Field7;
+  slot: Slot;
+  layer?: VisualItem | null;
 }
 /**
- * Immutable semantic composition of one support Tile.
+ * One equipped layer; the item's look is in the seat's record of `item_uuid`.
  */
-export interface TileSurface {
-  base_material: Material;
-  layers?: Layers1;
-  description?: Description3;
-}
-/**
- * One ordered semantic layer above a Tile base material.
- */
-export interface SurfaceLayer {
-  material: Material;
-  description?: Description2;
-}
-/**
- * Observable membership of one persistent residue on its owning tile.
- */
-export interface TileResidueState {
-  condition_uuid: ConditionUuid3;
-  residue_id: ResidueId;
-  description: Description4;
-  amount?: Amount;
-  max_amount?: MaxAmount;
-  contributions?: Contributions;
-}
-/**
- * Current deposited shape in owning-tile coordinates, without injury history.
- */
-export interface ResidueContribution {
-  ellipses: Ellipses;
-  amount?: Amount1;
-  deposit_source?: MaterialDepositSource | null;
-}
-/**
- * One discharge's original frame; current owners retain actual coverage.
- */
-export interface MaterialDepositSource {
-  deposit_uuid: DepositUuid;
-  origin: Origin3;
-  radius_cells: RadiusCells;
-}
-/**
- * Immutable item data needed to materialize an equipment/inventory row.
- *
- * The model deliberately contains only primitive values and dependency-leaf
- * enums. It can therefore be carried by cold event/replay contracts without
- * importing concrete items, Entity, runtime registries, or server DTOs.
- * Location and equipped-slot membership live on the surrounding event.
- */
-export interface ItemPresentationState {
+export interface VisualItem {
+  slot: Slot1;
   item_uuid: ItemUuid1;
-  item_id: ItemId1;
-  name: Name6;
-  description?: Description5;
-  item_kind: ItemPresentationKind;
-  rarity: ItemRarity;
-  weight: Weight;
-  value?: Value;
-  tags?: Tags2;
-  is_pickable?: IsPickable;
-  is_equippable?: IsEquippable;
-  is_usable?: IsUsable;
-  is_targetable?: IsTargetable;
-  door_mechanism?: DoorMechanism | null;
-  door_swing?: DoorSwing | null;
-  remnant_state?: ItemRemnantState | null;
+  item_id: ItemId;
+  is_lit?: IsLit;
+}
+/**
+ * An item entering (`held`) or leaving the actor's inventory.
+ */
+export interface InventoryRow {
+  field?: Field8;
+  item_uuid: ItemUuid2;
+  held: Held;
+}
+/**
+ * An item's effects, whole: the item's own snapshot order.
+ */
+export interface ItemEffectsRow {
+  field?: Field9;
+  item_uuid: ItemUuid3;
+  effects: Effects;
+}
+export interface ItemStateRow {
+  field?: Field10;
+  item_uuid: ItemUuid4;
+  changes: ItemStateChanges;
+}
+/**
+ * The `ItemState` fields one change replaces; omitted fields are unchanged.
+ */
+export interface ItemStateChanges {
+  stack_count?: StackCount;
+  charges?: Charges;
   integrity?: ItemIntegrity;
   destruction_outcome?: DestructionOutcome;
-  stack_id?: StackId;
-  visual_item_name: VisualItemName;
-  visual_variant_id?: VisualVariantId;
-  item_effects?: ItemEffects1;
-  equipped_visual_policy: EquippedVisualPolicy;
-  damage_dice?: DamageDice;
-  damage_type?: DamageType1;
-  weapon_properties?: WeaponProperties;
-  armor_type?: ArmorType;
-  armor_ac?: ArmorAc;
-  shield_ac_bonus?: ShieldAcBonus;
-  charges?: Charges;
-  max_charges?: MaxCharges;
-  stack_count: StackCount;
-  max_stack: MaxStack;
-  is_consumable: IsConsumable;
-  map_char?: MapChar;
-  include_in_senses_objects?: IncludeInSensesObjects;
-  include_in_adjacent_senses_objects?: IncludeInAdjacentSensesObjects;
-  include_in_available_object_actions?: IncludeInAvailableObjectActions;
+  remnant_state?: ItemRemnantState | null;
   current_hit_points?: CurrentHitPoints;
-  maximum_hit_points?: MaximumHitPoints;
-  concentration_capacity?: ConcentrationCapacity;
   concentration_slots?: ConcentrationSlots1;
-  boundary_structure?: BoundaryStructure | null;
   construction_owner_uuid?: ConstructionOwnerUuid;
   construction_geometry?: ConstructionGeometry;
   construction_suppressions?: ConstructionSuppressions;
   known_to_creator?: KnownToCreator;
   supported_by_uuid?: SupportedByUuid;
-  contact_passage?: ContactPassage1;
+  contact_passage?: ContactPassage;
   surface_residues?: SurfaceResidues;
   linked_spatial_condition_uuid?: LinkedSpatialConditionUuid;
   is_open?: IsOpen;
   is_engaged?: IsEngaged;
   blocks_movement?: BlocksMovement;
-  blocks_optics?: BlocksOptics1;
-  blocks_propagation?: BlocksPropagation1;
+  blocks_optics?: BlocksOptics;
+  blocks_propagation?: BlocksPropagation;
   is_lit?: IsLit1;
-  very_bright_radius_feet?: VeryBrightRadiusFeet;
-  bright_radius_feet?: BrightRadiusFeet;
-  dim_radius_feet?: DimRadiusFeet;
 }
 /**
  * Physical configuration at destruction, retained by inert remains.
@@ -4463,79 +4223,80 @@ export interface ItemRemnantState {
   intact_supported_items?: IntactSupportedItems;
 }
 /**
+ * One inert residue on the contacted world-facing sides of an object.
+ */
+export interface ObjectResidueState {
+  condition_uuid: ConditionUuid4;
+  residue_id: ResidueId;
+  description: Description2;
+  faces: Faces;
+}
+/**
+ * An item entering a seat's view: its static parts if the seat lacks them, its dynamic parts current and whole.
+ */
+export interface ItemRecord {
+  item_uuid: ItemUuid5;
+  look?: ItemLook | null;
+  profile?: ItemProfile | null;
+  state?: ItemState | null;
+  effects?: Effects1;
+}
+/**
+ * What any viewer of an equipped item sees of it, the same for the item's life: sent once per seat. Its
+ * effects are dynamic (`ItemRecord.effects`); `is_lit` travels in its layer.
+ */
+export interface ItemLook {
+  item_id: ItemId1;
+  item_kind: ItemPresentationKind;
+  visual_item_name: VisualItemName;
+  visual_variant_id: VisualVariantId;
+  equipped_visual_policy: EquippedVisualPolicy;
+  very_bright_radius_feet: VeryBrightRadiusFeet;
+  bright_radius_feet: BrightRadiusFeet;
+  dim_radius_feet: DimRadiusFeet;
+}
+/**
+ * What a controlled item is: the fields its use does not change.
+ */
+export interface ItemProfile {
+  name: Name4;
+  description: Description3;
+  rarity: ItemRarity;
+  weight: Weight;
+  value: Value1;
+  tags: Tags2;
+  is_pickable: IsPickable;
+  is_equippable: IsEquippable;
+  is_usable: IsUsable;
+  is_targetable: IsTargetable;
+  door_mechanism: DoorMechanism | null;
+  door_swing: DoorSwing | null;
+  stack_id: StackId;
+  damage_dice: DamageDice;
+  damage_type: DamageType1;
+  weapon_properties: WeaponProperties;
+  armor_type: ArmorType;
+  armor_ac: ArmorAc;
+  shield_ac_bonus: ShieldAcBonus;
+  max_charges: MaxCharges;
+  max_stack: MaxStack;
+  is_consumable: IsConsumable;
+  map_char: MapChar;
+  include_in_senses_objects: IncludeInSensesObjects;
+  include_in_adjacent_senses_objects: IncludeInAdjacentSensesObjects;
+  include_in_available_object_actions: IncludeInAvailableObjectActions;
+  maximum_hit_points: MaximumHitPoints;
+  concentration_capacity: ConcentrationCapacity;
+  boundary_structure: BoundaryStructure | null;
+}
+/**
  * Computed current structural channels of one boundary provider.
  */
 export interface BoundaryStructure {
   structure: BoundaryStructureKind;
   material: Material;
   blocked_channels: BlockedChannels;
-  contact_passage?: ContactPassage;
-}
-/**
- * One inert residue on the contacted world-facing sides of an object.
- */
-export interface ObjectResidueState {
-  condition_uuid: ConditionUuid4;
-  residue_id: ResidueId1;
-  description: Description6;
-  faces: Faces;
-}
-/**
- * One item's components new to the seat: all it may know the first time, then the components that changed.
- */
-export interface ItemPatch {
-  item_uuid: ItemUuid2;
-  look?: ItemLook | null;
-  profile?: ItemProfile | null;
-  state?: ItemState | null;
-}
-/**
- * What any viewer of an equipped item sees of it; `is_lit` travels in its layer.
- */
-export interface ItemLook {
-  item_id: ItemId2;
-  item_kind: ItemPresentationKind1;
-  visual_item_name: VisualItemName1;
-  visual_variant_id: VisualVariantId1;
-  equipped_visual_policy: EquippedVisualPolicy1;
-  item_effects: ItemEffects2;
-  very_bright_radius_feet: VeryBrightRadiusFeet1;
-  bright_radius_feet: BrightRadiusFeet1;
-  dim_radius_feet: DimRadiusFeet1;
-}
-/**
- * What a controlled item is: the fields its use does not change.
- */
-export interface ItemProfile {
-  name: Name7;
-  description: Description7;
-  rarity: ItemRarity1;
-  weight: Weight1;
-  value: Value1;
-  tags: Tags3;
-  is_pickable: IsPickable1;
-  is_equippable: IsEquippable1;
-  is_usable: IsUsable1;
-  is_targetable: IsTargetable1;
-  door_mechanism: DoorMechanism | null;
-  door_swing: DoorSwing | null;
-  stack_id: StackId1;
-  damage_dice: DamageDice1;
-  damage_type: DamageType2;
-  weapon_properties: WeaponProperties1;
-  armor_type: ArmorType1;
-  armor_ac: ArmorAc1;
-  shield_ac_bonus: ShieldAcBonus1;
-  max_charges: MaxCharges1;
-  max_stack: MaxStack1;
-  is_consumable: IsConsumable1;
-  map_char: MapChar1;
-  include_in_senses_objects: IncludeInSensesObjects1;
-  include_in_adjacent_senses_objects: IncludeInAdjacentSensesObjects1;
-  include_in_available_object_actions: IncludeInAvailableObjectActions1;
-  maximum_hit_points: MaximumHitPoints1;
-  concentration_capacity: ConcentrationCapacity1;
-  boundary_structure: BoundaryStructure | null;
+  contact_passage?: ContactPassage1;
 }
 /**
  * What a controlled item's use and the world change.
@@ -4543,7 +4304,7 @@ export interface ItemProfile {
 export interface ItemState {
   stack_count: StackCount1;
   charges: Charges1;
-  integrity: ItemIntegrity1;
+  integrity: ItemIntegrity;
   destruction_outcome: DestructionOutcome1;
   remnant_state: ItemRemnantState | null;
   current_hit_points: CurrentHitPoints1;
@@ -4553,37 +4314,21 @@ export interface ItemState {
   construction_suppressions: ConstructionSuppressions1;
   known_to_creator: KnownToCreator1;
   supported_by_uuid: SupportedByUuid1;
-  contact_passage: ContactPassage2;
+  contact_passage: ContactPassage;
   surface_residues: SurfaceResidues1;
   linked_spatial_condition_uuid: LinkedSpatialConditionUuid1;
   is_open: IsOpen1;
   is_engaged: IsEngaged1;
   blocks_movement: BlocksMovement1;
-  blocks_optics: BlocksOptics2;
-  blocks_propagation: BlocksPropagation2;
+  blocks_optics: BlocksOptics1;
+  blocks_propagation: BlocksPropagation1;
   is_lit: IsLit2;
 }
-export interface ConditionChangeFact {
-  kind?: Kind21;
-  target_entity_uuid: TargetEntityUuid8;
-  event_type: EventType;
-  condition: ConditionFact;
-  consumed?: Consumed1;
-}
-/**
- * Witnessed native item membership edge, without a creature condition.
- */
-export interface ItemEffectChangeFact {
-  kind?: Kind22;
-  item_uuid: ItemUuid3;
-  effect_uuid: EffectUuid1;
-  event_type: EventType;
-}
 export interface SpatialFact {
-  kind?: Kind23;
+  kind?: Kind21;
   change_type: SpatialChangeType;
   entity_uuid: EntityUuid3;
-  position: Position4;
+  position: Position3;
   object_uuid?: ObjectUuid;
   commit_occurrence?: CommitOccurrence;
   previous_occupancy_layer?: OccupancyLayer | null;
@@ -4600,23 +4345,23 @@ export interface CreationWitness {
   manifestation: SummonManifestation;
 }
 export interface FactionFact {
-  kind?: Kind24;
+  kind?: Kind22;
   entity_uuid: EntityUuid4;
   faction_after: FactionAfter;
   control_lost?: ControlLost;
 }
 export interface TurnFact {
-  kind?: Kind25;
+  kind?: Kind23;
   event_type: EventType;
   entity_uuid: EntityUuid5;
   round_number: RoundNumber;
 }
 export interface ActionFact {
-  kind?: Kind26;
-  source_entity_uuid: SourceEntityUuid10;
-  target_entity_uuid: TargetEntityUuid9;
+  kind?: Kind24;
+  source_entity_uuid: SourceEntityUuid9;
+  target_entity_uuid: TargetEntityUuid8;
   behavior_id: BehaviorId6;
-  name: Name8;
+  name: Name5;
   source_item_uuid?: SourceItemUuid2;
   reaction?: ActionReaction | null;
   font_conversion?: FontConversion | null;
@@ -4654,7 +4399,7 @@ export interface FontConversion {
  * are set when the group's row tables are.)
  */
 export interface SensoryFact {
-  kind?: Kind27;
+  kind?: Kind25;
   observer: Observer;
   initial?: Initial;
   observer_position: ObserverPosition;
@@ -4742,13 +4487,13 @@ export interface SpatialEffectContent {
  */
 export interface SpatialEffectContent1 {
   content_ref: ContentRef;
-  name: Name9;
-  description: Description8;
+  name: Name6;
+  description: Description4;
 }
 export interface ItemChargeFact {
-  kind?: Kind28;
-  source_entity_uuid: SourceEntityUuid11;
-  item_uuid: ItemUuid4;
+  kind?: Kind26;
+  source_entity_uuid: SourceEntityUuid10;
+  item_uuid: ItemUuid6;
   charges_after: ChargesAfter;
   stack_count_after: StackCountAfter;
   item_destroyed: ItemDestroyed;
@@ -4758,7 +4503,7 @@ export interface ItemChargeFact {
  * A witnessed mechanical transition, restricted to disclosed fixture cells.
  */
 export interface SpatialEffectStateFact {
-  kind?: Kind29;
+  kind?: Kind27;
   spatial_effect_uuid: SpatialEffectUuid1;
   positions: Positions2;
   previous_state: TrapState | null;
@@ -4773,7 +4518,7 @@ export interface SpatialEffectStateFact {
  * The completed damage result for an observed item, not an actor.
  */
 export interface ObjectDamageFact {
-  kind?: Kind30;
+  kind?: Kind28;
   object_uuid: ObjectUuid1;
   applied_damage: AppliedDamage1;
   resulting_hp: ResultingHp;
@@ -4783,14 +4528,14 @@ export interface ObjectDamageFact {
  * A witnessed break; replacement identity is retained only for old recordings.
  */
 export interface ObjectDestroyedFact {
-  kind?: Kind31;
+  kind?: Kind29;
   object_uuid: ObjectUuid2;
   replacement_uuid?: ReplacementUuid;
   placement: WorldObjectPlacement;
-  item_id: ItemId3;
+  item_id: ItemId2;
   remnant_state?: ItemRemnantState | null;
   destruction_outcome?: DestructionOutcome2;
-  remains_disposition?: RemainsDisposition2;
+  remains_disposition?: RemainsDisposition1;
   previous_item?: FloorItem | null;
   affected_volume?: ObjectSectionVolume | null;
   resulting_placement?: WorldObjectPlacement | null;
@@ -4800,8 +4545,8 @@ export interface ObjectDestroyedFact {
  */
 export interface WorldObjectPlacement {
   object_uuid: ObjectUuid3;
-  tile_uuid: TileUuid1;
-  position: Position5;
+  tile_uuid: TileUuid;
+  position: Position4;
   kind: WorldPlacementKind;
   occupies_bands: OccupiesBands;
   boundary_direction?: CardinalDirection | null;
@@ -4815,38 +4560,38 @@ export interface WorldObjectPlacement {
  * One existing Tile supporting a committed object footprint.
  */
 export interface WorldObjectSupport {
-  position: Position6;
-  tile_uuid: TileUuid2;
+  position: Position5;
+  tile_uuid: TileUuid1;
 }
 export interface FloorItem {
-  item_uuid: ItemUuid5;
-  item_id: ItemId4;
-  name: Name10;
-  visual_item_name: VisualItemName2;
-  visual_variant_id: VisualVariantId2;
-  map_char: MapChar2;
+  item_uuid: ItemUuid7;
+  item_id: ItemId3;
+  name: Name7;
+  visual_item_name: VisualItemName1;
+  visual_variant_id: VisualVariantId1;
+  map_char: MapChar1;
   boundary_structure: BoundaryStructure | null;
   is_open: IsOpen2;
   is_lit: IsLit3;
-  very_bright_radius_feet?: VeryBrightRadiusFeet2;
-  bright_radius_feet?: BrightRadiusFeet2;
-  dim_radius_feet?: DimRadiusFeet2;
+  very_bright_radius_feet?: VeryBrightRadiusFeet1;
+  bright_radius_feet?: BrightRadiusFeet1;
+  dim_radius_feet?: DimRadiusFeet1;
   stack_count?: StackCount2;
-  is_pickable?: IsPickable2;
-  item_effects?: ItemEffects3;
-  blocks_propagation?: BlocksPropagation3;
-  contact_passage?: ContactPassage3;
+  is_pickable?: IsPickable1;
+  item_effects?: ItemEffects1;
+  blocks_propagation?: BlocksPropagation2;
+  contact_passage?: ContactPassage2;
   supported_by_uuid?: SupportedByUuid2;
   is_engaged?: IsEngaged2;
   surface_residues?: SurfaceResidues2;
   current_hit_points?: CurrentHitPoints2;
-  maximum_hit_points?: MaximumHitPoints2;
-  concentration_capacity?: ConcentrationCapacity2;
+  maximum_hit_points?: MaximumHitPoints1;
+  concentration_capacity?: ConcentrationCapacity1;
   concentration_slots?: ConcentrationSlots3;
   door_mechanism?: DoorMechanism | null;
   door_swing?: DoorSwing | null;
   remnant_state?: ItemRemnantState | null;
-  integrity?: ItemIntegrity2;
+  integrity?: ItemIntegrity1;
   destruction_outcome?: DestructionOutcome3;
   construction_owner_uuid?: ConstructionOwnerUuid2;
   construction_geometry?: ConstructionGeometry2;
@@ -4857,10 +4602,10 @@ export interface FloorItem {
  * A witnessed discharge with independently disclosed origin and footprint.
  */
 export interface MechanismActivationFact {
-  kind?: Kind32;
+  kind?: Kind30;
   mechanism_uuid: MechanismUuid;
   mechanism_content_id: MechanismContentId;
-  target_entity_uuid: TargetEntityUuid10;
+  target_entity_uuid: TargetEntityUuid9;
   origin_position: OriginPosition;
   direction: Direction4;
   affected_positions: AffectedPositions;
@@ -4871,8 +4616,8 @@ export interface MechanismActivationFact {
  * The disclosed outcome of one native save, without private roll modifiers.
  */
 export interface SavingThrowFact {
-  kind?: Kind33;
-  target_entity_uuid: TargetEntityUuid11;
+  kind?: Kind31;
+  target_entity_uuid: TargetEntityUuid10;
   ability_name: AbilityName;
   succeeded: Succeeded3;
   effect_id: EffectId2;
@@ -4933,7 +4678,7 @@ export interface PlayerLogEntry {
  *     is_threatened: Whether the attacker was threatened while attacking.
  */
 export interface AttackLogData {
-  kind?: Kind34;
+  kind?: Kind32;
   attacker_name: AttackerName;
   attacker_uuid: AttackerUuid;
   target_name: TargetName1;
@@ -4976,7 +4721,7 @@ export interface DiceRollDisplay {
  *     source: Description of where the modifier originated.
  */
 export interface ModifierBreakdown {
-  name: Name11;
+  name: Name8;
   value: Value2;
   source?: Source;
 }
@@ -4996,7 +4741,7 @@ export interface DamageRollDisplay {
   dice_results?: DiceResults;
   bonus?: Bonus1;
   total: Total1;
-  damage_type: DamageType3;
+  damage_type: DamageType2;
   bonus_breakdown?: BonusBreakdown;
 }
 export interface MovementLogData {
@@ -5011,7 +4756,7 @@ export interface MovementLogData {
   termination_reason?: TerminationReason;
   controller_revalidation?: ControllerRevalidation;
   controller_revalidation_reason?: ControllerRevalidationReason;
-  kind?: Kind35;
+  kind?: Kind33;
 }
 export interface JumpMovementLogData {
   entity_name: EntityName1;
@@ -5025,7 +4770,7 @@ export interface JumpMovementLogData {
   termination_reason?: TerminationReason1;
   controller_revalidation?: ControllerRevalidation1;
   controller_revalidation_reason?: ControllerRevalidationReason1;
-  kind?: Kind36;
+  kind?: Kind34;
   movement_type?: MovementType;
   objective_end_position: ObjectiveEndPosition;
   start_elevation_feet: StartElevationFeet2;
@@ -5044,7 +4789,7 @@ export interface ConnectorMovementLogData {
   termination_reason?: TerminationReason2;
   controller_revalidation?: ControllerRevalidation2;
   controller_revalidation_reason?: ControllerRevalidationReason2;
-  kind?: Kind37;
+  kind?: Kind35;
   movement_type?: MovementType1;
   objective_end_position: ObjectiveEndPosition1;
   start_elevation_feet: StartElevationFeet3;
@@ -5071,7 +4816,7 @@ export interface ConnectorMovementLogData {
  *     source_name: Display name of the effect that requested the save.
  */
 export interface SavingThrowLogData {
-  kind?: Kind38;
+  kind?: Kind36;
   entity_name: EntityName3;
   entity_uuid: EntityUuid9;
   ability: Ability;
@@ -5117,7 +4862,7 @@ export interface DiceRollDisplay1 {
  *     target_hp_after: Target HP after spell resolution, if known.
  */
 export interface SpellSaveLogData {
-  kind?: Kind39;
+  kind?: Kind37;
   caster_name: CasterName;
   caster_uuid: CasterUuid;
   target_name: TargetName2;
@@ -5133,7 +4878,7 @@ export interface SpellSaveLogData {
   damage_rolls?: DamageRolls1;
   base_damage?: BaseDamage;
   final_damage?: FinalDamage;
-  damage_type?: DamageType4;
+  damage_type?: DamageType3;
   target_hp_after?: TargetHpAfter;
 }
 /**
@@ -5152,7 +4897,7 @@ export interface DiceRollDisplay2 {
  * Structured result of one Counterspell reaction.
  */
 export interface SpellInterruptionLogData {
-  kind?: Kind40;
+  kind?: Kind38;
   outcome_code: OutcomeCode1;
   counterspeller_name: CounterspellerName;
   counterspeller_uuid: CounterspellerUuid;
@@ -5180,7 +4925,7 @@ export interface SpellInterruptionLogData {
  *     success: Whether the check succeeded, when a DC exists.
  */
 export interface SkillCheckLogData {
-  kind?: Kind41;
+  kind?: Kind39;
   entity_name: EntityName4;
   entity_uuid: EntityUuid10;
   skill: Skill;
@@ -5215,7 +4960,7 @@ export interface DiceRollDisplay3 {
  *     stealth_dc: Stealth DC that was beaten.
  */
 export interface EntitySpottedLogData {
-  kind?: Kind42;
+  kind?: Kind40;
   observer_name: ObserverName;
   observer_uuid: ObserverUuid1;
   target_name: TargetName3;
@@ -5236,11 +4981,11 @@ export interface EntitySpottedLogData {
  *     stealth_dc: Stealth DC that was beaten.
  */
 export interface HazardDetectedLogData {
-  kind?: Kind43;
+  kind?: Kind41;
   observer_name: ObserverName1;
   observer_uuid: ObserverUuid2;
   hazard_name: HazardName;
-  position: Position7;
+  position: Position6;
   passive_perception: PassivePerception2;
   stealth_dc: StealthDc1;
 }
@@ -5257,10 +5002,10 @@ export interface HazardDetectedLogData {
  *     blocked_reason: Human-readable reason the damage was blocked.
  */
 export interface DamageTakenLogData {
-  kind?: Kind44;
+  kind?: Kind42;
   target_name: TargetName4;
   damage: Damage;
-  damage_type: DamageType5;
+  damage_type: DamageType4;
   source_name: SourceName2;
   effect_id?: EffectId3;
   blocked?: Blocked;
@@ -5276,10 +5021,10 @@ export interface DamageTakenLogData {
  *     source_description: Description of the healing source.
  */
 export interface HealLogData {
-  kind?: Kind45;
+  kind?: Kind43;
   entity_name: EntityName5;
   entity_uuid: EntityUuid11;
-  amount: Amount2;
+  amount: Amount;
   source_description: SourceDescription;
 }
 /**
@@ -5294,7 +5039,7 @@ export interface HealLogData {
  *     target_uuid: UUID string of the target, when the action has one.
  */
 export interface ActionLogData {
-  kind?: Kind46;
+  kind?: Kind44;
   entity_name: EntityName6;
   entity_uuid: EntityUuid12;
   action_name: ActionName;
@@ -5312,7 +5057,7 @@ export interface ActionLogData {
  *     turn_index: Encounter initiative index.
  */
 export interface TurnLogData {
-  kind?: Kind47;
+  kind?: Kind45;
   entity_name: EntityName7;
   entity_uuid: EntityUuid13;
   round_number: RoundNumber1;
@@ -5335,7 +5080,7 @@ export interface TurnLogData {
  *     aoe_center: Area-of-effect origin or center, if applicable.
  */
 export interface MultiEntityLogData {
-  kind?: Kind48;
+  kind?: Kind46;
   action_name: ActionName1;
   caster_name: CasterName1;
   total_targets?: TotalTargets;
@@ -5352,7 +5097,7 @@ export interface MultiEntityLogData {
  * Structured ordered changes made to one effective roll result.
  */
 export interface RollModificationLogData {
-  kind?: Kind49;
+  kind?: Kind47;
   roll_type: RollType;
   modifications: Modifications;
 }
@@ -5374,27 +5119,27 @@ export interface RollModificationLogFact {
   packet_dice?: PacketDice;
 }
 export interface EmptyLogData {
-  kind?: Kind50;
+  kind?: Kind48;
 }
 export interface ConditionRemovedLogData {
-  kind?: Kind51;
+  kind?: Kind49;
   condition_name: ConditionName;
   reveals_target: RevealsTarget;
 }
 export interface DeathLogData {
-  kind?: Kind52;
+  kind?: Kind50;
   entity_name: EntityName8;
   final_hp: FinalHp;
 }
 export interface SpellDamageLogData {
-  kind?: Kind53;
+  kind?: Kind51;
   spell_name: SpellName3;
   target_name: TargetName6;
   damage: Damage1;
-  damage_type: DamageType6;
+  damage_type: DamageType5;
 }
 export interface DeathSaveLogData {
-  kind?: Kind54;
+  kind?: Kind52;
   entity_name: EntityName9;
   entity_uuid: EntityUuid14;
   roll: Roll;
@@ -5407,7 +5152,7 @@ export interface DeathSaveLogData {
   died: Died;
 }
 export interface ShoveLogData {
-  kind?: Kind55;
+  kind?: Kind53;
   action_type?: ActionType;
   target_weight: TargetWeight;
   max_shove_weight: MaxShoveWeight;
@@ -5420,7 +5165,7 @@ export interface ShoveLogData {
   is_ally: IsAlly;
 }
 export interface StepMovementLogData {
-  kind?: Kind56;
+  kind?: Kind54;
   type?: Type;
   from_position: FromPosition1;
   to_position: ToPosition1;
@@ -5434,7 +5179,7 @@ export interface StepMovementLogData {
   committed: Committed3;
 }
 export interface ForcedMovementLogData {
-  kind?: Kind57;
+  kind?: Kind55;
   type?: Type1;
   cause: Cause;
   direction: Direction5;
@@ -5446,7 +5191,7 @@ export interface ForcedMovementLogData {
   end_position: EndPosition8;
 }
 export interface ObservedMovementLogData {
-  kind?: Kind58;
+  kind?: Kind56;
   type?: Type2;
   entity_name: EntityName10;
   entity_uuid: EntityUuid15;
@@ -5461,24 +5206,24 @@ export interface ObservedMovementLogData {
   movement_cost?: MovementCost4;
 }
 export interface UnlocatedMovementLogData {
-  kind?: Kind59;
+  kind?: Kind57;
   type?: Type3;
   observation_complete?: ObservationComplete1;
 }
 export interface UnknownMovementLogData {
-  kind?: Kind60;
+  kind?: Kind58;
   type?: Type4;
   observed?: Observed;
 }
 export interface SpatialChangeLogData {
-  kind?: Kind61;
+  kind?: Kind59;
   operation: SpatialEffectChangeOperation1;
   content_identity: ContentIdentity;
   layer: SpatialEffectLayer;
   affected_positions: AffectedPositions1;
 }
 export interface SpatialInteractionLogData {
-  kind?: Kind62;
+  kind?: Kind60;
   operation: SpatialEffectInteractionOperation;
   intensity: Intensity;
   affected_positions: AffectedPositions2;
@@ -5489,7 +5234,7 @@ export interface ContentAttribution {
   behavior_id: BehaviorId7;
   provided_by_id?: ProvidedById;
   origin_root_id?: OriginRootId;
-  source_entity_uuid?: SourceEntityUuid12;
+  source_entity_uuid?: SourceEntityUuid11;
   triggering_occurrence?: TriggeringOccurrence;
   triggering_lineage?: TriggeringLineage;
   emitted_lineages?: EmittedLineages;
@@ -5505,23 +5250,62 @@ export interface VersionRows {
   lineages?: Lineages;
 }
 /**
- * One actor's observed body at an event, as a patch against what the seat holds,
- * with the patches of the items that body discloses.
+ * A body entering a seat's view at an occurrence: all its changeable fields, its birth the first time,
+ * and the records of the items it shows.
  */
-export interface PlayerObservation {
+export interface BodyRecord {
   occurrence: Occurrence1;
-  actor_uuid: ActorUuid;
-  changes?: ActorChanges;
-  contact?: PerceivedContact | null;
+  actor_uuid: ActorUuid1;
+  birth?: ActorBirth | null;
+  body: BodyState;
   items?: Items1;
 }
 /**
- * One identified entity or object perceived by an observer.
+ * A body's birth fields: no event changes them, so a seat receives them once.
  */
-export interface PerceivedContact {
-  position: Position8;
-  visual: Visual;
-  special_senses?: SpecialSenses;
+export interface ActorBirth {
+  name: Name9;
+  character_body_id: CharacterBodyId;
+  creature_content_ref: CreatureContentRef;
+  appearance: AppearanceConfig;
+  structural_base_size?: Size | null;
+  manifestation?: SummonManifestation | null;
+}
+export interface AppearanceConfig {
+  portrait_key?: PortraitKey1;
+  presentation_kind?: PresentationKind;
+  visual_scale?: VisualScale;
+  visual_scale_x?: VisualScaleX;
+  placeholder_tint?: PlaceholderTint;
+  body_category?: BodyCategory;
+  skin_tint?: SkinTint;
+  head_category?: HeadCategory;
+  hair_tint?: HairTint;
+  has_beard?: HasBeard;
+  beard_tint?: BeardTint;
+}
+/**
+ * Every changeable field of a body, current at its record's occurrence.
+ */
+export interface BodyState {
+  visual_loadout: VisualLoadout;
+  normal_hp: NormalHp;
+  maximum_hp: MaximumHp;
+  temporary_hp: TemporaryHp;
+  life_state: LifeState;
+  armor_class: ArmorClass;
+  temporary_hp_grant?: TemporaryHitPointsGrant | null;
+  conditions?: Conditions;
+  controlled_items?: ControlledItems;
+  occupancy_layer?: OccupancyLayer | null;
+  resolved_size?: Size | null;
+  faction?: Faction;
+  remains_disposition?: RemainsDisposition2;
+  spatial_disposition?: SpatialDisposition1;
+}
+export interface VisualLoadout {
+  active_weapon_set: WeaponSet;
+  layers: Layers;
 }
 /**
  * The world a seat perceives change at one occurrence.
@@ -5542,7 +5326,7 @@ export interface WorldUpdate {
   resolved_light?: CellValues;
   residue_materials?: ResidueMaterials;
   boundary_structures?: BoundaryStructures;
-  residues?: Residues1;
+  residues?: Residues;
   residues_removed?: ResiduesRemoved;
   object_looks?: ObjectLooks;
   objects?: ObjectColumns | null;
@@ -5569,15 +5353,30 @@ export interface CellMask {
 export interface TileLook {
   look_id: LookId;
   surface: TileSurface;
-  name: Name12;
+  name: Name10;
+}
+/**
+ * Immutable semantic composition of one support Tile.
+ */
+export interface TileSurface {
+  base_material: Material;
+  layers?: Layers1;
+  description?: Description6;
+}
+/**
+ * One ordered semantic layer above a Tile base material.
+ */
+export interface SurfaceLayer {
+  material: Material;
+  description?: Description5;
 }
 /**
  * A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new
  * uuid). `look` is its surface and name's `TileLook` content id.
  */
 export interface TileStatic {
-  position: Position9;
-  tile_uuid: TileUuid3;
+  position: Position7;
+  tile_uuid: TileUuid2;
   look: Look;
 }
 /**
@@ -5588,14 +5387,14 @@ export interface TileStatic {
  */
 export interface TileColumns {
   cells: CellMask1;
-  walking_cost: WalkingCost1;
-  flying_cost: FlyingCost1;
-  swimming_cost: SwimmingCost1;
-  burrowing_cost: BurrowingCost1;
+  walking_cost: WalkingCost;
+  flying_cost: FlyingCost;
+  swimming_cost: SwimmingCost;
+  burrowing_cost: BurrowingCost;
   flags: Flags;
   default_light: DefaultLight;
   resolved_light: ResolvedLight;
-  elevation_steps?: ElevationSteps2;
+  elevation_steps?: ElevationSteps1;
 }
 /**
  * A set of map cells: cell (x0 + i, y0 + j) is bit i * height + j of `bits`,
@@ -5612,7 +5411,7 @@ export interface CellMask1 {
  * A tile's own condition names after the occurrence (never its residues' names), in the tile's order.
  */
 export interface TileConditions1 {
-  position: Position10;
+  position: Position8;
   names: Names;
 }
 /**
@@ -5620,7 +5419,7 @@ export interface TileConditions1 {
  * their own rows and its static part never changes.
  */
 export interface TileFieldUpdate {
-  position: Position11;
+  position: Position9;
   changes: WorldTileChanges;
 }
 /**
@@ -5628,13 +5427,13 @@ export interface TileFieldUpdate {
  * unchanged. A tile's surface and name never change for its uuid; its conditions and residues have their own rows.
  */
 export interface WorldTileChanges {
-  blocks_optics?: BlocksOptics3;
-  blocks_propagation?: BlocksPropagation4;
-  walking_cost?: WalkingCost2;
-  flying_cost?: FlyingCost2;
-  swimming_cost?: SwimmingCost2;
-  burrowing_cost?: BurrowingCost2;
-  elevation_steps?: ElevationSteps3;
+  blocks_optics?: BlocksOptics2;
+  blocks_propagation?: BlocksPropagation3;
+  walking_cost?: WalkingCost1;
+  flying_cost?: FlyingCost1;
+  swimming_cost?: SwimmingCost1;
+  burrowing_cost?: BurrowingCost1;
+  elevation_steps?: ElevationSteps2;
   surface_kind?: ElevationSurfaceKind;
   slope_axis?: SlopeAxis | null;
   default_light?: LightLevel;
@@ -5650,10 +5449,10 @@ export interface CellValues {
  * A residue material's fixed part, sent once per residue id.
  */
 export interface ResidueMaterial {
-  residue_id: ResidueId2;
-  name: Name13;
-  description: Description9;
-  max_amount: MaxAmount1;
+  residue_id: ResidueId1;
+  name: Name11;
+  description: Description7;
+  max_amount: MaxAmount;
 }
 /**
  * A boundary structure's value, sent once per seat under its content id (a digest of the value, so a
@@ -5668,11 +5467,11 @@ export interface BoundaryStructureStatic {
  * occurrence's change (`amount` None: unchanged; the contributions it set).
  */
 export interface ResidueRow {
-  position: Position12;
-  residue_id: ResidueId3;
+  position: Position10;
+  residue_id: ResidueId2;
   condition_uuid?: ConditionUuid6;
-  amount?: Amount3;
-  contributions?: Contributions1;
+  amount?: Amount1;
+  contributions?: Contributions;
 }
 /**
  * One contribution of a residue, set at its index (the index after the last appends one).
@@ -5681,9 +5480,25 @@ export interface ContributionRow {
   index: Index1;
   contribution: ResidueContribution;
 }
+/**
+ * Current deposited shape in owning-tile coordinates, without injury history.
+ */
+export interface ResidueContribution {
+  ellipses: Ellipses;
+  amount?: Amount2;
+  deposit_source?: MaterialDepositSource | null;
+}
+/**
+ * One discharge's original frame; current owners retain actual coverage.
+ */
+export interface MaterialDepositSource {
+  deposit_uuid: DepositUuid;
+  origin: Origin3;
+  radius_cells: RadiusCells;
+}
 export interface ResidueKey {
-  position: Position13;
-  residue_id: ResidueId4;
+  position: Position11;
+  residue_id: ResidueId3;
 }
 /**
  * A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid
@@ -5691,15 +5506,15 @@ export interface ResidueKey {
  * cut construction's geometry change, so they are state).
  */
 export interface ObjectLook {
-  item_uuid: ItemUuid6;
-  item_id: ItemId5;
-  visual_variant_id?: VisualVariantId3;
-  contact_passage?: ContactPassage4;
+  item_uuid: ItemUuid8;
+  item_id: ItemId4;
+  visual_variant_id?: VisualVariantId2;
+  contact_passage?: ContactPassage3;
   supported_by_uuid?: SupportedByUuid3;
   door_mechanism?: DoorMechanism | null;
   door_swing?: DoorSwing | null;
-  maximum_hit_points?: MaximumHitPoints3;
-  concentration_capacity?: ConcentrationCapacity3;
+  maximum_hit_points?: MaximumHitPoints2;
+  concentration_capacity?: ConcentrationCapacity2;
   construction_owner_uuid?: ConstructionOwnerUuid3;
   known_to_creator?: KnownToCreator3;
 }
@@ -5712,9 +5527,9 @@ export interface ObjectColumns {
   item_uuids: ItemUuids;
   members?: Column_MemberBits_ | null;
   observed_faces?: ColumnTuple_CardinalDirection__________ | null;
-  name: Name14;
+  name: Name12;
   visual_item_name?: ColumnStr_ | null;
-  map_char: MapChar3;
+  map_char: MapChar2;
   boundary_structure?: ColumnStr_ | null;
   is_open?: ColumnBool_ | null;
   is_lit?: ColumnBool_ | null;
@@ -5847,7 +5662,7 @@ export interface ColumnTuple_SpellSuppression__________ {
  */
 export interface PlacementColumns {
   rows?: RowBits5 | null;
-  position: Position14;
+  position: Position12;
   top_height_steps: TopHeightSteps1;
   boundary_direction?: Column_CardinalDirection_ | null;
   tile_uuid?: Column_UUID_ | null;
@@ -5897,7 +5712,7 @@ export interface ContainerContents {
   items?: Items2;
 }
 export interface ContainedItem {
-  item_uuid: ItemUuid7;
+  item_uuid: ItemUuid9;
   state: ObjectState;
 }
 /**
@@ -5906,25 +5721,25 @@ export interface ContainedItem {
  * id.
  */
 export interface ObjectState {
-  name: Name15;
-  visual_item_name?: VisualItemName3;
-  map_char: MapChar4;
+  name: Name13;
+  visual_item_name?: VisualItemName2;
+  map_char: MapChar3;
   boundary_structure?: BoundaryStructure1;
   is_open?: IsOpen3;
   is_lit?: IsLit4;
-  very_bright_radius_feet?: VeryBrightRadiusFeet3;
-  bright_radius_feet?: BrightRadiusFeet3;
-  dim_radius_feet?: DimRadiusFeet3;
+  very_bright_radius_feet?: VeryBrightRadiusFeet2;
+  bright_radius_feet?: BrightRadiusFeet2;
+  dim_radius_feet?: DimRadiusFeet2;
   stack_count?: StackCount3;
-  is_pickable?: IsPickable3;
-  item_effects?: ItemEffects4;
-  blocks_propagation?: BlocksPropagation5;
+  is_pickable?: IsPickable2;
+  item_effects?: ItemEffects2;
+  blocks_propagation?: BlocksPropagation4;
   is_engaged?: IsEngaged3;
   surface_residues?: SurfaceResidues3;
   current_hit_points?: CurrentHitPoints3;
   concentration_slots?: ConcentrationSlots4;
   remnant_state?: ItemRemnantState | null;
-  integrity?: ItemIntegrity3;
+  integrity?: ItemIntegrity2;
   destruction_outcome?: DestructionOutcome4;
   construction_geometry?: ConstructionGeometry4;
   construction_suppressions?: ConstructionSuppressions3;
@@ -5971,7 +5786,7 @@ export interface PlayerHUDPatch {
  * One sheet's change: its replaced fields and, by key, the new values of resource rows it holds.
  */
 export interface SheetPatch {
-  actor_uuid: ActorUuid1;
+  actor_uuid: ActorUuid2;
   changes: SheetChanges;
   resource_values?: ResourceValues;
 }
@@ -6036,7 +5851,7 @@ export interface ClassChoiceSelection {
  * One spendable channel or resource row of a sheet; its label is fixed by its key.
  */
 export interface PlayerResource {
-  key: Key;
+  key: Key1;
   label: Label;
   current: Current;
   maximum: Maximum;
@@ -6045,7 +5860,7 @@ export interface PlayerResource {
  * Player-toggleable event handler exposed with available actions.
  */
 export interface AvailableHandlerInfo {
-  name: Name16;
+  name: Name14;
   behavior_id: BehaviorId8;
   provided_by_id: ProvidedById1;
   origin_root_id?: OriginRootId1;
@@ -6064,7 +5879,7 @@ export interface PreparedSpellSelection {
  * A resource row's new values, by its key.
  */
 export interface PlayerResourceValue {
-  key: Key1;
+  key: Key2;
   current: Current1;
   maximum: Maximum1;
 }
@@ -6162,7 +5977,7 @@ export interface CellMask2 {
  * satisfying one complete entry is sufficient; planes within it remain AND.
  */
 export interface VolumeSurfaceSight {
-  position: Position15;
+  position: Position13;
   lower_height_planes: LowerHeightPlanes;
 }
 /**
@@ -6174,11 +5989,11 @@ export interface VolumeSurfaceSight {
 export interface LightRow {
   source: Source1;
   revision: Revision1;
-  position: Position16;
+  position: Position14;
   base_height_steps?: BaseHeightSteps6;
-  very_bright_radius_feet: VeryBrightRadiusFeet4;
-  bright_radius_feet: BrightRadiusFeet4;
-  dim_radius_feet: DimRadiusFeet4;
+  very_bright_radius_feet: VeryBrightRadiusFeet3;
+  bright_radius_feet: BrightRadiusFeet3;
+  dim_radius_feet: DimRadiusFeet3;
   appearance?: Appearance;
   actor_anchored?: ActorAnchored;
   anchor_entity?: AnchorEntity;
@@ -6221,12 +6036,12 @@ export interface AckRequest {
   cursor: PlayerCursor;
 }
 export interface AckResponse {
-  kind?: Kind63;
+  kind?: Kind61;
   cursor: PlayerCursor;
   catch_up_cursor: PlayerCursor;
 }
 export interface ChoicesRequest {
-  actor_uuid: ActorUuid2;
+  actor_uuid: ActorUuid3;
   state_revision: StateRevision1;
   force_attack: ForceAttack;
   correlation_id: CorrelationId;
@@ -6235,7 +6050,7 @@ export interface ChoicesResponse {
   game_id: GameId2;
   game_epoch: GameEpoch2;
   audience_id: AudienceId2;
-  kind?: Kind64;
+  kind?: Kind62;
   state_revision: StateRevision2;
   correlation_id: CorrelationId1;
   force_attack: ForceAttack1;
@@ -6257,8 +6072,8 @@ export interface PlayerChoices {
 }
 export interface ChoiceSubject {
   uuid: Uuid2;
-  kind: Kind65;
-  name?: Name17;
+  kind: Kind63;
+  name?: Name15;
 }
 export interface SubjectBinding {
   index: Index2;
@@ -6272,9 +6087,9 @@ export interface SubjectBinding {
   safe_path?: SafePath;
   opportunity_attack_exposures?: OpportunityAttackExposures;
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures;
-  kind: Kind66;
+  kind: Kind64;
   subject: Subject;
-  position?: Position17;
+  position?: Position15;
 }
 export interface ChoiceExposure {
   reactor_uuid: ReactorUuid;
@@ -6294,8 +6109,8 @@ export interface PositionBinding {
   safe_path?: SafePath1;
   opportunity_attack_exposures?: OpportunityAttackExposures1;
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures1;
-  kind: Kind67;
-  position: Position18;
+  kind: Kind65;
+  position: Position16;
 }
 export interface SelfBinding {
   index: Index4;
@@ -6309,7 +6124,7 @@ export interface SelfBinding {
   safe_path?: SafePath2;
   opportunity_attack_exposures?: OpportunityAttackExposures2;
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures2;
-  kind: Kind68;
+  kind: Kind66;
 }
 export interface PlayerAction {
   discovery_generation?: DiscoveryGeneration1;
@@ -6337,7 +6152,7 @@ export interface PlayerAction {
   availability_status: ActionAvailabilityStatus;
   can_afford: CanAfford;
   display_name: DisplayName2;
-  description?: Description10;
+  description?: Description8;
   cost_type: CostType;
   cost_amount?: CostAmount;
   restricted_action_budget?: RestrictedActionBudget;
@@ -6394,13 +6209,13 @@ export interface PlayerAction {
  * One selected position, such as a ring's center.
  */
 export interface SinglePositionSelection {
-  kind?: Kind69;
+  kind?: Kind67;
 }
 /**
  * Ordered vertices with an authored segment/length budget.
  */
 export interface PositionPathSelection {
-  kind?: Kind70;
+  kind?: Kind68;
   max_length_feet: MaxLengthFeet;
   max_segments?: MaxSegments;
   allow_origin_start?: AllowOriginStart;
@@ -6410,7 +6225,7 @@ export interface PositionPathSelection {
  * One creature followed by one independently selected destination.
  */
 export interface EntityDestinationSelection {
-  kind?: Kind71;
+  kind?: Kind69;
 }
 /**
  * Where a position action may aim (plan §14.4 region descriptors).
@@ -6430,7 +6245,7 @@ export interface PositionRegion {
  * Serializable action cost without executable callbacks.
  */
 export interface BaseCost {
-  name?: Name18;
+  name?: Name16;
   cost_type: CostType1;
   cost: Cost;
   resource_name?: ResourceName;
@@ -6466,7 +6281,7 @@ export interface DamageRollProfile {
   dice_count: DiceCount;
   die_size: DieSize;
   flat_bonus?: FlatBonus;
-  damage_type: DamageType7;
+  damage_type: DamageType6;
   save_dc?: SaveDc1;
   save_ability?: SaveAbility1;
   double_on_critical?: DoubleOnCritical;
@@ -6573,7 +6388,7 @@ export interface TopologyEffectProfile {
  * A published cost paid only when the declared trigger occurs.
  */
 export interface ConditionalCost {
-  name?: Name19;
+  name?: Name17;
   cost_type: CostType2;
   cost: Cost1;
   resource_name?: ResourceName1;
@@ -6584,7 +6399,7 @@ export interface ConditionalCost {
  * One action-owned choice exposed without parsing execution tokens.
  */
 export interface ActionVariantFacet {
-  key: Key2;
+  key: Key3;
   value: Value3;
   label: Label1;
 }
@@ -6639,7 +6454,7 @@ export interface AvailableWorldInteraction {
   subject_uuid: SubjectUuid;
   behavior_id: BehaviorId10;
   label: Label2;
-  description?: Description11;
+  description?: Description9;
   default_priority?: DefaultPriority1;
   contact_positions?: ContactPositions1;
   connector_uuid?: ConnectorUuid3;
@@ -6649,7 +6464,7 @@ export interface AvailableWorldInteraction {
   reason?: Reason2;
 }
 export interface PreviewRequest {
-  actor_uuid: ActorUuid3;
+  actor_uuid: ActorUuid4;
   state_revision: StateRevision3;
   discovery_generation: DiscoveryGeneration2;
   correlation_id: CorrelationId2;
@@ -6666,7 +6481,7 @@ export interface PreviewResponse {
   game_id: GameId3;
   game_epoch: GameEpoch3;
   audience_id: AudienceId3;
-  kind?: Kind72;
+  kind?: Kind70;
   state_revision: StateRevision4;
   request: PreviewRequest;
   preview: PlayerSelectionPreview;
@@ -6709,35 +6524,35 @@ export interface OpportunityAttackExposure {
 }
 export interface CommandRequest {
   command_number: CommandNumber;
-  actor_uuid: ActorUuid4;
+  actor_uuid: ActorUuid5;
   state_revision: StateRevision5;
   intent: Intent;
 }
 export interface ExecuteSelectionIntent {
-  kind?: Kind73;
+  kind?: Kind71;
   discovery_generation: DiscoveryGeneration3;
   selection: ActionSelection;
 }
 export interface EndTurnIntent {
-  kind?: Kind74;
+  kind?: Kind72;
 }
 export interface EquipIntent {
-  kind?: Kind75;
+  kind?: Kind73;
   item: EquipItem;
 }
 export interface EquipItem {
-  item_uuid: ItemUuid8;
-  slot: Slot1;
+  item_uuid: ItemUuid10;
+  slot: Slot2;
 }
 export interface UnequipIntent {
-  kind?: Kind76;
+  kind?: Kind74;
   item: UnequipItem;
 }
 export interface UnequipItem {
-  slot: Slot2;
+  slot: Slot3;
 }
 export interface ToggleHandlerIntent {
-  kind?: Kind77;
+  kind?: Kind75;
   discovery_generation: DiscoveryGeneration4;
   handler: ToggleHandler;
 }
@@ -6746,11 +6561,11 @@ export interface ToggleHandler {
   enabled: Enabled2;
 }
 export interface PrepareSpellsIntent {
-  kind?: Kind78;
+  kind?: Kind76;
   selection: PreparedSpellSelection;
 }
 export interface StudySpellMasteryIntent {
-  kind?: Kind79;
+  kind?: Kind77;
   selection: SpellMasteryStudy;
 }
 export interface SpellMasteryStudy {
@@ -6759,7 +6574,7 @@ export interface SpellMasteryStudy {
   hours?: Hours;
 }
 export interface ReceiptResponse {
-  kind?: Kind80;
+  kind?: Kind78;
   receipt: Receipt;
 }
 export interface PendingReceipt {
@@ -6767,14 +6582,14 @@ export interface PendingReceipt {
   game_epoch: GameEpoch4;
   audience_id: AudienceId4;
   command_number: CommandNumber1;
-  kind?: Kind81;
+  kind?: Kind79;
 }
 export interface CommittedReceipt {
   game_id: GameId5;
   game_epoch: GameEpoch5;
   audience_id: AudienceId5;
   command_number: CommandNumber2;
-  kind?: Kind82;
+  kind?: Kind80;
   cursor: PlayerCursor;
 }
 export interface RejectedReceipt {
@@ -6782,7 +6597,7 @@ export interface RejectedReceipt {
   game_epoch: GameEpoch6;
   audience_id: AudienceId6;
   command_number: CommandNumber3;
-  kind?: Kind83;
+  kind?: Kind81;
   reason: Reason4;
 }
 export interface IndeterminateReceipt {
@@ -6790,7 +6605,7 @@ export interface IndeterminateReceipt {
   game_epoch: GameEpoch7;
   audience_id: AudienceId7;
   command_number: CommandNumber4;
-  kind?: Kind84;
+  kind?: Kind82;
   incident_id: IncidentId1;
 }
 export interface ExpiredReceipt {
@@ -6798,29 +6613,29 @@ export interface ExpiredReceipt {
   game_epoch: GameEpoch8;
   audience_id: AudienceId8;
   command_number: CommandNumber5;
-  kind?: Kind85;
+  kind?: Kind83;
 }
 export interface UnknownReceipt {
   game_id: GameId9;
   game_epoch: GameEpoch9;
   audience_id: AudienceId9;
   command_number: CommandNumber6;
-  kind?: Kind86;
+  kind?: Kind84;
 }
 export interface ContentResponse {
-  kind?: Kind87;
+  kind?: Kind85;
   revision: Revision2;
   descriptors: Descriptors;
 }
 export interface StreamReady {
-  kind?: Kind88;
+  kind?: Kind86;
   protocol: ProtocolIdentity;
   after: PlayerCursor;
   head: PlayerCursor;
   status: StatusSnapshot;
 }
 export interface StreamStatus {
-  kind?: Kind89;
+  kind?: Kind87;
   status: StatusSnapshot;
 }
 export interface PlayerOperation {
@@ -6829,7 +6644,7 @@ export interface PlayerOperation {
   hud: PlayerHUDPatch | null;
   combat_log_appends: CombatLogAppends;
   content_additions: ContentAdditions1;
-  kind?: Kind90;
+  kind?: Kind88;
   protocol: ProtocolIdentity;
   cursor: PlayerCursor;
   state_revision: StateRevision6;
@@ -6845,7 +6660,7 @@ export interface PlayerLineage {
   version_rows: VersionRows;
   start_cursor: StartCursor;
   end_cursor: EndCursor1;
-  observations?: Observations1;
+  bodies?: Bodies1;
   world_updates?: WorldUpdates1;
   audience?: PlayerAudience | null;
   sensory_rows?: SensoryRows1;
@@ -6893,98 +6708,98 @@ export interface CombatLogAppend {
   entry: PlayerLogEntry;
 }
 export interface ErrorInvalidRequest {
-  kind?: Kind91;
+  kind?: Kind89;
   incident_id?: IncidentId2;
   code?: Code;
   http_status?: HttpStatus;
   retryable?: Retryable;
 }
 export interface ErrorUnauthenticated {
-  kind?: Kind92;
+  kind?: Kind90;
   incident_id?: IncidentId3;
   code?: Code1;
   http_status?: HttpStatus1;
   retryable?: Retryable1;
 }
 export interface ErrorForbidden {
-  kind?: Kind93;
+  kind?: Kind91;
   incident_id?: IncidentId4;
   code?: Code2;
   http_status?: HttpStatus2;
   retryable?: Retryable2;
 }
 export interface ErrorGameNotFound {
-  kind?: Kind94;
+  kind?: Kind92;
   incident_id?: IncidentId5;
   code?: Code3;
   http_status?: HttpStatus3;
   retryable?: Retryable3;
 }
 export interface ErrorEpochMismatch {
-  kind?: Kind95;
+  kind?: Kind93;
   incident_id?: IncidentId6;
   code?: Code4;
   http_status?: HttpStatus4;
   retryable?: Retryable4;
 }
 export interface ErrorAudienceMismatch {
-  kind?: Kind96;
+  kind?: Kind94;
   incident_id?: IncidentId7;
   code?: Code5;
   http_status?: HttpStatus5;
   retryable?: Retryable5;
 }
 export interface ErrorAttachmentReplaced {
-  kind?: Kind97;
+  kind?: Kind95;
   incident_id?: IncidentId8;
   code?: Code6;
   http_status?: HttpStatus6;
   retryable?: Retryable6;
 }
 export interface ErrorAttachmentConflict {
-  kind?: Kind98;
+  kind?: Kind96;
   incident_id?: IncidentId9;
   code?: Code7;
   http_status?: HttpStatus7;
   retryable?: Retryable7;
 }
 export interface ErrorCommandConflict {
-  kind?: Kind99;
+  kind?: Kind97;
   incident_id?: IncidentId10;
   code?: Code8;
   http_status?: HttpStatus8;
   retryable?: Retryable8;
 }
 export interface ErrorCommandNumber {
-  kind?: Kind100;
+  kind?: Kind98;
   incident_id?: IncidentId11;
   code?: Code9;
   http_status?: HttpStatus9;
   retryable?: Retryable9;
 }
 export interface ErrorStaleState {
-  kind?: Kind101;
+  kind?: Kind99;
   incident_id?: IncidentId12;
   code?: Code10;
   http_status?: HttpStatus10;
   retryable?: Retryable10;
 }
 export interface ErrorStaleDiscovery {
-  kind?: Kind102;
+  kind?: Kind100;
   incident_id?: IncidentId13;
   code?: Code11;
   http_status?: HttpStatus11;
   retryable?: Retryable11;
 }
 export interface ErrorNotYourTurn {
-  kind?: Kind103;
+  kind?: Kind101;
   incident_id?: IncidentId14;
   code?: Code12;
   http_status?: HttpStatus12;
   retryable?: Retryable12;
 }
 export interface ErrorCatchUpRequired {
-  kind?: Kind104;
+  kind?: Kind102;
   incident_id?: IncidentId15;
   code?: Code13;
   http_status?: HttpStatus13;
@@ -6992,21 +6807,21 @@ export interface ErrorCatchUpRequired {
   required_cursor: PlayerCursor;
 }
 export interface ErrorQuerySuperseded {
-  kind?: Kind105;
+  kind?: Kind103;
   incident_id?: IncidentId16;
   code?: Code14;
   http_status?: HttpStatus14;
   retryable?: Retryable14;
 }
 export interface ErrorInvalidCursor {
-  kind?: Kind106;
+  kind?: Kind104;
   incident_id?: IncidentId17;
   code?: Code15;
   http_status?: HttpStatus15;
   retryable?: Retryable15;
 }
 export interface ErrorResumeUnavailable {
-  kind?: Kind107;
+  kind?: Kind105;
   incident_id?: IncidentId18;
   code?: Code16;
   http_status?: HttpStatus16;
@@ -7014,28 +6829,28 @@ export interface ErrorResumeUnavailable {
   earliest_cursor: PlayerCursor | null;
 }
 export interface ErrorProtocolMismatch {
-  kind?: Kind108;
+  kind?: Kind106;
   incident_id?: IncidentId19;
   code?: Code17;
   http_status?: HttpStatus17;
   retryable?: Retryable17;
 }
 export interface ErrorRequestTooLarge {
-  kind?: Kind109;
+  kind?: Kind107;
   incident_id?: IncidentId20;
   code?: Code18;
   http_status?: HttpStatus18;
   retryable?: Retryable18;
 }
 export interface ErrorResponseTooLarge {
-  kind?: Kind110;
+  kind?: Kind108;
   incident_id?: IncidentId21;
   code?: Code19;
   http_status?: HttpStatus19;
   retryable?: Retryable19;
 }
 export interface ErrorBusy {
-  kind?: Kind111;
+  kind?: Kind109;
   incident_id?: IncidentId22;
   code?: Code20;
   http_status?: HttpStatus20;
@@ -7043,7 +6858,7 @@ export interface ErrorBusy {
   retry_after_ms?: RetryAfterMs;
 }
 export interface ErrorStarting {
-  kind?: Kind112;
+  kind?: Kind110;
   incident_id?: IncidentId23;
   code?: Code21;
   http_status?: HttpStatus21;
@@ -7051,7 +6866,7 @@ export interface ErrorStarting {
   retry_after_ms?: RetryAfterMs1;
 }
 export interface ErrorRecordingCapacity {
-  kind?: Kind113;
+  kind?: Kind111;
   incident_id?: IncidentId24;
   code?: Code22;
   http_status?: HttpStatus22;
@@ -7059,28 +6874,28 @@ export interface ErrorRecordingCapacity {
   retry_after_ms?: RetryAfterMs2;
 }
 export interface ErrorGameTerminal {
-  kind?: Kind114;
+  kind?: Kind112;
   incident_id?: IncidentId25;
   code?: Code23;
   http_status?: HttpStatus23;
   retryable?: Retryable23;
 }
 export interface ErrorGameFailed {
-  kind?: Kind115;
+  kind?: Kind113;
   incident_id?: IncidentId26;
   code?: Code24;
   http_status?: HttpStatus24;
   retryable?: Retryable24;
 }
 export interface ErrorGameClosed {
-  kind?: Kind116;
+  kind?: Kind114;
   incident_id?: IncidentId27;
   code?: Code25;
   http_status?: HttpStatus25;
   retryable?: Retryable25;
 }
 export interface ErrorInternalFailure {
-  kind?: Kind117;
+  kind?: Kind115;
   incident_id?: IncidentId28;
   code?: Code26;
   http_status?: HttpStatus26;

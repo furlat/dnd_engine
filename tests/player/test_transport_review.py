@@ -135,7 +135,7 @@ def test_stream_drains_terminal_publication_that_arrives_during_send(tmp_path):
                 generation=uuid4(), observer_uuid=actor, audience=audience,
                 world=PlayerWorld(battlefield_id="review", battlefield_name="Review", bounds=(0, 0, 1, 1),
                     width=1, height=1), nodes=(), version_rows=(), end_cursor=0,
-                observations=(), world_updates=()))
+                world_updates=()))
 
         def publish(sequence, lifecycle):
             boundary = wire.BoundaryState(lifecycle=lifecycle, input_actor_uuid=None, state_revision=None)

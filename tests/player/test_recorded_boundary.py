@@ -13,7 +13,8 @@ from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.player.audience import resolve_audience
 from dnd.player.capture import capture_interval, capture_lineages
-from dnd.player.facts import CombatLogAppend, ConditionChangeFact, PlayerLogEntry, PlayerState, PlayerWorld
+from dnd.player.facts import ActorChangeFact, CombatLogAppend, PlayerLogEntry, PlayerNode, PlayerState, PlayerWorld
+from dnd.types.actor_facts import ConditionRow, DurationRow
 from dnd.player.projection import SessionProjection, ProjectionState, begin_projection, project_lineage, project_log_appends
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.runtime_reset import reset_engine_runtime
@@ -31,7 +32,7 @@ def test_after_values_wait_for_all_disclosed_occurrences(native_order, expected)
     generation, observer = uuid4(), uuid4()
     world = PlayerWorld(battlefield_id="test", battlefield_name="Test",
         bounds=(0, 0, 1, 1), width=2, height=2)
-    projection = ProjectionState(generation=generation, observer_uuid=observer, actors={},
+    projection = ProjectionState(generation=generation, observer_uuid=observer,
         remembered=PlayerState(generation=generation, observer_uuid=observer, world=world),
         audience=resolve_audience(observer, None), public_cursors={native: local for local, native in enumerate(native_order)}, next_occurrence=len(native_order))
     entry = PlayerLogEntry(entry_type=CombatLogEntryType.ACTION, source_name="", source_uuid="", target_name=None,
@@ -60,6 +61,14 @@ def world():
     finally:
         game.close()
         reset_engine_runtime()
+
+
+def condition_nodes(nodes: tuple[PlayerNode, ...], identity) -> list[PlayerNode]:
+    """The nodes whose actor change sets, ends or re-times the membership `identity`."""
+    return [node for node in nodes if isinstance(node.fact, ActorChangeFact) and any(
+        isinstance(row, ConditionRow) and row.condition_uuid == identity
+        or isinstance(row, DurationRow) and row.key == identity
+        for change in node.fact.actors for row in change.rows)]
 
 
 def start_view(session, built, actor):
@@ -98,11 +107,11 @@ def test_condition_remaining_duration_is_recorded_under_turn_and_private_to_owne
         assert member.state is not None
         if actor is owner:
             assert member.state.duration.remaining_rounds == 2
-            changed = [node for node in delivered[-1].events if isinstance(node.fact, ConditionChangeFact)]
+            changed = condition_nodes(delivered[-1].events, condition.uuid)
             root = delivered[-1].root
             assert root is not None
             assert len(changed) == 1 and changed[0].parent_lineage == delivered[-1].events[root].lineage
-            application = next(node for node in delivered[0].events if isinstance(node.fact, ConditionChangeFact))
+            application, = condition_nodes(delivered[0].events, condition.uuid)
             origin = application.occurrence
             assert member.state.applied_source_event_cursor == origin + 1
         else:
