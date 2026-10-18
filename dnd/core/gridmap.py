@@ -17,8 +17,9 @@ from pydantic import BaseModel, Field
 
 from dnd.types.event_facts import GroupEntryKind, LandingKind
 from dnd.core.geometry import circle_positions, grid_distance_feet, supercover_line
-from dnd.core.view import (CARDINAL_DIRECTIONS, CARDINAL_STEPS, OPPOSITE_CARDINAL, Box, CellLayer, boxes_intersect,
-    cell_visible, cells_layer, embed, layer_value, layer_window, union_box, wall_visibility)
+from dnd.core.view import (CARDINAL_DIRECTIONS, CARDINAL_STEPS, EDGE_SHIFTS, OPPOSITE_CARDINAL, Box, CellLayer,
+    boxes_intersect, cell_visible, cells_layer, compact_window_groups, covering_box, embed, entered_by, layer_value,
+    layer_window, union_box, wall_visibility)
 from dnd.core.elevation import support_distance_feet
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.shadowcast import compute_fov
@@ -112,6 +113,10 @@ CENTER_BLOCKS = 1 << 12
 UNSETTLE_EDGES = np.uint16(0xFFFF ^ EDGES_SETTLED)
 TRANSIT_CHANNELS = (WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION)
 CARDINAL_INDEX = {direction: index for index, direction in enumerate(CARDINAL_DIRECTIONS)}
+CARDINAL_STEP_X = np.array([step[0] for step in CARDINAL_STEPS])
+CARDINAL_STEP_Y = np.array([step[1] for step in CARDINAL_STEPS])
+CARDINAL_STEP_X.setflags(write=False)
+CARDINAL_STEP_Y.setflags(write=False)
 _READ_OFFSETS = np.array([(dx, dy) for dx in range(-TRANSITION_READ_REACH, TRANSITION_READ_REACH + 1)
                           for dy in range(-TRANSITION_READ_REACH, TRANSITION_READ_REACH + 1)], dtype=np.int64)
 
@@ -188,6 +193,31 @@ class PropagationEntry(NamedTuple):
 
     box: Optional[CellBox]
     positions: Tuple[Tuple[int, int], ...]
+
+
+class WallFovRequest(NamedTuple):
+    """One origin of a `_compute_directional_fovs` batch: its request index, its squared distance and its
+    window (the map bounds within the distance)."""
+
+    index: int
+    origin: Tuple[int, int]
+    radius_squared: float
+    window: CellBox
+
+
+def sight_reaches(held: Optional[float], wanted: Optional[float]) -> bool:
+    """Whether a sight answer solved within ``held`` cells (None: unbounded) answers one within ``wanted``."""
+    return held is None or (wanted is not None and held >= wanted)
+
+
+def sight_within(entry: SightEntry, origin: Tuple[int, int], max_distance: Optional[float]) -> List[Tuple[int, int]]:
+    """A kept sight answer cut to ``max_distance`` (which it reaches: `sight_reaches`), as a new list."""
+    if max_distance == entry.distance:
+        return list(entry.positions)
+    assert max_distance is not None
+    radius_squared = max_distance * max_distance
+    return [position for position in entry.positions
+            if ((position[0] - origin[0]) ** 2 + (position[1] - origin[1]) ** 2) <= radius_squared]
 
 
 class PathEntry(NamedTuple):
@@ -4683,73 +4713,106 @@ class GridMap:
         """Public transition-aware line check for physical topology."""
         return self._transition_clear(start, end, channel)
 
-    def _compute_directional_fov(
+    def _compute_directional_fovs(
         self,
-        origin: Tuple[int, int],
-        max_distance: Optional[float],
+        requests: Sequence[Tuple[Tuple[int, int], Optional[float]]],
         channel: WorldEdgeChannel,
-    ) -> List[Tuple[int, int]]:
-        """The Tiles the channel's native ray reaches from ``origin`` (``raycast_clear``), x-major.
+    ) -> List[List[Tuple[int, int]]]:
+        """For each (origin, max_distance), the Tiles the channel's native ray reaches from the origin
+        (``raycast_clear``), x-major; nothing from an origin without a Tile.
 
-        Targets are the Tiles in the map bounds within ``max_distance`` (the whole bounds when
-        None), at any reach. One array solve
-        (`wall_visibility`) over the channel's transit grid: the written center bits, and the
-        answers of the structured edges -- every edge while a global crossing owner exists --
-        with the unsettled ones a route from here crosses settled first. Any other edge between
-        two Tiles is open.
+        Targets are the Tiles in the map bounds within the distance (the whole bounds when None), at
+        any reach. One array solve per group of origins (`wall_visibility`) over the channel's transit
+        grid: the written center bits, and the answers of the structured edges -- every edge while a
+        global crossing owner exists -- with the unsettled ones a route from one of the origins
+        crosses settled first. Any other edge between two Tiles is open. An unsettled edge that no
+        route of an origin decides is open in its solve whatever its answer, so settling every
+        origin's edges before the solve gives each origin its own answer.
+
+        The origins share the transit arrays and entry layers of the box covering their windows, in
+        groups whose box holds no more cells than their windows (`compact_window_groups`): the
+        shared work never exceeds the windows' own. The groups settle in turn.
         """
         timing = action_timing_enabled()
         total_started = time.perf_counter() if timing else 0.0
-        if origin not in self._tiles:
-            return []
         if self._bounds_dirty:
             self._update_bounds()
-        radius = max_distance if max_distance is not None else max(self.width, self.height)
-        min_x = max(self._min_x, math.floor(origin[0] - radius))
-        max_x = min(self._max_x, math.ceil(origin[0] + radius))
-        min_y = max(self._min_y, math.floor(origin[1] - radius))
-        max_y = min(self._max_y, math.ceil(origin[1] + radius))
-        if min_x > max_x or min_y > max_y:
-            return []
-        window = (min_x, min_y, max_x, max_y)
-        dx = np.arange(min_x - origin[0], max_x - origin[0] + 1)
-        dy = np.arange(min_y - origin[1], max_y - origin[1] + 1)
-        exists = layer_window(self._cell_exists, window)
-        radius_squared = max_distance * max_distance if max_distance is not None else math.inf
-        targets = exists & ((dx * dx)[:, None] + (dy * dy)[None, :] <= radius_squared)
-        transit = layer_window(self._transit[channel], window)
+        answers: List[List[Tuple[int, int]]] = [[] for _ in requests]
+        asked: List[WallFovRequest] = []
+        for index, (origin, max_distance) in enumerate(requests):
+            if origin not in self._tiles:
+                continue
+            radius = max_distance if max_distance is not None else max(self.width, self.height)
+            window = (max(self._min_x, math.floor(origin[0] - radius)), max(self._min_y, math.floor(origin[1] - radius)),
+                      min(self._max_x, math.ceil(origin[0] + radius)), min(self._max_y, math.ceil(origin[1] + radius)))
+            if window[0] <= window[2] and window[1] <= window[3]:
+                asked.append(WallFovRequest(index, origin, max_distance * max_distance if max_distance is not None
+                                            else math.inf, window))
+        for group in compact_window_groups([request.window for request in asked]):
+            members = [asked[member] for member in group]
+            for request, answer in zip(members, self._solve_directional_group(members, channel)):
+                answers[request.index] = answer
+        if timing:
+            record_action_count("grid.directional_fov.origins", len(asked))
+            record_action_timing("grid.directional_fov.total_ms", total_started)
+        return answers
+
+    def _solve_directional_group(self, asked: Sequence[WallFovRequest],
+                                 channel: WorldEdgeChannel) -> List[List[Tuple[int, int]]]:
+        """One group of `_compute_directional_fovs`, solved over the box covering its windows: each
+        request's answer, in order."""
+        timing = action_timing_enabled()
+        box = covering_box([request.window for request in asked])
+        exists = layer_window(self._cell_exists, box)
+        # A view of the grid: it holds the answers `_settled_edge` writes below.
+        transit = layer_window(self._transit[channel], box)
         # A global crossing owner may block any edge; otherwise only structured edges can.
         structured = (np.full(transit.shape, ALL_EDGES, dtype=np.uint16) if self._global_crossing_owners
                       else (transit >> EDGE_STRUCTURED_SHIFT) & ALL_EDGES)
         opaque = (transit & CENTER_BLOCKS) != 0
-        # A route from this origin steps away from it (east from its column on, west up to it,
-        # ...), between targets, and stops at an opaque cell it leaves: only such structured
-        # edges can decide one, so only their unsettled answers are settled.
-        leaving = targets & ~opaque
-        oi, oj = origin[0] - min_x, origin[1] - min_y
-        leaving[oi, oj] = True
-        settled = 0
+        # The unsettled structured edges between two Tiles, by direction, then x-major: the answers a
+        # route from one of the group's origins may need. Each is settled once, for the first origin
+        # that needs it.
+        width, height = exists.shape
+        candidates = np.zeros((len(CARDINAL_STEPS), width, height), dtype=bool)
         for direction, (step_x, step_y) in enumerate(CARDINAL_STEPS):
-            i0 = oi if step_x > 0 else 0
-            j0 = oj if step_y > 0 else 0
-            xs = slice(i0, oi + 1 if step_x < 0 else None)
-            ys = slice(j0, oj + 1 if step_y < 0 else None)
-            unsettled = leaving[xs, ys] & ((structured[xs, ys] & ~transit[xs, ys] & (1 << direction)) != 0)
-            for i, j in zip(*np.nonzero(unsettled)):
-                i, j = i0 + int(i), j0 + int(j)
-                if 0 <= i + step_x < targets.shape[0] and 0 <= j + step_y < targets.shape[1] \
-                        and targets[i + step_x, j + step_y]:
-                    self._settled_edge(channel, (min_x + i, min_y + j), direction)
-                    settled += 1
-        transit = layer_window(self._transit[channel], window)   # with the answers just settled
+            (enters_x, leaves_x), (enters_y, leaves_y) = entered_by(step_x, width), entered_by(step_y, height)
+            candidates[direction, leaves_x, leaves_y] = exists[enters_x, enters_y]
+        candidates &= exists[None] & ((((structured & ~transit)[None] >> EDGE_SHIFTS) & 1) != 0)
+        edge_direction, edge_x, edge_y = np.nonzero(candidates)
+        edge_step_x, edge_step_y = CARDINAL_STEP_X[edge_direction], CARDINAL_STEP_Y[edge_direction]
+        edge_opaque = opaque[edge_x, edge_y]
+        unsettled = np.ones(edge_x.size, dtype=bool)
+        solves: List[Tuple[Tuple[int, int], CellBox, np.ndarray]] = []
+        for _, origin, radius_squared, window in asked:
+            dx = np.arange(window[0] - origin[0], window[2] - origin[0] + 1)
+            dy = np.arange(window[1] - origin[1], window[3] - origin[1] + 1)
+            wx, wy = window[0] - box[0], window[1] - box[1]
+            targets = (exists[wx:wx + dx.size, wy:wy + dy.size]
+                       & ((dx * dx)[:, None] + (dy * dy)[None, :] <= radius_squared))
+            solves.append((origin, window, targets))
+            if not edge_x.size:
+                continue
+            # A route from this origin steps away from it (east from its column on, west up to it, ...),
+            # between targets, and stops at an opaque cell it leaves: only such edges can decide one.
+            off_x, off_y = edge_x - (origin[0] - box[0]), edge_y - (origin[1] - box[1])
+            needed = (unsettled & np.where(edge_step_x != 0, edge_step_x * off_x >= 0, edge_step_y * off_y >= 0)
+                      & (~edge_opaque | ((off_x == 0) & (off_y == 0)))
+                      & (off_x * off_x + off_y * off_y <= radius_squared)
+                      & ((off_x + edge_step_x) ** 2 + (off_y + edge_step_y) ** 2 <= radius_squared))
+            for i, j, direction in zip(edge_x[needed].tolist(), edge_y[needed].tolist(),
+                                       edge_direction[needed].tolist()):
+                self._settled_edge(channel, (box[0] + i, box[1] + j), direction)
+            unsettled &= ~needed
         blocked = (transit >> EDGE_BLOCKED_SHIFT) & structured & (transit & EDGES_SETTLED)
-        rows_x, rows_y = wall_visibility(origin, window, exists, opaque, blocked, targets)
+        clear = wall_visibility(CellLayer(box[0], box[1], ~exists | opaque), CellLayer(box[0], box[1], blocked), solves)
         if timing:
-            record_action_count("grid.directional_fov.targets", int(np.count_nonzero(targets)))
-            record_action_count("grid.directional_fov.settled_predicates", settled)
-            record_action_count("grid.directional_fov.visible_targets", len(rows_x))
-            record_action_timing("grid.directional_fov.total_ms", total_started)
-        return layer_window(self._cell_positions, window)[rows_x, rows_y].tolist()
+            record_action_count("grid.directional_fov.targets", sum(int(np.count_nonzero(targets))
+                                                                    for _, _, targets in solves))
+            record_action_count("grid.directional_fov.settled_predicates", int(np.count_nonzero(~unsettled)))
+            record_action_count("grid.directional_fov.visible_targets", sum(len(rows_x) for rows_x, _ in clear))
+        return [layer_window(self._cell_positions, request.window)[rows_x, rows_y].tolist()
+                for request, (rows_x, rows_y) in zip(asked, clear)]
 
     def upper_volume_sight_planes(
         self, origin: Tuple[int, int], destination: Tuple[int, int],
@@ -4808,57 +4871,59 @@ class GridMap:
         origin: Tuple[int, int],
         max_distance: Optional[float] = None,
     ) -> List[Tuple[int, int]]:
-        """
-        Compute field of view from a position using shadowcasting.
+        """`compute_fovs` for one (origin, max_distance)."""
+        return self.compute_fovs(((origin, max_distance),))[0]
 
-        Args:
-            origin: Position to compute FOV from
-            max_distance: Maximum view distance
-        Returns list of visible positions. With an optical boundary on the map the solve is the
-        wall FOV over the map bounds within ``max_distance``.
+    def compute_fovs(
+        self,
+        requests: Sequence[Tuple[Tuple[int, int], Optional[float]]],
+    ) -> List[List[Tuple[int, int]]]:
+        """The cells visible from each origin within its max distance (None: unbounded), x-major on a
+        map with an optical boundary.
+
+        Each origin is answered once, as far as its farthest request asks: by its kept entry when that
+        one reaches as far, else by a fresh solve kept in its place. With an optical boundary on the map
+        the fresh solves are one `_compute_directional_fovs` call (the wall FOV over the map bounds),
+        else one shadowcast each.
         """
         timing = action_timing_enabled()
-        cache_started = time.perf_counter() if timing else 0.0
         # The solver is a global choice; a result is reused only under the one that made it.
         directional = self._has_directional_blockers(WorldEdgeChannel.OPTICAL)
-        cache_key = (origin, directional)
-        cached = self._fov_cache.get(cache_key)
-        if cached is not None:
-            cached_distance, positions = cached.distance, cached.positions
-            if cached_distance is None or (max_distance is not None and cached_distance >= max_distance):
-                self._fov_cache.move_to_end(cache_key)
-                if max_distance == cached_distance:
-                    visible = list(positions)
-                else:
-                    assert max_distance is not None
-                    radius_squared = max_distance * max_distance
-                    visible = [position for position in positions
-                        if ((position[0] - origin[0]) ** 2 + (position[1] - origin[1]) ** 2) <= radius_squared]
+        farthest: Dict[Tuple[int, int], Optional[float]] = {}
+        for origin, max_distance in requests:
+            so_far = farthest.get(origin, max_distance)
+            farthest[origin] = None if so_far is None or max_distance is None else max(so_far, max_distance)
+        entries: Dict[Tuple[int, int], SightEntry] = {}
+        fresh: List[Tuple[Tuple[int, int], Optional[float]]] = []
+        for origin, max_distance in farthest.items():
+            cache_started = time.perf_counter() if timing else 0.0
+            cached = self._fov_cache.get((origin, directional))
+            if cached is not None and sight_reaches(cached.distance, max_distance):
+                self._fov_cache.move_to_end((origin, directional))
+                entries[origin] = cached
                 if timing:
                     record_action_timing("grid.compute_fov.cache_hit_ms", cache_started)
-                return visible
-        if timing:
-            record_action_timing("grid.compute_fov.cache_miss_ms", cache_started)
-
-        visible_positions: List[Tuple[int, int]] = []
-
-        def mark_visible(x: int, y: int) -> None:
-            visible_positions.append((x, y))
-
+                continue
+            if timing:
+                record_action_timing("grid.compute_fov.cache_miss_ms", cache_started)
+            fresh.append((origin, max_distance))
         if directional:
-            visible_positions = self._compute_directional_fov(
-                origin,
-                max_distance,
-                WorldEdgeChannel.OPTICAL,
-            )
+            solved = self._compute_directional_fovs(fresh, WorldEdgeChannel.OPTICAL)
         else:
-            compute_fov(origin, self.is_blocking_optics, mark_visible, max_distance)
-        self._fov_cache[cache_key] = SightEntry(sight_read_box(origin, max_distance), max_distance,
-                                                tuple(visible_positions))
-        self._fov_cache.move_to_end(cache_key)
-        if len(self._fov_cache) > FOV_CACHE_ORIGINS:
-            self._fov_cache.popitem(last=False)
-        return list(visible_positions)
+            solved = []
+            for origin, max_distance in fresh:
+                visible_positions: List[Tuple[int, int]] = []
+                compute_fov(origin, self.is_blocking_optics, lambda x, y: visible_positions.append((x, y)),
+                            max_distance)
+                solved.append(visible_positions)
+        for (origin, max_distance), visible_positions in zip(fresh, solved):
+            entry = entries[origin] = SightEntry(sight_read_box(origin, max_distance), max_distance,
+                                                 tuple(visible_positions))
+            self._fov_cache[(origin, directional)] = entry
+            self._fov_cache.move_to_end((origin, directional))
+            if len(self._fov_cache) > FOV_CACHE_ORIGINS:
+                self._fov_cache.popitem(last=False)
+        return [sight_within(entries[origin], origin, max_distance) for origin, max_distance in requests]
 
     def compute_light_fov(self, origin: Tuple[int, int], max_distance: Optional[float] = None) -> List[Tuple[int, int]]:
         """Compute ordinary light reach through the shared optical topology."""
@@ -5744,13 +5809,15 @@ class GridMap:
         Pure computation — does NOT modify any tiles.
         Uses FOV from position so light doesn't go through walls.
         """
-        record_action_count("light.source_fov", 1)
         pos = position or source.position
-        total_radius_tiles = self._light_radius_tiles(source)
+        return self._light_levels(source, pos, self.compute_fovs(((pos, self._light_radius_tiles(source)),))[0])
+
+    def _light_levels(self, source: LightSourceData, pos: Tuple[int, int],
+                      visible_positions: List[Tuple[int, int]]) -> Dict[Tuple[int, int], LightLevel]:
+        """The level a source at ``pos`` lights each Tile of its light FOV (``visible_positions``) at."""
+        record_action_count("light.source_fov", 1)
         bright_radius_tiles = source.bright_radius_feet / 5
         very_bright_radius_tiles = source.very_bright_radius_feet / 5 if source.very_bright_radius_feet > 0 else 0
-
-        visible_positions = self.compute_light_fov(pos, total_radius_tiles)
         result: Dict[Tuple[int, int], LightLevel] = {}
         for tile_pos in visible_positions:
             if tile_pos not in self._tiles:
@@ -5996,22 +6063,23 @@ class GridMap:
 
         A source's lit area is a deterministic optical solve from its position
         (`_compute_light_tiles`); a source whose read box holds no changed cell
-        would recompute the same area, so it is not selected.
+        would recompute the same area, so it is not selected. The selected sources'
+        solves are one batch (`compute_fovs`): the loop below writes Tile illumination,
+        light slots and source revisions only, which neither a solve nor the selection reads.
         """
         all_changed: set[Tuple[int, int]] = set()
         moved_lit_areas: set[Tuple[int, int]] = set()
         changed_box = cells_box(positions)
         if changed_box is None:
             return all_changed
-        for source in self._light_sources.values():
-            if not self._is_light_effectively_active(source):
-                continue
-            if not box_reads_any(sight_read_box(source.position, self._light_radius_tiles(source)),
-                                 changed_box, positions):
-                continue
-
+        relit = [source for source in self._light_sources.values()
+                 if self._is_light_effectively_active(source)
+                 and box_reads_any(sight_read_box(source.position, self._light_radius_tiles(source)),
+                                   changed_box, positions)]
+        reached = self.compute_fovs([(source.position, self._light_radius_tiles(source)) for source in relit])
+        for source, visible_positions in zip(relit, reached):
             old_affected = dict(source.affected_tiles)
-            new_affected = self._compute_light_tiles(source)
+            new_affected = self._light_levels(source, source.position, visible_positions)
 
             changed_positions: List[Tuple[int, int]] = []
             all_positions = set(old_affected) | set(new_affected)
@@ -6105,7 +6173,7 @@ class GridMap:
             record_action_timing("grid.compute_propagation_fov.cache_hit_ms", cache_started)
             return list(cached.positions)
         record_action_timing("grid.compute_propagation_fov.cache_miss_ms", cache_started)
-        visible_positions = self._compute_directional_fov(origin, max_distance, WorldEdgeChannel.PROPAGATION)
+        visible_positions = self._compute_directional_fovs(((origin, max_distance),), WorldEdgeChannel.PROPAGATION)[0]
 
         self._propagation_fov_cache[cache_key] = PropagationEntry(sight_read_box(origin, max_distance),
                                                                   tuple(visible_positions))

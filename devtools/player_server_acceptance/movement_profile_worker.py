@@ -169,7 +169,7 @@ def main():
             if args.coarse_timing else 'Decoded request through completed dispatch, response/public-record encoding and writes; includes cProfile and fine wrappers. ')
         data['scope'] += 'Ends before next input read. Still instrumented; never a clean speed sample.'
         if not args.coarse_timing:
-            data['directional_fov_note'] = 'Temporary timers and scalar counters add diagnostic overhead. One array solve per call; settled_predicates counts the edge predicates it settled first. There is no retained ray graph or geometry warmup cache.'
+            data['directional_fov_note'] = 'Temporary timers and scalar counters add diagnostic overhead. One array solve per group of the origins of a batch (a relight, a sensory settlement, or one query; `compact_window_groups`); settled_predicates counts the edge predicates it settled first. There is no retained ray graph or geometry warmup cache.'
         data['exclusive_note'] = ('exclusive_wrapped_ns removes explicit child wrapper spans only; it is not function self time.'
             if args.coarse_timing else 'exclusive_wrapped_ns removes explicit child wrapper spans only; cProfile supplies function self time. Existing action hooks overlap these spans and each other.')
         data['coverage'] = coverage
@@ -349,7 +349,7 @@ def main():
         (sensory.SpatialSensesSystem, 'recompute_observer', 'sensory.full_solve', sensory.SpatialSensesSystem.recompute_observer),
         (sensory.SpatialSensesSystem, '_collect_boundary_evidence', 'sensory.boundaries', sensory.SpatialSensesSystem._collect_boundary_evidence),
         (GridMap, 'move_light_source', 'grid.move_light', GridMap.move_light_source),
-        (GridMap, 'compute_fov', 'grid.fov', GridMap.compute_fov),
+        (GridMap, 'compute_fovs', 'grid.fov', GridMap.compute_fovs),
         (GridMap, 'compute_paths', 'grid.paths', GridMap.compute_paths),
     )
     if args.coarse_timing:
@@ -362,8 +362,8 @@ def main():
         )
         methods = (
             (sensory.SpatialSensesSystem, 'recompute_observer', 'sensory.recompute_observer', sensory.SpatialSensesSystem.recompute_observer),
-            (GridMap, '_compute_directional_fov', 'grid._compute_directional_fov', GridMap._compute_directional_fov),
-            (GridMap, 'compute_fov', 'grid.compute_fov', GridMap.compute_fov),
+            (GridMap, '_compute_directional_fovs', 'grid._compute_directional_fovs', GridMap._compute_directional_fovs),
+            (GridMap, 'compute_fovs', 'grid.compute_fovs', GridMap.compute_fovs),
             (GridMap, 'compute_paths', 'grid.compute_paths', GridMap.compute_paths),
             (GridMap, 'move_light_source', 'grid.move_light', GridMap.move_light_source),
             (Entity, '_materialize_navigation_distance', 'entity.materialize_navigation', Entity._materialize_navigation_distance),

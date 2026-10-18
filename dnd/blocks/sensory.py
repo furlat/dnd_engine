@@ -935,6 +935,22 @@ def _contact_table_value(box: Box, facts: Sequence[Tuple[UUID, bool, TargetFacts
 
 
 @dataclass(frozen=True)
+class SightScope:
+    """What one observer's view reads of the observer for one settlement (read once: the
+    settlement's wall-FOV routes and the view both use it)."""
+
+    owner: BaseBlock
+    senses: Senses
+    origin: Position
+    max_distance: int
+    modes: Dict[SensesType, int]
+    visual_access: bool
+    ordinary_sight: bool
+    optical_reach: int                       # cells the observer's sight reaches: 0 without visual access
+    optical_key: Tuple[Position, int, int]   # origin, optical reach, optical revision
+
+
+@dataclass(frozen=True)
 class ObserverView:
     """One observer's optical and felt cells for one settlement, before contacts and hazards."""
 
@@ -1466,11 +1482,16 @@ class SpatialSensesSystem:
         world = self._world()
         if diagnostic:
             record_action_timing("sensory.settlement.world_ms", started)
+        scopes = [self._sight_scope(observer_uuid, world) for observer_uuid in observers]
+        started = time.perf_counter() if diagnostic else 0.0
+        routes_of = self._wall_fov_routes(scopes)
+        if diagnostic:
+            record_action_timing("sensory.recompute.wall_fov_ms", started)
         views = []
-        for observer_uuid in observers:
+        for scope, routes in zip(scopes, routes_of):
             record_action_count("sensory.observer_settled", 1)
             started = time.perf_counter() if diagnostic else 0.0
-            views.append(self._view(observer_uuid, world))
+            views.append(self._view(scope, world, routes))
             if diagnostic:
                 record_action_timing("sensory.recompute.view_ms", started)
         started = time.perf_counter() if diagnostic else 0.0
@@ -1550,13 +1571,11 @@ class SpatialSensesSystem:
         self._identity_grants.clear()
         return touched
 
-    def _view(self, observer_uuid: UUID, world: SettlementWorld) -> ObserverView:
-        """Optical and felt cells of one observer, as arrays: the sight stage runs when its inputs
-        changed, the light stage when the sight or the light over the window changed."""
+    def _sight_scope(self, observer_uuid: UUID, world: SettlementWorld) -> SightScope:
+        """What one observer's view reads of the observer this settlement."""
         senses = self.senses_by_observer[observer_uuid]
         owner = BaseBlock.get(observer_uuid)
         assert owner is not None
-        grid = get_map()
         max_distance = senses._perception_max_distance
         origin = owner.get_position()
         assert origin is not None
@@ -1568,7 +1587,40 @@ class SpatialSensesSystem:
             sense_range = modes.get(sense_type)
             if sense_range is not None:
                 optical_radius = max(optical_radius, sense_radius_cells(sense_range, max_distance))
-        reach = optical_radius if visual_access else 0
+        optical_reach = optical_radius if visual_access else 0
+        return SightScope(owner, senses, origin, max_distance, modes, visual_access, ordinary_sight, optical_reach,
+                          (origin, optical_reach, world.optical_revision))
+
+    def _wall_fov_routes(self, scopes: Sequence[SightScope]) -> List[RouteRows]:
+        """Each view's wall-FOV routes: its field's while the optical key holds, none without visual
+        reach, else from its wall FOV; those wall FOVs are solved together (`GridMap.compute_fovs`)."""
+        kept: List[Optional[RouteRows]] = []
+        for scope in scopes:
+            previous = self.fields.get(scope.owner.uuid)
+            kept.append(previous.routes if previous is not None and previous.optical_key == scope.optical_key
+                        else None)
+        solving = [index for index, (scope, routes) in enumerate(zip(scopes, kept))
+                   if routes is None and scope.optical_reach > 0]
+        solved = dict(zip(solving, get_map().compute_fovs(
+            [(scopes[index].origin, scopes[index].optical_reach) for index in solving])))
+        routes_of: List[RouteRows] = []
+        for index, (scope, routes) in enumerate(zip(scopes, kept)):
+            if routes is None:
+                fov = solved.get(index, [])
+                routes = route_rows(frame_rows(np.array(fov, dtype=np.int64).reshape(-1, 2), scope.origin))
+            routes_of.append(routes)
+        return routes_of
+
+    def _view(self, scope: SightScope, world: SettlementWorld, routes: RouteRows) -> ObserverView:
+        """Optical and felt cells of one observer, as arrays, over its wall-FOV ``routes``
+        (`_wall_fov_routes`): the sight stage runs when its inputs changed, the light stage when
+        the sight or the light over the window changed."""
+        owner, senses, origin, max_distance = scope.owner, scope.senses, scope.origin, scope.max_distance
+        modes, visual_access, ordinary_sight = scope.modes, scope.visual_access, scope.ordinary_sight
+        optical_reach, optical_key = scope.optical_reach, scope.optical_key
+        previous = self.fields.get(owner.uuid)
+        grid = get_map()
+        reach = optical_reach
         felt_radii = [(sense_type, bit, sense_radius_cells(modes[sense_type], max_distance))
                       for sense_type, bit in NONVISUAL_SENSES if sense_type in modes]
         for _, _, radius in felt_radii:
@@ -1579,7 +1631,6 @@ class SpatialSensesSystem:
         selection = (origin[0] - reach - 1, origin[1] - reach - 1, origin[0] + reach + 1, origin[1] + reach + 1)
         scalars = (origin, max_distance, tuple(sorted(modes.items())), ordinary_sight, visual_access,
                    world.optical_revision, world.propagation_revision, window)
-        previous = self.fields.get(observer_uuid)
         if previous is not None and previous.sight_inputs.scalars == scalars:
             held = previous.sight_inputs
             inputs = held if held.version == world.sight_version else SightInputs(
@@ -1590,20 +1641,15 @@ class SpatialSensesSystem:
             inputs = SightInputs(scalars, _window_values(world.exists, window),
                                  _window_values(world.obscurement, window), world.sight_version)
             light = _window_values(world.light, window)
-        optical_key = (origin, optical_radius if visual_access else 0, world.optical_revision)
         if previous is not None and (inputs is previous.sight_inputs or _same_sight_inputs(previous.sight_inputs, inputs)):
-            routes, sight = previous.routes, previous.sight
+            # Held sight inputs hold the optical key (the scalars hold all of it): ``routes`` are the field's.
+            sight = previous.sight
             felt_keys, felt_rows, felt_frame = previous.felt_keys, previous.felt_rows, previous.felt_frame
             exists = previous.exists_frame
             lit_kept = light is previous.light or np.array_equal(previous.light, light)
             sight_kept = True
         else:
             record_action_count("sensory.full_recompute", 1)
-            if previous is not None and previous.optical_key == optical_key:
-                routes = previous.routes
-            else:
-                fov = grid.compute_fov(origin, optical_radius) if visual_access and optical_radius > 0 else []
-                routes = route_rows(frame_rows(np.array(fov, dtype=np.int64).reshape(-1, 2), origin))
             exists = frame_of(world.exists, origin)
             sight = route_sight(routes, modes, ordinary_sight, exists, frame_of(world.obscurement, origin))
             keys: List[Tuple[SensesType, Tuple[Position, int, int]]] = []
@@ -1651,7 +1697,7 @@ class SpatialSensesSystem:
                               previous.light_inputs if previous is not None else None,
                               previous.volumes if previous is not None else {},
                               previous.upper if previous is not None else {})
-        return ObserverView(owner, senses, origin, modes, ordinary_sight, optical_radius if visual_access else 0,
+        return ObserverView(owner, senses, origin, modes, ordinary_sight, optical_reach,
                             field, previous is not None, lit_kept, frames_kept, frame_changes, optical, exists,
                             seen_frame,
                             senses_frame, felt_frame)
