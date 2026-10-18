@@ -717,10 +717,7 @@ def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload:
         case HealRollResultEvent():
             copied = event.model_copy(update={**common, "context": {}})
         case D20Event():
-            copied = event.model_copy(update={
-                **common, "dice": None, "dc": event.get_dc(),
-                "bonus": event.dice_roll.bonus if event.dice_roll is not None else None,
-            })
+            copied = event.model_copy(update={**common, "dice": None, "dc": event.get_dc(), "bonus": None})
         case SpellMasteryStudiedEvent() | ConditionMembershipCommittedEvent() | RestResourcesRecoveredEvent() | PermanentFeatureUsedEvent() | ActionApplicationCommittedEvent() | MaximumHitPointReductionEvent() | EffectApplicationEvent() | ActionCostsCommittedEvent() | RestCompletedEvent() | HealingAppliedEvent():
             copied = event.model_copy(update=common)
         case CounterspellReactionEvent():

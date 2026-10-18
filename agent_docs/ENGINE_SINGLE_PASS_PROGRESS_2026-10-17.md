@@ -151,7 +151,7 @@ Hard rules:
   - Human: "you can't just push costs out of course total cost is still important". The AI knowledge advance runs in the op and is counted there (the post-reply move was reverted); PV1b owns its cost.
   - **Unowned term found:** Sleet zone install (terrain per tile, condition application models, dousing items), ~50–75 ms loaded. It goes to a PV1a follow-up after PV1a merges (same grids).
 - 2026-10-17: **PR findings.**
-  - **Player-visible bug, pre-existing, to fix separately:** `actions.py:2272` `set_context` replaces the attack context set at `entity.py:3425`, so `attack_ability` is missing during a real weapon-attack roll. Reckless Attack's contextual advantage never applies. PR preserves the behaviour exactly.
+  - **Player-visible bug, pre-existing, to fix separately:** `actions.py:2272` `set_context` replaces the attack context set at `entity.py:3425`, so `attack_ability` is missing during a real weapon-attack roll. Reckless Attack's contextual advantage never applies. PR preserves the behaviour exactly. **Fixed 2026-10-18 (codex/enp-cleanup):** the attack read's context now starts from the attack value's own context (`Attack._resolve_attack`); `tests/progression/test_reckless_attack_roll.py` failed first.
   - **First-use pydantic schema builds inside ops** (`defer_build` kept): Fireball 12.6–14.6 ms, Ice Storm 7.3–8.3, Circle of Death 2.7–2.9, once per process per model.
   - The value-read lineage only keyed a "latest evaluation" slot; it is deleted with the frozen reading.
 - 2026-10-17: **PV1a, rule-level side effects** (logged per the human's direction):
@@ -460,7 +460,7 @@ Hard rules:
   - The admitted physical-access contact is carried from admission to the target list: `BaseAction._physical_access_contact`, `@final`, listed in the admission architecture test. `attack_object_contact` calls: fighter menu / AI decision 819 → 650, caster menu 851 → 774. An oracle found 0 mismatches over 15,551 listed targets.
   - Object HP is read once per check, and `Health.get_max_hit_dices_points` skips the count read when the modifier is 0.
   - `Tile._add_illumination` skips an identical installed level.
-  - `SolidWallZone.blocks_crossing_between` builds its admitted cells once per call. Forcecage (wall_constructions.py:831) still rebuilds them per section.
+  - `SolidWallZone.blocks_crossing_between` builds its admitted cells once per call. Forcecage (wall_constructions.py:831) still rebuilds them per section. **Fixed in 18f88c8cc (codex/enp-cleanup).**
   - Gates (agent, vs d6a5ba8e7):
     - discovery dumps and agreement counts identical;
     - transcripts byte-identical on 6 cases;
@@ -496,8 +496,8 @@ Hard rules:
   - Logged:
     - `AreaCondition.crossing_channels` defaults to None, which makes undeclared zones (Gust's among them) global crossing owners that force Python step checks;
     - a kept movement-cost grid was not adopted (writer completeness unproven);
-    - `EventQueue.is_first_at_phase` compares wall-clock timestamps (latent; no effect seen).
-  - Census gap closed: `Entity._navigation_traversal` (P5) is an entity-held memo against §6a, now listed in RULE_VIOLATIONS.
+    - `EventQueue.is_first_at_phase` compares wall-clock timestamps (latent; no effect seen). **Fixed in 387645d3a (codex/enp-cleanup): store order.**
+  - Census gap closed: `Entity._navigation_traversal` (P5) is an entity-held memo against §6a, now listed in RULE_VIOLATIONS. **Fixed in 4345392a6 (codex/enp-cleanup): a `SpatialSensesSystem` frozen `NavigationRead`.**
 - 2026-10-18: **PV2 wire part 2 merged (777ecce99; 8b4673143 … 312d4a8b8): player schema 15, PlayerSequence 8.**
   - Wire changes:
     - each group sends its visible cells once, and light and hazard (cell, value) tables once; each observer's cell lists are bit lists over them;
@@ -519,7 +519,7 @@ Hard rules:
     - Fireball 247 → 201 KB; CoD 262 → 220 KB.
     - Client fold cost +0 to +3 ms per update.
   - **For the human:** Fireball and CoD can't fit 100 KB without (a) a residue-patch world-update type (each blood or ash change re-sends the tile's whole residue list, 53–56 KB) and (b) a combat-log redesign (41–57 KB, one entry per native event). Both are wire-design decisions.
-  - Also: `PlayerCausalIndex` / `index_player_lineage` are only called from `game_obsolete/`, so deleting them is the human's call. One more fact-family `isinstance` (`SpellFact`, `_public_occurrences`).
+  - Also: `PlayerCausalIndex` / `index_player_lineage` are only called from `game_obsolete/`, so deleting them is the human's call. **Deleted in d96f0b973 (codex/enp-cleanup).** One more fact-family `isinstance` (`SpellFact`, `_public_occurrences`).
 - 2026-10-18: **PV1a-2 fan-out merged (codex/single-pass-fanout, head 2c52b957d).**
   - Settlement runs each stage over all views in turn. The rule hooks read only the observer's own senses or the world (reorder checked by both reviewers).
   - Fixtures are re-observed in one pass per condition footprint, and emitters (light) are one masked OR over stacked views (`GridMap.light_slot_words`).
