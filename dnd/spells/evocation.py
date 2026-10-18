@@ -133,6 +133,7 @@ from dnd.spells.spell_utils import spell_valid_positions, deliver_spell_damage, 
 from dnd.spells.surfaces import place_spell_surface, SimpleToxinSurface, SpellAcidSurface
 from dnd.spells.hit_effects import install_hit_rider, AttackBackedSpell, hit_spell_payload_allowed
 from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
+from dnd.core.base_object import empty_set
 from dnd.types.spatial_effects import (
     SpatialEffectInteractionIntensity,
     SpatialEffectInteractionOperation,
@@ -4829,14 +4830,14 @@ class DivineWord(SpellAction):
 
 
 class FireShieldEffect(BaseCondition):
-    granted_action_uuids: set[UUID] = Field(default_factory=set)
+    granted_action_uuids: set[UUID] = Field(default_factory=empty_set)
     description: str = "Warm/chill resistance and automatic retaliation against qualifying melee hits."
     name: str = "Fire Shield"
     tags: set[ConditionTag] = {ConditionTag.MAGICAL}
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=100))
     shield_kind: Literal["warm", "chill"] = "warm"
     light_source_uuid: UUID | None = None
-    retaliated_lineages: set[UUID] = Field(default_factory=set, exclude=True)
+    retaliated_lineages: set[UUID] = Field(default_factory=empty_set, exclude=True)
 
     _removed_light: SpatialChangeEvent | None = PrivateAttr(default=None)
 
@@ -6040,7 +6041,7 @@ class ArcaneSwordEffect(BaseCondition):
     description: str = "A retained force sword anchor and two native bonus-action options."
     position: Tuple[int, int]
     spellcasting_source_id: UUID | None = None
-    action_uuids: set[UUID] = Field(default_factory=set)
+    action_uuids: set[UUID] = Field(default_factory=empty_set)
     duration: Duration = Field(default_factory=lambda: Duration(duration=10, duration_type=DurationType.ROUNDS))
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 

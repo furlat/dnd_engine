@@ -72,6 +72,7 @@ from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.spells.divination import TrueSeeingEffect
 from dnd.spells.transmutation import HasteEffect
+from dnd.core.base_object import empty_list
 
 
 BASIC_POISON_APPLY_SEMANTIC_KEY = "content.neurodragon:action:action.consumable.weapon_coat.basic_poison.apply@1"
@@ -671,7 +672,7 @@ class _ApplyWeaponCoatAction(BaseAction):
         description="Weapon coats target the acting entity.",
     )
     costs: list[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Authored action-economy cost for coat application.",
     )
     source_item_uuid: Optional[UUID] = Field(

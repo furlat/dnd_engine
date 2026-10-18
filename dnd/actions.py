@@ -129,6 +129,7 @@ from dnd.blocks.action_economy import (
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.sensory import spatial_senses_system
 from dnd.conditions import ExtraAttacksGranted, Dashing, Dodging, Disengaging, Prone, Hidden, Concentrating
+from dnd.core.base_object import empty_list
 
 
 _CoreActionDefinition = TypeVar("_CoreActionDefinition")
@@ -1310,7 +1311,7 @@ class TraverseConnector(BaseAction):
     description: str = Field(default="Traverse the selected connector")
     target_type: TargetType = Field(default=TargetType.SELF)
     action_category: ActionCategory = Field(default=ActionCategory.MOVEMENT)
-    costs: List[Cost] = Field(default_factory=list)
+    costs: List[Cost] = Field(default_factory=empty_list)
     connector_traversal: Optional[ConnectorTraversalDiscovery] = None
 
     @staticmethod
@@ -2074,7 +2075,7 @@ class Attack(BaseAction):
 
 
 
-    additional_damages: List[Damage] = Field(default_factory=list)
+    additional_damages: List[Damage] = Field(default_factory=empty_list)
 
     def get_natural_weapon(self) -> Optional[NaturalWeaponSpec]:
         return None
@@ -2799,7 +2800,7 @@ class DropConcentration(BaseAction):
         description="DropConcentration is a utility ability action.",
     )
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="No-cost payload because dropping concentration is free.",
     )
     target_spell: Optional[str] = Field(default=None, description="Specific spell to drop (multi-slot). None = drop all.")
@@ -3173,7 +3174,7 @@ class DropProne(BaseAction):
     name: str = Field(default="Drop Prone", description="Human-readable drop-prone action name.")
     description: str = Field(default="Drop to the ground", description="Player-facing drop-prone action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Drop Prone targets self")
-    costs: List[Cost] = Field(default_factory=list, description="Drop Prone has no action economy cost.")
+    costs: List[Cost] = Field(default_factory=empty_list, description="Drop Prone has no action economy cost.")
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the drop-prone declaration event."""
@@ -5524,7 +5525,7 @@ class PickUp(BaseAction):
         description="PickUp targets a floor object.",
     )
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="No-cost action-economy payload for pickup.",
     )
 
@@ -5589,7 +5590,7 @@ class Drop(BaseAction):
         description="Drop targets a visible position.",
     )
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="No-cost action-economy payload for item drops.",
     )
     item_uuid: Optional[UUID] = Field(default=None, description="UUID of the item to drop (bound at creation)")

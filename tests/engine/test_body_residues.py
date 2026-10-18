@@ -179,7 +179,7 @@ def test_repeated_injuries_record_authored_amount_without_changing_membership_or
         assert injury.body_release is not None
         if prior:
             assert (grid.optical_revision, grid.movement_revision) == revisions
-            # One splatter is one change (plan R1): one fact whose rows are every cell's after-value.
+            # One splatter is one change (plan R1): one fact keyed by every changed cell's material.
             changes = [event for _, event in EventQueue.iter_events_since(cursor)
                        if isinstance(event, SpatialChangeEvent) and event.phase is EventPhase.COMPLETION
                        and event.change_type is SpatialChangeType.TILES_CHANGED]
@@ -187,9 +187,9 @@ def test_repeated_injuries_record_authored_amount_without_changing_membership_or
             assert len(changes) == int(prior[0].amount != amount)
             if changes:
                 change, = changes
-                assert {row.position for row in change.tile_states} == cells and change.parent_event is not None
-                at_origin, = [row for row in change.tile_states if row.position == creature.position]
-                assert at_origin.residues == (residue,)
+                assert {row.position for row in change.keyed_tile_changes} == cells and change.parent_event is not None
+                at_origin, = [row for row in change.keyed_tile_changes if row.position == creature.position]
+                assert [material.state for material in at_origin.residues] == [residue]
                 parent = EventQueue.get_event_by_uuid(change.parent_event)
                 assert parent is not None and parent.lineage_uuid == injury.lineage_uuid
 

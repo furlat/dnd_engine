@@ -35,6 +35,7 @@ from dnd.spatial.jaws import JawTrap
 from dnd.spatial.gas_traps import GasVent
 from dnd.types.traps import TrapState
 from dnd.types.discovery import ActorScan
+from dnd.core.base_object import empty_list
 
 
 class OpenDoorAction(BaseAction):
@@ -46,7 +47,7 @@ class OpenDoorAction(BaseAction):
         description="Door actions target the source user and resolve through source_item_uuid.",
     )
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="No-cost action-economy payload for opening a door.",
     )
     source_item_uuid: Optional[UUID] = Field(
@@ -96,7 +97,7 @@ class CloseDoorAction(BaseAction):
         description="Door actions target the source user and resolve through source_item_uuid.",
     )
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="No-cost action-economy payload for closing a door.",
     )
     source_item_uuid: Optional[UUID] = Field(
@@ -204,7 +205,7 @@ class PullLeverAction(BaseAction):
         description="Trap levers target the source user and resolve through source_item_uuid.",
     )
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="No-cost action-economy payload for pulling a trap lever.",
     )
     source_item_uuid: Optional[UUID] = Field(
@@ -317,7 +318,7 @@ class ToggleLeverAction(BaseAction):
 
     name: str = "Toggle Lever"
     target_type: TargetType = TargetType.SELF
-    costs: List[Cost] = Field(default_factory=list)
+    costs: List[Cost] = Field(default_factory=empty_list)
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         lever = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
@@ -398,7 +399,7 @@ class OpenChestAction(BaseAction):
 
     name: str = "Open Chest"
     target_type: TargetType = TargetType.SELF
-    costs: List[Cost] = Field(default_factory=list)
+    costs: List[Cost] = Field(default_factory=empty_list)
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
@@ -421,7 +422,7 @@ class CloseChestAction(BaseAction):
 
     name: str = "Close Chest"
     target_type: TargetType = TargetType.SELF
-    costs: List[Cost] = Field(default_factory=list)
+    costs: List[Cost] = Field(default_factory=empty_list)
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
@@ -448,7 +449,7 @@ class LootAllAction(BaseAction):
         description="Chest looting targets the source user and resolves through source_item_uuid.",
     )
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="No-cost action-economy payload for looting a chest.",
     )
     source_item_uuid: Optional[UUID] = Field(
@@ -499,7 +500,7 @@ class LootItemAction(BaseAction):
 
     name: str = "Loot"
     target_type: TargetType = TargetType.SELF
-    costs: List[Cost] = Field(default_factory=list)
+    costs: List[Cost] = Field(default_factory=empty_list)
     loot_item_uuid: UUID
 
     def describe_discovery(self) -> ActionDiscoveryDescription:
@@ -631,7 +632,7 @@ class RestAction(BaseAction):
 
     name: str = Field(default="Rest", description="Action name for taking a campfire rest.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Campfire rest targets the acting entity.")
-    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for campfire rest.")
+    costs: List[Cost] = Field(default_factory=empty_list, description="No-cost action-economy payload for campfire rest.")
     source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the campfire item used for rest.")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
@@ -655,7 +656,7 @@ class CookAction(BaseAction):
 
     name: str = Field(default="Cook", description="Action name for cooking at a campfire.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Campfire cooking targets the acting entity.")
-    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for campfire cooking.")
+    costs: List[Cost] = Field(default_factory=empty_list, description="No-cost action-economy payload for campfire cooking.")
     source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the campfire item used for cooking.")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
@@ -674,7 +675,7 @@ class ActivateDeviceAction(BaseAction):
 
     name: str = Field(default="Activate Device", description="Action name for using an arcane device.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Arcane devices target the acting entity.")
-    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for device activation.")
+    costs: List[Cost] = Field(default_factory=empty_list, description="No-cost action-economy payload for device activation.")
     source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the arcane device item being used.")
     heal_amount: int = Field(default=5, description="Hit points restored by the arcane device.")
 

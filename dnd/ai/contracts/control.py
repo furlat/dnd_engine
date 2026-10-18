@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-import time
 from typing import Any, Dict, Final, Iterator, Literal, Mapping, Optional, Self, Sequence, Tuple, overload
 from uuid import uuid4
 
@@ -17,7 +16,7 @@ from dnd.ai.contracts.semantics import (
 )
 from dnd.ai.contracts.immutable import FrozenDict
 from dnd.core.action_types import PositionSelection
-from dnd.core.base_object import read_private_attribute
+from dnd.core.base_object import read_private_attribute, wall_clock
 
 
 ActionBucket = Literal[
@@ -1099,7 +1098,7 @@ class DecisionEpoch(ControlModel):
     turn_execution_id: Optional[str] = Field(default=None, description="Stable native turn identity.")
     economy: ActionEconomyState = Field(description="Current actor action economy.")
     affordances: AffordanceSet = Field(description="Legal command rows.")
-    created_at: float = Field(default_factory=time.time, description="Unix timestamp when the epoch was created.")
+    created_at: float = Field(default_factory=wall_clock, description="Unix timestamp when the epoch was created.")
 
 
 class CommandResultStatus(str, Enum):

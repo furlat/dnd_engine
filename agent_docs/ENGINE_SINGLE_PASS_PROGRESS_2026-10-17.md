@@ -648,3 +648,35 @@ Hard rules:
   - **Static-look census:** no held item's look or profile changes over 29 gallery cases and 4,139 tests.
   - **Ruling (a):** one per-event conversion turns E2's named after-values into keyed rows, shared by every seat.
 - 2026-10-18: **E3-sensory prep (codex/enp-e3-sensory, 314105098):** the native settlement marker, with native events identical apart from it and the wire byte-identical; schema-16 sensory types in a staging module; the client fold; vectors V1–V8.
+- 2026-10-18: **Free-aim per point and GC alarms (codex/enp-freeaim: f02305211, 2b3fc5be6, 0405ae2d6), merged with 6810854a2 (c903b3dce).**
+  - **Free aim:** Create or Destroy Water, Call Lightning and its Strike answer each aim point by one per-point rule (`valid_positions_among`), and `get_valid_positions` lists that rule's cells. Caster menu `_collect_aoe_actions` 41 → 32 ms (minimum of 30 in-process repeats).
+  - **GC alarms:** pydantic reads a default factory's signature at every schema build in play and every `model_construct`. A C callable's (`list`/`set`/`frozenset`/`tuple`, `time.time`) leaves a class cycle (`inspect._signature_fromstr`).
+    - The 71 fields of models built in play and `DecisionEpoch.created_at` use Python factories (`dnd/core/base_object.py`).
+    - The content registry's recursive closure is a module function.
+    - Per-op `cycles_found` is 0 on 31 gallery cases (AI decisions 15 → 0). Start 11,947 → 317.
+  - **Known Start garbage:** 317 objects, once per process. numpy 2.5's `np.unique` reads `np.ma`, so numpy imports numpy.ma at the first `np.unique` (`view.py` `frame_rows`, at Start), and that import parses 5 C signatures. Integrator: no eager import; the alarm stays an alarm.
+  - **Gates vs 6810854a2:** discovery dumps equal on 3 cases; seeded agreement reports equal; transcripts byte-identical on 4 cases; sweep = r29; pyright 0 new.
+  - **Schema builds (measured, not changed):** none inside a timed gallery op. The harness builds each case's cast spells before its ops, as character creation would: 1–9 builds, 2.6–19.5 ms per case. Start plus setup: 81 builds, 137–204 ms (godmode 194 builds, 358–378 ms).
+- 2026-10-18: **Free-aim/GC merged into codex/event-native-deltas (9394c24d0; ec2b72c0c).** Free-aim legality is per point, so zone spells no longer list their region in Choices (discovery 41 → 32 ms, controlled). The GC fix stops pydantic re-parsing C signatures on models built in play: `cycles_found` is 0 per op on 31 cases, and Start drops 11,947 → 317 objects (from numpy.ma's import, left as known). No gallery case builds a schema inside a timed op.
+- 2026-10-18: **E2 merged into codex/event-native-deltas (a8299d110; 5e884c209).**
+  - World (Q4 W): `KeyedTileChange` with its one fold `apply_keyed_tile_change`.
+  - Actors: `ActorFactChange` in `AdmissionEvidence`, with one dispatch and one fold. `RecordedSequence` is schema 4.
+  - Gates:
+    - wire byte-identical except the accepted Fireball light cell (41,13);
+    - AI knowledge equal on 10 of 10;
+    - the (C) oracle exact except that cell;
+    - pyright 0 new;
+    - integrator sweep r30 on a8299d110: 64 failures, the same set as r29.
+  - Native completion payload: Fireball 128 → 61 KB, Sleet 203 → 28 KB.
+- 2026-10-18: **long_game measured (integrator, 9394c24d0).** The case is degenerate: the party is down in round 1 and stabilizes, the basic AI never finishes stable characters, and the harness loops AI-only rounds forever. That's the "hour".
+  - Per-op time is flat with game length: AI advances average 147–250 ms over 20 rounds, and a profiled window at round ~10 is cheaper than one at round ~3.
+  - Memory grows ~100 MB per round.
+  - In the long game, ~50 % of an AI advance is the action menu: ~1,200 attack admissions per decision, with `attack_object_contact` 14 s profiled per 90 decisions.
+  - New lanes: codex/long-game-case (a real game with a per-round curve) and codex/ai-step (an exact reach prefilter in discovery).
+- 2026-10-18: **Native-exact merged into codex/event-native-deltas (ba7861260).**
+  - Eleven byte-identical native fixes; the item list and dispositions are in scratchpad `native/ITEMS.md`. Item 11 is skipped because the light-row inputs have writers that can't all bump a revision.
+  - Kept state lives only in owning systems: the registry's attachment index, `SpatialSensesSystem.identity_epoch` and `_id_texts`, the encounter's `_IDENTITY_CARRY`, and `EventQueue._contained_grants`.
+  - Native ms, loaded machine: Wall of Stone 91 → 86, Fireball 88 → 79, Circle of Death 82 → 72, SG move 91 → 85.
+  - Projected after E3, quiet machine: Wall of Stone ≈98 and Fireball ≈103. What remains:
+    - Wall of Stone: the formation settlement (PV1), the zone install with its relight (P7), and the escape Move.
+    - Fireball: per-target rules (PR, PD1c), the settlement (PV1), and per-version event machinery (P6, P7b).
