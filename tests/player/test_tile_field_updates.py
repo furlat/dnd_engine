@@ -19,6 +19,7 @@ from dnd.player.reduction import (decode_player_sequence, encode_player_sequence
 from dnd.types.materials import Material, TileSurface
 from dnd.types.residues import TileResidueState
 from dnd.types.world import LightLevel
+from dnd.core.cells import values_from_items, values_items
 from tests.player.test_projection_local_world import initial, objective, sensory
 
 
@@ -52,10 +53,9 @@ def test_known_tile_light_updates_carry_only_changed_fields_at_each_event():
         packets.append(packet)
         update, = packet.world_updates
         assert update.occurrence == projection.public_cursors[index]
-        assert update.tiles == ()
-        change, = update.tile_changes
-        assert change.position == (1, 0)
-        assert change.changes == {"resolved_light": light}
+        assert update.tiles == () and update.tile_changes == ()
+        # A changed resolved light travels as the update's packed values.
+        assert update.resolved_light == values_from_items({(1, 0): light.value})
         state = reduce_lineage(state, packet)
         retained.append(state)
         assert state.tiles[(1, 0)].resolved_light is light
@@ -92,7 +92,8 @@ def test_tile_field_updates_preserve_clears_and_replace_nested_values():
     enriched = original.model_copy(update=changes)
     packet = project_event(projection, tile_change(start.observer_uuid, enriched), start.end_cursor)
     delta, = packet.world_updates[0].tile_changes
-    assert delta.changes == changes
+    assert delta.changes == {key: value for key, value in changes.items() if key != 'resolved_light'}
+    assert packet.world_updates[0].resolved_light == values_from_items({(1, 0): LightLevel.DIM_LIGHT.value})
     changed = reduce_lineage(before, packet)
     clears = dict(blocks_optics=False, blocks_propagation=False, walking_cost=0,
         flying_cost=0, swimming_cost=0, burrowing_cost=0, elevation_steps=0,
@@ -104,9 +105,11 @@ def test_tile_field_updates_preserve_clears_and_replace_nested_values():
     parsed = TypeAdapter(PlayerLineage).validate_json(wire)
     raw = json.loads(wire)['world_updates'][0]['tile_changes'][0]['changes']
     assert raw['slope_axis'] is None and raw['condition_names'] == [] and raw['residues'] == []
-    assert raw['blocks_optics'] is False and raw['walking_cost'] == raw['resolved_light'] == 0
-    assert 'name' not in raw and 'surface' not in raw
-    assert parsed.world_updates[0].tile_changes[0].changes == clears
+    assert raw['blocks_optics'] is False and raw['walking_cost'] == 0
+    assert 'name' not in raw and 'surface' not in raw and 'resolved_light' not in raw
+    assert parsed.world_updates[0].tile_changes[0].changes == {key: value for key, value in clears.items()
+        if key != 'resolved_light'}
+    assert parsed.world_updates[0].resolved_light == values_from_items({(1, 0): 0})
     after = reduce_lineage(changed, parsed)
     assert after.tiles[(1, 0)] == cleared
     assert after.tiles[(1, 0)].name == 'Ramp'
@@ -124,7 +127,8 @@ def test_hidden_tile_changes_remain_private_until_discovery_and_identity_replace
     assert state.tiles[(1, 0)].resolved_light is LightLevel.BRIGHT_LIGHT
     reveal = project_event(projection, sensory(start.observer_uuid, visible_cells_added=[(1, 0), (2, 0)]), 4)
     assert [tile.position for update in reveal.world_updates for tile in update.tiles] == [(2, 0)]
-    assert [row.position for update in reveal.world_updates for row in update.tile_changes] == [(1, 0)]
+    # The hidden light change reaches the seat when the tile comes back into view.
+    assert [position for update in reveal.world_updates for position, _ in values_items(update.resolved_light)] == [(1, 0)]
     state = reduce_lineage(state, reveal)
     old = state.tiles[(1, 0)]
     replacement = old.model_copy(update={'tile_uuid': uuid4(), 'name': 'Replacement'})
