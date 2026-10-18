@@ -216,6 +216,22 @@ def revision_edge_channels(channels: AbstractSet[SpatialChannel]) -> Tuple[World
     return tuple(edge for edge, revision in EDGE_CHANNEL_REVISIONS.items() if revision in channels)
 
 
+# The neighbour cell a boundary placement faces, by its boundary direction.
+BOUNDARY_FACING: Dict[CardinalDirection, Tuple[int, int]] = {
+    CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
+    CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0),
+}
+
+
+def contact_surface(placement: WorldObjectPlacement) -> Set[Tuple[int, int]]:
+    """The cells a contact can land on: the supports, plus the cell a boundary placement faces."""
+    positions = set(placement.positions)
+    if placement.boundary_direction is not None:
+        dx, dy = BOUNDARY_FACING[placement.boundary_direction]
+        positions.add((placement.position[0] + dx, placement.position[1] + dy))
+    return positions
+
+
 @dataclass(frozen=True, slots=True)
 class PreparedObjectPlacement:
     """One exact admitted placement awaiting its location commit."""
@@ -3157,9 +3173,9 @@ class GridMap:
     ) -> Tuple[Tuple[int, int], ...]:
         """The origins, sorted, from which `manual_object_contact` finds a surface.
 
-        Only origins within the object's reach of a surface cell by grid
-        distance are traced: support distance is never shorter than grid
-        distance, and the subjective surface is a subset of this one.
+        Only origins within the object's reach, by grid distance, of a cell of
+        its contact surface are traced: support distance is never shorter than
+        grid distance, and the subjective surface is a subset of the full one.
         """
         provider = BaseBlock.get(object_uuid)
         placement = self._object_placements.get(object_uuid)
@@ -3169,21 +3185,9 @@ class GridMap:
         steps = reach // 5
         offsets = [(dx, dy) for dx in range(-steps, steps + 1) for dy in range(-steps, steps + 1)
                    if grid_distance_feet((0, 0), (dx, dy)) <= reach]
-        near = {(x + dx, y + dy) for x, y in self._contact_surface(placement) for dx, dy in offsets}
+        near = {(x + dx, y + dy) for x, y in contact_surface(placement) for dx, dy in offsets}
         return tuple(sorted(origin for origin in near.intersection(origins) if self.manual_object_contact(
             requester_uuid, object_uuid, subjective=subjective, origin=origin) is not None))
-
-    @staticmethod
-    def _contact_surface(placement: WorldObjectPlacement) -> Set[Tuple[int, int]]:
-        """The cells a contact can land on: the supports, plus the cell a boundary placement faces."""
-        positions = set(placement.positions)
-        if placement.boundary_direction is not None:
-            dx, dy = {
-                CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
-                CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0),
-            }[placement.boundary_direction]
-            positions.add((placement.position[0] + dx, placement.position[1] + dy))
-        return positions
 
     def attack_object_contact(
         self, requester_uuid: UUID, object_uuid: UUID, *,
@@ -3203,7 +3207,7 @@ class GridMap:
         if origin is None or placement is None or origin not in self._tiles:
             return None
         source_tile = self._tiles[origin]
-        positions = self._contact_surface(placement)
+        positions = contact_surface(placement)
 
         if subjective:
             senses = requester.get_senses() if requester is not None else None
