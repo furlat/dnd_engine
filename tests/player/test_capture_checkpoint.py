@@ -70,12 +70,11 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
         nonlocal hot, cold, cursor
         roots = tuple(event for _, event in EventQueue.iter_events_since(cursor)
             if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
-        arguments = dict(observer_uuid=first.uuid, audience=audience,
-            known_actor_uuids=frozenset(hot.actors),
-            known_entity_names={str(identity): actor.name for identity, actor in hot.actors.items()})
-        resumed = capture_lineages(roots, **arguments, context=capture_context(checkpoint, roots))
-        original = capture_lineages(roots, **arguments)
+        resumed = capture_lineages(roots, observer_uuid=first.uuid, audience=audience,
+            context=capture_context(checkpoint, roots))
+        original = capture_lineages(roots, observer_uuid=first.uuid, audience=audience)
         assert resumed == original
+        published = []
         for left, right in zip(resumed, original, strict=True):
             hot_public = project_lineage(hot_session, hot_projection, left)
             cold_public = project_lineage(cold_session, cold_projection, right)
@@ -85,9 +84,10 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
                     encode_player_sequence(PlayerSequence(initialization=initial, lineages=(cold_public,))))
                 hot = reduce_lineage(hot, hot_public)
                 cold = reduce_lineage(cold, cold_public)
+                published.append(hot_public)
         assert hot == cold
         cursor = EventQueue.event_cursor()
-        return roots, arguments, resumed
+        return roots, resumed, [record for lineage in published for record in lineage.bodies]
 
     unseen = member(world, 'Previously unseen', (4, 3), deploy=False)
     dagger = build_authored_item('weapon.dagger', unseen.uuid)
@@ -99,11 +99,13 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
 
     world.deploy_entity(unseen, unseen.position)
     unseen.receive_damage(2, DamageType.FORCE, source_entity_uuid=unseen.uuid)
-    earlier_roots, earlier_arguments, earlier_capture = consume()
-    discovered = next(row for root in earlier_capture for row in root.admissions if row.actor.uuid == unseen.uuid)
-    assert discovered.actor.normal_hp == 33, 'Discovery must precede the later damage in the same operation'
-    assert dict(discovered.actor.equipment)[WeaponSlot.MELEE_MAIN.value] == dagger.uuid
-    assert any(condition.name == 'Blinded' for condition in discovered.actor.conditions)
+    earlier_roots, earlier_capture, entered = consume()
+    discovered = next(record for record in entered if record.actor_uuid == unseen.uuid)
+    assert discovered.birth is not None
+    assert discovered.body.normal_hp == 33, 'Discovery must precede the later damage in the same operation'
+    assert {layer.slot: layer.item_uuid for layer in discovered.body.visual_loadout.layers}[
+        WeaponSlot.MELEE_MAIN.value] == dagger.uuid
+    assert any(member.name == 'Blinded' for member in discovered.body.conditions)
     assert unseen.get_normal_hp() == 31
     assert hot.actors[unseen.uuid].normal_hp == 31
 
@@ -119,9 +121,8 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
     consume()
     assert hot.actors[unseen.uuid].normal_hp == remembered_hp, 'Unseen damage must remain private'
     world.deploy_entity(unseen, unseen.position)
-    _, _, reacquired = consume()
-    assert any(row.actor.uuid == unseen.uuid and row.actor.normal_hp == 28
-        for root in reacquired for row in root.admissions)
+    reentered = [record for record in consume()[2] if record.actor_uuid == unseen.uuid]
+    assert [(record.body.normal_hp, record.birth) for record in reentered] == [(28, None)]
     assert hot.actors[unseen.uuid].normal_hp == 28
 
     unseen.receive_damage(1000, DamageType.FORCE, source_entity_uuid=first.uuid)
@@ -135,13 +136,14 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
     assert unseen.uuid in hot.actors, 'Retiring private reconstruction must preserve admitted public identity'
     assert unseen.uuid not in checkpoint.actors
     assert all(unseen.uuid not in contacts for contacts in checkpoint.contacts.values())
-    assert discovered.actor.normal_hp == 33
+    assert discovered.body.normal_hp == 33
 
     # The shared fold never folds history again: a request for roots it has
     # already passed is refused instead of answered from newer state.
     with pytest.raises(ValueError, match='precedes the capture checkpoint'):
-        capture_lineages(earlier_roots, **earlier_arguments, context=capture_context(checkpoint, earlier_roots))
-    assert capture_lineages(earlier_roots, **earlier_arguments) == earlier_capture
+        capture_lineages(earlier_roots, observer_uuid=first.uuid, audience=audience,
+            context=capture_context(checkpoint, earlier_roots))
+    assert capture_lineages(earlier_roots, observer_uuid=first.uuid, audience=audience) == earlier_capture
 
 
 def test_capture_checkpoint_belongs_to_one_event_queue_generation(world):

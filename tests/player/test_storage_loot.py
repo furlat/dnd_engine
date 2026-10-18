@@ -79,8 +79,7 @@ def test_one_all_close_reopen_survive_cold_serialization(cache_world):
 
     def commit(root, contents, holdings):
         nonlocal state
-        native = capture_lineages((root,), observer_uuid=actor.uuid,
-            known_actor_uuids=frozenset(state.actors))
+        native = capture_lineages((root,), observer_uuid=actor.uuid)
         assert native and not any(row.dispositions for row in native)
         recorded.extend(native)
         for lineage in native:
@@ -176,8 +175,7 @@ def test_full_stack_merge_removes_source_child_in_cold_view(cache_world):
     chosen = next(row for row in rows(actor, chest) if row.loot_item_uuid == incoming.uuid)
     root = execute_available_action(actor, chosen, chosen.valid_targets[0])
     assert root is not None and not root.canceled
-    for native in capture_lineages((root,), observer_uuid=actor.uuid,
-            known_actor_uuids=frozenset(state.actors)):
+    for native in capture_lineages((root,), observer_uuid=actor.uuid):
         packet = project_lineage(session, projection, native)
         assert packet is not None
         state = reduce_lineage(state, packet)
@@ -201,8 +199,7 @@ def test_losing_sight_keeps_last_contents_and_does_not_discover_private_items(ca
         duration=Duration(duration=3, duration_type=DurationType.ROUNDS)), check_save_throw=False)
     assert blinded is not None
     assert rows(actor, chest) == []
-    for native in capture_lineages((blinded,), observer_uuid=actor.uuid,
-            known_actor_uuids=frozenset(state.actors)):
+    for native in capture_lineages((blinded,), observer_uuid=actor.uuid):
         packet = project_lineage(session, projection, native)
         assert packet is not None
         state = reduce_lineage(state, packet)
@@ -219,8 +216,7 @@ def test_partial_loot_all_keeps_exact_remaining_contents_visible(cache_world):
     state = reduce_initialization(public)
     original = {row.item_uuid for row in state.objects[chest.uuid].contained_items}
     root = use(actor, chest, "Loot All")
-    for native in capture_lineages((root,), observer_uuid=actor.uuid,
-            known_actor_uuids=frozenset(state.actors)):
+    for native in capture_lineages((root,), observer_uuid=actor.uuid):
         packet = project_lineage(session, projection, native)
         assert packet is not None
         state = reduce_lineage(state, packet)

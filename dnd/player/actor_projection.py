@@ -34,10 +34,12 @@ def fold_completed_actors(actors: dict[UUID, ActorState], event: Event, change: 
         actors.pop(ended, None)
 
 
-def fold_birth(actors: dict[UUID, ActorState], event: Event) -> None:
-    """A completed birth's actor."""
-    if isinstance(event, EntityCreatedEvent):
-        actors[event.entity_uuid] = actor_from_birth(event)
+def fold_birth(actors: dict[UUID, ActorState], event: Event) -> UUID | None:
+    """A completed birth's actor; the born uuid, None when the event is no birth."""
+    if not isinstance(event, EntityCreatedEvent):
+        return None
+    actors[event.entity_uuid] = actor_from_birth(event)
+    return event.entity_uuid
 
 
 def apply_presented_change(actors: dict[UUID, ActorState], change: ActorFactChange) -> tuple[UUID, ...]:

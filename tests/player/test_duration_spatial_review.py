@@ -56,7 +56,7 @@ def consume(seat, state, roots):
     session, projection = seat
     delivered = []
     for native in capture_lineages(roots, observer_uuid=state.observer_uuid,
-            audience=state.viewing_audience, known_actor_uuids=frozenset(state.actors)):
+            audience=state.viewing_audience):
         public = project_lineage(session, projection, native)
         if public is not None:
             delivered.append(public)
