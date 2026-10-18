@@ -583,3 +583,10 @@ Hard rules:
   - Op totals moved 2–4 ms. Every op that was over 100 ms still is: the budget is decided by publication (~40 ms per SG move) and Wall of Stone's light work.
   - Branches never hit by the gallery or the tests: multi-row entities, and side rows over cell rows.
   - `_target_ids` is listed in RULE_VIOLATIONS (append-only intern map).
+- 2026-10-18: **Wall FOV shared across origins merged into codex/event-native-deltas (7b484f736).**
+  - `wall_visibility` builds the 8 quadrant entry layers once per group of origins (`compact_window_groups` bounds each group's box). `compute_fovs` solves at most once per origin, the relight solves its sources as one batch, and the settlement solves its wall FOVs together (`SightScope`, `_wall_fov_routes`).
+  - A kept map-wide layer was prototyped and rejected (saves ~1.5 ms, needs a revision at 6 writers). The batch saves ~4 ms and keeps nothing.
+  - Gates (agent, vs ff7701f9a): FOV oracle 0 mismatches on 8 cases; random worlds 0 mismatches over 26,776 queries and 49,860 batch answers; kernel fuzz 0/14,978; transcripts byte-identical; sweep = r21; pyright 0 new.
+  - Wall of Stone 144 → 136 ms (native 95 → 87). The other rows are within load noise.
+  - The scalar-solver oracle moved to scratchpad `wf/fov_oracle_batch.py`; the old `pv1a4/fov_oracle.py` wraps a deleted method.
+  - Next, decided by the integrator: sensory re-converts each sight answer (~1,800 tuples) to arrays and repeats the route lookup the solve made (~9 ms per Wall of Stone op). The solve returns its rows instead (own lane).
