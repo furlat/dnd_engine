@@ -1143,10 +1143,11 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
         if isinstance(event, SensoryUpdateEvent) and sensed_here:
             # The member's senses: the seat's perception and composed view after the event. A body enters when
             # the seat's composed view takes it as a contact (a member regaining a body another holds is no
-            # entry); only the member's changed contacts can enter, in the member's order.
+            # entry); only the member's changed contacts can enter, in the member's order. A controlled body
+            # never enters here: it is always perceived (below).
             held = composition.view.entities if composition.view is not None else {}
             entering = tuple(identity for identity in event.entity_contacts_changed
-                             if identity not in held or identity not in walk.known)
+                             if not observer.controls(identity) and (identity not in held or identity not in walk.known))
             fold_senses(remembered, event, cursor=indexes[event.uuid], audience_composition=composition)
             view = composition.view
             if view is not None:

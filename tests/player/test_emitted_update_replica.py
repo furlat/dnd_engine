@@ -174,6 +174,27 @@ SCENARIO = (
 )
 
 
+def test_a_seats_own_bodies_are_never_resent_whole(session):
+    # A controlled body is always perceived, so after initialization it travels as changes only, also when one
+    # member of the party loses and regains sight of the other (the fighter inside the darkness, then its end).
+    steps = SCENARIO[:-1] + (Step('fighter walks into the darkness', move(0, (10, 10))), SCENARIO[-1])
+    sorcerer = session.player_uuids[1]
+    session.game.entities[sorcerer].action_economy.set_normal_spell_slot_capacity(
+        uuid5(sorcerer, 'replica'), {level: 4 for level in range(1, 10)})
+    publish_sheets(session)
+    catalog = ui_content_manifest()
+    runtimes, _ = initialize_audiences(session, catalog)
+    resent = []
+    for step in steps:
+        start = EventQueue.event_cursor()
+        step.act(session)
+        updates = capture_application_operation(runtimes, operation_since(session, start), catalog)
+        for seat, update in updates.items():
+            resent += [(step.name, seat) for lineage in update.lineages for record in lineage.bodies
+                       if record.actor_uuid in session.seats[seat].controlled]
+    assert resent == []
+
+
 def test_client_fold_of_emitted_updates_matches_projection_and_cold_composition(session):
     fighter, sorcerer = session.player_uuids
     # A second, single-observer seat beside the two-observer party seat.
