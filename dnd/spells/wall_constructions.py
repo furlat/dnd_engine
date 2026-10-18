@@ -20,7 +20,7 @@ from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.events import Event, EventHandler, EventType, Trigger, PortalTransferEvent, EventPhase, EventQueue, ForcedMovementEvent, ItemDestructionEvent, Range, RangeType, SpatialChangeEvent
 from dnd.core.gridmap import CrossingChannel, get_map
-from dnd.core.navigation import route, route_cost, route_destinations
+from dnd.core.navigation import route, route_costs
 from dnd.core.item_types import ItemPresentationState
 from dnd.core.life_types import RemainsDisposition
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
@@ -549,7 +549,7 @@ def stone_enclosure_escapes(caster: Entity, geometry: WallAssemblyPresentationGe
         speed = entity.action_economy.current_speed()
         reached = grid.compute_paths(entity.position, requesting_entity_uuid=entity.uuid,
             max_distance=ceil(speed / 5), subjective=True)
-        costs = {p: route_cost(reached, p) or 0 for p in route_destinations(reached)}
+        costs = dict(route_costs(reached))
         exits = [p for p in costs if (p[0] < min_x or p[0] > max_x or p[1] < min_y or p[1] > max_y)
                  and costs[p] <= speed]
         if not exits:

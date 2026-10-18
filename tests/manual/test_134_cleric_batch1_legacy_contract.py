@@ -63,7 +63,7 @@ from tests.manual.spell_regression_support import (
     reset_spell_regression_arena,
 )
 from dnd.core.values import Channel, Kind, add_modifier
-from tests.engine.support import route_paths, search_tables
+from tests.engine.support import route_paths
 
 
 def _dark_arena(width: int = 24, height: int = 15) -> None:

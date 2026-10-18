@@ -50,7 +50,7 @@ from dnd.spells.content_metadata import get_spell_catalog_metadata
 from dnd.types.summoning import SummonApplication
 from dnd.types.discovery import ActorScan
 from dnd.core.elevation import support_distance_feet
-from dnd.core.navigation import DIRECTION_STEP, has_route, mark_cell, route
+from dnd.core.navigation import has_route, remember_blocked_cell, remember_blocked_sides, route
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.action_types import ActionAffordance, ActionSelection, ActionVariantFacet, CostSource, RestrictedActionKind
@@ -950,11 +950,10 @@ class Move(BaseAction):
                             directions = list(from_tile.directions_toward(to_pos))
                         senses = source_entity.senses
                         if cell_blocked:
-                            senses.collision_blocked = mark_cell(senses.collision_blocked, to_pos, True)
-                        else:
-                            for direction in directions:
-                                senses.directional_collision_blocked = mark_cell(
-                                    senses.directional_collision_blocked, from_pos, 1 << DIRECTION_STEP[direction])
+                            senses.collision_blocked = remember_blocked_cell(senses.collision_blocked, to_pos)
+                        elif directions:
+                            senses.directional_collision_blocked = remember_blocked_sides(
+                                senses.directional_collision_blocked, from_pos, directions)
                         collision_event = SpatialChangeEvent.movement_collision(
                             position=to_pos, mover_uuid=source_entity.uuid,
                             parent_event=effect_event.uuid,

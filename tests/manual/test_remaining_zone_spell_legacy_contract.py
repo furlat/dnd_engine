@@ -41,7 +41,7 @@ from tests.manual.spell_regression_support import (
     force_save_result,
     reset_spell_regression_arena,
 )
-from tests.engine.support import route_paths, search_tables
+from tests.engine.support import search_tables
 from dnd.core.navigation import route_count
 
 

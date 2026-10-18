@@ -22,9 +22,9 @@ from dnd.core.view import (CARDINAL_DIRECTIONS, CARDINAL_STEPS, OPPOSITE_CARDINA
 from dnd.core.elevation import support_distance_feet
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.shadowcast import compute_fov
-from dnd.core.navigation import (CARDINAL_COUNT, DIAGONAL_EPSILON, DIRECTION_STEP, STEP_BITS, STEP_INDEX, STEPS,
-    PathSearch, Routes, flat_offsets, frozen_array, layer_key, lone_search, padded, path_tree, reached_routes, route,
-    search_box)
+from dnd.core.navigation import (CARDINAL_COUNT, DIAGONAL_EPSILON, NO_CELLS_LAYER, NO_SIDES_LAYER, STEP_BITS,
+    STEP_INDEX, STEPS, PathQuery, PathSearch, Routes, flat_offsets, frozen_array, layer_key, lone_search, padded,
+    path_tree, reached_routes, remembered_cells, route, search_box, side_bit)
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_object import BaseObject
 from dnd.core.condition_types import HazardFilter
@@ -2164,7 +2164,7 @@ class GridMap:
                         mode: MovementMode = MovementMode.WALKING,
                         walk_in_danger: bool = True,
                         subjective: bool = False,
-                        collision_blocked: Optional[CellLayer] = None) -> bool:
+                        collision_blocked: CellLayer = NO_CELLS_LAYER) -> bool:
         """Check whether a position is walkable for a specific entity.
 
         Considers:
@@ -2210,7 +2210,7 @@ class GridMap:
             if self.is_position_hazardous_for(x, y, requesting_entity_uuid):
                 return False
 
-        if collision_blocked is not None and layer_value(collision_blocked, (x, y)):
+        if layer_value(collision_blocked, (x, y)):
             return False
 
         return True
@@ -2333,10 +2333,10 @@ class GridMap:
         return result
 
     def _remembered_transition_allows(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
-                                      blocked: Optional[CellLayer]) -> bool:
+                                      blocked: CellLayer) -> bool:
         """Whether no directional collision is remembered on the sides of `from_pos` this step crosses
-        (bit 1 << DIRECTION_STEP[direction] of the layer)."""
-        if blocked is None or not blocked.values.any():
+        (`side_bit` of each side in the layer)."""
+        if not blocked.values.any():
             return True
         tile = self._tiles.get(from_pos)
         if tile is None:
@@ -2345,14 +2345,14 @@ class GridMap:
         if not directions:
             return True
         sides = layer_value(blocked, from_pos)
-        return all(not sides >> DIRECTION_STEP[direction] & 1 for direction in directions)
+        return all(not sides & side_bit(CardinalDirection(direction)) for direction in directions)
 
     def _transition_cell_allows(self, position: Tuple[int, int], channel: WorldEdgeChannel,
                                 requester_uuid: Optional[UUID] = None,
                                 movement_mode: MovementMode = MovementMode.WALKING,
                                 walk_in_danger: bool = True,
                                 subjective: bool = False,
-                                collision_blocked: Optional[CellLayer] = None,
+                                collision_blocked: CellLayer = NO_CELLS_LAYER,
                                 movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None) -> bool:
         if channel is WorldEdgeChannel.MOVEMENT:
             if movement_cell_cache is not None:
@@ -2380,7 +2380,7 @@ class GridMap:
                                          requester_uuid: Optional[UUID] = None,
                                          movement_mode: MovementMode = MovementMode.WALKING,
                                          subjective: bool = False,
-                                         directional_collision_blocked: Optional[CellLayer] = None,
+                                         directional_collision_blocked: CellLayer = NO_SIDES_LAYER,
                                          side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None) -> bool:
         dx = abs(to_pos[0] - from_pos[0])
         dy = abs(to_pos[1] - from_pos[1])
@@ -2507,17 +2507,24 @@ class GridMap:
         return min(contacts, key=lambda row: ((row[1][0] - start[0]) ** 2 + (row[1][1] - start[1]) ** 2,
                                              str(row[0]))) if contacts else None
 
+    @staticmethod
+    def _terrain_units(tile: Tile, movement_mode: MovementMode, ignore_difficult_terrain: bool) -> int:
+        """A Tile's own cost of entering it in a mode: 0 or less blocks; difficult terrain ignored costs at most 1."""
+        terrain = tile.get_movement_cost(movement_mode)
+        if terrain > 0 and movement_mode is MovementMode.WALKING and ignore_difficult_terrain:
+            return min(terrain, 1)
+        return terrain
+
     def movement_cell_cost_units(self, position: Tuple[int, int], movement_mode: MovementMode,
                                  *, ignore_difficult_terrain: bool = False) -> float:
-        """Terrain plus independent expenditure; identical effects do not compound."""
+        """Terrain plus independent expenditure; identical effects do not compound (the search reads the same
+        rule as arrays, `_search_paths`)."""
         tile = self._tiles.get(position)
         if tile is None:
             return 0
-        terrain = tile.get_movement_cost(movement_mode)
+        terrain = self._terrain_units(tile, movement_mode, ignore_difficult_terrain)
         if terrain <= 0:
             return terrain
-        if movement_mode is MovementMode.WALKING and ignore_difficult_terrain:
-            terrain = min(terrain, 1)
         extra = max((owner.movement_extra_cost_at(position, movement_mode)
                      for owner in self.get_spatial_conditions_at(position)), default=0)
         return terrain + extra
@@ -2553,8 +2560,8 @@ class GridMap:
                                     movement_mode: MovementMode = MovementMode.WALKING,
                                     walk_in_danger: bool = True,
                                     subjective: bool = False,
-                                    collision_blocked: Optional[CellLayer] = None,
-                                    directional_collision_blocked: Optional[CellLayer] = None,
+                                    collision_blocked: CellLayer = NO_CELLS_LAYER,
+                                    directional_collision_blocked: CellLayer = NO_SIDES_LAYER,
                                     side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None,
                                     movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None) -> bool:
         dx = to_pos[0] - from_pos[0]
@@ -2614,8 +2621,8 @@ class GridMap:
                        movement_mode: MovementMode = MovementMode.WALKING,
                        walk_in_danger: bool = True,
                        subjective: bool = False,
-                       collision_blocked: Optional[CellLayer] = None,
-                       directional_collision_blocked: Optional[CellLayer] = None,
+                       collision_blocked: CellLayer = NO_CELLS_LAYER,
+                       directional_collision_blocked: CellLayer = NO_SIDES_LAYER,
                        side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None,
                        movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None) -> bool:
         """Return whether movement can cross from one adjacent tile to another."""
@@ -4863,8 +4870,8 @@ class GridMap:
                       movement_mode: MovementMode = MovementMode.WALKING,
                       walk_in_danger: bool = True,
                       subjective: bool = False,
-                      collision_blocked: Optional[CellLayer] = None,
-                      directional_collision_blocked: Optional[CellLayer] = None,
+                      collision_blocked: CellLayer = NO_CELLS_LAYER,
+                      directional_collision_blocked: CellLayer = NO_SIDES_LAYER,
                       ignore_difficult_terrain: bool = False
                       ) -> Routes:
         """Every cell reachable from start, with its cost and tree path (`path_search`'s reached routes)."""
@@ -4877,11 +4884,11 @@ class GridMap:
                     movement_mode: MovementMode = MovementMode.WALKING,
                     walk_in_danger: bool = True,
                     subjective: bool = False,
-                    collision_blocked: Optional[CellLayer] = None,
-                    directional_collision_blocked: Optional[CellLayer] = None,
+                    collision_blocked: CellLayer = NO_CELLS_LAYER,
+                    directional_collision_blocked: CellLayer = NO_SIDES_LAYER,
                     ignore_difficult_terrain: bool = False
                     ) -> PathSearch:
-        """Search every reachable position from start, keeping the inputs the search read.
+        """Search every reachable position from start, keeping its query and the inputs it read.
 
         Args:
             start: Starting position.
@@ -4892,8 +4899,7 @@ class GridMap:
             walk_in_danger: Whether hazardous positions remain walkable.
             subjective: Whether imperceivable blockers are ignored.
             collision_blocked: Cells remembered as blocked by collision (bool layer).
-            directional_collision_blocked: Tile sides remembered as blocked by collision (bit
-                1 << DIRECTION_STEP[direction] per cell).
+            directional_collision_blocked: Tile sides remembered as blocked by collision (`side_bit` per cell).
             ignore_difficult_terrain: Whether costs above base movement are capped at 1.
 
         Returns:
@@ -4930,16 +4936,16 @@ class GridMap:
         if timing:
             record_action_timing("grid.compute_paths.cache_miss_ms", cache_started)
 
+        query = PathQuery(requesting_entity_uuid, movement_mode, walk_in_danger, subjective, collision_blocked,
+                          directional_collision_blocked)
         start_tile = self.get_tile(*start)
         if (start_tile is None or start_tile.get_movement_cost(movement_mode) <= 0
                 or (max_distance is not None and max_distance < 1)):
             # Every step costs at least one unit: the search reaches only its start.
-            search = lone_search(start)
+            search = lone_search(start, query)
         else:
             started = time.perf_counter() if timing else 0.0
-            search = self._search_paths(start, max_distance, requesting_entity_uuid, movement_mode, walk_in_danger,
-                                        subjective, collision_blocked, directional_collision_blocked,
-                                        ignore_difficult_terrain)
+            search = self._search_paths(start, max_distance, query, ignore_difficult_terrain)
             if timing:
                 record_action_timing("grid.compute_paths.search_ms", started)
         self._path_cache[cache_key] = PathEntry(path_read_box(start, max_distance), search)
@@ -4947,30 +4953,38 @@ class GridMap:
             self._path_cache.popitem(last=False)
         return search
 
-    def _search_paths(self, start: Tuple[int, int], max_distance: Optional[int], requester_uuid: Optional[UUID],
-                      mode: MovementMode, walk_in_danger: bool, subjective: bool,
-                      collision_blocked: Optional[CellLayer], directional_collision_blocked: Optional[CellLayer],
+    def answer_steps(self, query: PathQuery, sources: Sequence[Tuple[int, int]], targets: Sequence[Tuple[int, int]],
+                     side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None,
+                     cell_cache: Optional[Dict[Tuple[int, int], bool]] = None) -> List[bool]:
+        """`can_transition` for each (source, target) step, asked as the search `query` asks."""
+        return [self.can_transition(source, target, query.requester_uuid, query.mode, query.walk_in_danger,
+                                    query.subjective, query.collision_blocked,
+                                    directional_collision_blocked=query.directional_collision_blocked,
+                                    side_cache=side_cache, movement_cell_cache=cell_cache)
+                for source, target in zip(sources, targets)]
+
+    def _search_paths(self, start: Tuple[int, int], max_distance: Optional[int], query: PathQuery,
                       ignore_difficult_terrain: bool) -> PathSearch:
         """Build the search's cell and edge inputs as arrays over its box (`search_box`), then search.
 
-        Per cell: the cost of entering it (`movement_cell_cost_units`: the Tile's cost, read once per Tile,
-        plus the spatial conditions' extra cost, read at their footprint cells) and whether the requester can
-        enter it (`enterable_cells`). Per edge, its answer (`movement_edge_answers`). With every Tile of the box
-        costing exactly one unit the search is breadth-first, else weighted.
+        Per cell: the cost of entering it (`movement_cell_cost_units`' rule: the Tile's `_terrain_units`, read
+        once per Tile, plus the largest extra cost of the spatial conditions holding it, read at their footprint
+        cells) and whether the requester can enter it (`_enterable_cells`). Per edge, its answer
+        (`_movement_edge_answers`). With every Tile of the box costing exactly one unit the search is
+        breadth-first, else weighted.
         """
         box = search_box(start, max_distance, (self._min_x, self._min_y, self._max_x, self._max_y))
         x0, y0, width, height = padded(box)
+        mode = query.mode
         exists = np.zeros((width, height), dtype=bool)
         exists[1:-1, 1:-1] = embed(self._cell_exists, box, np.dtype(bool))
         terrain = np.zeros((width, height), dtype=np.float64)
         heights = np.zeros((width, height), dtype=np.int64)
         tiles = self._tiles
-        cap = mode is MovementMode.WALKING and ignore_difficult_terrain
         tile_i, tile_j = np.nonzero(exists)
         for i, j in zip(tile_i.tolist(), tile_j.tolist()):
             tile = tiles[(x0 + i, y0 + j)]
-            cost = tile.get_movement_cost(mode)
-            terrain[i, j] = min(cost, 1) if cap and cost > 0 else cost
+            terrain[i, j] = self._terrain_units(tile, mode, ignore_difficult_terrain)
             heights[i, j] = tile.height
         walk = terrain > 0
         extra = np.full((width, height), -np.inf)
@@ -4985,46 +4999,41 @@ class GridMap:
                 if walk[x - x0, y - y0]:
                     extra[x - x0, y - y0] = max(extra[x - x0, y - y0], owner.movement_extra_cost_at((x, y), mode))
         step_cost = np.where(walk, terrain + np.where(np.isneginf(extra), 0.0, extra), terrain)
-        enter = self.enterable_cells(box, walk, footprint_cells, requester_uuid, mode, walk_in_danger, subjective,
-                                     collision_blocked)
-        allowed, settled = self.movement_edge_answers(x0, y0, exists, heights, enter, directional_collision_blocked)
-
+        enter = self._enterable_cells(x0, y0, walk, footprint_cells, query)
+        allowed, settled = self._movement_edge_answers(x0, y0, exists, heights, enter,
+                                                       query.directional_collision_blocked)
         side_cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool] = {}
         cell_cache: Dict[Tuple[int, int], bool] = {}
-        offsets = flat_offsets(height)
 
-        def settle(cells: np.ndarray, directions: np.ndarray) -> None:
-            """Answer structured steps with `can_transition` and record them."""
-            for cell, direction in zip(cells.tolist(), directions.tolist()):
-                source = (x0 + cell // height, y0 + cell % height)
-                step = STEPS[direction]
-                if self.can_transition(source, (source[0] + step[0], source[1] + step[1]), requester_uuid, mode,
-                                       walk_in_danger, subjective, collision_blocked,
-                                       directional_collision_blocked=directional_collision_blocked,
-                                       side_cache=side_cache, movement_cell_cache=cell_cache):
-                    allowed[cell] |= STEP_BITS[direction]
-                settled[cell] |= STEP_BITS[direction]
+        def settle(cell: int, directions: List[int]) -> List[bool]:
+            """The answers of structured steps out of one cell (`answer_steps`)."""
+            source = (x0 + cell // height, y0 + cell % height)
+            return self.answer_steps(query, [source] * len(directions),
+                                     [(source[0] + STEPS[d][0], source[1] + STEPS[d][1]) for d in directions],
+                                     side_cache, cell_cache)
 
         enterable = np.append(enter.ravel(), False)
         costs = np.append(step_cost.ravel(), 0.0)
         origin = (start[0] - x0) * height + start[1] - y0
+        offsets = flat_offsets(height)
         if bool(np.all(step_cost[exists] == 1)):
             cost, pred, order = self._breadth_first(origin, width * height, offsets, enterable, allowed, settled,
                                                     settle, max_distance)
         else:
             cost, pred, order = self._dijkstra(origin, width * height, offsets, enterable, costs, allowed, settled,
                                                settle, max_distance)
-        return PathSearch(reached_routes(path_tree(start, x0, y0, width, height, cost, pred, order)),
+        return PathSearch(query, reached_routes(path_tree(start, x0, y0, width, height, cost, pred, order)),
                           frozen_array(costs), frozen_array(allowed), frozen_array(settled))
 
     @staticmethod
     def _breadth_first(origin: int, size: int, offsets: np.ndarray, enterable: np.ndarray, allowed: np.ndarray,
-                       settled: np.ndarray, settle: Callable[[np.ndarray, np.ndarray], None],
+                       settled: np.ndarray, settle: Callable[[int, List[int]], List[bool]],
                        max_distance: Optional[int]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Unit-cost search: a first-in first-out queue over the flat cells.
 
         An expanded cell reads its `STEPS` in order into each unreached cell that can be entered; the first to
-        reach a cell is its predecessor. An unsettled step is settled when read.
+        reach a cell is its predecessor. An unsettled step is answered (`settle`) when read and recorded in
+        `allowed` / `settled`.
         """
         steps = list(enumerate(offsets.tolist()))
         enter = enterable.tolist()
@@ -5044,8 +5053,11 @@ class GridMap:
                 if cost[neighbour] >= 0 or not enter[neighbour]:
                     continue
                 if not known >> direction & 1:
-                    settle(np.array([cell], dtype=np.int64), np.array([direction], dtype=np.int64))
-                    known, answers = int(settled[cell]), int(allowed[cell])
+                    known |= 1 << direction
+                    settled[cell] = known
+                    if settle(cell, [direction])[0]:
+                        answers |= 1 << direction
+                        allowed[cell] = answers
                 if not answers >> direction & 1:
                     continue
                 cost[neighbour] = next_cost
@@ -5056,14 +5068,15 @@ class GridMap:
 
     @staticmethod
     def _dijkstra(origin: int, size: int, offsets: np.ndarray, enterable: np.ndarray, step_cost: np.ndarray,
-                  allowed: np.ndarray, settled: np.ndarray, settle: Callable[[np.ndarray, np.ndarray], None],
+                  allowed: np.ndarray, settled: np.ndarray, settle: Callable[[int, List[int]], List[bool]],
                   max_distance: Optional[int]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Weighted search on (priority, cell).
 
         The priority adds each entered cell's cost plus DIAGONAL_EPSILON per diagonal step, in float, left to
         right; the cost adds each cell's cost to the truncated cost so far and is truncated again. A cell is
         relaxed on a strictly lower priority; `order` is first relaxation. Flat order is (x, y) order, so ties
-        pop as on positions. The steps of an expanded cell into enterable cells are settled before it is read.
+        pop as on positions. The unsettled steps of an expanded cell into enterable cells are answered
+        (`settle`) before it is read and recorded in `allowed` / `settled`.
         """
         steps = list(enumerate(offsets.tolist()))
         enter = enterable.tolist()
@@ -5079,12 +5092,14 @@ class GridMap:
             if cell in expanded:
                 continue
             expanded.add(cell)
-            known = int(settled[cell])
+            known, answers = int(settled[cell]), int(allowed[cell])
             unsettled = [direction for direction, offset in steps
                          if enter[cell + offset] and not known >> direction & 1]
             if unsettled:
-                settle(np.full(len(unsettled), cell, dtype=np.int64), np.array(unsettled, dtype=np.int64))
-            answers = int(allowed[cell])
+                for direction, answer in zip(unsettled, settle(cell, unsettled)):
+                    known |= 1 << direction
+                    answers |= answer << direction
+                settled[cell], allowed[cell] = known, answers
             for direction, offset in steps:
                 neighbour = cell + offset
                 if not enter[neighbour] or not answers >> direction & 1:
@@ -5111,50 +5126,50 @@ class GridMap:
         pred[found] = [predecessors[cell] for cell in order]
         return cost, pred, found
 
-    def enterable_cells(self, box: CellBox, walk: np.ndarray, footprint_cells: Collection[Tuple[int, int]],
-                        requester_uuid: Optional[UUID], mode: MovementMode, walk_in_danger: bool, subjective: bool,
-                        collision_blocked: Optional[CellLayer]) -> np.ndarray:
-        """`is_walkable_for` over a padded box (`walk`: its Tiles' walkability, `padded(box)` layout; the ring is
-        never enterable).
+    def _enterable_cells(self, x0: int, y0: int, walk: np.ndarray, footprint_cells: Collection[Tuple[int, int]],
+                         query: PathQuery) -> np.ndarray:
+        """`is_walkable_for` over a padded box at (x0, y0) (`walk`: its Tiles' walkability; the ring is never
+        enterable).
 
         It differs from the Tile's walkability only at cells holding an entity or a center object, spatial
         condition footprint cells (`footprint_cells`), hazard-owner cells when hazards are avoided, and
         remembered collision cells; it is read there.
         """
+        width, height = walk.shape
+        box = (x0 + 1, y0 + 1, x0 + width - 2, y0 + height - 2)
         enter = walk.copy()
-        x0, y0 = box[0] - 1, box[1] - 1
-        if requester_uuid is not None:
+        if query.requester_uuid is not None:
             candidates = {position for position, _ in self.contact_cells_in_box(box)}
             candidates.update(footprint_cells)
-            if not walk_in_danger:
+            if not query.walk_in_danger:
                 candidates.update(self._hazard_cells_in_box(box))
-            if collision_blocked is not None:
-                candidates.update((x, y) for x, y, _ in layer_key(collision_blocked)
-                                  if box[0] <= x <= box[2] and box[1] <= y <= box[3])
+            candidates.update(remembered_cells(query.collision_blocked, box))
             for x, y in candidates:
                 if walk[x - x0, y - y0]:
-                    enter[x - x0, y - y0] = self.is_walkable_for(x, y, requester_uuid, mode, walk_in_danger,
-                                                                 subjective, collision_blocked)
+                    enter[x - x0, y - y0] = self.is_walkable_for(x, y, query.requester_uuid, query.mode,
+                                                                 query.walk_in_danger, query.subjective,
+                                                                 query.collision_blocked)
         enter[[0, -1], :] = False
         enter[:, [0, -1]] = False
         return enter
 
-    def movement_edge_answers(self, x0: int, y0: int, exists: np.ndarray, heights: np.ndarray, enter: np.ndarray,
-                              directional_collision_blocked: Optional[CellLayer]) -> Tuple[np.ndarray, np.ndarray]:
-        """`can_transition` for the eight `STEPS` out of every cell of a padded box, where it is decided by the
-        cells' Tile presence and enterability: (allowed, settled) flat edge bytes (plus OFF).
+    def _movement_edge_answers(self, x0: int, y0: int, exists: np.ndarray, heights: np.ndarray, enter: np.ndarray,
+                               remembered_sides: CellLayer) -> Tuple[np.ndarray, np.ndarray]:
+        """`can_transition` for the eight `STEPS` out of every cell of a padded box at (x0, y0), where it is
+        decided by the cells' Tile presence and enterability: (allowed, settled) flat edge bytes (plus OFF).
 
         A step is structured — its answer can read more — when there is any global crossing owner; a local
         movement crossing owner holds a Tile within one cardinal step of either end; its exit or entry side holds
         boundary objects; a directional collision is remembered on it; or it changes height (a diagonal also
         through any leg via a bridge). Every other cardinal step is allowed when both Tiles exist and the target
         is enterable, every other diagonal one when both Tiles exist and the target and one bridge are
-        enterable. Structured steps are left unsettled; the ring around the box is never settled.
+        enterable. Structured steps are left unsettled, and so is every step out of or into the ring.
         """
         width, height = exists.shape
+        padded_box = (x0, y0, x0 + width - 1, y0 + height - 1)
         side = np.zeros((width, height), dtype=np.uint8)
-        for position, direction, _ in self.boundary_sides_in_box((x0, y0, x0 + width - 1, y0 + height - 1)):
-            side[position[0] - x0, position[1] - y0] |= np.uint8(1 << DIRECTION_STEP[direction])
+        for position, direction, _ in self.boundary_sides_in_box(padded_box):
+            side[position[0] - x0, position[1] - y0] |= np.uint8(side_bit(direction))
         owner_cells = np.zeros((width + 2, height + 2), dtype=bool)
         for identity in self._local_crossing_owners.get(WorldEdgeChannel.MOVEMENT, ()):
             footprint = self._condition_footprints.get(identity)
@@ -5162,17 +5177,19 @@ class GridMap:
                 owner_cells |= embed(footprint, (x0 - 1, y0 - 1, x0 + width, y0 + height), np.dtype(bool))
         near = (owner_cells[1:-1, 1:-1] | owner_cells[:-2, 1:-1] | owner_cells[2:, 1:-1]
                 | owner_cells[1:-1, :-2] | owner_cells[1:-1, 2:])
-        remembered = (embed(directional_collision_blocked, (x0, y0, x0 + width - 1, y0 + height - 1), np.dtype(np.uint8))
-                      if directional_collision_blocked is not None else np.zeros((width, height), dtype=np.uint8))
+        remembered = embed(remembered_sides, padded_box, np.dtype(np.uint8))
         every = bool(self._global_crossing_owners)
+        ring = np.zeros((width, height), dtype=bool)
+        ring[[0, -1], :] = True
+        ring[:, [0, -1]] = True
         structured: List[np.ndarray] = []
         allowed = np.zeros((width, height), dtype=np.uint8)
         for direction, (dx, dy) in enumerate(STEPS[:CARDINAL_COUNT]):
             target_exists = _shifted(exists, dx, dy)
-            exit_side = ((side >> direction) & 1).astype(bool)
-            entry_side = ((_shifted(side, dx, dy) >> STEP_INDEX[(-dx, -dy)]) & 1).astype(bool)
-            structured.append(every | exit_side | entry_side | near | _shifted(near, dx, dy)
-                              | ((remembered >> direction) & 1).astype(bool)
+            exit_bit, entry_bit = side_bit(CARDINAL_DIRECTIONS[CARDINAL_STEPS.index((dx, dy))]), side_bit(
+                CARDINAL_DIRECTIONS[CARDINAL_STEPS.index((-dx, -dy))])
+            structured.append(every | ((side & exit_bit) != 0) | ((_shifted(side, dx, dy) & entry_bit) != 0)
+                              | near | _shifted(near, dx, dy) | ((remembered & exit_bit) != 0)
                               | (exists & target_exists & (heights != _shifted(heights, dx, dy))))
             allowed |= np.where(exists & target_exists & _shifted(enter, dx, dy), STEP_BITS[direction], np.uint8(0))
         for direction, (dx, dy) in enumerate(STEPS[CARDINAL_COUNT:], start=CARDINAL_COUNT):
@@ -5186,9 +5203,8 @@ class GridMap:
                                 STEP_BITS[direction], np.uint8(0))
         settled = np.full((width, height), 0xFF, dtype=np.uint8)
         for direction, edge in enumerate(structured):
-            settled &= np.where(edge, ~STEP_BITS[direction], np.uint8(0xFF))
-        settled[[0, -1], :] = 0
-        settled[:, [0, -1]] = 0
+            dx, dy = STEPS[direction]
+            settled &= np.where(edge | ring | _shifted(ring, dx, dy), ~STEP_BITS[direction], np.uint8(0xFF))
         allowed &= settled
         return np.append(allowed.ravel(), np.uint8(0)), np.append(settled.ravel(), np.uint8(0))
 
@@ -5198,7 +5214,7 @@ class GridMap:
         values = np.zeros((box[2] - box[0] + 1, box[3] - box[1] + 1), dtype=bool)
         for x, y in self._hazard_cells_in_box(box):
             values[x - box[0], y - box[1]] = self.is_position_hazardous_for(x, y, entity_uuid)
-        return CellLayer(box[0], box[1], values)
+        return CellLayer(box[0], box[1], frozen_array(values))
 
     def _hazard_cells_in_box(self, box: CellBox) -> Set[Tuple[int, int]]:
         """The cells of a box some hazard owner covers."""
@@ -5209,11 +5225,10 @@ class GridMap:
     def walkable_cells(self, layer: CellLayer) -> CellLayer:
         """`is_walkable` (walking) at the cells of a bool layer, as a bool layer over its box."""
         values = np.zeros(layer.values.shape, dtype=bool)
-        tiles = self._tiles
         xs, ys = np.nonzero(layer.values)
-        values[xs, ys] = [tile is not None and not tile.blocks_walking(mode=MovementMode.WALKING)
-                          for tile in map(tiles.get, zip((xs + layer.x0).tolist(), (ys + layer.y0).tolist()))]
-        return CellLayer(layer.x0, layer.y0, values)
+        is_walkable = self.is_walkable
+        values[xs, ys] = [is_walkable(x, y) for x, y in zip((xs + layer.x0).tolist(), (ys + layer.y0).tolist())]
+        return CellLayer(layer.x0, layer.y0, frozen_array(values))
 
     def get_path(self, start: Tuple[int, int], end: Tuple[int, int],
                  max_distance: Optional[int] = None,

@@ -24,7 +24,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.base_tiles import Tile
 from dnd.core.gridmap import GridMap, SpatialConditionOwner, get_map
-from dnd.core.navigation import NO_ROUTES, Routes, has_route, no_collisions, no_side_collisions
+from dnd.core.navigation import NO_CELLS_LAYER, NO_ROUTES, NO_SIDES_LAYER, Routes, has_route
 from dnd.core.geometry import ROUTE_STEP_SHIFT, supercover_line, supercover_route_table
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.values import ModifiableValue
@@ -99,7 +99,7 @@ class Senses(BaseBlock):
     )
     light_sources: Dict[UUID, PerceivedLightSource] = Field(default_factory=dict)
     light_source_removals: Dict[UUID, int] = Field(default_factory=dict)
-    walkable: InstanceOf[CellLayer] = Field(default_factory=_empty_seen, exclude=True,
+    walkable: InstanceOf[CellLayer] = Field(default_factory=lambda: NO_CELLS_LAYER, exclude=True,
                                             description="Walkable visible cells (bool layer over the window).")
     paths: InstanceOf[Routes] = Field(default=NO_ROUTES, exclude=True,
                                       description="Known subjective routes: destinations, costs and paths.")
@@ -111,13 +111,12 @@ class Senses(BaseBlock):
         description="Source-owned structural special senses keyed by grant UUID.",
     )
     collision_blocked: InstanceOf[CellLayer] = Field(
-        default_factory=no_collisions, exclude=True,
+        default_factory=lambda: NO_CELLS_LAYER, exclude=True,
         description="Cells discovered blocked by imperceivable entities or objects during movement (bool layer).",
     )
     directional_collision_blocked: InstanceOf[CellLayer] = Field(
-        default_factory=no_side_collisions, exclude=True,
-        description="Tile sides discovered blocked by imperceivable blockers during movement "
-                    "(bit 1 << DIRECTION_STEP[direction] per cell).",
+        default_factory=lambda: NO_SIDES_LAYER, exclude=True,
+        description="Tile sides discovered blocked by imperceivable blockers during movement (side_bit per cell).",
     )
     _paths_dirty: bool = PrivateAttr(default=False)
     _last_passive_perception: int = PrivateAttr(default=0)

@@ -82,7 +82,7 @@ from dnd.core.values import (
     add_modifier,
     parts,
 )
-from tests.engine.support import route_paths, search_tables
+from tests.engine.support import search_tables
 
 
 def situated(value, target_uuid):

@@ -10,19 +10,18 @@ from the predecessors when read; nothing per cell is kept in Python containers. 
 The neighbour order (`STEPS`) and the route preference are the engine's movement rules: changing either changes
 which of several equal-cost paths a creature walks. The search itself runs in its predicate's owner
 (`GridMap.compute_paths`); this module takes primitives and arrays and never imports a block, an entity or the
-map (imports: numpy, dnd.core.view).
+map (imports: numpy, dnd.core.view, dnd.types.world).
 """
 
 from dataclasses import dataclass
 import math
-from typing import Collection, Dict, List, Optional, Sequence, Tuple
+from typing import Collection, Dict, List, NamedTuple, Optional, Sequence, Tuple
+from uuid import UUID
 
 import numpy as np
 
-from dnd.core.view import CellLayer, embed
-
-Position = Tuple[int, int]
-Box = Tuple[int, int, int, int]  # inclusive (min_x, min_y, max_x, max_y)
+from dnd.core.view import CARDINAL_DIRECTIONS, Box, CellLayer, Position, embed, layer_positions
+from dnd.types.world import CardinalDirection, MovementMode
 
 # The search's neighbour order: north, east, south, west, then the diagonals. A cell's predecessor is the
 # first expanded cell, in this order, that reaches it. Bit d of an edge-answer byte is the step STEPS[d].
@@ -30,9 +29,6 @@ STEPS: Tuple[Position, ...] = ((0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (1, -1)
 CARDINAL_COUNT = 4
 STEP_INDEX: Dict[Position, int] = {step: index for index, step in enumerate(STEPS)}
 STEP_BITS = (1 << np.arange(len(STEPS))).astype(np.uint8)
-# Tile-relative direction names (`Tile.directions_toward`, CardinalDirection values) as STEPS indices: the bit
-# a remembered directional collision and a boundary side use.
-DIRECTION_STEP: Dict[str, int] = {"north": 0, "east": 1, "south": 2, "west": 3}
 # Weighted searches add this to a diagonal step's priority (not to its cost), so equal costs prefer fewer
 # diagonals.
 DIAGONAL_EPSILON = 0.001
@@ -44,6 +40,16 @@ def frozen_array(values: np.ndarray) -> np.ndarray:
     """The array, made read-only (a kept value is never written)."""
     values.flags.writeable = False
     return values
+
+
+def side_bit(direction: CardinalDirection) -> int:
+    """A Tile side's bit in a side layer: the side's index in `CARDINAL_DIRECTIONS` (the transit grids' order)."""
+    return 1 << CARDINAL_DIRECTIONS.index(direction)
+
+
+# Empty layers: no cell (bool) and no side (side bits); remembered collisions start and are cleared as these.
+NO_CELLS_LAYER = CellLayer(0, 0, frozen_array(np.zeros((0, 0), dtype=bool)))
+NO_SIDES_LAYER = CellLayer(0, 0, frozen_array(np.zeros((0, 0), dtype=np.uint8)))
 
 
 @dataclass(frozen=True, eq=False)
@@ -77,12 +83,26 @@ class Routes:
     kinds: np.ndarray
 
 
+class PathQuery(NamedTuple):
+    """What a search asks: whose movement, in which mode, whether hazards may be entered, with which knowledge
+    and remembered collisions. A step is answered by `GridMap.can_transition` with exactly these."""
+
+    requester_uuid: Optional[UUID]
+    mode: MovementMode
+    walk_in_danger: bool
+    subjective: bool
+    collision_blocked: CellLayer
+    directional_collision_blocked: CellLayer
+
+
 @dataclass(frozen=True, eq=False)
 class PathSearch:
-    """A search and the inputs it read, kept together by the map's path cache: `reached` holds every reached
-    cell with its tree path; `step_cost` is the movement-unit cost of entering each cell (0 without a Tile);
-    bit d of `allowed` answers the step STEPS[d] out of a cell where the same bit of `settled` is set."""
+    """A search, its query and the inputs it read, kept together by the map's path cache: `reached` holds every
+    reached cell with its tree path; `step_cost` is the movement-unit cost of entering each cell (0 without a
+    Tile); bit d of `allowed` answers the step STEPS[d] between two cells of the box where the same bit of
+    `settled` is set (steps into the ring around the box are never settled)."""
 
+    query: PathQuery
     reached: Routes
     step_cost: np.ndarray
     allowed: np.ndarray
@@ -114,16 +134,11 @@ def path_tree(origin: Position, x0: int, y0: int, width: int, height: int, cost:
     return PathTree(origin, x0, y0, width, height, frozen_array(cost), frozen_array(pred), frozen_array(order))
 
 
-def lone_search(origin: Position) -> PathSearch:
+def lone_search(origin: Position, query: PathQuery) -> PathSearch:
     """The search that reaches only its origin."""
-    x0, y0, width, height = padded((origin[0], origin[1], origin[0], origin[1]))
-    size = width * height
-    flat = (origin[0] - x0) * height + origin[1] - y0
-    cost = np.full(size + 1, -1, dtype=np.int64)
-    cost[flat] = 0
-    tree = path_tree(origin, x0, y0, width, height, cost, np.full(size + 1, size, dtype=np.int64),
-                     np.array([flat], dtype=np.int64))
-    return PathSearch(reached_routes(tree), frozen_array(np.zeros(size + 1, dtype=np.float64)),
+    tree = _lone_tree(origin)
+    size = tree.width * tree.height
+    return PathSearch(query, reached_routes(tree), frozen_array(np.zeros(size + 1, dtype=np.float64)),
                       frozen_array(np.zeros(size + 1, dtype=np.uint8)), frozen_array(np.zeros(size + 1, dtype=np.uint8)))
 
 
@@ -209,7 +224,17 @@ def reached_routes(tree: PathTree) -> Routes:
     return _routes(tree, tree.order, np.zeros(tree.order.size, dtype=np.uint8))
 
 
-NO_ROUTES = admit(lone_search((0, 0)).reached.tree, np.zeros(10, dtype=bool), np.zeros(10, dtype=bool))
+def _lone_tree(origin: Position) -> PathTree:
+    x0, y0, width, height = padded((origin[0], origin[1], origin[0], origin[1]))
+    size = width * height
+    flat = (origin[0] - x0) * height + origin[1] - y0
+    cost = np.full(size + 1, -1, dtype=np.int64)
+    cost[flat] = 0
+    return path_tree(origin, x0, y0, width, height, cost, np.full(size + 1, size, dtype=np.int64),
+                     np.array([flat], dtype=np.int64))
+
+
+NO_ROUTES = _routes(_lone_tree((0, 0)), np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.uint8))
 
 
 def route_count(routes: Routes) -> int:
@@ -253,15 +278,33 @@ def _monotone(origin: Position, destination: Position, kind: int) -> List[Positi
     return path
 
 
+def _chosen(routes: Routes, flat: int, index: int, position: Position) -> List[Position]:
+    kind = int(routes.kinds[index])
+    return _chain(routes.tree, flat) if kind == TREE_ROUTE else _monotone(routes.tree.origin, position, kind)
+
+
 def route(routes: Routes, position: Position) -> Optional[List[Position]]:
     """The path chosen for an admitted destination (a new list), None for any other cell."""
-    tree = routes.tree
-    flat = _flat(tree, position)
+    flat = _flat(routes.tree, position)
     index = int(routes.slot[flat])
-    if index < 0:
-        return None
-    kind = int(routes.kinds[index])
-    return _chain(tree, flat) if kind == TREE_ROUTE else _monotone(tree.origin, position, kind)
+    return _chosen(routes, flat, index, position) if index >= 0 else None
+
+
+def destination_path(routes: Routes, index: int) -> List[Position]:
+    """The chosen path (a new list) of the destination at `index` in `route_destinations` order."""
+    flat = int(routes.destinations[index])
+    return _chosen(routes, flat, index, _position(routes.tree, flat))
+
+
+def route_items(routes: Routes) -> List[Tuple[Position, List[Position]]]:
+    """Every destination with its chosen path (new lists), in tree order."""
+    return [(position, _chosen(routes, flat, index, position))
+            for index, (flat, position) in enumerate(zip(routes.destinations.tolist(), route_destinations(routes)))]
+
+
+def route_costs(routes: Routes) -> List[Tuple[Position, int]]:
+    """Every destination with its movement cost in feet, in tree order."""
+    return list(zip(route_destinations(routes), (routes.tree.cost[routes.destinations] * 5).tolist()))
 
 
 def routes_box(routes: Routes) -> Optional[Box]:
@@ -282,7 +325,8 @@ def routes_box(routes: Routes) -> Optional[Box]:
 
 
 def routes_touch(routes: Routes, mask: np.ndarray) -> bool:
-    """Whether a cell after the origin on an admitted tree path is in the flat mask."""
+    """Whether a cell after the origin on an admitted destination's tree path is in the flat mask (the kinds are
+    not read: this is asked of admitted routes, before the preference picks any path)."""
     if not routes.destinations.size:
         return False
     off = routes.tree.width * routes.tree.height
@@ -298,15 +342,15 @@ def routes_touch(routes: Routes, mask: np.ndarray) -> bool:
 class RouteCandidates:
     """The equal-cost monotone routes `route_candidates` keeps for one `Routes`, before their steps are read.
 
-    `chosen` indexes `Routes.destinations`; per route (diagonal-first, then cardinal-first) `cells`,
-    `previous` and `directions` are (steps, chosen) arrays (OFF past its end), `considered` says whether it is
-    weighed at all (differs from the current path, known, same cost), `risk` its risk words. `best` / `turns`
-    are the tree paths' risk and turns, `floor` the fewest turns possible.
+    `chosen` indexes `Routes.destinations`; `within` (steps, chosen) marks each route's steps (both candidates
+    have the same length). Per route (diagonal-first, then cardinal-first) `previous` and `directions` are the
+    cell each step leaves and its STEPS direction, `considered` says whether it is weighed at all (differs from
+    the current path, known, same cost), `risk` its risk words. `best` / `turns` are the tree paths' risk and
+    turns, `floor` the fewest turns possible.
     """
 
     chosen: np.ndarray
     within: np.ndarray
-    cells: Tuple[np.ndarray, np.ndarray]
     previous: Tuple[np.ndarray, np.ndarray]
     directions: Tuple[np.ndarray, np.ndarray]
     considered: Tuple[np.ndarray, np.ndarray]
@@ -424,43 +468,51 @@ def route_candidates(routes: Routes, search: PathSearch, known: np.ndarray, haza
     same_route = (d == 0) | (c == 0)
     considered_first = ~first[3] & first[4]
     considered_second = ~second[3] & ~(~first[3] & same_route) & second[4]
-    return RouteCandidates(chosen, within, (first[0], second[0]), (first[1], second[1]), (first[2], second[2]),
+    return RouteCandidates(chosen, within, (first[1], second[1]), (first[2], second[2]),
                            (considered_first, considered_second), (first[5], second[5]), best[chosen],
                            turns[chosen], minimum_turns[chosen])
 
 
-def candidate_steps(search: PathSearch, candidates: RouteCandidates) -> Tuple[List[Position], List[Position]]:
-    """The steps of considered candidates the search did not settle, as (sources, targets), each once."""
+class CandidateSteps(NamedTuple):
+    """Steps the search did not settle, each once: flat source cells and STEPS directions, and the same steps as
+    (source, target) positions for `GridMap.answer_steps`."""
+
+    cells: np.ndarray
+    directions: np.ndarray
+    sources: List[Position]
+    targets: List[Position]
+
+
+def candidate_steps(search: PathSearch, candidates: RouteCandidates) -> CandidateSteps:
+    """The steps of considered candidates the search did not settle."""
     tree = search.reached.tree
-    sources: List[np.ndarray] = []
+    pairs: List[np.ndarray] = []
     for previous, directions, considered in zip(candidates.previous, candidates.directions, candidates.considered):
         read = candidates.within & considered[None, :]
         unsettled = read & ((search.settled[previous] & STEP_BITS[directions]) == 0)
-        sources.append(np.stack([previous[unsettled], directions[unsettled]], axis=1))
-    pairs = np.unique(np.concatenate(sources), axis=0)
-    cells, directions = pairs[:, 0], pairs[:, 1]
+        pairs.append(np.stack([previous[unsettled], directions[unsettled]], axis=1))
+    unique = np.unique(np.concatenate(pairs), axis=0)
+    cells, directions = unique[:, 0], unique[:, 1]
     xs, ys = (cells // tree.height + tree.x0).tolist(), (cells % tree.height + tree.y0).tolist()
     steps = [STEPS[direction] for direction in directions.tolist()]
-    return list(zip(xs, ys)), [(x + dx, y + dy) for x, y, (dx, dy) in zip(xs, ys, steps)]
+    return CandidateSteps(cells, directions, list(zip(xs, ys)),
+                          [(x + dx, y + dy) for x, y, (dx, dy) in zip(xs, ys, steps)])
 
 
-def choose_routes(routes: Routes, search: PathSearch, candidates: RouteCandidates,
-                  steps: Tuple[List[Position], List[Position]], answers: Sequence[bool]) -> Routes:
-    """The route preference's decision (second pass), with `answers` for the `candidate_steps` `steps`.
+def choose_routes(routes: Routes, search: PathSearch, candidates: RouteCandidates, steps: CandidateSteps,
+                  answers: Sequence[bool]) -> Routes:
+    """The route preference's decision (second pass) over `routes`, admitted over `search`'s own tree, with
+    `answers` for the `candidate_steps` `steps`.
 
     Per destination, the diagonal-first then the cardinal-first candidate is taken when it is considered, every
     step is allowed, and its risk is a subset of the current best risk and either smaller or with fewer turns
     than the current path; a taken route becomes the best.
     """
-    tree = search.reached.tree
-    allowed, settled = search.allowed.copy(), search.settled.copy()
-    sources, targets = steps
-    if sources:
-        cells = np.array([(x - tree.x0) * tree.height + y - tree.y0 for x, y in sources], dtype=np.int64)
-        bits = STEP_BITS[[STEP_INDEX[(t[0] - s[0], t[1] - s[1])] for s, t in zip(sources, targets)]]
-        np.bitwise_or.at(settled, cells, bits)
-        granted = np.array(answers, dtype=bool)
-        np.bitwise_or.at(allowed, cells[granted], bits[granted])
+    assert routes.tree is search.reached.tree
+    allowed = search.allowed.copy()
+    bits = STEP_BITS[steps.directions]
+    granted = np.array(answers, dtype=bool)
+    np.bitwise_or.at(allowed, steps.cells[granted], bits[granted])
     best, best_turns, floor = candidates.best, candidates.turns, candidates.floor
     taken = []
     for previous, directions, considered, risk in zip(candidates.previous, candidates.directions,
@@ -476,31 +528,21 @@ def choose_routes(routes: Routes, search: PathSearch, candidates: RouteCandidate
     kinds = routes.kinds.copy()
     kinds[candidates.chosen[taken[0]]] = DIAGONAL_FIRST
     kinds[candidates.chosen[taken[1]]] = CARDINAL_FIRST
-    return Routes(tree, routes.destinations, routes.slot, frozen_array(kinds))
+    return Routes(routes.tree, routes.destinations, routes.slot, frozen_array(kinds))
 
 
 # ---------------------------------------------------------------- remembered collisions
 
 
-def no_collisions() -> CellLayer:
-    """An empty remembered-cell layer (bool)."""
-    return CellLayer(0, 0, frozen_array(np.zeros((0, 0), dtype=bool)))
-
-
-def no_side_collisions() -> CellLayer:
-    """An empty remembered-side layer (bit 1 << DIRECTION_STEP[direction] per cell)."""
-    return CellLayer(0, 0, frozen_array(np.zeros((0, 0), dtype=np.uint8)))
-
-
-def layer_key(layer: Optional[CellLayer]) -> Tuple[Tuple[int, int, int], ...]:
+def layer_key(layer: CellLayer) -> Tuple[Tuple[int, int, int], ...]:
     """A layer's nonzero cells and values, x-major: a hashable key for what it holds."""
-    if layer is None or not layer.values.size:
+    if not layer.values.size:
         return ()
     xs, ys = np.nonzero(layer.values)
     return tuple(zip((xs + layer.x0).tolist(), (ys + layer.y0).tolist(), layer.values[xs, ys].astype(int).tolist()))
 
 
-def mark_cell(layer: CellLayer, position: Position, bits: int) -> CellLayer:
+def _mark_cell(layer: CellLayer, position: Position, bits: int) -> CellLayer:
     """A new layer holding the old one's values plus `bits` at one cell (the old layer is not written)."""
     if layer.values.size:
         box = (min(layer.x0, position[0]), min(layer.y0, position[1]),
@@ -511,3 +553,21 @@ def mark_cell(layer: CellLayer, position: Position, bits: int) -> CellLayer:
     i, j = position[0] - box[0], position[1] - box[1]
     values[i, j] = values[i, j] | bits
     return CellLayer(box[0], box[1], frozen_array(values))
+
+
+def remember_blocked_cell(layer: CellLayer, position: Position) -> CellLayer:
+    """The remembered blocked cells (bool layer) with one more cell."""
+    return _mark_cell(layer, position, True)
+
+
+def remember_blocked_sides(layer: CellLayer, position: Position, directions: Sequence[str]) -> CellLayer:
+    """The remembered blocked sides (side layer) with these sides of one cell (`Tile.directions_toward` names)."""
+    bits = 0
+    for direction in directions:
+        bits |= side_bit(CardinalDirection(direction))
+    return _mark_cell(layer, position, bits)
+
+
+def remembered_cells(layer: CellLayer, box: Box) -> List[Position]:
+    """The remembered cells of a layer inside a box."""
+    return [(x, y) for x, y in layer_positions(layer) if box[0] <= x <= box[2] and box[1] <= y <= box[3]]

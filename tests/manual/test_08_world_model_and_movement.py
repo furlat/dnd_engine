@@ -15,7 +15,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import ModifiableValue
-from tests.engine.support import route_paths, search_tables
+from tests.engine.support import search_tables
 
 
 def reset_world_state() -> None:

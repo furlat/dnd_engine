@@ -1136,15 +1136,8 @@ def test_grid_compute_paths_reuses_same_revision_result(
     assert solver_calls == 1
     assert second_distances == first_distances
     assert second_paths == first_paths
-    sample_destination = next(iter(second_paths))
-    second_paths[sample_destination].append((999, 999))
-    _, third_paths = search_tables(grid.compute_paths(
-        actor.position,
-        max_distance=20,
-        requesting_entity_uuid=actor.uuid,
-        subjective=True,
-    ))
-    assert third_paths[sample_destination] == first_paths[sample_destination]
+    kept = grid.compute_paths(actor.position, max_distance=20, requesting_entity_uuid=actor.uuid, subjective=True)
+    assert not kept.tree.pred.flags.writeable and not kept.destinations.flags.writeable
 
 
 def test_unit_cost_paths_use_breadth_first_fast_path(

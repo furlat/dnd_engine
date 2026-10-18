@@ -94,9 +94,9 @@ from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
 from dnd.blocks.sensory import Senses, published_senses, spatial_senses_system
 from dnd.core.view import cell_seen, cell_visible, layer_value, visible_box, visible_positions
-from dnd.core.navigation import (NO_ROUTES, PathSearch, Routes, admit, candidate_steps, choose_routes, has_route,
-    layer_key, route, route_candidates, route_cost, route_count, route_destinations, routes_box, routes_touch,
-    tree_box, tree_cells, tree_mask)
+from dnd.core.navigation import (NO_ROUTES, PathSearch, Routes, admit, candidate_steps, choose_routes,
+    destination_path, layer_key, route, route_candidates, route_cost, route_costs, route_count, route_destinations,
+    route_items, routes_box, routes_touch, tree_box, tree_cells, tree_mask)
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.blocks.inventory import Inventory, InventoryAddResult
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
@@ -5269,21 +5269,16 @@ class Entity(BaseBlock):
         else:
             self.materialize_navigation(max_distance=20, path_max_distance=remaining_distance)
 
-    def _preferred_routes(self, routes: Routes, search: PathSearch, known: np.ndarray, hazard: np.ndarray,
-                          domains: Sequence[np.ndarray], has_reachable_hazard: bool, *,
-                          walk_in_danger: bool) -> Routes:
+    @staticmethod
+    def _preferred_routes(routes: Routes, search: PathSearch, known: np.ndarray, hazard: np.ndarray,
+                          domains: Sequence[np.ndarray], has_reachable_hazard: bool) -> Routes:
         """The route preference over one search's admitted routes; the candidate steps the search did not read
-        are answered by `can_transition` with the search's own arguments."""
+        are answered as that search asks (`GridMap.answer_steps` with its query)."""
         candidates = route_candidates(routes, search, known, hazard, domains, has_reachable_hazard)
         if candidates is None:
             return routes
         steps = candidate_steps(search, candidates)
-        grid = get_map()
-        senses = self.senses
-        answers = [grid.can_transition(source, target, self.uuid, MovementMode.WALKING, walk_in_danger, True,
-                                       senses.collision_blocked,
-                                       directional_collision_blocked=senses.directional_collision_blocked)
-                   for source, target in zip(*steps)]
+        answers = get_map().answer_steps(search.query, steps.sources, steps.targets)
         return choose_routes(routes, search, candidates, steps, answers)
 
     def _materialize_navigation_distance(self, effective_path_distance: int) -> None:
@@ -5291,7 +5286,8 @@ class Entity(BaseBlock):
 
         The routes are the walking search's reached cells whose whole path is known (seen or visible) and where
         this creature may end; when an admitted path crosses a hazardous cell, also those of the search that
-        avoids hazards. With more than one route, the route preference picks each destination's path.
+        avoids hazards (same start and reach, so the same box and the same cell masks). With more than one
+        route, the route preference picks each destination's path.
         """
         grid = get_map()
         senses = self.senses
@@ -5306,31 +5302,26 @@ class Entity(BaseBlock):
                                     directional_collision_blocked=senses.directional_collision_blocked,
                                     ignore_difficult_terrain=self.ignore_difficult_terrain)
 
-        def admitted(search: PathSearch) -> Tuple[Routes, np.ndarray]:
-            tree = search.reached.tree
-            known = tree_cells(tree, senses.cells.visible) | tree_cells(tree, senses.seen)
-            return admit(tree, known, tree_mask(tree, self.end_blocked_cells(tree_box(tree)))), known
-
         search = search_from_here(True)
-        paths, known = admitted(search)
-        tree = paths.tree
-        hazard = tree_cells(tree, grid.hazard_cells(tree_box(tree), self.uuid))
+        tree = search.reached.tree
+        box = tree_box(tree)
+        known = tree_cells(tree, senses.cells.visible) | tree_cells(tree, senses.seen)
+        end_blocked = tree_mask(tree, self.end_blocked_cells(box))
+        paths = admit(tree, known, end_blocked)
+        hazard = tree_cells(tree, grid.hazard_cells(box, self.uuid))
         has_reachable_hazard = routes_touch(paths, hazard)
         safe_search: Optional[PathSearch] = None
         safe_paths = NO_ROUTES
         if has_reachable_hazard:
             safe_search = search_from_here(False)
-            safe_paths, safe_known = admitted(safe_search)
+            assert tree_box(safe_search.reached.tree) == box
+            safe_paths = admit(safe_search.reached.tree, known, end_blocked)
         if route_count(paths) > 1:
-            domains = [cells for _, cells in self._visible_hostile_threat_domains()]
-            paths = self._preferred_routes(paths, search, known, hazard, [tree_mask(tree, cells) for cells in domains],
-                                           has_reachable_hazard, walk_in_danger=True)
+            domains = [tree_mask(tree, cells) for _, cells in self._visible_hostile_threat_domains()]
+            paths = self._preferred_routes(paths, search, known, hazard, domains, has_reachable_hazard)
             if safe_search is not None:
-                safe_tree = safe_paths.tree
-                safe_paths = self._preferred_routes(
-                    safe_paths, safe_search, safe_known,
-                    tree_cells(safe_tree, grid.hazard_cells(tree_box(safe_tree), self.uuid)),
-                    [tree_mask(safe_tree, cells) for cells in domains], has_reachable_hazard, walk_in_danger=False)
+                safe_paths = self._preferred_routes(safe_paths, safe_search, known, hazard, domains,
+                                                    has_reachable_hazard)
         senses.replace_navigation(
             walkable=grid.walkable_cells(senses.cells.visible),
             paths=paths,
@@ -6482,7 +6473,7 @@ class Entity(BaseBlock):
                         # Costs that do not depend on the destination are checked once per template.
                         fixed_cost = (None if template.target_dependent_costs else (template.check_costs(), sum(
                             cost.cost for cost in template.effective_costs if cost.cost_type == "movement")))
-                        for position in route_destinations(paths_by_position):
+                        for index, position in enumerate(route_destinations(paths_by_position)):
                             if position == self.senses.position:
                                 continue
                             selection = replace(base, positions=(position,))
@@ -6499,23 +6490,17 @@ class Entity(BaseBlock):
                                 affordable, path_cost = fixed_cost
                             if not affordable:
                                 continue
-                            normal_path = route(paths_by_position, position)
-                            assert normal_path is not None
+                            normal_path = destination_path(paths_by_position, index)
                             is_hazardous = any(
                                 hazard[step] if step in hazard else hazard.setdefault(
                                     step, grid.is_position_hazardous_for(step[0], step[1], self.uuid))
                                 for step in normal_path[1:]
                             )
                             # The target validates (copies) both paths; the senses' lists are only read.
-                            safe_path_list: Optional[List[Tuple[int, int]]] = None
+                            safe_path_list = (route(self.senses.safe_paths, position)
+                                              if movement_mode == MovementMode.WALKING and is_hazardous else None)
                             safe_cost: Optional[int] = None
-                            if (
-                                movement_mode == MovementMode.WALKING
-                                and is_hazardous
-                                and has_route(self.senses.safe_paths, position)
-                            ):
-                                safe_path_list = route(self.senses.safe_paths, position)
-                                assert safe_path_list is not None
+                            if safe_path_list is not None:
                                 safe_cost = self.movement_path_cost_feet(
                                     safe_path_list,
                                     MovementMode.WALKING,
@@ -6637,8 +6622,8 @@ class Entity(BaseBlock):
         path_signature: Optional[Tuple[Any, ...]] = None
         if movement_mode != MovementMode.WALKING:
             path_signature = tuple(
-                (position, tuple(route(paths_by_position, position) or ()))
-                for position in route_destinations(paths_by_position)
+                (position, tuple(path))
+                for position, path in route_items(paths_by_position)
             )
         if movement_blocked:
             return []
@@ -6682,24 +6667,25 @@ class Entity(BaseBlock):
         safe_path_seconds = 0.0
         exposure_seconds = 0.0
         target_model_seconds = 0.0
-        for pos in route_destinations(paths_by_position):
+        walking = movement_mode == MovementMode.WALKING
+        # Walking costs are the senses' route costs; other modes price each path here.
+        walking_feet = [cost for _, cost in route_costs(paths_by_position)] if walking else []
+        for index, pos in enumerate(route_destinations(paths_by_position)):
             if pos == self.senses.position:
                 continue
             phase_started = time.perf_counter() if timing else 0.0
-            # Walking costs are the senses' route costs; other modes price the path here.
-            path_cost = route_cost(paths_by_position, pos) if movement_mode == MovementMode.WALKING else None
             normal_path: Optional[List[Tuple[int, int]]] = None
-            if path_cost is None:
-                normal_path = route(paths_by_position, pos)
-                assert normal_path is not None
+            if walking:
+                path_cost = walking_feet[index]
+            else:
+                normal_path = destination_path(paths_by_position, index)
                 path_cost = cached_path_cost_feet(normal_path)
             if timing:
                 path_cost_seconds += time.perf_counter() - phase_started
             if path_cost > remaining_movement:
                 continue
             if normal_path is None:
-                normal_path = route(paths_by_position, pos)
-                assert normal_path is not None
+                normal_path = destination_path(paths_by_position, index)
 
             phase_started = time.perf_counter() if timing else 0.0
             is_hazardous = any(
@@ -6713,15 +6699,10 @@ class Entity(BaseBlock):
             # The target validates (copies) both paths; the senses' lists are only read.
             safe_cost: Optional[int] = None
             safe_path_list: Optional[List[Tuple[int, int]]] = None
-            if (
-                movement_mode == MovementMode.WALKING
-                and is_hazardous
-                and has_route(self.senses.safe_paths, pos)
-            ):
+            if walking and is_hazardous:
                 phase_started = time.perf_counter() if timing else 0.0
                 safe_path_list = route(self.senses.safe_paths, pos)
                 safe_cost = route_cost(self.senses.safe_paths, pos)
-                assert safe_path_list is not None and safe_cost is not None
                 if timing:
                     safe_path_seconds += time.perf_counter() - phase_started
 

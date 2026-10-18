@@ -28,7 +28,7 @@ from dnd.core.events import (
     SpatialChangeEvent,
 )
 from dnd.core.gridmap import get_map
-from dnd.core.navigation import DIRECTION_STEP, has_route, mark_cell, route
+from dnd.core.navigation import has_route, remember_blocked_cell, route, side_bit
 from dnd.core.view import layer_positions, layer_value
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
@@ -782,7 +782,7 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
     assert result is not None
     assert mover.position == (0, 0)
     assert layer_positions(mover.senses.collision_blocked) == []
-    assert layer_value(mover.senses.directional_collision_blocked, (0, 0)) == 1 << DIRECTION_STEP["east"]
+    assert layer_value(mover.senses.directional_collision_blocked, (0, 0)) == side_bit(CardinalDirection.EAST)
 
     mover.update_entity_senses(max_distance=5)
     remembered_path = route(mover.senses.paths, (1, 0))
@@ -795,7 +795,7 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
         directional_collision_blocked=mover.senses.directional_collision_blocked,
     )
 
-    mover.senses.collision_blocked = mark_cell(mover.senses.collision_blocked, (2, 0), True)
+    mover.senses.collision_blocked = remember_blocked_cell(mover.senses.collision_blocked, (2, 0))
     encounter = Encounter(name="Collision Cleanup", source_entity_uuid=uuid4())
     encounter.add_combatant(mover, PassController(source_entity_uuid=mover.uuid))
     encounter.add_combatant(other, PassController(source_entity_uuid=other.uuid))
@@ -1620,7 +1620,8 @@ def test_eb_12_029_invisible_collision_stops_repaths_and_preserves_invisibility(
 
     mover.update_entity_senses(max_distance=10)
 
-    corrected_path = route(mover.senses.paths, (4, 1)) or []
+    corrected_path = route(mover.senses.paths, (4, 1))
+    assert corrected_path is not None
     assert corrected_path[0] == mover.position
     assert corrected_path[-1] == (4, 1)
     assert (2, 1) not in corrected_path
