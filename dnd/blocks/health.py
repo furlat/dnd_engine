@@ -932,3 +932,8 @@ class Health(BaseBlock):
                        hit_dices=hit_dices, max_hit_points_bonus=max_hit_points_bonus, temporary_hit_points=temporary_hit_points, damage_reduction=damage_reduction,
                        life_state=config.life_state, remains_disposition=config.remains_disposition,
                        nonmagical_attack_resistances=config.nonmagical_attack_resistances)
+
+
+def normal_hit_points(max_hp: int, health: Health) -> int:
+    """Normal hit points (before temporary hit points): the maximum less the damage taken."""
+    return max_hp - health.damage_taken
