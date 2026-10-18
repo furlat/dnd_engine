@@ -1,4 +1,5 @@
-"""A body enters a seat's view whole, once per seat-level entry (player schema 16).
+"""A body enters a seat's view whole, once per seat-level entry, unless the seat holds it unchanged (player
+schema 16; digest stamps).
 
 Live play on the party seat (the fighter and the sorcerer), each update folded the way the client folds it. A
 member regaining a body the other member still sees sends nothing; a body both members lost goes out whole again
@@ -79,9 +80,9 @@ def test_a_member_regaining_a_body_the_seat_still_sees_sends_nothing(session):
     assert {name: records(update) for name, update in updates.items()} == {name: [] for name in updates}
 
 
-def test_a_body_the_seat_lost_reenters_whole_once_without_its_birth(session):
+def test_a_body_the_seat_lost_reenters_whole_once_without_its_birth_unless_unchanged(session):
     goblins = [str(actor.uuid) for actor in enemies(session)]
-    unseen = enemies(session)[1]
+    unseen, still = enemies(session)[1], enemies(session)[0]
 
     def unseen_goblin_falls_prone(session: Session) -> None:
         unseen.add_condition(Prone(source_entity_uuid=unseen.uuid, target_entity_uuid=unseen.uuid))
@@ -97,9 +98,12 @@ def test_a_body_the_seat_lost_reenters_whole_once_without_its_birth(session):
     assert records(updates['darkness over the goblins']) == []
     assert records(updates['a goblin falls prone unseen']) == []
     assert 'Prone' not in condition_names(clients['a goblin falls prone unseen'], unseen.uuid)
-    # Both members lost them: one record each when the darkness ends, without the birth, replacing the memory.
-    assert sorted(records(updates['the darkness ends'])) == sorted((identity, False) for identity in goblins)
+    # Both members lost them. When the darkness ends the goblin that changed unseen re-enters whole, without its
+    # birth, replacing the memory; the other, unchanged, is confirmed by its digest stamp: no record.
+    assert records(updates['the darkness ends']) == [(str(unseen.uuid), False)]
     assert 'Prone' in condition_names(clients['the darkness ends'], unseen.uuid)
+    held, kept = clients['darkness over the goblins'].actors[still.uuid], clients['the darkness ends'].actors[still.uuid]
+    assert (kept.normal_hp, kept.conditions, kept.visual_loadout) == (held.normal_hp, held.conditions, held.visual_loadout)
 
 
 def test_a_condition_ending_on_a_body_the_seat_no_longer_perceives_reaches_nothing(session):
