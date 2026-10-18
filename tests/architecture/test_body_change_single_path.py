@@ -59,9 +59,11 @@ def test_the_bodies_module_builds_the_actor_change_fact_and_the_entering_body():
 
 def test_the_session_actor_fold_has_one_writer():
     """The session's actors are written by `_fold_actors` alone, through the shared fold functions the capture fold
-    applies too (each fold has its one writer); nothing else in projection writes an actors mapping."""
+    applies too (each fold has its one writer; a recorded presentation target's reducer folds births with the same
+    function); nothing else in projection writes an actors mapping."""
     folds = {"dnd/player/projection.py:_fold_actors", "dnd/player/capture.py:advance_capture"}
-    assert _calls("fold_birth") == folds and _calls("fold_completed_actors") == folds
+    assert _calls("fold_birth") == folds | {"dnd/player/capture.py:reduce_lineage"}
+    assert _calls("fold_completed_actors") == folds
     writes = []
     for function in ast.walk(_modules()["dnd/player/projection.py"]):
         if not isinstance(function, ast.FunctionDef):

@@ -3242,7 +3242,7 @@ class UnequipIntent(TypedDict):
 
 
 class BodyState(TypedDict):
-    visual_loadout: VisualLoadout
+    visual_loadout_id: str
     normal_hp: int
     maximum_hp: int
     temporary_hp: int
@@ -3676,6 +3676,7 @@ class BodyRecord(TypedDict):
     actor_uuid: str
     birth: NotRequired[ActorBirth | None]
     body: BodyState
+    loadout: NotRequired[VisualLoadout | None]
     items: NotRequired[list[ItemRecord]]
 
 

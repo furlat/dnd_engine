@@ -32,10 +32,7 @@
      "structural_base_size": "Medium"
     },
     "body": {
-     "visual_loadout": {
-      "active_weapon_set": "melee",
-      "layers": []
-     },
+     "visual_loadout_id": "4a600f64332558c6",
      "normal_hp": 10,
      "maximum_hp": 10,
      "temporary_hp": 0,
@@ -44,6 +41,10 @@
      "controlled_items": [],
      "remains_disposition": "intact",
      "spatial_disposition": "present"
+    },
+    "loadout": {
+     "active_weapon_set": "melee",
+     "layers": []
     }
    },
    "expected": {
@@ -95,10 +96,7 @@
      "structural_base_size": "Medium"
     },
     "body": {
-     "visual_loadout": {
-      "active_weapon_set": "melee",
-      "layers": []
-     },
+     "visual_loadout_id": "4a600f64332558c6",
      "normal_hp": 4,
      "maximum_hp": 10,
      "temporary_hp": 0,
@@ -106,6 +104,10 @@
      "armor_class": 12,
      "remains_disposition": "intact",
      "spatial_disposition": "present"
+    },
+    "loadout": {
+     "active_weapon_set": "melee",
+     "layers": []
     }
    },
    "expected": {
@@ -137,10 +139,7 @@
      "structural_base_size": "Medium"
     },
     "body": {
-     "visual_loadout": {
-      "active_weapon_set": "melee",
-      "layers": []
-     },
+     "visual_loadout_id": "4a600f64332558c6",
      "normal_hp": 4,
      "maximum_hp": 10,
      "temporary_hp": 0,
@@ -148,6 +147,10 @@
      "armor_class": 12,
      "remains_disposition": "intact",
      "spatial_disposition": "present"
+    },
+    "loadout": {
+     "active_weapon_set": "melee",
+     "layers": []
     }
    },
    "expected": {
@@ -179,10 +182,7 @@
      "structural_base_size": "Medium"
     },
     "body": {
-     "visual_loadout": {
-      "active_weapon_set": "melee",
-      "layers": []
-     },
+     "visual_loadout_id": "4a600f64332558c6",
      "normal_hp": 4,
      "maximum_hp": 10,
      "temporary_hp": 0,
@@ -190,6 +190,10 @@
      "armor_class": 12,
      "remains_disposition": "intact",
      "spatial_disposition": "present"
+    },
+    "loadout": {
+     "active_weapon_set": "melee",
+     "layers": []
     }
    },
    "expected": {
@@ -221,10 +225,7 @@
      "structural_base_size": "Medium"
     },
     "body": {
-     "visual_loadout": {
-      "active_weapon_set": "melee",
-      "layers": []
-     },
+     "visual_loadout_id": "4a600f64332558c6",
      "normal_hp": 4,
      "maximum_hp": 10,
      "temporary_hp": 0,
@@ -232,6 +233,10 @@
      "armor_class": 12,
      "remains_disposition": "intact",
      "spatial_disposition": "present"
+    },
+    "loadout": {
+     "active_weapon_set": "melee",
+     "layers": []
     }
    },
    "expected": {

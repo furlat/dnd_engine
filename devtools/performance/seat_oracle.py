@@ -460,7 +460,8 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
         state = replace(state, last_visual_position=(contact.position if contact is not None else entity.position)
                         if visual else None)
         # The seat's body record of this body entering its view now, as its client folds it.
-        record = entering_body(0, state, audience, visual=visual, birth=True, sent=StaticSent(), pending=StaticSent())
+        record = entering_body(0, state, audience, visual=visual, birth=True, sent=StaticSent(), pending=StaticSent(),
+            loadout_ids={})
         held = PlayerState(generation=client.generation, observer_uuid=client.observer_uuid, world=client.world,
             audience=audience)
         enter_body(held, record)

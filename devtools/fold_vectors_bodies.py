@@ -40,6 +40,7 @@ from dnd.core.equipment_types import WeaponSet
 from dnd.core.item_types import (EquippedVisualPolicy, ItemEffectPresentationState, ItemIntegrity,
     ItemPresentationKind, ItemRarity)
 from dnd.core.life_types import LifeState
+from dnd.player.bodies import loadout_id
 from dnd.player.facts import (ActorBirth, ActorChangeFact, ActorRows, BodyRecord, BodyState, ItemRecord, SpatialFact,
     VisualLoadout)
 from dnd.types.actor import ConditionState, SpatialDisposition, TemporaryHitPointsGrant
@@ -86,10 +87,20 @@ def layer(slot: str, item: UUID, item_id: str, lit: bool | None = None) -> Visua
 
 
 def body(hp: int, *, conditions: tuple[ConditionMember, ...] = (), layers: tuple[VisualItem, ...] = (),
-         inventory: tuple[UUID, ...] | None = None, weapon_set: WeaponSet = WeaponSet.MELEE) -> BodyState:
-    return BodyState(visual_loadout=VisualLoadout(active_weapon_set=weapon_set, layers=layers), normal_hp=hp,
-        maximum_hp=10, temporary_hp=0, life_state=LifeState.ALIVE, armor_class=12, conditions=conditions,
-        controlled_items=inventory)
+         inventory: tuple[UUID, ...] | None = None, weapon_set: WeaponSet = WeaponSet.MELEE,
+         life: LifeState = LifeState.ALIVE) -> tuple[BodyState, VisualLoadout]:
+    loadout = VisualLoadout(active_weapon_set=weapon_set, layers=layers)
+    return BodyState(visual_loadout_id=loadout_id(loadout), normal_hp=hp, maximum_hp=10, temporary_hp=0,
+        life_state=life, armor_class=12, conditions=conditions, controlled_items=inventory), loadout
+
+
+def entered(*, occurrence: int, actor_uuid: UUID, birth: ActorBirth | None = None,
+            body: tuple[BodyState, VisualLoadout], items: tuple[ItemRecord, ...] = (), by_id: bool = False
+            ) -> BodyRecord:
+    """A body record with its loadout's value, or (`by_id`) naming a loadout the seat holds by its id alone."""
+    state, loadout = body
+    return BodyRecord(occurrence=occurrence, actor_uuid=actor_uuid, birth=birth, body=state,
+        loadout=None if by_id else loadout, items=items)
 
 
 def look(item_id: str) -> ItemLook:
@@ -166,7 +177,7 @@ def vectors() -> dict[str, tuple[str, list[Step]]]:
     goblin = birth("Goblin")
     dagger = layer("MELEE_MAIN", DAGGER, "weapon.dagger")
     helm, robe = layer("Head", HELM, "apparel.helm"), layer("Body", ROBE, "apparel.robe")
-    first = BodyRecord(occurrence=0, actor_uuid=B, birth=goblin, body=body(7, conditions=(member(POISON, "Poisoned"),),
+    first = entered(occurrence=0, actor_uuid=B, birth=goblin, body=body(7, conditions=(member(POISON, "Poisoned"),),
         layers=(dagger,)), items=(ItemRecord(item_uuid=DAGGER, look=look("weapon.dagger"), effects=(flame(),)),))
     seen_b = Step("seen", seen(((4, 5),), {B: ((4, 5), True)}), expect({B: view("Goblin", 7,
         conditions=((POISON, "Poisoned", None),), layers=(("MELEE_MAIN", DAGGER, None),), position=(4, 5))}))
@@ -177,7 +188,7 @@ def vectors() -> dict[str, tuple[str, list[Step]]]:
             [Step("body", first, expect({B: view("Goblin", 7, conditions=((POISON, "Poisoned", None),),
                                                  layers=(("MELEE_MAIN", DAGGER, None),))},
                                         {DAGGER: item_view("weapon.dagger", effects=((FLAME, None),))})),
-             Step("body", BodyRecord(occurrence=4, actor_uuid=B, body=body(3, layers=(dagger,)),
+             Step("body", entered(occurrence=4, actor_uuid=B, body=body(3, layers=(dagger,)),
                                      items=(ItemRecord(item_uuid=DAGGER),)),
                   expect({B: view("Goblin", 3, layers=(("MELEE_MAIN", DAGGER, None),))},
                          {DAGGER: item_view("weapon.dagger")}))]),
@@ -186,7 +197,7 @@ def vectors() -> dict[str, tuple[str, list[Step]]]:
             [Step("body", first, expect({B: view("Goblin", 7, conditions=((POISON, "Poisoned", None),),
                                                  layers=(("MELEE_MAIN", DAGGER, None),))})),
              seen_b,
-             Step("body", BodyRecord(occurrence=6, actor_uuid=B, body=body(5)),
+             Step("body", entered(occurrence=6, actor_uuid=B, body=body(5)),
                   expect({B: view("Goblin", 5, position=(4, 5))}))]),
         "v3_leaving_view_changes_nothing": (
             "Bodies and items are never pruned: a body that leaves view keeps its values and its last position.",
@@ -199,10 +210,10 @@ def vectors() -> dict[str, tuple[str, list[Step]]]:
         "v4_a_seen_cell_shows_what_is_there": (
             "A living body last seen on a visible cell that is no longer a contact loses its position; a controlled "
             "body, a dead body, a body still held as a contact and one on a cell not seen keep theirs.",
-            [Step("body", BodyRecord(occurrence=0, actor_uuid=A, birth=birth("Hero"), body=body(10, inventory=())),
+            [Step("body", entered(occurrence=0, actor_uuid=A, birth=birth("Hero"), body=body(10, inventory=())),
                   expect({A: view("Hero", 10, inventory=())})),
-             *(Step("body", BodyRecord(occurrence=0, actor_uuid=identity, birth=birth(name),
-                                       body=replace(body(4), life_state=life)), expect({}))
+             *(Step("body", entered(occurrence=0, actor_uuid=identity, birth=birth(name),
+                                       body=body(4, life=life)), expect({}))
                for identity, name, life in ((B, "Goblin", LifeState.ALIVE), (C, "Corpse", LifeState.DEAD),
                                             (D, "Far goblin", LifeState.ALIVE), (E, "Hidden goblin", LifeState.ALIVE))),
              Step("seen", seen(((4, 5), (4, 6), (4, 7), (4, 8), (9, 9)),
@@ -219,7 +230,7 @@ def vectors() -> dict[str, tuple[str, list[Step]]]:
             "An actor change applies its entering items, then each actor's rows in order: a set keeps its key's place "
             "or appends, an end removes its key, the end of an absent key changes nothing; re-equipping a slot moves "
             "it last.",
-            [Step("body", BodyRecord(occurrence=0, actor_uuid=A, birth=birth("Hero"),
+            [Step("body", entered(occurrence=0, actor_uuid=A, birth=birth("Hero"),
                                      body=body(10, conditions=(member(POISON, "Poisoned"), member(BLESS, "Blessed", 3)),
                                                layers=(helm, robe), inventory=(HELM, ROBE)),
                                      items=(ItemRecord(item_uuid=HELM, look=look("apparel.helm"), profile=PROFILE,
@@ -249,7 +260,7 @@ def vectors() -> dict[str, tuple[str, list[Step]]]:
         "v6_scalar_and_item_rows_replace_their_field": (
             "Scalar rows replace their field; item rows change the seat's record of that item: its state fields, "
             "its effects whole, an effect's or a condition's duration.",
-            [Step("body", BodyRecord(occurrence=0, actor_uuid=A, birth=birth("Hero"),
+            [Step("body", entered(occurrence=0, actor_uuid=A, birth=birth("Hero"),
                                      body=body(10, conditions=(member(BLESS, "Blessed", 3),),
                                                layers=(layer("MELEE_OFF", TORCH, "light.torch", False),),
                                                inventory=(TORCH,)),
@@ -282,11 +293,31 @@ def vectors() -> dict[str, tuple[str, list[Step]]]:
                                          terminal_departure=True),
                   expect({B: view("Goblin", 7, conditions=((POISON, "Poisoned", None),),
                                   layers=(("MELEE_MAIN", DAGGER, None),), present=False)})),
-             Step("body", BodyRecord(occurrence=9, actor_uuid=B, body=body(1)), expect({B: view("Goblin", 7,
+             Step("body", entered(occurrence=9, actor_uuid=B, body=body(1)), expect({B: view("Goblin", 7,
                  conditions=((POISON, "Poisoned", None),), layers=(("MELEE_MAIN", DAGGER, None),), present=False)})),
              Step("change", ActorChangeFact(actors=(rows(B, NumberRow(field=ChangeField.NORMAL_HP, value=1)),)),
                   expect({B: view("Goblin", 7, conditions=((POISON, "Poisoned", None),),
                                   layers=(("MELEE_MAIN", DAGGER, None),), present=False)}))]),
+        "v8_a_reentering_body_names_its_loadout_by_id": (
+            "A body record names its visual loadout by content id, with the value the first time; a later record "
+            "naming a held id takes that value. Layer rows change the body's value, not the id's.",
+            [Step("body", first, expect({B: view("Goblin", 7, conditions=((POISON, "Poisoned", None),),
+                                                 layers=(("MELEE_MAIN", DAGGER, None),))})),
+             Step("change", ActorChangeFact(actors=(rows(B, LayerRow(slot="MELEE_MAIN")),)),
+                  expect({B: view("Goblin", 7, conditions=((POISON, "Poisoned", None),))})),
+             Step("body", entered(occurrence=5, actor_uuid=B, body=body(6, layers=(dagger,)), by_id=True,
+                                  items=(ItemRecord(item_uuid=DAGGER, effects=(flame(),)),)),
+                  expect({B: view("Goblin", 6, layers=(("MELEE_MAIN", DAGGER, None),))},
+                         {DAGGER: item_view("weapon.dagger", effects=((FLAME, None),))}))]),
+        "v9_a_shown_item_without_a_record_has_no_effects": (
+            "A body record leaves out the records of the items it shows that carry nothing (their look already "
+            "sent, no state, no effects): such an item has no effects.",
+            [Step("body", first, expect({B: view("Goblin", 7, conditions=((POISON, "Poisoned", None),),
+                                                 layers=(("MELEE_MAIN", DAGGER, None),))},
+                                        {DAGGER: item_view("weapon.dagger", effects=((FLAME, None),))})),
+             Step("body", entered(occurrence=4, actor_uuid=B, body=body(7, layers=(dagger,)), by_id=True),
+                  expect({B: view("Goblin", 7, layers=(("MELEE_MAIN", DAGGER, None),))},
+                         {DAGGER: item_view("weapon.dagger")}))]),
     }
 
 
