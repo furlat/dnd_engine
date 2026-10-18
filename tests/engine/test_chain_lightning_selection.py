@@ -1,10 +1,13 @@
 """One real cast selects each branch from the primary, never a nearest-neighbor chain."""
+from dataclasses import replace
+
 import pytest
 
 from dnd.actions import SpellEvent
 from dnd.ai.contracts.control import DecisionEpochReason
 from dnd.ai.contracts.decision import ExecuteIntent
 from dnd.ai.runtime.execution import AIDecisionValidationError, ValidatedExecuteDecision, validate_policy_intent
+from dnd.ai.runtime.knowledge_system import bind_ai_knowledge, open_assignment_knowledge
 from dnd.ai.runtime.state_projection import SubjectiveAIStateProjector
 from dnd.controller import TurnContext
 from dnd.actions_functional import execute_available_action, get_available_actions, register_spell
@@ -14,7 +17,6 @@ from dnd.core.events import EventPhase, EventQueue, TakeDamageEvent
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import ChainLightning
-from dnd.spells.abjuration import AntimagicField
 from tests.manual.spell_regression_support import create_spell_regression_actor, reset_spell_regression_arena, force_save_result
 
 
@@ -33,9 +35,17 @@ def scene():
     reset_engine_runtime()
 
 
-def choice(caster, target, slot=6):
+def admitted(caster, row, *targets):
+    """Secondaries are picked by uuid and admitted on demand by the action's rule (plan §14.4)."""
+    template = row.execution_template
+    selection = replace(template.current_selection(), target_uuids=tuple(target.uuid for target in targets))
+    return template.discovery_error(caster.action_scan(subjective=True), selection) is None
+
+
+def choice(caster, target):
+    """The spell's one row (plan D17); the level is chosen at execution."""
     row = next(row for row in get_available_actions(caster).entity_actions
-               if row.behavior_id == 'spell.chain_lightning' and row.cast_at_level == slot)
+               if row.behavior_id == 'spell.chain_lightning')
     option = next(option for option in row.valid_targets if option.target_uuid == target.uuid)
     return row, option
 
@@ -43,15 +53,17 @@ def choice(caster, target, slot=6):
 @pytest.mark.parametrize('slot', [6, 7, 8, 9])
 def test_upcast_adds_selected_recipients_not_damage_or_extra_casts(scene, slot):
     caster, (primary, secondary, distant, other) = scene
-    row, option = choice(caster, primary, slot)
-    assert row.num_projectiles == slot - 2 and row.allow_same_target is False
-    assert option.secondary_targets is not None
-    offered = {target.target_uuid for target in option.secondary_targets}
-    assert secondary.uuid in offered and other.uuid in offered and distant.uuid not in offered and primary.uuid not in offered
+    row, option = choice(caster, primary)
+    assert row.cast_levels == (6, 7, 8, 9) and row.allow_same_target is False
+    form = row.execution_template
+    assert form.with_selection(replace(form.current_selection(), cast_at_level=slot)).get_multi_target_count() == slot - 2
+    assert admitted(caster, row, primary, secondary) and admitted(caster, row, primary, other)
+    assert not admitted(caster, row, primary, distant) and not admitted(caster, row, primary, primary)
     hp = {entity.uuid: entity.get_normal_hp() for entity in (primary, secondary, distant, other)}
     cursor = EventQueue.event_cursor()
     with fixed_dice_faces(*([2] * 100)):
-        result = execute_available_action(caster, row, option, extra_target_uuids=[str(secondary.uuid), str(other.uuid)])
+        result = execute_available_action(caster, row, option, extra_target_uuids=[str(secondary.uuid), str(other.uuid)],
+                                          cast_at_level=slot)
     assert isinstance(result, SpellEvent) and result.phase is EventPhase.COMPLETION
     assert caster.action_economy.actions.normalized_score == 0
     assert caster.action_economy.spell_slot_value(slot).normalized_score == 1
@@ -102,17 +114,13 @@ def test_object_is_an_explicit_primary_or_secondary_and_save_halves_only_its_rec
     assert primary.get_normal_hp() == 240
 
 
-def test_secondary_uses_primary_contact_when_caster_diagonal_crosses_antimagic(scene):
+def test_secondary_uses_primary_contact_across_caster_diagonal(scene):
     caster, (primary, _, _, _) = scene
     secondary = create_spell_regression_actor('Corner secondary', (8, 11), 'monsters')
-    field_owner = create_spell_regression_actor('Field owner', (5, 8), 'monsters', spell_slots={8: 1})
-    field = AntimagicField(source_entity_uuid=field_owner.uuid).apply()
-    assert field is not None and not field.canceled
     force_save_result(secondary, 'dexterity', succeeds=False)
     Entity.update_all_entities_senses(max_distance=300)
     row, option = choice(caster, primary)
-    assert option.secondary_targets is not None
-    assert secondary.uuid in {target.target_uuid for target in option.secondary_targets}
+    assert admitted(caster, row, primary, secondary)
     before = primary.get_normal_hp(), secondary.get_normal_hp()
     cursor = EventQueue.event_cursor()
     with fixed_dice_faces(*([2] * 100)):
@@ -134,12 +142,15 @@ def test_secondary_uses_primary_contact_when_caster_diagonal_crosses_antimagic(s
 
 def test_ai_receives_and_validates_the_same_primary_dependent_branches(scene):
     caster, (primary, secondary, distant, _) = scene
-    projector = SubjectiveAIStateProjector(assignment_id="chain-selection", controlled_entity_uuids=(caster.uuid,))
+    knowledge = bind_ai_knowledge()
+    open_assignment_knowledge(knowledge, caster.uuid, (caster.uuid,))
+    projector = SubjectiveAIStateProjector(assignment_id="chain-selection", controlled_entity_uuids=(caster.uuid,),
+        knowledge=knowledge, knowledge_key=caster.uuid)
     context = TurnContext(source_entity_uuid=caster.uuid, entity_uuid=caster.uuid)
     state = projector.project_decision(caster, context, reason=DecisionEpochReason.SNAPSHOT)
     row = next(row for row in state.epoch_build.epoch.affordances.all_rows
                if row.targets and row.targets[0].target_uuid == str(primary.uuid)
-               and row.targets[0].secondary_targets is not None)
+               and row.num_projectiles is not None and row.num_projectiles > 1)
     cursor = EventQueue.event_cursor()
     for targets in ((str(distant.uuid),), (str(primary.uuid),), (str(secondary.uuid), str(secondary.uuid))):
         with pytest.raises(AIDecisionValidationError):

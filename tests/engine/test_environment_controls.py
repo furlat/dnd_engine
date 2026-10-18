@@ -1,5 +1,7 @@
 """Native environment commands preserve visible state and causal ownership."""
 
+from dataclasses import replace
+
 from collections.abc import Iterator
 from uuid import UUID, uuid4
 
@@ -223,14 +225,14 @@ def test_remote_item_action_requires_a_reachable_exact_authored_link(
     lever.place_on_grid((4, 1) if invalid_admission == "distant_controller" else (2, 1))
     parent = ActionEvent(source_entity_uuid=operator.uuid, phase=EventPhase.EFFECT)
     template = light.get_use_actions(operator.uuid)[0]
-    action = template.instantiate() if template.template else template
     cursor = EventQueue.event_cursor()
 
     if invalid_admission == "parent_only":
-        result = action.apply(parent_event=parent)
+        result = operator.perform(template, template.current_selection(), parent_event=parent)
     else:
         controller_uuid = uuid4() if invalid_admission == "missing_controller" else lever.uuid
-        result = action.apply_from_control(controller_uuid, parent_event=parent)
+        result = operator.perform(template, replace(template.current_selection(), controller_uuid=controller_uuid),
+                                  parent_event=parent)
 
     assert result is not None and result.canceled
     assert not light.is_lit and not lever.is_engaged

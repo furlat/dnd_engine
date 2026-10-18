@@ -1,12 +1,13 @@
-from dnd.core.action_types import ActionEconomyCostType
-from typing import AbstractSet, Dict, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
+from dnd.core.events import ConditionMembershipCommittedEvent
+from dnd.core.action_types import ActionEconomyCostType, RestrictedActionGrant
+from typing import AbstractSet, Dict, Hashable, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
-from dnd.core.values import ModifiableValue
-from dnd.core.base_object import BaseObject
-from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent, SpellProtectionRegistry
+from dnd.core.values import ModifiableValue, retire_value
+from dnd.core.base_object import BaseObject, CreatesModels, build_creatable_models, read_private_attribute
+from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent
 from dnd.core.condition_types import (
-    HazardFilter, InvoluntarySustainLoss, SustainLossPolicy, ConditionTag,
+    HazardFilter, InvoluntarySustainLoss, SustainLossPolicy,
 )
 from dnd.core.item_types import ItemPresentationState, ItemReleaseReason
 from dnd.core.content.runtime import (
@@ -20,7 +21,6 @@ from dnd.core.events import (
     EventQueue,
     EventType,
     SpatialChangeEvent,
-    Trigger,
     WorldTileState,
 )
 from dnd.core.item_properties import ItemWearerValues
@@ -29,6 +29,7 @@ from dnd.types.senses import (
     SensesType as SensesType,
     SensesView,
 )
+from dnd.types.discovery import ActorScan
 from dnd.types.world import LightLevel as LightLevel, MovementMode, OccupancyLayer
 from dnd.types.actor import EntityStatsState
 from dnd.types.physical_access import ContactPassage, PhysicalAccess
@@ -41,7 +42,6 @@ from dnd.types.world_placement import (
     WorldObjectPlacement,
 )
 
-from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Iterator, Protocol
@@ -49,7 +49,7 @@ from dnd.types.actor import ConditionState
 from dnd.types.summoning import TerminalOwnerRelease
 from contextvars import ContextVar
 
-ContextualConditionImmunity = Callable[['BaseBlock', Optional['BaseBlock'], Optional[dict]], bool]
+ContextualConditionImmunity = Callable[['BaseBlock', Optional[dict]], bool]
 
 
 @dataclass(frozen=True)
@@ -140,12 +140,13 @@ class BaseBlock(BaseModel):
     """UUID-addressable container for engine components.
 
     Blocks group child blocks, modifiable values, conditions, and local event
-    handlers behind a shared source/target/context identity. Subclasses such as
+    handlers behind a shared owner identity. Subclasses such as
     entities, items, tiles, equipment, and health blocks specialize the virtual
     spatial and gameplay hooks while retaining the same registry and cleanup
     contracts.
     """
 
+    __getattr__ = read_private_attribute
     name: str = Field(
         default="A Block",
         description="The name of the block. Defaults to 'A Block' if not specified."
@@ -182,10 +183,6 @@ class BaseBlock(BaseModel):
         default_factory=dict,
         description="Dictionary of all BaseBlock instances that are attributes of this class."
     )
-    values: Dict[UUID, 'ModifiableValue'] = Field(
-        default_factory=dict,
-        description="Dictionary of all ModifiableValue instances that are attributes of this class."
-    )
 
     position: Tuple[int, int] = Field(
         default_factory=lambda: (0, 0),
@@ -199,6 +196,10 @@ class BaseBlock(BaseModel):
 
     @property
     def is_invisible(self) -> bool:
+        conditions = self.active_conditions_by_uuid.values()
+        if any(condition.suppresses_invisibility and condition.contributions_active()
+               for condition in conditions):
+            return False
         return self.intrinsic_invisibility or any(condition.grants_invisibility
             and condition.contributions_active() for condition in self.active_conditions_by_uuid.values())
 
@@ -206,7 +207,7 @@ class BaseBlock(BaseModel):
     def is_invisible(self, value: bool) -> None:
         self.intrinsic_invisibility = value
 
-    _attached_light_sources: Set[UUID] = PrivateAttr(default_factory=set)
+    _attached_light_sources: Set[UUID] = PrivateAttr(default=set())
 
     active_conditions: Dict[str, BaseCondition] = Field(
         default_factory=dict,
@@ -227,7 +228,7 @@ class BaseBlock(BaseModel):
         description="Runtime condition immunity checks keyed by condition name."
     )
     active_conditions_by_source: Dict[UUID, List[str]] = Field(
-        default_factory=lambda: defaultdict(list),
+        default_factory=dict,
         exclude=True,
         description="Active condition names grouped by source entity UUID."
     )
@@ -235,16 +236,6 @@ class BaseBlock(BaseModel):
     event_handlers: Dict[UUID, EventHandler] = Field(
         default_factory=dict,
         description="Local event handlers owned by this block."
-    )
-    event_handlers_by_trigger: Dict[Trigger, List[EventHandler]] = Field(
-        default_factory=lambda: defaultdict(list),
-        exclude=True,
-        description="Local event handlers indexed by full trigger."
-    )
-    event_handlers_by_simple_trigger: Dict[Trigger, List[EventHandler]] = Field(
-        default_factory=lambda: defaultdict(list),
-        exclude=True,
-        description="Local event handlers indexed by simplified trigger."
     )
 
     allow_events_conditions: bool = Field(default=False,description="If True, events and conditions will be allowed to be added to the block")
@@ -256,6 +247,8 @@ class BaseBlock(BaseModel):
         return {cond: [name for name, _ in imms] for cond, imms in self.contextual_condition_immunities.items()}
 
     _registry: ClassVar[Dict[UUID, 'BaseBlock']] = {}
+    # The model classes this block's content can create in play (see BaseObject.creates).
+    creates: ClassVar[tuple[type[CreatesModels], ...]] = ()
     _accepted_condition_removals: ClassVar[ContextVar[Optional[Dict[
         UUID, Tuple[Optional['BaseBlock'], BaseCondition, Event, bool]
     ]]]] = ContextVar("accepted_condition_removals", default=None)
@@ -266,6 +259,10 @@ class BaseBlock(BaseModel):
     _involuntary_loss: ClassVar[ContextVar[InvoluntarySustainLoss | None]] = ContextVar("condition_involuntary_loss", default=None)
     _graph_settled_hooks: ClassVar[dict[UUID, ConditionGraphSettledHook]] = {}
     _removal_participants: ClassVar[dict[UUID, ConditionRemovalParticipant]] = {}
+    # Blocks holding a condition that can make their cells hazardous on the ground layer,
+    # written at every condition membership commit; GridMap's hazard owners read it with
+    # the blocks' placements.
+    ground_hazard_holders: ClassVar[dict[UUID, None]] = {}
 
     @classmethod
     def register_condition_removal_participant(cls, participant: ConditionRemovalParticipant) -> UUID:
@@ -360,6 +357,11 @@ class BaseBlock(BaseModel):
         """Admit ordinary contacts; composed objects can share an existing discovery owner."""
         return True
 
+    def observability_reads_the_world(self) -> bool:
+        """Whether `is_observable_to` reads state beyond this block's own facts (then perception
+        asks it again at every settlement)."""
+        return False
+
     def appears_in_entity_contacts(self) -> bool:
         """Whether a GridMap entity occupant belongs in perceived contacts."""
         return True
@@ -373,38 +375,33 @@ class BaseBlock(BaseModel):
         return True
 
     def _set_values_and_blocks_source(self, block: 'BaseBlock') -> None:
-        """Propagate source, target, and context into a block tree.
+        """Propagate the owner identity into a block tree.
 
         Args:
             block: Block whose immediate values and child blocks should inherit
                 owner identity.
         """
-        for value in block.values.values():
-            value.set_source_entity(block.source_entity_uuid, block.source_entity_name)
-            if block.context is not None:
-                value.set_context(block.context)
-            if block.target_entity_uuid is not None:
-                value.set_target_entity(block.target_entity_uuid, block.target_entity_name)
+        for value in block.value_fields():
+            value.source_entity_uuid = block.source_entity_uuid
+            value.source_entity_name = block.source_entity_name
 
         for sub_block in block.blocks.values():
             sub_block.source_entity_uuid = block.source_entity_uuid
             sub_block.source_entity_name = block.source_entity_name
-            if block.context is not None:
-                sub_block.set_context(block.context)
-            if block.target_entity_uuid is not None:
-                sub_block.set_target_entity(block.target_entity_uuid, block.target_entity_name)
             self._set_values_and_blocks_source(sub_block)
 
-    def _populate_blocks_and_values(self) -> None:
-        """Discover direct child blocks and modifiable values on this model."""
+    def _populate_blocks(self) -> None:
+        """Discover direct child blocks on this model."""
         for name, _ in self.__class__.model_fields.items():
             attr_value = getattr(self, name)
-            if name in ['blocks', 'values']:
+            if name == 'blocks':
                 continue
-            if isinstance(attr_value, ModifiableValue):
-                self.values[attr_value.uuid] = attr_value
-            elif isinstance(attr_value, BaseBlock):
+            if isinstance(attr_value, BaseBlock):
                 self.blocks[attr_value.uuid] = attr_value
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's own values. A block that holds values names its value fields by overriding this."""
+        return ()
 
     @model_validator(mode='after')
     def set_values_and_blocks_source(self) -> 'Self':
@@ -413,7 +410,7 @@ class BaseBlock(BaseModel):
         Returns:
             This block after propagation.
         """
-        self._populate_blocks_and_values()
+        self._populate_blocks()
         self._set_values_and_blocks_source(self)
         return self
 
@@ -428,7 +425,7 @@ class BaseBlock(BaseModel):
             ValueError: If a discovered value or child block has a mismatched
                 source UUID.
         """
-        for _, value in self.values.items():
+        for value in self.value_fields():
             if value.source_entity_uuid != self.source_entity_uuid:
                 raise ValueError(f"ModifiableValue '{value.name}' has mismatched source UUID")
 
@@ -440,8 +437,9 @@ class BaseBlock(BaseModel):
 
 
     def model_post_init(self, __context: Any) -> None:
-        """Register this block in the block registry by UUID."""
+        """Build what this block can create and register it in the block registry by UUID."""
         super().model_post_init(__context)
+        build_creatable_models(type(self))
         self.__class__._registry[self.uuid] = self
 
     @classmethod
@@ -501,7 +499,7 @@ class BaseBlock(BaseModel):
         Returns:
             Discovered modifiable values.
         """
-        values = list(self.values.values())
+        values = list(self.value_fields())
         if deep:
             for block in self.blocks.values():
                 values.extend(block.get_values(deep=True))
@@ -589,6 +587,14 @@ class BaseBlock(BaseModel):
         """Return passive perception for this block as an observer."""
         return 0
 
+    def traversal_rule_inputs(self) -> Tuple[Hashable, ...]:
+        """This block's own values that path rules read when it requests a path.
+
+        Allegiance decides who it may pass and which hazards threaten it;
+        passive perception decides which concealed hazards it knows.
+        """
+        return (self.faction, self.get_passive_perception())
+
     def has_ordinary_visual_sight(self) -> bool:
         """Return whether this block has ordinary visual sight."""
         return False
@@ -604,6 +610,14 @@ class BaseBlock(BaseModel):
     def get_senses(self) -> Optional[SensesView]:
         """Override in Entity to return Senses block for subjective perception."""
         return None
+
+    def action_scan(self, *, subjective: bool, with_navigation: bool = False) -> ActorScan:
+        """The actor scan admission reads (plan §14.2); only creatures act."""
+        raise ValueError(f"{self.name} does not perform actions")
+
+    def get_restricted_action_grants(self) -> tuple[RestrictedActionGrant, ...]:
+        """Named restricted action budgets; only creatures hold them."""
+        return ()
 
     def is_object_known_to(self, observer_uuid: UUID) -> bool:
         """Explicit authored knowledge; ordinary entities grant no object contact."""
@@ -664,6 +678,14 @@ class BaseBlock(BaseModel):
         """Get all light sources attached to this block."""
         return self._attached_light_sources.copy()
 
+    def is_spellcasting_blocked(self) -> bool:
+        return any(condition.blocks_spellcasting and condition.contributions_active()
+            for condition in self.active_conditions_by_uuid.values())
+
+    def prevents_surprise(self) -> bool:
+        return any(condition.prevents_surprise and condition.contributions_active()
+            for condition in self.active_conditions_by_uuid.values())
+
     def is_enemy_of(self, other_uuid: UUID) -> bool:
         """Whether this block considers other_uuid an enemy.
         Default: True (unknown blocks are enemies).
@@ -695,68 +717,6 @@ class BaseBlock(BaseModel):
 
         return False
 
-    def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str] = None) -> None:
-        """Set target identity on this block, direct values, and child blocks.
-
-        Args:
-            target_entity_uuid: UUID of the target entity.
-            target_entity_name: Optional display name for the target entity.
-
-        Raises:
-            ValueError: If `target_entity_uuid` is not a UUID.
-        """
-        if not isinstance(target_entity_uuid, UUID):
-            raise ValueError("target_entity_uuid must be a UUID")
-
-        self.target_entity_uuid = target_entity_uuid
-        self.target_entity_name = target_entity_name
-
-        for value in self.values.values():
-            value.set_target_entity(target_entity_uuid, target_entity_name)
-
-        for block in self.blocks.values():
-            block.set_target_entity(target_entity_uuid, target_entity_name)
-
-    def clear_target_entity(self) -> None:
-        """Clear target identity on this block, direct values, and children."""
-        for value in self.values.values():
-            value.clear_target_entity()
-
-        for block in self.blocks.values():
-            block.clear_target_entity()
-
-        self.target_entity_uuid = None
-        self.target_entity_name = None
-
-    def set_context(self, context: Dict[str, Any]) -> None:
-        """Set runtime context on this block, direct values, and children.
-
-        Args:
-            context: Context dictionary to propagate.
-        """
-        self.context = context
-
-        for value in self.values.values():
-            value.set_context(context)
-
-        for block in self.blocks.values():
-            block.set_context(context)
-
-    def clear_context(self) -> None:
-        """Clear runtime context on this block, direct values, and children."""
-        self.context = None
-
-        for value in self.values.values():
-            value.clear_context()
-
-        for block in self.blocks.values():
-            block.clear_context()
-
-    def clear(self) -> None:
-        """Clear target identity and context from this block tree."""
-        self.clear_target_entity()
-        self.clear_context()
-
     def remove_contained_item(self, item_uuid: UUID, *, parent_event: Event | None = None,
                               reason: ItemReleaseReason = ItemReleaseReason.TRANSFERRED) -> bool:
         """Remove a contained item by UUID.
@@ -786,8 +746,9 @@ class BaseBlock(BaseModel):
         return False
 
     def owned_values(self) -> tuple[ModifiableValue, ...]:
-        """Return exact values whose local channels belong to this block."""
-        return tuple(self.values.values())
+        """Return exact values whose rows belong to this block: its value fields (blocks with list-held
+        values add them)."""
+        return self.value_fields()
 
     def owned_block_tree(self, *, excluded_uuids: frozenset[UUID] = frozenset()) -> tuple['BaseBlock', ...]:
         """Snapshot exact composition edges, never mutable source-identity matches."""
@@ -809,7 +770,7 @@ class BaseBlock(BaseModel):
             self.remove_event_handler(handler)
             handler.remove_from_register()
         for value in {value.uuid: value for value in self.owned_values()}.values():
-            value.retire_owned_state()
+            retire_value(value)
         BaseBlock.unregister(self.uuid)
 
     def on_owned_item_destroyed(
@@ -959,7 +920,7 @@ class BaseBlock(BaseModel):
         Returns:
             Matching direct value, or `None`.
         """
-        return self.values.get(uuid)
+        return next((value for value in self.value_fields() if value.uuid == uuid), None)
 
     def get_value_from_name(self, name: str) -> Optional[ModifiableValue]:
         """Return a direct value by name.
@@ -970,10 +931,7 @@ class BaseBlock(BaseModel):
         Returns:
             Matching direct value, or `None`.
         """
-        for value in self.values.values():
-            if value.name == name:
-                return value
-        return None
+        return next((value for value in self.value_fields() if value.name == name), None)
 
     def get_block_from_uuid(self, uuid: UUID) -> Optional['BaseBlock']:
         """Return a direct child block by UUID.
@@ -1015,11 +973,12 @@ class BaseBlock(BaseModel):
         )
         event_handler.owner_block = self
         self.event_handlers[event_handler.uuid] = event_handler
-        for trigger in event_handler.trigger_conditions:
-            if trigger.is_simple():
-                self.event_handlers_by_simple_trigger[trigger].append(event_handler)
-            self.event_handlers_by_trigger[trigger].append(event_handler)
         EventQueue.add_event_handler(event_handler)
+        try:
+            event_handler.on_admitted()
+        except BaseException:
+            self.remove_event_handler(event_handler)
+            raise
 
     def remove_event_handler_from_dicts(self, event_handler: EventHandler) -> None:
         """Remove a handler from this block's local indexes.
@@ -1030,10 +989,7 @@ class BaseBlock(BaseModel):
         if not self.allow_events_conditions:
             return None
         self.event_handlers.pop(event_handler.uuid)
-        for trigger in event_handler.trigger_conditions:
-            if trigger.is_simple():
-                self.event_handlers_by_simple_trigger[trigger].remove(event_handler)
-            self.event_handlers_by_trigger[trigger].remove(event_handler)
+        event_handler.on_removed()
 
     def remove_event_handler(self, event_handler: EventHandler) -> None:
         """Remove a handler from the queue and this block's local indexes.
@@ -1053,19 +1009,12 @@ class BaseBlock(BaseModel):
             raise ValueError("block event handler order contains duplicate UUIDs")
         if set(ordered_uuids) != set(self.event_handlers):
             raise ValueError("block event handler order must name every handler")
-        order = {handler_uuid: index for index, handler_uuid in enumerate(ordered_uuids)}
         handlers = dict(self.event_handlers)
         self.event_handlers.clear()
         self.event_handlers.update(
             (handler_uuid, handlers[handler_uuid])
             for handler_uuid in ordered_uuids
         )
-        for index in (
-            self.event_handlers_by_trigger,
-            self.event_handlers_by_simple_trigger,
-        ):
-            for rows in index.values():
-                rows.sort(key=lambda handler: order[handler.uuid])
 
     def get_event_handler_by_name(self, name: str) -> Optional[EventHandler]:
         """Find the first local event handler matching a name.
@@ -1148,6 +1097,15 @@ class BaseBlock(BaseModel):
             )
             if source_rows is not None and condition_name in source_rows:
                 source_rows.remove(condition_name)
+        self._write_ground_hazard_holder()
+
+    def _write_ground_hazard_holder(self) -> None:
+        """Keep this block's entry in `ground_hazard_holders` after a membership change."""
+        if any(condition.hazard_filter is not None and condition.affects_occupancy_layer(OccupancyLayer.GROUND)
+               for condition in self.active_conditions.values()):
+            BaseBlock.ground_hazard_holders[self.uuid] = None
+        else:
+            BaseBlock.ground_hazard_holders.pop(self.uuid, None)
 
     def _discard_uncommitted_condition_tree(
         self,
@@ -1495,6 +1453,12 @@ class BaseBlock(BaseModel):
                     errors.append(error)
             try:
                 row.condition.on_membership_changed(row.effect)
+                if row.condition.target_entity_uuid is not None:
+                    membership = EventQueue.publish_committed_phase(ConditionMembershipCommittedEvent(
+                        source_entity_uuid=row.condition.target_entity_uuid, target_entity_uuid=row.condition.target_entity_uuid,
+                        condition_uuid=row.condition.uuid, present=False, parent_event=row.effect.uuid,
+                        phase=EventPhase.EFFECT, use_register=False))
+                    membership.phase_to(EventPhase.COMPLETION)
             except BaseException as error:
                 errors.append(error)
             try:
@@ -1794,13 +1758,6 @@ class BaseBlock(BaseModel):
             if declaration_event.canceled:
                 self._discard_uncommitted_condition_tree(condition)
                 return declaration_event
-            position = self.get_position()
-            if (position is not None and condition.magical_origin and not condition.antimagic_exempt()
-                    and ConditionTag.CONCENTRATION not in condition.tags):
-                parent = BaseCondition.get(condition.parent_condition) if condition.parent_condition else None
-                if not isinstance(parent, BaseCondition) or not parent.magical_origin:
-                    condition.suppression_provider_uuids.update(row.provider_uuid for row in
-                        SpellProtectionRegistry.get_antimagic_suppressions({position}))
             effect = condition.prepare_application(declaration_event=declaration_event)
             if effect is None or effect.canceled:
                 self._discard_uncommitted_condition_tree(condition)
@@ -1887,7 +1844,8 @@ class BaseBlock(BaseModel):
         assert name is not None
         self.active_conditions[name] = prepared.condition
         self.active_conditions_by_uuid[prepared.condition.uuid] = prepared.condition
-        self.active_conditions_by_source[prepared.condition.source_entity_uuid].append(name)
+        self.active_conditions_by_source.setdefault(prepared.condition.source_entity_uuid, []).append(name)
+        self._write_ground_hazard_holder()
         prepared.publication = ConditionPublication(
             prepared.condition, prepared.effect, prepared.condition.snapshot_state(),
             self.snapshot_entity_stats(), self.snapshot_world_tile(), self.snapshot_item_state(), {},
@@ -1917,16 +1875,27 @@ class BaseBlock(BaseModel):
             errors.append(error)
         try:
             prepared.condition.on_membership_changed(prepared.effect)
+            membership = EventQueue.publish_committed_phase(ConditionMembershipCommittedEvent(
+                source_entity_uuid=self.uuid, target_entity_uuid=self.uuid,
+                condition_uuid=prepared.condition.uuid, present=True, parent_event=prepared.effect.uuid,
+                phase=EventPhase.EFFECT, use_register=False))
+            membership.phase_to(EventPhase.COMPLETION)
         except BaseException as error:
             errors.append(error)
         try:
             publication = prepared.publication
             assert publication is not None
-            prepared.completion = prepared.effect.phase_to(
+            completion = prepared.effect.phase_to(
                 EventPhase.COMPLETION, condition_state=publication.condition_state,
                 resulting_stats=publication.resulting_stats, resulting_tile=publication.resulting_tile,
-                resulting_item=publication.resulting_item,
+                resulting_item=publication.resulting_item, use_register=False,
             )
+            try:
+                prepared.completion = EventQueue.register(completion.model_copy(update={"use_register": True}))
+            finally:
+                committed = EventQueue.get_event_by_uuid(completion.uuid)
+                if committed is not None:
+                    prepared.condition.record_committed_publication(committed)
             prepared.condition.applied_source_event_cursor = EventQueue.event_cursor()
         except BaseException as error:
             errors.append(error)
@@ -2141,3 +2110,15 @@ class BaseBlock(BaseModel):
         self._remove_static_condition_immunity(condition_name)
         self._remove_contextual_condition_immunity(condition_name)
         return
+
+
+def resolution_order_key(block: "BaseBlock") -> Tuple[bool, int, int, str, str]:
+    """Replay-stable order for simultaneous resolution (plan §5.3).
+
+    Objective position first (unplaced blocks last), then name, then uuid as the
+    exact-tie breaker. Carried and unplaced items no longer sort at (0, 0).
+    """
+    position = block.get_position()
+    if position is None:
+        return (True, 0, 0, block.name or "", str(block.uuid))
+    return (False, position[0], position[1], block.name or "", str(block.uuid))

@@ -1,38 +1,45 @@
 """Solid wall spells: ordinary attackable sections and one native spatial owner."""
 
 from math import ceil, hypot, isclose
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, Optional, Tuple
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
 from dnd.actions import Move, SpellAction, SpellEvent, commit_forced_movement, entity_action_economy_cost_evaluator
 from dnd.blocks.base_item import BaseItem, WorldItem, PreparedItemRetirement
-from dnd.core.action_types import ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection
-from dnd.core.base_actions import BaseAction, Cost, TargetType
-from dnd.core.base_block import BaseBlock
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection, selection_facet
+from dnd.core.base_actions import Cost, TargetType
+from dnd.core.base_block import BaseBlock, resolution_order_key
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.content.identities import ContentRef
-from dnd.core.creature_types import DamageType
+from dnd.core.creature_types import DamageType, Size
+from dnd.spells.spell_utils import condition_save
+from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.effect_types import ObjectSectionVolume
-from dnd.core.events import Event, EventPhase, EventQueue, ForcedMovementEvent, ItemDestructionEvent, Range, RangeType, SpatialChangeEvent
-from dnd.core.gridmap import get_map
-from dnd.core.item_types import ItemLocation, ItemPresentationState
+from dnd.core.events import Event, EventHandler, EventType, Trigger, PortalTransferEvent, EventPhase, EventQueue, ForcedMovementEvent, ItemDestructionEvent, Range, RangeType, SpatialChangeEvent
+from dnd.core.gridmap import CrossingChannel, get_map
+from dnd.core.navigation import route, route_costs
+from dnd.core.item_types import ItemPresentationState
 from dnd.core.life_types import RemainsDisposition
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
 from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry, WallDome, WallPolyline, WallRing, WallSegment
 from dnd.core.wall_geometry import wall_crosses_path, wall_path_contact, wall_shell_cells
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
-from dnd.spells.wall_fields import WallDamageSpec, WallFieldZone, apply_wall_damage, wall_condition_ref, wall_support_error
+from dnd.spells.wall_fields import WallDamageSpec, WallFieldZone, apply_wall_damage, selection_wall_support_error, wall_condition_ref
+from dnd.types.discovery import ActorScan, ScanRecord
+from dnd.types.event_facts import GroupEntryKind
 from dnd.types.materials import Material
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
 from dnd.types.summoning import TerminalOwnerRelease
-from dnd.types.world import MovementMode
+from dnd.types.world import MovementMode, WorldEdgeChannel
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
+from dnd.conditions import Prone
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 class FrigidAirZone(WallFieldZone):
@@ -79,6 +86,7 @@ class WallSection(WorldItem):
     wall_owner_uuid: UUID
     geometry: WallAssemblyPresentationGeometry
     magical_force: bool = False
+    force_owner_disintegration: Literal["whole", "section"] = "whole"
     is_pickable: bool = False
     is_targetable: bool = True
     blocks_movement: bool = False
@@ -121,7 +129,7 @@ class WallSection(WorldItem):
 
     def disintegrate(self, parent_event: Event) -> bool:
         owner = BaseCondition.get(self.wall_owner_uuid)
-        if self.magical_force:
+        if self.magical_force and self.force_owner_disintegration == "whole":
             if not isinstance(owner, SolidWallZone):
                 return False
             event = ItemDestructionEvent(source_entity_uuid=parent_event.source_entity_uuid,
@@ -166,8 +174,7 @@ class WallSection(WorldItem):
         owner = BaseCondition.get(self.wall_owner_uuid)
         if isinstance(owner, SolidWallZone) and owner.applied:
             owner.sections[self.uuid] = self.geometry
-            get_map().invalidate_spatial_caches(
-                {"movement", "optical", "propagation"}, owner.affected_positions)
+            get_map().spatial_condition_changed(owner)
             change = owner._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
                 previous_positions=set(owner.affected_positions), affected_positions=set(owner.affected_positions),
                 parent_event=parent_event)
@@ -183,8 +190,10 @@ class WallSection(WorldItem):
 
 class SolidWallZone(AreaCondition):
     """Ownership links and exact shell crossings, without a filled-volume blocker."""
+    creates = (FrigidAirZone, Move, Prone)
 
-    crossing_channels: ClassVar[frozenset[str] | None] = frozenset({"movement", "optical", "propagation"})
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset({
+        WorldEdgeChannel.MOVEMENT, WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION})
 
     geometry: WallAssemblyPresentationGeometry
     material: Literal["ice", "stone", "force"]
@@ -199,7 +208,7 @@ class SolidWallZone(AreaCondition):
     _prepared_retirements: tuple[PreparedItemRetirement, ...] = PrivateAttr(default=())
 
     _pending_sections: tuple[tuple[WallSection, tuple[int, int]], ...] = PrivateAttr(default=())
-    _formation_displacements: dict[UUID, tuple[int, int]] = PrivateAttr(default_factory=dict)
+    _formation_displacements: dict[UUID, tuple[int, int]] = PrivateAttr(default={})
 
     def _commit_activation_footprint(self, parent_event: Event) -> None:
         """Commit real sections before CREATED can disclose the construction."""
@@ -222,29 +231,16 @@ class SolidWallZone(AreaCondition):
     def resolve_condition_footprint(self) -> set[tuple[int, int]]:
         return self._apply_spell_protection({p for p in wall_shell_cells(self.geometry) if get_map().has_tile(*p)})
 
-    def antimagic_exempt(self) -> bool:
-        return self.material == "stone" or super().antimagic_exempt()
 
-    def allows_contribution_at(self, position: tuple[int, int] | None) -> bool:
-        return self.material == "stone" or super().allows_contribution_at(position)
-
-    def refresh_antimagic_suppression(self, *, parent_event: Event) -> None:
-        previous = self.spatial_suppressions
-        super().refresh_antimagic_suppression(parent_event=parent_event)
-        if previous != self.spatial_suppressions:
-            for identity in self.sections:
-                item = BaseBlock.get(identity)
-                if isinstance(item, BaseItem):
-                    item.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
 
     def blocks_crossing_between(self, start, end, channel, requester_uuid, mode,
                                 terminal_provider_uuid=None) -> bool:
-        if channel == "optical" and self.material != "stone":
+        if channel is WorldEdgeChannel.OPTICAL and self.material != "stone":
             return False
-        if channel == "movement" and mode is MovementMode.BURROWING and self.material != "force":
+        if channel is WorldEdgeChannel.MOVEMENT and mode is MovementMode.BURROWING and self.material != "force":
             return False
-        return any(identity != terminal_provider_uuid and wall_path_contact(geometry, start, end,
-                   {p for p in self.affected_positions if self.allows_contribution_at(p)}) is not None
+        admitted = {p for p in self.affected_positions if self.allows_contribution_at(p)}
+        return any(identity != terminal_provider_uuid and wall_path_contact(geometry, start, end, admitted) is not None
                    for identity, geometry in self.sections.items())
 
     def blocks_physical_optics_at(self, position: tuple[int, int]) -> bool:
@@ -263,8 +259,7 @@ class SolidWallZone(AreaCondition):
         geometry = self.sections.pop(identity, None)
         if geometry is None:
             return
-        get_map().invalidate_spatial_caches(
-            {"movement", "optical", "propagation"}, self.affected_positions)
+        get_map().spatial_condition_changed(self)
         change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
             previous_positions=set(self.affected_positions), affected_positions=set(self.affected_positions),
             parent_event=parent_event)
@@ -524,10 +519,11 @@ def stone_enclosure_escapes(caster: Entity, geometry: WallAssemblyPresentationGe
     shell = wall_shell_cells(geometry)
     min_x, max_x = min(p[0] for p in shell), max(p[0] for p in shell)
     min_y, max_y = min(p[1] for p in shell), max(p[1] for p in shell)
-    for entity in Entity.get_all_entities():
+    # Displaced creatures stand on shell cells, inside the box; the formation group fixes the order (plan §5.3).
+    for entity in sorted(map(Entity.get, grid.get_entities_in_bounds((min_x, min_y, max_x, max_y))),
+                         key=resolution_order_key):
         start = displacements.get(entity.uuid, entity.position)
-        if (not entity.is_deployed or not min_x <= start[0] <= max_x
-                or not min_y <= start[1] <= max_y):
+        if not min_x <= start[0] <= max_x or not min_y <= start[1] <= max_y:
             continue
         visited = {start}
         pending = [start]
@@ -551,21 +547,24 @@ def stone_enclosure_escapes(caster: Entity, geometry: WallAssemblyPresentationGe
         if not success:
             continue
         speed = entity.action_economy.current_speed()
-        costs, paths = grid.compute_paths(entity.position, requesting_entity_uuid=entity.uuid,
+        reached = grid.compute_paths(entity.position, requesting_entity_uuid=entity.uuid,
             max_distance=ceil(speed / 5), subjective=True)
-        exits = [p for p in paths if (p[0] < min_x or p[0] > max_x or p[1] < min_y or p[1] > max_y)
-                 and costs[p] * 5 <= speed]
+        costs = dict(route_costs(reached))
+        exits = [p for p in costs if (p[0] < min_x or p[0] > max_x or p[1] < min_y or p[1] > max_y)
+                 and costs[p] <= speed]
         if not exits:
             continue
         destination = min(exits, key=lambda p: (costs[p], p))
-        Move(name="Escape forming wall", source_entity_uuid=entity.uuid, end_position=destination,
-            path=paths[destination], use_movement_cost=False, movement_allowance_feet=speed,
+        escape = Move(name="Escape forming wall", source_entity_uuid=entity.uuid, end_position=destination,
+            path=route(reached, destination), use_movement_cost=False, movement_allowance_feet=speed,
             costs=[Cost(name="Wall enclosure escape", cost_type="reactions", cost=1,
-                        evaluator=entity_action_economy_cost_evaluator)]).apply(parent_event=parent_event)
+                        evaluator=entity_action_economy_cost_evaluator)])
+        entity.perform(escape, escape.current_selection(), parent_event=parent_event)
 
 
 class ConstructWall(SpellAction):
     """Concrete shared placement composer, configured by native spell data."""
+    creates = (*SpellAction.creates, WallOfIceZone, WallOfStoneZone, WallOfForceZone, Move)
 
     construction_material: Literal["ice", "stone", "force"]
     concentration: bool = True
@@ -587,14 +586,18 @@ class ConstructWall(SpellAction):
             allow_origin_start=True, origin_start_offset_cells=1))
 
     def wall_geometry(self) -> WallAssemblyPresentationGeometry | None:
-        if self.end_position is None:
+        return self._wall_geometry(self.current_selection())
+
+    def _wall_geometry(self, selection: ActionSelection) -> WallAssemblyPresentationGeometry | None:
+        if not selection.positions:
             return None
-        points = self.get_selected_position_path()
+        end_position = selection.positions[0]
+        points = self._selected_position_path(selection)
         if points is not None and any(a == b for a, b in zip(points, points[1:])):
             return None
         if self.wall_form == "dome":
-            path = WallDome(center=self.end_position, radius_feet=self.dome_radius_feet)
-            anchor = self.end_position
+            path = WallDome(center=end_position, radius_feet=self.dome_radius_feet)
+            anchor = end_position
         elif points is not None and len(points) >= 2:
             path = WallPolyline(points=tuple(points)) if self.construction_material == "stone" else WallSegment(start=points[0], end=points[-1])
             anchor = points[0]
@@ -605,15 +608,40 @@ class ConstructWall(SpellAction):
         return WallAssemblyPresentationGeometry(path=path, base_height_steps=tile.height,
             width_feet=width, height_feet=self.dome_radius_feet if self.wall_form == "dome" else 10) if tile is not None else None
 
-    def selection_preview_error(self) -> str | None:
-        return self.position_selection_error() or self.position_placement_error(subjective=True)
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """Panels pushing left or right (stone: 10 or 20 ft panels); a non-stone dome of 5 or 10 ft pushing in or out."""
+        form = lambda value: ActionVariantFacet(key="form", value=value, label=value.title())
+        panels = tuple((form("panels"), ActionVariantFacet(key="side", value=side, label=f"Push {side}"),
+                        *((ActionVariantFacet(key="width", value=str(width), label=f"{width} ft panels"),)
+                          if self.construction_material == "stone" else ()))
+                       for width in ((10, 20) if self.construction_material == "stone" else (10,))
+                       for side in ("left", "right"))
+        domes = () if self.construction_material == "stone" else tuple(
+            (form("dome"), ActionVariantFacet(key="side", value=side, label=f"Push {side}"),
+             ActionVariantFacet(key="radius", value=str(radius), label=f"{radius} ft radius"))
+            for radius in (5, 10) for side in ("inside", "outside"))
+        return (*panels, *domes)
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        chosen = {facet.key: facet.value for facet in selection.facets}
+        overrides = {**super()._selection_overrides(selection), "wall_form": selection_facet(selection, "form"),
+                     "displacement_side": selection_facet(selection, "side")}
+        if overrides["wall_form"] == "dome":
+            overrides["dome_radius_feet"] = int(selection_facet(selection, "radius"))
+        else:
+            overrides["stone_panel_width_feet"] = int(chosen.get("width", "10"))
+        return overrides
 
     def get_selection_geometry(self):
         return self.wall_geometry()
 
-    def position_placement_error(self, *, subjective=False) -> str | None:
-        geometry = self.wall_geometry()
-        error = wall_support_error(self, geometry, subjective=subjective)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        return self._placement_error(selection, subjective=scan.subjective)
+
+    def _placement_error(self, selection: ActionSelection, *, subjective: bool) -> str | None:
+        geometry = self._wall_geometry(selection)
+        error = selection_wall_support_error(self, selection, geometry, subjective=subjective)
         if error is not None or geometry is None:
             return error
         if self.construction_material == "stone" and self.wall_form == "dome":
@@ -645,9 +673,6 @@ class ConstructWall(SpellAction):
         event = super()._create_declaration_event(parent_event, use_register)
         return event.with_updates(area_geometry=self.wall_geometry()) if isinstance(event, SpellEvent) else event
 
-    def _validate(self, declaration_event: SpellEvent) -> SpellEvent | None:
-        return declaration_event.phase_to(EventPhase.EXECUTION)
-
     def _apply(self, execution_event: SpellEvent) -> SpellEvent | None:
         caster = Entity.get(self.source_entity_uuid)
         geometry = self.wall_geometry()
@@ -660,98 +685,72 @@ class ConstructWall(SpellAction):
         effect = execution_event.phase_to(EventPhase.EFFECT)
         if effect.canceled:
             return effect
-        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-        if self.construction_material == "stone":
-            stone_enclosure_escapes(caster, geometry, dc, effect, displacements)
-            displacements = displacement_plan(caster, geometry, side=self.displacement_side)
-            if displacements is None:
-                return effect.cancel(status_message="No supported formation displacement remains")
-        formation_contacts = {identity: entity.position for identity in displacements
-                              if (entity := Entity.get(identity)) is not None}
-        zone_type = {"ice": WallOfIceZone, "stone": WallOfStoneZone, "force": WallOfForceZone}[self.construction_material]
-        zone = zone_type(source_entity_uuid=caster.uuid, position=self.end_position,
-            geometry=geometry, spell_dc=dc,
-            residual_dice_count=5 + max(0, self.cast_at_level - 6), effect_origin=execution_event.to_effect_origin())
-        pending = []
-        grid = get_map()
-        try:
-            for section in sections:
-                positions = wall_shell_cells(section)
-                anchor = min(positions)
-                offsets = tuple(sorted((p[0] - anchor[0], p[1] - anchor[1]) for p in positions))
-                hp = (120 if self.wall_form == "dome" else 30) if self.construction_material == "ice" else (180 if self.stone_panel_width_feet == 10 else 90)
-                item = WallSection(source_entity_uuid=caster.uuid, wall_owner_uuid=zone.uuid,
-                    item_id=f"spell_construction.{self.construction_material}.section", name=f"{self.name} section",
-                    geometry=section, magical_force=self.construction_material == "force",
-                    creation_condition_uuid=zone.uuid,
-                    armor_class=12 if self.construction_material == "ice" else 15,
-                    health=None if self.construction_material == "force" else BaseItem.create_item_health(caster.uuid, hp),
-                    is_invisible=self.construction_material == "force",
-                    world_placement_spec=WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=False,
-                        vertical_extent_steps=ceil(section.height_feet / 5), footprint_offsets=offsets))
-                pending.append((item, anchor))
-                if item.health is not None and self.construction_material == "ice":
-                    item.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
-                        source_entity_uuid=caster.uuid, target_entity_uuid=item.uuid, name="Ice fire vulnerability",
-                        damage_type=DamageType.FIRE, value=ResistanceStatus.VULNERABILITY))
-                grid.validate_object_placement(item.uuid, anchor)
-            # All native placements are preflighted before displacement or commit.
-            zone._pending_sections = tuple(pending)
-            zone._formation_displacements = dict(displacements)
+        # Escapes, displacement, sections and appearance damage are one formation
+        # instant; observers settle once when it closes (plan §5.2).
+        with EventQueue.group(GroupEntryKind.WALL_FORMATION, root=effect, shares_damage_rolls=True):
+            dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+            if self.construction_material == "stone":
+                stone_enclosure_escapes(caster, geometry, dc, effect, displacements)
+                displacements = displacement_plan(caster, geometry, side=self.displacement_side)
+                if displacements is None:
+                    return effect.cancel(status_message="No supported formation displacement remains")
+            formation_contacts = {identity: entity.position for identity in displacements
+                                  if (entity := Entity.get(identity)) is not None}
+            zone_type = {"ice": WallOfIceZone, "stone": WallOfStoneZone, "force": WallOfForceZone}[self.construction_material]
+            zone = zone_type(source_entity_uuid=caster.uuid, position=self.end_position,
+                geometry=geometry, spell_dc=dc,
+                residual_dice_count=5 + max(0, self.cast_at_level - 6), effect_origin=execution_event.to_effect_origin())
+            pending = []
+            grid = get_map()
             try:
-                activated = zone.activate(parent_event=effect)
-            except ValueError as error:
-                return effect.cancel(status_message=str(error))
-            if activated is None or activated.canceled or not zone.applied:
-                return effect.cancel(status_message="Wall construction was canceled")
-            self.ensure_concentration(effect).add_linked_condition(zone.uuid, zone.uuid)
-            if self.construction_material == "ice":
-                spec = WallDamageSpec(dice_count=10 + 2 * max(0, self.cast_at_level - 6), die=6,
-                    damage_type=DamageType.COLD, save_ability="dexterity", effect_id="wall_of_ice.appearance")
-                for identity in displacements:
-                    entity = Entity.get(identity)
-                    if entity is not None:
-                        apply_wall_damage(zone, entity, spec, zone.spell_dc, effect, geometry.base_height_steps,
-                                          contact_position=formation_contacts[identity])
-            return effect
-        finally:
-            if not zone.sections:
-                if zone.applied:
-                    zone.deactivate(parent_event=effect)
-                for item, _ in pending:
-                    item.retire(effect)
-                remaining = {item.uuid: item.geometry for item, _ in pending if BaseBlock.get(item.uuid) is not None}
-                zone.sections = remaining
-                if not remaining and not zone.applied:
-                    zone.discard_from_runtime_owner()
-
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        facets = (ActionVariantFacet(key="form", value=self.wall_form, label=self.wall_form.title()),
-                  ActionVariantFacet(key="side", value=self.displacement_side, label=f"Push {self.displacement_side}"))
-        if self.wall_form == "dome":
-            return (*facets, ActionVariantFacet(key="radius", value=str(self.dome_radius_feet),
-                                               label=f"{self.dome_radius_feet} ft radius"))
-        if self.construction_material == "stone":
-            return (*facets, ActionVariantFacet(key="width", value=str(self.stone_panel_width_feet),
-                                               label=f"{self.stone_panel_width_feet} ft panels"))
-        return facets
-
-    def get_discovery_variants(self, entity) -> list[BaseAction]:
-        variants = []
-        for slot in super().get_discovery_variants(entity):
-            for width in ((10, 20) if self.construction_material == "stone" else (10,)):
-                for side in ("left", "right"):
-                    variants.append(slot.model_copy(update={"wall_form": "panels", "displacement_side": side,
-                                                            "stone_panel_width_feet": width}))
-            if self.construction_material != "stone":
-                for radius in (5, 10):
-                    for side in ("inside", "outside"):
-                        variants.append(slot.model_copy(update={"wall_form": "dome", "dome_radius_feet": radius,
-                                                                 "displacement_side": side}))
-        return variants
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__{self.wall_form}_{self.displacement_side}_{self.dome_radius_feet}_{self.stone_panel_width_feet}"
+                for section in sections:
+                    positions = wall_shell_cells(section)
+                    anchor = min(positions)
+                    offsets = tuple(sorted((p[0] - anchor[0], p[1] - anchor[1]) for p in positions))
+                    hp = (120 if self.wall_form == "dome" else 30) if self.construction_material == "ice" else (180 if self.stone_panel_width_feet == 10 else 90)
+                    item = WallSection(source_entity_uuid=caster.uuid, wall_owner_uuid=zone.uuid,
+                        item_id=f"spell_construction.{self.construction_material}.section", name=f"{self.name} section",
+                        geometry=section, magical_force=self.construction_material == "force",
+                        armor_class=12 if self.construction_material == "ice" else 15,
+                        health=None if self.construction_material == "force" else BaseItem.create_item_health(caster.uuid, hp),
+                        is_invisible=self.construction_material == "force",
+                        world_placement_spec=WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=False,
+                            vertical_extent_steps=ceil(section.height_feet / 5), footprint_offsets=offsets))
+                    pending.append((item, anchor))
+                    if item.health is not None and self.construction_material == "ice":
+                        add_modifier(item.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
+                            source_entity_uuid=caster.uuid, target_entity_uuid=item.uuid, name="Ice fire vulnerability",
+                            damage_type=DamageType.FIRE, value=ResistanceStatus.VULNERABILITY))
+                    grid.validate_object_placement(item.uuid, anchor)
+                # All native placements are preflighted before displacement or commit.
+                zone._pending_sections = tuple(pending)
+                zone._formation_displacements = dict(displacements)
+                try:
+                    activated = zone.activate(parent_event=effect)
+                except ValueError as error:
+                    return effect.cancel(status_message=str(error))
+                if activated is None or activated.canceled or not zone.applied:
+                    return effect.cancel(status_message="Wall construction was canceled")
+                self.ensure_concentration(effect).add_linked_condition(zone.uuid, zone.uuid)
+                if self.construction_material == "ice":
+                    spec = WallDamageSpec(dice_count=10 + 2 * max(0, self.cast_at_level - 6), die=6,
+                        damage_type=DamageType.COLD, save_ability="dexterity", effect_id="wall_of_ice.appearance")
+                    for identity in displacements:
+                        entity = Entity.get(identity)
+                        if entity is not None:
+                            apply_wall_damage(zone, entity, spec, zone.spell_dc, effect, geometry.base_height_steps,
+                                              contact_position=formation_contacts[identity])
+                return effect
+            finally:
+                if not zone.sections:
+                    if zone.applied:
+                        zone.deactivate(parent_event=effect)
+                    for item, _ in pending:
+                        item.retire(effect)
+                    remaining = {item.uuid: item.geometry for item, _ in pending if BaseBlock.get(item.uuid) is not None}
+                    zone.sections = remaining
+                    if not remaining and not zone.applied:
+                        zone.discard_from_runtime_owner()
 
 
 class WallOfIce(ConstructWall):
@@ -777,3 +776,226 @@ class WallOfForce(ConstructWall):
     spell_level: int = 5
     spell_school: str = "evocation"
     construction_material: Literal["ice", "stone", "force"] = "force"
+
+
+class ForcecageZone(SolidWallZone):
+    name: str = "Forcecage"
+    description: str = "Invisible independent barred cage or sealed box with paid magical escape saves."
+    content_ref: ContentRef = wall_condition_ref("spatial_effect.spell.forcecage")
+    material: Literal["ice", "stone", "force"] = "force"
+    cage_form: Literal["cage", "box"] = "cage"
+    center: tuple[int,int]
+    side_feet: int
+    duration: Duration = Field(default_factory=lambda: Duration(duration=600, duration_type=DurationType.ROUNDS))
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset({
+        WorldEdgeChannel.MOVEMENT, WorldEdgeChannel.PROPAGATION, PhysicalAccess.HAND, PhysicalAccess.WEAPON,
+        PhysicalAccess.LIGHT_WEAPON, PhysicalAccess.NATURAL, PhysicalAccess.BODY})
+
+    def _commit_activation_footprint(self,parent_event):
+        admitted=[]
+        for identity,destination in self._formation_displacements.items():
+            actor=Entity.get(identity)
+            if actor is None:raise ValueError("Formation occupant disappeared")
+            start=actor.position
+            direction=(0 if destination[0]==start[0] else 1 if destination[0]>start[0] else -1,
+                0 if destination[1]==start[1] else 1 if destination[1]>start[1] else -1)
+            distance=max(abs(destination[0]-start[0]),abs(destination[1]-start[1]))*5
+            event=ForcedMovementEvent(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=actor.uuid,
+                start_position=start,end_position=destination,direction=direction,intended_distance=distance,actual_distance=distance,
+                cause="forcecage_formation",parent_event=parent_event.uuid)
+            for phase in (EventPhase.EXECUTION,EventPhase.EFFECT):
+                if not event.canceled:event=event.phase_to(phase)
+            if event.canceled:raise ValueError("Formation ejection refused")
+            admitted.append((actor,destination,event))
+        grid=get_map()
+        sections=grid.prepare_object_sections(tuple((item.uuid,anchor) for item,anchor in self._pending_sections),parent_event=parent_event.uuid)
+        placements=grid.commit_object_sections(sections,publish=False)
+        for (item,_),placement in zip(self._pending_sections,placements,strict=True):
+            item.synchronize_floor_placement(placement)
+            self.sections[item.uuid]=item.geometry
+        AreaCondition._commit_activation_footprint(self,parent_event)
+        self._pending_sections=()
+        self._formation_displacements.clear()
+        errors=[]
+        try:Entity.commit_position_transfers(tuple((actor,destination,event.uuid) for actor,destination,event in admitted))
+        except BaseException as error:errors.append(error)
+        try:grid.publish_object_sections(sections)
+        except BaseException as error:errors.append(error)
+        for _,_,event in admitted:
+            try:event.phase_to(EventPhase.COMPLETION)
+            except BaseException as error:errors.append(error)
+        if errors:raise BaseExceptionGroup("Forcecage formation publication failed",errors)
+
+    def contains(self, position: tuple[int,int]) -> bool:
+        half = self.side_feet / 10
+        return abs(position[0]-self.center[0]) < half and abs(position[1]-self.center[1]) < half
+
+    def blocks_crossing_between(self,start,end,channel,requester_uuid,mode,terminal_provider_uuid=None):
+        if channel is WorldEdgeChannel.PROPAGATION and self.cage_form == "cage": return False
+        # Rays and creature crossings on the supported floor use the remaining
+        # ground band. A 10-foot breach need not erase the bars above it.
+        return any(identity != terminal_provider_uuid and wall_path_contact(
+            geometry.model_copy(update={"height_feet":5}),start,end,
+            {cell for cell in self.affected_positions if self.allows_contribution_at(cell)}) is not None
+            for identity,geometry in self.sections.items())
+
+    def _apply(self,event: Event):
+        modifiers,handlers,children,spatial,effect=super()._apply(event)
+        if effect is None or effect.canceled: return modifiers,handlers,children,spatial,effect
+        def escape(transfer: Event,_):
+            if not isinstance(transfer,PortalTransferEvent) or not self.contains(transfer.start_position) or self.contains(transfer.end_position):
+                return None
+            if not any(self.allows_contribution_at(cell) for cell in self.affected_positions): return None
+            traveler=Entity.get(transfer.target_entity_uuid) if transfer.target_entity_uuid else None
+            if traveler is not None and not condition_save(self,traveler,transfer,"charisma",self.spell_dc,"spell.forcecage.escape"):
+                return transfer.cancel(status_message="Forcecage prevents magical escape; attempted resources remain spent")
+            return None
+        def spell_boundary(incoming: Event,_):
+            if self.cage_form != "box" or not isinstance(incoming,SpellEvent) or incoming.canceled:
+                return None
+            if not any(self.allows_contribution_at(cell) for cell in self.affected_positions): return None
+            origin=incoming.effect_source_position or incoming.source_position
+            if origin is None: return None
+            inside=self.contains(origin)
+            if inside and incoming.magical_transfer: return None
+            terminal=BaseBlock.get(incoming.target_entity_uuid) if incoming.target_entity_uuid else None
+            if incoming.authored_spell_id=="spell.disintegrate" and isinstance(terminal,WallSection) and terminal.wall_owner_uuid==self.uuid:return None
+            target=BaseBlock.get(incoming.target_entity_uuid) if incoming.target_entity_uuid else None
+            destination=target.position if target is not None else incoming.target_position or incoming.aoe_position or origin
+            if destination is not None and inside != self.contains(destination):
+                return incoming.cancel(status_message="Sealed Forcecage blocks the spell boundary")
+            if not inside and incoming.resolved_area_positions is not None:
+                excluded=tuple(cell for cell in incoming.resolved_area_positions if self.contains(cell))
+                if excluded:
+                    return incoming.with_updates(resolved_area_positions=tuple(cell for cell in incoming.resolved_area_positions if cell not in excluded),
+                        suppressions=(*incoming.suppressions,SpellSuppression(provider_uuid=self.uuid,positions=excluded)))
+            return None
+        for handler in (EventHandler(name="Forcecage paid magical escape",source_entity_uuid=self.source_entity_uuid,
+                trigger_conditions=[Trigger(event_type=EventType.PORTAL_TRANSFER,event_phase=EventPhase.EFFECT)],event_processor=escape),
+                EventHandler(name="Forcecage sealed spell boundary",source_entity_uuid=self.source_entity_uuid,
+                trigger_conditions=[Trigger(event_type=kind,event_phase=phase) for kind in (EventType.CAST_SPELL,EventType.BASE_ACTION)
+                    for phase in (EventPhase.EXECUTION,EventPhase.EFFECT)],event_processor=spell_boundary)):
+            EventQueue.add_event_handler(handler);handlers.append(handler.uuid)
+        return modifiers,handlers,children,spatial,effect
+
+
+def forcecage_geometry(center: tuple[int,int], side_feet: int) -> WallAssemblyPresentationGeometry | None:
+    tile=get_map().get_tile(*center)
+    if tile is None: return None
+    half=side_feet//10
+    x,y=center
+    points=((x-half,y-half),(x+half,y-half),(x+half,y+half),(x-half,y+half),(x-half,y-half))
+    return WallAssemblyPresentationGeometry(path=WallPolyline(points=points),base_height_steps=tile.height,
+        width_feet=1/48,height_feet=side_feet)
+
+
+def forcecage_displacements(caster: Entity, center: tuple[int,int],side_feet:int,*,subjective:bool) -> dict[UUID,tuple[int,int]] | None:
+    """Where each partially enclosed creature is pushed out; None when one cannot be.
+
+    Subjective (discovery) knows only the creatures, positions and blockers the
+    caster perceives; objective (execution) knows the world.
+    """
+    half=side_feet/10
+    used=set()
+    result={}
+    grid=get_map()
+    known=caster.senses.entities
+    occupied={contact.position for contact in known.values()}|{caster.position} if subjective else set()
+    # The box spans half the side plus a Gargantuan space, so it holds every partially enclosed occupant.
+    reach=side_feet//10+2
+    nearby=((caster.uuid,*known) if subjective
+            else grid.get_entities_in_bounds((center[0]-reach,center[1]-reach,center[0]+reach,center[1]+reach)))
+    for identity in sorted(nearby,key=str):
+        entity=Entity.get(identity)
+        if entity is None: continue
+        position=known[identity].position if subjective and identity!=caster.uuid else entity.position
+        space={Size.TINY:2.5,Size.SMALL:5,Size.MEDIUM:5,Size.LARGE:10,Size.HUGE:15,Size.GARGANTUAN:20}[entity.size]/10
+        dx,dy=abs(position[0]-center[0]),abs(position[1]-center[1])
+        if dx-space>=half or dy-space>=half: continue
+        if dx+space<=half and dy+space<=half: continue
+        candidates=[]
+        for x in range(center[0]-6,center[0]+7):
+            for y in range(center[1]-6,center[1]+7):
+                point=(x,y)
+                if max(abs(x-center[0])-space,abs(y-center[1])-space)<half or point in used: continue
+                tile=grid.get_tile(*point)
+                if tile is None or tile.height!=grid.get_support_elevation_feet(center)//5: continue
+                if not grid.is_walkable_for(*point,caster.uuid if subjective else entity.uuid,subjective=subjective): continue
+                if (point in occupied and point!=position) if subjective else grid.get_entities_at(point)-{entity.uuid}: continue
+                if not grid.can_reach_between(position,point,PhysicalAccess.BODY,entity.uuid,subjective=subjective,
+                        knowledge_observer_uuid=caster.uuid if subjective else None): continue
+                candidates.append(point)
+        if not candidates:return None
+        destination=min(candidates,key=lambda p:(hypot(p[0]-position[0],p[1]-position[1]),p))
+        used.add(destination);result[entity.uuid]=destination
+    return result
+
+
+class Forcecage(SpellAction):
+    creates = (*SpellAction.creates, ForcecageZone)
+    name: str = "Forcecage"
+    description: str = "Independent invisible 20-foot barred cage or 10-foot sealed box for one hour."
+    spell_level: int = 7
+    spell_school: str = "evocation"
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.RANGE,normal=100))
+    target_type: TargetType = TargetType.POSITION_LOS
+    cage_form: Literal["cage","box"] = "cage"
+    concentration: bool = False
+
+    def get_selection_geometry(self):
+        return forcecage_geometry(self.end_position,20 if self.cage_form=="cage" else 10) if self.end_position else None
+
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=form, label=form.title()),) for form in ("cage", "box"))
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "cage_form": selection_facet(selection, "form")}
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        side=20 if self.cage_form=="cage" else 10
+        center=selection.positions[0] if selection.positions else None
+        error=selection_wall_support_error(self,selection,forcecage_geometry(center,side) if center else None,subjective=scan.subjective)
+        if error is not None:return error
+        caster=Entity.get(self.source_entity_uuid)
+        if caster is None or center is None or forcecage_displacements(caster,center,side,subjective=scan.subjective) is None:
+            return "Forcecage cannot displace a partially enclosed creature"
+        return None
+
+    def _create_declaration_event(self,parent_event=None,use_register=True):
+        event=super()._create_declaration_event(parent_event,use_register)
+        return event.with_updates(area_geometry=self.get_selection_geometry()) if event is not None else None
+
+    def _apply(self,event: SpellEvent):
+        caster=Entity.get(self.source_entity_uuid)
+        geometry=self.get_selection_geometry()
+        if caster is None or geometry is None or self.end_position is None:return event.cancel(status_message="Cage placement absent")
+        side=20 if self.cage_form=="cage" else 10
+        displacements=forcecage_displacements(caster,self.end_position,side,subjective=False)
+        sections=construction_sections(geometry)
+        if displacements is None or sections is None:return event.cancel(status_message="Cage formation is impossible")
+        effect=event.phase_to(EventPhase.EFFECT)
+        if effect.canceled:return effect
+        zone=ForcecageZone(source_entity_uuid=caster.uuid,position=self.end_position,geometry=geometry,
+            spell_dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),cage_form=self.cage_form,
+            center=self.end_position,side_feet=side,effect_origin=event.to_effect_origin())
+        pending=[]
+        try:
+            for section in sections:
+                cells=wall_shell_cells(section);anchor=min(cells)
+                item=WallSection(source_entity_uuid=caster.uuid,wall_owner_uuid=zone.uuid,
+                    item_id="spell_construction.forcecage.section",name="Forcecage section",geometry=section,
+                    magical_force=True,force_owner_disintegration="whole" if self.cage_form=="box" else "section",is_invisible=True,health=None,
+                    world_placement_spec=WorldPlacementSpec(kind=WorldPlacementKind.CENTER,occupies_bands=False,
+                        vertical_extent_steps=ceil(section.height_feet/5),footprint_offsets=tuple(sorted((x-anchor[0],y-anchor[1]) for x,y in cells))))
+                pending.append((item,anchor));get_map().validate_object_placement(item.uuid,anchor)
+            zone._pending_sections=tuple(pending);zone._formation_displacements=displacements
+            result=zone.activate(parent_event=effect)
+            if result is None or result.canceled:return effect.cancel(status_message="Forcecage was not admitted")
+            return effect
+        except ValueError as error:
+            return effect.cancel(status_message=str(error))
+        finally:
+            if not zone.applied:
+                for item,_ in pending:item.retire(effect)
+                zone.discard_from_runtime_owner()

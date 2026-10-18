@@ -1,9 +1,17 @@
 from typing import Optional, List, Literal, Tuple
 from uuid import UUID, uuid4, uuid5
 from pydantic import BaseModel, Field, computed_field, field_validator
+from dnd.action_timing import record_action_count
 from dnd.core.damage import DamageComponentResolution, DamageResolution
 from dnd.core.life_types import LifeState, RemainsDisposition
-from dnd.core.values import ModifiableValue
+from dnd.core.values import (
+    ModifiableValue,
+    Channel,
+    Kind,
+    add_modifier,
+    remove_all_modifiers,
+    retire_value,
+)
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     NumericalModifier,
@@ -15,7 +23,7 @@ from random import randint
 from functools import cached_property
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import EventPhase, EventQueue, TakeDamageEvent, TemporaryHitPointsChangedEvent
+from dnd.core.events import EventPhase, EventQueue, MaximumHitPointReductionEvent, TakeDamageEvent, TemporaryHitPointsChangedEvent
 from dnd.types.actor import TemporaryHitPointsGrant
 
 
@@ -70,11 +78,11 @@ class HitDice(BaseBlock):
 
     name: str = Field(default="HitDice", description="Block name used in health block indexes.")
     hit_dice_value: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=6, value_name="Hit Dice Value"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(),base=6, name="Hit Dice Value"),
         description="Modifiable die size used by each hit die.",
     )
     hit_dice_count: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=1, value_name="Hit Dice Count"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(),base=1, name="Hit Dice Count"),
         description="Modifiable number of hit dice in this block.",
     )
     mode: Literal["average", "maximums","roll"] = Field(
@@ -86,6 +94,10 @@ class HitDice(BaseBlock):
         description="Whether first-level maximum-hit-die treatment is skipped.",
     )
     spent_hit_dice: int = Field(default=0, ge=0, description="Number of dice from this block spent on short-rest healing.")
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (self.hit_dice_value, self.hit_dice_count)
 
     @computed_field
     @cached_property
@@ -221,11 +233,11 @@ class HitDice(BaseBlock):
             if identity_uuid is not None
             else None
         )
-        modifiable_hit_dice_value = ModifiableValue.create(
+        modifiable_hit_dice_value = ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=resolved.hit_dice_value,
-            value_name="Hit Dice Value",
-            identity_uuid=value_identity,
+            base=resolved.hit_dice_value,
+            name="Hit Dice Value",
+            uuid=value_identity,
         )
         for index, modifier in enumerate(resolved.hit_dice_value_modifiers):
             modifier_uuid = (
@@ -233,19 +245,17 @@ class HitDice(BaseBlock):
                 if identity_uuid is not None
                 else uuid4()
             )
-            modifiable_hit_dice_value.self_static.add_value_modifier(
-                NumericalModifier(
+            add_modifier(modifiable_hit_dice_value, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     uuid=modifier_uuid,
                     source_entity_uuid=source_entity_uuid,
                     name=modifier[0],
                     value=modifier[1],
-                )
-            )
-        modifiable_hit_dice_count = ModifiableValue.create(
+                ))
+        modifiable_hit_dice_count = ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=resolved.hit_dice_count,
-            value_name="Hit Dice Count",
-            identity_uuid=count_identity,
+            base=resolved.hit_dice_count,
+            name="Hit Dice Count",
+            uuid=count_identity,
         )
         for index, modifier in enumerate(resolved.hit_dice_count_modifiers):
             modifier_uuid = (
@@ -253,14 +263,12 @@ class HitDice(BaseBlock):
                 if identity_uuid is not None
                 else uuid4()
             )
-            modifiable_hit_dice_count.self_static.add_value_modifier(
-                NumericalModifier(
+            add_modifier(modifiable_hit_dice_count, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                     uuid=modifier_uuid,
                     source_entity_uuid=source_entity_uuid,
                     name=modifier[0],
                     value=modifier[1],
-                )
-            )
+                ))
         return cls(
             uuid=identity_uuid or uuid4(),
             source_entity_uuid=source_entity_uuid,
@@ -276,6 +284,8 @@ class HitDice(BaseBlock):
         )
 class HealthConfig(BaseModel):
     """Configuration used to materialize a health block."""
+
+    nonmagical_attack_resistances: frozenset[DamageType] = frozenset()
 
     life_state: LifeState = Field(
         default=LifeState.ALIVE,
@@ -319,6 +329,8 @@ class Health(BaseBlock):
         healing_blocked: Whether healing effects currently restore no HP.
     """
 
+    nonmagical_attack_resistances: frozenset[DamageType] = frozenset()
+
     name: str = Field(default="Health", description="Block name used in entity composition indexes.")
     life_state: LifeState = Field(
         default=LifeState.ALIVE,
@@ -329,15 +341,38 @@ class Health(BaseBlock):
         default_factory=lambda: [HitDice.create(source_entity_uuid=uuid4(),name="HitDice")],
         description="Hit-dice blocks used for maximum HP and short rests.",
     )
-    max_hit_points_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Max Hit Points Bonus"), description="Max Hit Points Bonus, e.g. Aid spell")
-    temporary_hit_points: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Temporary Hit Points"), description="Temporary Hit Points, e.g. False Life spell")
+    max_hit_points_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(),base=0, name="Max Hit Points Bonus"), description="Max Hit Points Bonus, e.g. Aid spell")
+    temporary_hit_points: ModifiableValue = Field(default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(),base=0, name="Temporary Hit Points"), description="Temporary Hit Points, e.g. False Life spell")
+    death_save_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), base=0, name="Death Saving Throw"))
     temporary_hit_points_grant: TemporaryHitPointsGrant | None = None
     damage_taken: int = Field(default=0,ge=0, description="The amount of damage taken")
-    damage_reduction: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Damage Reduction"), description="Damage Reduction, e.g. Damage Resistance")
+    damage_reduction: ModifiableValue = Field(default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(),base=0, name="Damage Reduction"), description="Damage Reduction, e.g. Damage Resistance")
     healing_blocked: bool = Field(default=False, description="If True, entity cannot regain HP (e.g., Chill Touch)")
 
-    def get_resistance(self,damage_type: DamageType) -> ResistanceStatus:
-        return self.damage_reduction.resistance[damage_type]
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (
+            self.max_hit_points_bonus, self.temporary_hit_points, self.death_save_bonus,
+            self.damage_reduction)
+
+    def get_resistance(self,damage_type: DamageType, *, attack_magical: bool | None = None) -> ResistanceStatus:
+        record_action_count("health.resistance_evaluation", 1)
+        status = self.damage_reduction.resistance[damage_type]
+        if attack_magical is False and damage_type in self.nonmagical_attack_resistances:
+            if status is ResistanceStatus.IMMUNITY: return status
+            return ResistanceStatus.NONE if status is ResistanceStatus.VULNERABILITY else ResistanceStatus.RESISTANCE
+        return status
+
+    def damage_affinities(self) -> tuple[tuple[str, str], ...]:
+        """Return every non-neutral damage affinity from one resistance evaluation.
+
+        Each row equals `get_resistance(damage_type)` with no attack magic stated,
+        in `DamageType` order.
+        """
+        record_action_count("health.resistance_evaluation", 1)
+        resistance = self.damage_reduction.resistance
+        return tuple((damage_type.value, status.value) for damage_type in DamageType
+                     if (status := resistance[damage_type]) is not ResistanceStatus.NONE)
 
     @computed_field
     @property
@@ -405,8 +440,8 @@ class Health(BaseBlock):
             if hit_dice.uuid != hit_dice_uuid:
                 continue
             del self.hit_dices[index]
-            hit_dice.hit_dice_value.retire_owned_state()
-            hit_dice.hit_dice_count.retire_owned_state()
+            retire_value(hit_dice.hit_dice_value)
+            retire_value(hit_dice.hit_dice_count)
             HitDice.unregister(hit_dice.uuid)
             return True
         return False
@@ -504,10 +539,12 @@ class Health(BaseBlock):
         declared_damage: int,
         normal_hit_point_damage_cap: Optional[int] = None,
         normal_hit_points_available: Optional[int] = None,
+        attack_magical: tuple[bool | None, ...] = (),
+        ignores_resistance_immunity: bool = False,
     ) -> DamageApplicationPreview:
         """Resolve typed components through affinities, defenses, and HP pools."""
         component_resolutions: list[DamageComponentResolution] = []
-        for damage, damage_type in components:
+        for index, (damage, damage_type) in enumerate(components):
             if damage < 0:
                 raise ValueError(f"Damage must be greater than 0 instead of {damage}")
             if not isinstance(damage_type, DamageType):
@@ -515,8 +552,10 @@ class Health(BaseBlock):
                     "Damage must use a DamageType instead of "
                     f"{damage_type!r}"
                 )
-            resistance_status = self.get_resistance(damage_type)
-            multiplier = self.damage_multiplier(damage_type)
+            resistance_status = self.get_resistance(damage_type, attack_magical=attack_magical[index] if attack_magical else None)
+            if ignores_resistance_immunity and resistance_status in (ResistanceStatus.RESISTANCE, ResistanceStatus.IMMUNITY):
+                resistance_status = ResistanceStatus.NONE
+            multiplier = {ResistanceStatus.IMMUNITY:0, ResistanceStatus.RESISTANCE:0.5, ResistanceStatus.VULNERABILITY:2, ResistanceStatus.NONE:1}[resistance_status]
             after_affinity_damage = max(0, int(damage * multiplier))
             component_resolutions.append(
                 DamageComponentResolution(
@@ -615,18 +654,38 @@ class Health(BaseBlock):
         """Resolve the existing interruptible packet through one defense owner."""
         if not event.damages:
             raise ValueError("TakeDamageEvent requires at least one typed damage component")
-        if (event.final_damage is None
-                and len(event.damage_rolls) == len(event.damages)
-                and len(event.damages) > 1):
-            components = [(roll.total, damage.damage_type)
-                          for roll, damage in zip(event.damage_rolls, event.damages)]
+        if event.component_amounts is not None or (len(event.damage_rolls) == len(event.damages) and len(event.damages) > 1):
+            if event.component_amounts is not None:
+                if len(event.component_amounts) != len(event.damages):
+                    raise ValueError("Explicit damage amounts must match typed components")
+                amounts = [max(0, amount) for amount in event.component_amounts]
+            else:
+                amounts = [max(0, roll.total) for roll in event.damage_rolls]
+            adjustment = event.get_effective_damage() - sum(amounts)
+            if adjustment > 0:
+                amounts[0] += adjustment
+            else:
+                reduction = -adjustment
+                for index, amount in enumerate(amounts):
+                    removed = min(amount, reduction)
+                    amounts[index] -= removed
+                    reduction -= removed
+            components = [(amount, damage.damage_type)
+                          for amount, damage in zip(amounts, event.damages)]
+            identities = [damage.uuid for damage in event.damages]
         else:
             components = [(event.get_effective_damage(), event.damages[0].damage_type)]
-        return self.preview_damage_components(
+            identities = [event.damages[0].uuid]
+        resolution = self.preview_damage_components(
             components, event.normal_hit_point_damage_cap,
             declared_damage=event.total_damage,
+            attack_magical=tuple(damage.attack_magical for damage in event.damages[:len(components)]),
             normal_hit_points_available=normal_hit_points_available,
+            ignores_resistance_immunity=event.ignores_resistance_immunity,
         )
+        return resolution.model_copy(update={"components": tuple(
+            component.model_copy(update={"source_damage_uuid": identity})
+            for component, identity in zip(resolution.components, identities, strict=True))})
 
     def preview_damage_components(
         self,
@@ -635,11 +694,15 @@ class Health(BaseBlock):
         *,
         declared_damage: Optional[int] = None,
         normal_hit_points_available: Optional[int] = None,
+        attack_magical: tuple[bool | None, ...] = (),
+        ignores_resistance_immunity: bool = False,
     ) -> DamageApplicationPreview:
         """Preview mixed typed damage without mutating health state."""
         incoming_damage = sum(max(0, damage) for damage, _ in components)
         return self._preview_damage_components(
             components,
+            attack_magical=attack_magical,
+            ignores_resistance_immunity=ignores_resistance_immunity,
             declared_damage=(incoming_damage if declared_damage is None else declared_damage),
             normal_hit_point_damage_cap=normal_hit_point_damage_cap,
             normal_hit_points_available=normal_hit_points_available,
@@ -684,6 +747,19 @@ class Health(BaseBlock):
         """
         preview = self.preview_damage(damage, damage_type, normal_hit_point_damage_cap)
         return self.apply_damage_preview(preview, source_entity_uuid)
+
+    def prepare_maximum_hit_point_reduction(self, amount: int, source_entity_uuid: UUID,
+            *, parent_event: UUID | None = None, source_condition_uuid: UUID | None = None):
+        """Publish factual admission shared by initial and cumulative HP loss."""
+        event = EventQueue.publish_declaration(MaximumHitPointReductionEvent(
+            source_entity_uuid=source_entity_uuid, target_entity_uuid=self.source_entity_uuid,
+            amount=amount, source_condition_uuid=source_condition_uuid,
+            parent_event=parent_event, use_register=False))
+        for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
+            if event.canceled:
+                break
+            event = event.phase_to(phase)
+        return event if event.canceled else event.phase_to(EventPhase.COMPLETION)
 
     def is_healing_blocked(self) -> bool:
         """Check if healing is blocked by a condition (e.g., Chill Touch).
@@ -733,7 +809,7 @@ class Health(BaseBlock):
             Temporary hit points removed.
         """
         removed = self.temporary_hit_points.normalized_score
-        self.temporary_hit_points.remove_all_modifiers()
+        remove_all_modifiers(self.temporary_hit_points)
         self.temporary_hit_points_grant = None
         if self.temporary_hit_points.normalized_score != removed:
             self._record_temporary_hit_points(self.source_entity_uuid, parent_event)
@@ -767,8 +843,8 @@ class Health(BaseBlock):
         modifier = NumericalModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=self.source_entity_uuid, name=f"Temporary Hit Points from {source_entity_uuid}", value=temporary_hit_points)
         if modifier.value > 0 and modifier.value > self.temporary_hit_points.score:
 
-            self.temporary_hit_points.remove_all_modifiers()
-            self.temporary_hit_points.self_static.add_value_modifier(modifier)
+            remove_all_modifiers(self.temporary_hit_points)
+            add_modifier(self.temporary_hit_points, Channel.SELF_STATIC, Kind.VALUE, modifier)
             self.temporary_hit_points_grant = TemporaryHitPointsGrant(
                 instance_uuid=modifier.uuid, source_id=source_id,
             )
@@ -784,11 +860,11 @@ class Health(BaseBlock):
         """
         modifier = NumericalModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=self.source_entity_uuid, name=f"Temporary Hit Points from {source_entity_uuid}", value=-temporary_hit_points)
         if modifier.value + self.temporary_hit_points.score <= 0:
-            self.temporary_hit_points.remove_all_modifiers()
+            remove_all_modifiers(self.temporary_hit_points)
             self.temporary_hit_points_grant = None
         else:
 
-            self.temporary_hit_points.self_static.add_value_modifier(modifier)
+            add_modifier(self.temporary_hit_points, Channel.SELF_STATIC, Kind.VALUE, modifier)
 
     def preserve_normal_hit_points(self, previous_normal_hp: int, *, maximum_hp: int) -> None:
         """Reconcile a changed maximum without healing or dealing damage again.
@@ -808,6 +884,8 @@ class Health(BaseBlock):
         Returns:
             int: The maximum hit points.
         """
+        if not constitution_modifier:
+            return self.hit_dices_total_hit_points  # A zero modifier adds nothing per hit die.
         return self.hit_dices_total_hit_points + constitution_modifier * self.total_hit_dices_number
 
     def get_total_hit_points(self, constitution_modifier: int) -> int:
@@ -834,22 +912,23 @@ class Health(BaseBlock):
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
             hit_dices = [HitDice.create(source_entity_uuid=source_entity_uuid, config=hit_dice) for hit_dice in config.hit_dices]
-            max_hit_points_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.max_hit_points_bonus, value_name="Max Hit Points Bonus")
+            max_hit_points_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.max_hit_points_bonus, name="Max Hit Points Bonus")
             for modifier in config.max_hit_points_bonus_modifiers:
-                max_hit_points_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            temporary_hit_points = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.temporary_hit_points, value_name="Temporary Hit Points")
+                add_modifier(max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            temporary_hit_points = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.temporary_hit_points, name="Temporary Hit Points")
             for modifier in config.temporary_hit_points_modifiers:
-                temporary_hit_points.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            damage_reduction = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.damage_reduction, value_name="Damage Reduction")
+                add_modifier(temporary_hit_points, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            damage_reduction = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.damage_reduction, name="Damage Reduction")
             for modifier in config.damage_reduction_modifiers:
-                damage_reduction.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(damage_reduction, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             for vulnerability in config.vulnerabilities:
-                damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.VULNERABILITY, damage_type=vulnerability, name=f"Vulnerability to {vulnerability}"))
+                add_modifier(damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.VULNERABILITY, damage_type=vulnerability, name=f"Vulnerability to {vulnerability}"))
             for resistance in config.resistances:
-                damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.RESISTANCE, damage_type=resistance, name=f"Resistance to {resistance}"))
+                add_modifier(damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.RESISTANCE, damage_type=resistance, name=f"Resistance to {resistance}"))
             for immunity in config.immunities:
-                damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.IMMUNITY, damage_type=immunity, name=f"Immunity to {immunity}"))
+                add_modifier(damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.IMMUNITY, damage_type=immunity, name=f"Immunity to {immunity}"))
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
                        hit_dices=hit_dices, max_hit_points_bonus=max_hit_points_bonus, temporary_hit_points=temporary_hit_points, damage_reduction=damage_reduction,
-                       life_state=config.life_state, remains_disposition=config.remains_disposition)
+                       life_state=config.life_state, remains_disposition=config.remains_disposition,
+                       nonmagical_attack_resistances=config.nonmagical_attack_resistances)

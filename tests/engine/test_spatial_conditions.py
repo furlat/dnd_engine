@@ -1,5 +1,6 @@
 """Public world-state contracts for independent spatial conditions."""
 
+from dataclasses import dataclass, replace
 from uuid import UUID, uuid4
 
 import pytest
@@ -294,7 +295,8 @@ def test_entity_anchored_area_translates_from_committed_movement() -> None:
     )
     completion = condition.activate(parent_event=cause)
     assert completion is not None
-    assert len(condition.event_handlers_uuids) == 1
+    # Losing the anchor ends the area inline; following it waits for phase B.
+    assert len(condition.event_handlers_uuids) == 2
 
     Entity.update_entity_position(
         anchor,
@@ -418,37 +420,95 @@ def test_area_membership_is_source_owned_across_entry_exit_and_removal() -> None
     assert occupant.active_conditions_by_uuid == {}
 
 
-def test_invalid_or_exclusive_footprints_do_not_partially_mutate_world() -> None:
-    """Admission rejects bad cells and occupied exclusive layers atomically."""
+@dataclass(frozen=True)
+class ExclusiveCase:
+    """Incumbent placed first; the incoming condition activates or moves over it."""
+
+    name: str
+    incumbent: frozenset[tuple[int, int]]
+    incoming: frozenset[tuple[int, int]]
+    expected_owners: dict[tuple[int, int], str | None]
+    same_content: bool = False
+    incumbent_potency: int = 0
+    moves_from: frozenset[tuple[int, int]] | None = None
+    area: bool = False
+
+
+def _exclusive(source_uuid: UUID, name: str, content: str, positions, potency: int,
+        area: bool) -> SpatialCondition:
+    condition_type = AreaCondition if area else SpatialCondition
+    return condition_type(
+        name=name,
+        source_entity_uuid=source_uuid,
+        content_ref=_content_ref(content),
+        position=min(positions),
+        affected_positions=set(positions),
+        layer=SpatialEffectLayer.FIELD,
+        occupancy_policy=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING,
+        blocking_policy=SpatialEffectBlockingPolicy.FOOTPRINT,
+        arbitration_potency=potency,
+    )
+
+
+def check_exclusive_latest_wins(case: ExclusiveCase) -> None:
+    reset_engine_runtime(grid_size=(4, 1))
+    source_uuid = uuid4()
+    incumbent = _exclusive(source_uuid, "Incumbent", "material_a", case.incumbent, case.incumbent_potency, case.area)
+    assert incumbent.activate(parent_event=_cause(source_uuid)) is not None, case.name
+    content = "material_a" if case.same_content else "material_b"
+    if case.moves_from is None:
+        incoming = _exclusive(source_uuid, "Incoming", content, case.incoming, 0, case.area)
+        incoming.activate(parent_event=_cause(source_uuid))
+    else:
+        incoming = _exclusive(source_uuid, "Incoming", content, case.moves_from, 0, case.area)
+        assert incoming.activate(parent_event=_cause(source_uuid)) is not None, case.name
+        incoming.change_footprint(set(case.incoming), parent_event=_cause(source_uuid))
+
+    owners = {}
+    for x in range(4):
+        conditions = get_map().get_spatial_conditions_at((x, 0), layer=SpatialEffectLayer.FIELD)
+        assert len(conditions) <= 1, case.name
+        owners[(x, 0)] = conditions[0].name if conditions else None
+    assert owners == case.expected_owners, case.name
+    for condition in (incumbent, incoming):
+        owned = {position for position, owner in owners.items() if owner == condition.name}
+        assert condition.affected_positions == owned, case.name
+        assert (condition in get_map().get_spatial_conditions()) == bool(owned), case.name
+
+
+def test_exclusive_conditions_latest_wins_without_raising() -> None:
+    """An incoming exclusive condition substitutes a different incumbent (human Q1, 2026-10-17)."""
+    cases = [
+        ExclusiveCase("activation covers a different incumbent", frozenset({(0, 0)}),
+            frozenset({(0, 0), (1, 0)}), {(0, 0): "Incoming", (1, 0): "Incoming", (2, 0): None, (3, 0): None}),
+        ExclusiveCase("activation overlaps a different incumbent", frozenset({(0, 0), (1, 0)}),
+            frozenset({(1, 0), (2, 0)}), {(0, 0): "Incumbent", (1, 0): "Incoming", (2, 0): "Incoming", (3, 0): None}),
+        ExclusiveCase("move overlaps a different incumbent", frozenset({(0, 0), (1, 0)}),
+            frozenset({(1, 0), (2, 0)}), {(0, 0): "Incumbent", (1, 0): "Incoming", (2, 0): "Incoming", (3, 0): None},
+            moves_from=frozenset({(3, 0)})),
+        ExclusiveCase("move covers a different incumbent", frozenset({(1, 0)}),
+            frozenset({(1, 0), (2, 0)}), {(0, 0): None, (1, 0): "Incoming", (2, 0): "Incoming", (3, 0): None},
+            moves_from=frozenset({(3, 0)})),
+        ExclusiveCase("move into a stronger matching incumbent keeps its cell", frozenset({(1, 0)}),
+            frozenset({(1, 0), (2, 0)}), {(0, 0): None, (1, 0): "Incumbent", (2, 0): "Incoming", (3, 0): None},
+            same_content=True, incumbent_potency=2, moves_from=frozenset({(3, 0)})),
+    ]
+    for case in cases:
+        check_exclusive_latest_wins(case)
+        check_exclusive_latest_wins(replace(case, name=f"{case.name} (area)", area=True))
+
+
+def test_invalid_footprint_does_not_partially_mutate_world() -> None:
+    """A footprint naming a missing tile is rejected before any world mutation."""
     reset_engine_runtime(grid_size=(2, 1))
     source_uuid = uuid4()
-    incumbent = _condition(
-        source_uuid,
-        name="exclusive_a",
-        positions={(0, 0)},
-        occupancy_policy=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING,
-    )
-    incumbent_completion = incumbent.activate(parent_event=_cause(source_uuid))
-    assert incumbent_completion is not None
-
-    incoming = _condition(
-        source_uuid,
-        name="exclusive_b",
-        positions={(0, 0), (1, 0)},
-        occupancy_policy=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING,
-    )
-    with pytest.raises(ValueError, match="authored material transformation"):
+    incoming = _condition(source_uuid, name="exclusive_b", positions={(0, 0), (5, 0)},
+        occupancy_policy=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING)
+    with pytest.raises(ValueError, match="existing tiles"):
         incoming.activate(parent_event=_cause(source_uuid))
-
-    assert get_map().get_spatial_conditions() == [incumbent]
-    assert incoming.affected_positions == set()
-    tile_one = get_map().get_tile(1, 0)
-    assert tile_one is not None and tile_one.get_conditions() == {}
-
-    incumbent.duration.duration_type = DurationType.ROUNDS
-    incumbent.duration.duration = 1
-    assert incumbent.progress_spatial_duration(parent_event=incumbent_completion)
     assert get_map().get_spatial_conditions() == []
+    tile = get_map().get_tile(0, 0)
+    assert tile is not None and tile.get_conditions() == {}
 
 
 def test_matching_exclusive_conditions_arbitrate_and_transfer_exact_cells() -> None:

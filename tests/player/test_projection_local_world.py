@@ -3,6 +3,7 @@
 from uuid import uuid4
 
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
+from tests.sensory_cells import packed_cells
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import (
     EventPhase, SensoryUpdateEvent, SpatialChangeEvent, SpatialChangeType, WorldInitializedEvent, WorldModifiedEvent,
@@ -51,7 +52,7 @@ def objective(index, event):
 
 def sensory(observer, **changes):
     return SensoryUpdateEvent.model_validate(dict(source_entity_uuid=observer,
-        observer_uuid=observer, use_register=False, phase=EventPhase.COMPLETION, **changes),
+        observer_uuid=observer, use_register=False, phase=EventPhase.COMPLETION, **packed_cells(changes)),
         context=PASSIVE_EVENT_REPLAY)
 
 
@@ -73,7 +74,7 @@ def initial(objects, visible, contacts):
     return IntervalEnvelope(name='recorded local changes', generation=generation, start_cursor=0,
         end_cursor=2, observer_uuid=observer, battlefield_id=world.battlefield_id, door_uuid=None,
         standing_torch_uuid=None, objective_rows=tuple(objective(i, event) for i, event in enumerate(events)),
-        subjective_rows=(), admitted=tuple(enumerate(events)), dispositions=())
+        admitted=tuple(enumerate(events)), dispositions=())
 
 
 def check(initialization, events):
@@ -196,13 +197,13 @@ def test_explicit_object_after_value_updates_a_known_object_with_no_surviving_ba
 def test_remote_section_visibility_and_provider_after_values_refresh_construction_suppression():
     provider = uuid4()
     section = placed(item('Stationary section').model_copy(update={'construction_suppressions': (
-        SpellSuppression(provider_uuid=provider, antimagic=True, positions=((4, 0),)),)}), (0, 0))
+        SpellSuppression(provider_uuid=provider, positions=((4, 0),)),)}), (0, 0))
     identity = section.item.item_uuid
     start = initial((section,), ((0, 0),), {
         identity: PerceivedContact(position=(0, 0), visual=True, special_senses=())})
     observed = PerceivedSpatialEffect(content_ref=ContentRef(pack_id='test.projection',
         definition_kind=ContentDefinitionKind.CONDITION, content_id='condition.test.projection',
-        content_version=1, definition_contract_hash='0'*64), name='Antimagic', description='',
+        content_version=1, definition_contract_hash='0'*64), name='Globe of Invulnerability', description='',
         positions=((4, 0),), owner_revision=1, area_geometry=SpherePresentationGeometry(center=(4, 0), radius_feet=5))
     changed = observed.model_copy(update={'area_geometry': SpherePresentationGeometry(center=(4, 0), radius_feet=10),
         'owner_revision': 2})

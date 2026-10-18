@@ -46,8 +46,11 @@ from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.subjective_combat_log import project_combat_log
-from dnd.types.senses import PerceivedContact, SenseMode, SensesType
+from dnd.types.senses import PerceivedContact, SenseMode, SensesSnapshot, SensesType
 from dnd.types.world import LightLevel
+from dnd.core.cells import values_items
+from tests.sensory_cells import cells, packed_cells
+from dnd.core.sensory_fold import reduce_senses_snapshot
 
 
 CONTROLLED_UUID = "00000000-0000-0000-0000-000000000001"
@@ -350,9 +353,8 @@ def test_sensory_updates_replay_independently_for_two_observers(
         observer_position_changed=True,
         cause_event_uuid=uuid4(),
         update_reason=SensoryUpdateReason.SELF_MOVEMENT,
-        visible_cells_added=[(1, 1), (2, 1)],
-        seen_cells_added=[(1, 1), (2, 1)],
-        effective_light_levels_changed={"1,1": LightLevel.DIM_LIGHT.value},
+        **packed_cells({"visible_cells_added": [(1, 1), (2, 1)], "seen_cells_added": [(1, 1), (2, 1)],
+            "effective_light_levels_changed": {(1, 1): LightLevel.DIM_LIGHT, (2, 1): LightLevel.BRIGHT_LIGHT}}),
         entity_contacts_changed={
             first_contact_uuid: PerceivedContact(
                 position=(2, 1),
@@ -377,8 +379,7 @@ def test_sensory_updates_replay_independently_for_two_observers(
         observer_position_changed=True,
         cause_event_uuid=uuid4(),
         update_reason=SensoryUpdateReason.SELF_MOVEMENT,
-        visible_cells_added=[(6, 7)],
-        seen_cells_added=[(6, 7)],
+        **packed_cells({"visible_cells_added": [(6, 7)], "seen_cells_added": [(6, 7)]}),
         entity_contacts_changed={
             second_contact_uuid: PerceivedContact(
                 position=(6, 6),
@@ -393,32 +394,38 @@ def test_sensory_updates_replay_independently_for_two_observers(
         lambda: (_ for _ in ()).throw(AssertionError("live world read")),
     )
 
-    first.apply_sensory_update(first_event)
-    second.apply_sensory_update(second_event)
+    first_after = _replay(first_uuid, capture_senses_snapshot(first), first_event)
+    second_after = _replay(second_uuid, capture_senses_snapshot(second), second_event)
 
-    assert first.position == (1, 1)
-    assert set(first.visible) == {(1, 1), (2, 1)}
-    assert first.seen == {(1, 1), (2, 1)}
-    assert set(first.entities) == {first_contact_uuid}
-    assert first.effective_light_levels == {(1, 1): LightLevel.DIM_LIGHT}
-    assert first.get_sense_modes() == [
+    assert first_after.position == (1, 1)
+    assert cells(first_after.visible) == {(1, 1), (2, 1)}
+    assert cells(first_after.seen) == {(1, 1), (2, 1)}
+    assert set(first_after.entities) == {first_contact_uuid}
+    assert values_items(first_after.effective_light_levels) == [((1, 1), LightLevel.DIM_LIGHT), ((2, 1), LightLevel.BRIGHT_LIGHT)]
+    assert first_after.sense_modes == (
         SenseMode(sense_type=SensesType.DARKVISION, range_feet=60),
-    ]
-    assert first._last_passive_perception == 14
-    assert first._paths_dirty is True
-    assert second.position == (6, 7)
-    assert set(second.visible) == {(6, 7)}
-    assert second.seen == {(6, 7)}
-    assert set(second.entities) == {second_contact_uuid}
-    assert first_contact_uuid not in second.entities
-    assert second_contact_uuid not in first.entities
-    assert set(first.visible) | set(second.visible) == {
+    )
+    assert first_after.passive_perception == 14
+    assert first_after.paths_dirty is True
+    assert second_after.position == (6, 7)
+    assert cells(second_after.visible) == {(6, 7)}
+    assert cells(second_after.seen) == {(6, 7)}
+    assert set(second_after.entities) == {second_contact_uuid}
+    assert first_contact_uuid not in second_after.entities
+    assert second_contact_uuid not in first_after.entities
+    assert cells(first_after.visible) | cells(second_after.visible) == {
         (1, 1),
         (2, 1),
         (6, 7),
     }
     with pytest.raises(ValueError, match="different observer"):
-        first.apply_sensory_update(second_event)
+        _replay(first_uuid, first_after, second_event)
+
+
+def _replay(observer_uuid: UUID, previous: SensesSnapshot, event: SensoryUpdateEvent) -> SensesSnapshot:
+    """Fold one recorded observer delta onto a snapshot without reading live state."""
+    event.validate_replay_payload()
+    return reduce_senses_snapshot(observer_uuid, previous, event)
 
 
 def _event_with_log(log: CombatLogEntry) -> Event:
@@ -666,7 +673,7 @@ def test_sensory_replay_rejects_runtime_values_before_state_changes() -> None:
             "entity_contacts_changed": {contact_uuid: bad_value},
         })
         with pytest.raises(ValueError, match="runtime value"):
-            senses.apply_sensory_update(malformed)
+            _replay(observer_uuid, before, malformed)
         assert capture_senses_snapshot(senses) == before
 
 
@@ -763,35 +770,20 @@ def test_cold_world_creation_logs_and_two_senses_replay_match_live_values() -> N
     )
 
     EventQueue.reset()
-    replay_senses = tuple(
-        Senses(
-            source_entity_uuid=actor.uuid,
-            position=actor.position,
-            use_register=False,
-        )
-        for actor in actors
-    )
-    for replay, initial in zip(replay_senses, initial_senses):
-        replay.sense_modes = list(initial.sense_modes)
-        replay.snapshot_perception(initial.passive_perception)
-        assert capture_senses_snapshot(replay) == initial
-    replay_by_uuid = {
-        replay.source_entity_uuid: replay for replay in replay_senses
-    }
+    replayed_senses = dict(zip((actor.uuid for actor in actors), initial_senses))
     for sensory_event in sensory_events:
-        replay_by_uuid[sensory_event.observer_uuid].apply_sensory_update(
-            sensory_event,
-        )
+        observer_uuid = sensory_event.observer_uuid
+        replayed_senses[observer_uuid] = _replay(observer_uuid, replayed_senses[observer_uuid], sensory_event)
 
     replayed = (
         world.model_copy(deep=True),
         tuple(event.model_copy(deep=True) for event in creations),
         projected_slots,
-        tuple(capture_senses_snapshot(replay) for replay in replay_senses),
+        tuple(replayed_senses[actor.uuid] for actor in actors),
     )
     assert replayed == expected
-    assert set(replay_senses[0].visible) | set(replay_senses[1].visible) == (
-        set(actors[0].senses.visible) | set(actors[1].senses.visible)
+    assert cells(replayed_senses[actors[0].uuid].visible) | cells(replayed_senses[actors[1].uuid].visible) == (
+        cells(capture_senses_snapshot(actors[0].senses).visible) | cells(capture_senses_snapshot(actors[1].senses).visible)
     )
 
 

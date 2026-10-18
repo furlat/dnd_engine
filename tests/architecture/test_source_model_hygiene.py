@@ -304,6 +304,15 @@ SERVER_SESSION_GOOGLE_DOCSTRING_CLASSES = {
         "GameSession",
     },
 }
+WORLD_REGISTRY_NAMES = frozenset({"get_all_entities", "_entity_registry"})
+KEYED_REGISTRY_OPS = frozenset({"get", "pop"})
+# The only functions in dnd/ that may read every registered Entity (plan §14.8).
+WORLD_SCAN_EXCEPTIONS = {
+    "dnd/entity.py": "get_all_entities",  # the registry's own accessor
+    "dnd/runtime_reset.py": "reset_engine_runtime",  # clears the registry
+    "dnd/content_system/pack_loader.py": "_engine_runtime_attribute_specs",  # cold-runtime check
+    "dnd/scenarios/encounter_assembler.py": "assemble_encounter_recipe",  # empty-world setup guard
+}
 def read_text(path: Path) -> str:
     """Read repository text with a consistent encoding."""
     return path.read_text(encoding="utf-8")
@@ -783,3 +792,44 @@ def test_server_http_errors_do_not_use_bare_string_details() -> None:
     ]
 
     assert not offenders, "Bare string HTTPException detail in:\n" + "\n".join(offenders)
+
+
+def world_registry_reads(path: Path) -> list[tuple[str, int]]:
+    """(enclosing function, line) of each whole-world Entity registry read.
+
+    That is `get_all_entities`, or `_entity_registry` used other than by key
+    (`[uuid]`, `.get`, `.pop`), by attribute or by name in a string.
+    """
+    reads: list[tuple[str, int]] = []
+
+    def visit(node: ast.AST, function: str, parent: ast.AST | None) -> None:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            function = node.name
+        name = (node.attr if isinstance(node, ast.Attribute)
+                else node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None)
+        keyed = (isinstance(parent, ast.Subscript) and parent.value is node
+                 or isinstance(parent, ast.Attribute) and parent.attr in KEYED_REGISTRY_OPS)
+        if name in WORLD_REGISTRY_NAMES and not (name == "_entity_registry" and keyed):
+            reads.append((function, node.lineno))
+        for child in ast.iter_child_nodes(node):
+            visit(child, function, node)
+
+    visit(ast.parse(read_text(path)), "<module>", None)
+    return reads
+
+
+def test_dnd_never_iterates_every_registered_entity_outside_the_listed_owners() -> None:
+    """Execution reads bounded owners and discovery reads perception (plan §14.8)."""
+    offenders: list[str] = []
+    used: set[str] = set()
+    for path in sorted((ROOT / "dnd").rglob("*.py")):
+        relative = path.relative_to(ROOT).as_posix()
+        for function, line in world_registry_reads(path):
+            if WORLD_SCAN_EXCEPTIONS.get(relative) == function:
+                used.add(relative)
+            else:
+                offenders.append(f"{relative}:{line} in {function}")
+
+    assert not offenders, "Whole-world Entity registry reads in dnd/:\n" + "\n".join(offenders)
+    assert used == set(WORLD_SCAN_EXCEPTIONS), "Stale world-scan exceptions: " + ", ".join(
+        sorted(set(WORLD_SCAN_EXCEPTIONS) - used))

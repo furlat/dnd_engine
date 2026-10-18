@@ -62,7 +62,7 @@ def test_previewed_route_is_the_committed_route(preference):
                 "selection": selection}}
         _, records, _ = dispatch(runtime, Command(seat_id="party",
             request=CommandRequest.model_validate_json(json.dumps(command))))
-        steps = {node.lineage_uuid: node.fact for record in records for lineage in record.lineages
+        steps = {node.lineage: node.fact for record in records for lineage in record.lineages
             for node in lineage.events if isinstance(node.fact, StepFact) and node.fact.committed
             and node.fact.source_entity_uuid == actor.uuid}
         assert tuple((step.from_position, step.to_position) for step in steps.values()) == tuple(

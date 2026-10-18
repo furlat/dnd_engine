@@ -108,7 +108,7 @@ def test_registered_door_profiles_have_native_material_channels_and_independent_
     for item_id, profile in DOOR_PROFILES.items()
     for outcome in (("clear", "jammed") if profile.supports_jammed_remnant else ("clear",))])
 def test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains(arena, swing, open_before_break, item_id, outcome):
-    attacker = actor(arena, (2, 3))
+    attacker = actor(arena, (4, 3))
     door = build_authored_door(item_id, swing=swing,
         destruction_outcome=outcome, hit_points=12)
     original = door.place_on_grid((3, 3), boundary_direction=CardinalDirection.EAST,
@@ -154,13 +154,13 @@ def test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains(
 
 
 def test_door_close_still_rejects_an_occupied_opening_and_retains_swing(arena):
-    operator = actor(arena, (2, 3))
+    operator = actor(arena, (4, 3))
     door = build_authored_door("environment.door.indoor_door_shabby", swing=DoorSwing.INWARD)
     door.place_on_grid((3, 3), boundary_direction=CardinalDirection.EAST)
     assert not execute_use_action(operator, door.uuid, "Open Door").canceled
     traveler = actor(arena, (3, 3))
     assert door.get_use_actions(operator.uuid) == [] and door.is_open
-    move(traveler, (4, 3))
+    move(traveler, (2, 3))
     assert not execute_use_action(operator, door.uuid, "Close Door").canceled
     assert not door.is_open and door.to_item_presentation_state().door_swing is DoorSwing.INWARD
 

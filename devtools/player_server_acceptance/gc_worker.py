@@ -11,7 +11,7 @@ import weakref
 
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventQueue
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from server import worker
 
 
@@ -75,13 +75,13 @@ def main():
         graph = tracked_graph()
         censuses.append({'name': name, 'history': EventQueue.event_cursor(), 'allocated_blocks': sys.getallocatedblocks(),
             'gc_count': gc.get_count(), **graph, 'frozen_objects': gc.get_freeze_count(), 'rss_bytes': rss_bytes(),
-            'registered_values': len(BaseValue._registry),
-            'registered_values_by_type': dict(Counter(type(value).__name__ for value in BaseValue._registry.values())),
-            'registered_values_by_name': dict(Counter(value.name for value in BaseValue._registry.values())),
+            'registered_values': len(ModifiableValue._registry),
+            'registered_values_by_type': dict(Counter(type(value).__name__ for value in ModifiableValue._registry.values())),
+            'registered_values_by_name': dict(Counter(value.name for value in ModifiableValue._registry.values())),
             'registered_objects': len(BaseObject._registry),
             'registered_objects_by_type': dict(Counter(type(value).__name__ for value in BaseObject._registry.values())),
             'catalog_descriptors': len(runtime.catalog.content),
-            'audience_content_counts': {seat: len(view.latest.content) for seat, view in runtime.audiences.items()},
+            'audience_content_counts': {seat: len(view.projection.remembered.content) for seat, view in runtime.audiences.items()},
             'census_ms': (perf_counter() - started) * 1000})
         inside_census = False
 
@@ -142,7 +142,7 @@ def main():
         policy['before_freeze_rss_bytes'] = rss_bytes()
         policy['before_freeze_native_event_cursor'] = EventQueue.event_cursor()
         policy['before_freeze_registered_objects'] = len(BaseObject._registry)
-        policy['before_freeze_registered_values'] = len(BaseValue._registry)
+        policy['before_freeze_registered_values'] = len(ModifiableValue._registry)
         policy['pre_freeze_census_ms'] = (perf_counter() - started) * 1000
         inside_census = False
         started = perf_counter()

@@ -4,6 +4,7 @@ from uuid import UUID
 
 import pytest
 
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.events import EventPhase, ItemDestructionEvent, SpatialEffectInteractionEvent, WorldTileState
 from dnd.core.gridmap import get_map
@@ -16,6 +17,7 @@ from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectInteractionOperation
 from tests.engine.test_liquid_barrel_areas import AREA, barrel_and_attacker, break_barrel, world as world
 from tests.engine.test_liquid_barrels import CONTENTS, actor, completed
+from dnd.types.cells import cell_in
 
 
 @pytest.mark.parametrize("contents", CONTENTS)
@@ -159,7 +161,7 @@ def test_visible_fragment_keeps_source_geometry_without_discovering_anchor_or_hi
     observer.update_entity_senses(max_distance=1)
     owner, = get_map().get_spatial_conditions()
     observed = observer.senses.spatial_effects[owner.uuid]
-    assert observed.anchor_position is None and (3, 3) not in observer.senses.visible
+    assert observed.anchor_position is None and not cell_in(capture_senses_snapshot(observer.senses).visible, (3, 3))
     assert observed.positions == ((4, 3),)
     assert observed.deposit_source is not None and observed.deposit_source.origin == (3, 3)
     assert barrel.uuid not in observer.senses.objects

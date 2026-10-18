@@ -3,7 +3,8 @@
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventHandler, Trigger, EventType, EventPhase, StepMovementEvent
 from dnd.core.action_execution import MovementProvocationPolicy
-from dnd.actions import Attack, entity_action_economy_cost_evaluator
+from dnd.actions import Attack, StandUp, entity_action_economy_cost_evaluator
+from dnd.core.events import StandOfferEvent, Event
 from dnd.core.base_actions import Cost
 from dnd.core.content.runtime import (
     RuntimeBehaviorKind,
@@ -27,6 +28,9 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
         The processed step event.
     """
     reaction_source_entity = Entity.get(source_entity_uuid)
+    if reaction_source_entity is not None and any(condition.blocks_opportunity_attacks
+            and condition.contributions_active() for condition in reaction_source_entity.active_conditions_by_uuid.values()):
+        return None
     event_source_entity = Entity.get(event.source_entity_uuid)
     if reaction_source_entity is None or event_source_entity is None:
         return event
@@ -63,7 +67,7 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
         reaction_attack.behavior_binding = active_runtime_behavior_binding()
         if reaction_attack.pre_validate():
             reaction_attack.add_to_register()
-            reaction_attack.apply(parent_event=event)
+            reaction_source_entity.perform(reaction_attack, reaction_attack.current_selection(), parent_event=event)
 
     return event
 
@@ -105,3 +109,24 @@ def add_opportunity_attack_handler(entity: Entity) -> None:
         entity: Entity receiving the reaction handler.
     """
     entity.add_event_handler(create_opportunity_attack_handler(entity.uuid))
+    add_stand_when_healed_handler(entity)
+
+
+class StandWhenHealedHandler(EventHandler):
+    """Persistent recipient preference, registered before any heal offer."""
+
+
+def add_stand_when_healed_handler(entity: Entity) -> None:
+    if any(handler.semantic_key == "reaction.stand_when_healed" for handler in entity.event_handlers.values()):
+        return
+    def stand(event: Event, owner_uuid: UUID):
+        if not isinstance(event, StandOfferEvent): return None
+        owner = Entity.get(owner_uuid)
+        if owner is None or not owner.can_take_actions() or "Prone" not in owner.active_conditions: return None
+        action = StandUp(source_entity_uuid=owner.uuid, reaction_stand=True)
+        if action.pre_validate(): owner.perform(action, action.current_selection(), parent_event=event)
+        return None
+    entity.add_event_handler(StandWhenHealedHandler(name="Stand when healed", semantic_key="reaction.stand_when_healed",
+        source_entity_uuid=entity.uuid, content_kind=RuntimeBehaviorKind.REACTION, player_toggleable=True,
+        trigger_conditions=[Trigger(event_type=EventType.BASE_ACTION, event_phase=EventPhase.EFFECT,
+            event_target_entity_uuid=entity.uuid)], event_processor=stand))

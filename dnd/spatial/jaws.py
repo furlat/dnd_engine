@@ -13,7 +13,9 @@ from dnd.core.events import (
     Event, EventHandler, EventPhase, EventQueue, EventType, MechanismActivationEvent,
     SpatialChangeEvent, Trigger,
 )
-from dnd.core.gridmap import get_map
+from typing import ClassVar
+
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import SpatialCondition
@@ -23,7 +25,9 @@ from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.abilities import SkillName
 from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from dnd.types.traps import TrapDamage, TrapPayload, TrapState
-from dnd.types.world import OccupancyLayer
+from dnd.types.world import OccupancyLayer, SpatialChannel
+from dnd.actions import Move
+from dnd.conditions import Poisoned, Prone
 
 
 JAW_TRAP_CONTENT_REF = ContentRef(
@@ -42,6 +46,7 @@ class SlipFreeOfJaw(EscapeSpatialRestraintAction):
 
 
 class JawRestrained(SpatialRestraintSource):
+    creates = (*SpatialRestraintSource.creates, ForceJawOpen, SlipFreeOfJaw)
     name: str = "Jaw restraint"
     description: str = "Held by one closed jaw until escaped, opened or removed."
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, frozen=True)
@@ -53,6 +58,8 @@ class JawRestrained(SpatialRestraintSource):
 
 class JawTrap(SpatialCondition):
     """An armed jaw closes once; reset and removal release its exact source."""
+    creates = (JawRestrained, Move, Poisoned, Prone)
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Jaw trap"
     content_ref: ContentRef = JAW_TRAP_CONTENT_REF
@@ -73,6 +80,9 @@ class JawTrap(SpatialCondition):
         senses = observer.get_senses() if observer is not None else None
         return (senses is not None and self.uuid in senses.spatial_effects
                 or super().is_hazard_perceived_by(requesting_entity_uuid))
+
+    def spatial_channels(self) -> frozenset[SpatialChannel]:
+        return super().spatial_channels() | {SpatialChannel.MOVEMENT}
 
     def is_hazardous_for(self, entity_uuid: UUID | None = None, *,
                          occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND) -> bool:

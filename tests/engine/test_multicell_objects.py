@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from dnd.actions import Attack, AttackEvent, PickUp
 from dnd.actions_functional import execute_use_action, get_available_actions, setup_standard_actions
 from dnd.blocks.base_item import BaseItem, WorldItem
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import build_directional_wall, build_storage_chest
 from dnd.core.base_block import BaseBlock, LightLevel
@@ -19,6 +20,7 @@ from dnd.core.events import (
     SpatialChangeEvent, SpatialHandler, Trigger,
 )
 from dnd.core.gridmap import get_map
+from dnd.core.navigation import has_route
 from dnd.core.item_types import ItemDestructionProfile, ItemIntegrity
 from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.entity import Entity, EntityConfig
@@ -27,6 +29,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.world import CardinalDirection
 from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementKind, WorldPlacementSpec
 from dnd.world_facts import WorldFacts, apply_world_fact, world_event_positions
+from dnd.types.cells import cell_in
 
 
 @pytest.fixture
@@ -82,7 +85,7 @@ def test_one_identity_reindexes_rotation_move_and_removal(arena: Game) -> None:
     assert original.positions == ((2, 3), (3, 3))
     assert all(grid.get_center_objects_at(point) == {item.uuid} for point in original.positions)
     assert all(not grid.is_walkable_for(*point) for point in original.positions)
-    assert set(original.positions) <= grid.get_barrier_positions()
+    assert all(grid.is_blocking_propagation(*point) for point in original.positions)
     assert len(grid.iter_object_placements()) == 1
     with pytest.raises(ValueError, match="world objects"):
         grid.validate_tile_detachment((3, 3))
@@ -190,7 +193,7 @@ def test_far_end_attack_and_same_identity_destruction_update_only_real_supports(
     item.place_on_grid((2, 3))
     tile_ids = tuple(support.tile_uuid for support in placement(item).covered_supports)
     attacker.update_entity_senses(max_distance=1)
-    assert (2, 3) not in attacker.senses.visible
+    assert not cell_in(capture_senses_snapshot(attacker.senses).visible, (2, 3))
     assert attacker.senses.objects[item.uuid].position == (3, 3)
     assert object_choices(attacker, item)
     assert all(choice.position == (3, 3) for choice in object_choices(attacker, item))
@@ -209,7 +212,7 @@ def test_far_end_attack_and_same_identity_destruction_update_only_real_supports(
     assert item.uuid not in attacker.senses.objects
     # Paths are deliberately refreshed on action discovery, not every sensory fact.
     get_available_actions(attacker)
-    assert (3, 3) in attacker.senses.paths
+    assert has_route(attacker.senses.paths, (3, 3))
     assert tuple(get_map().get_tile(x, 3).uuid for x in (2, 3)) == tile_ids
     broken = [event for _, event in EventQueue.iter_events_since(cursor)
               if isinstance(event, ItemDestructionEvent) and event.phase is EventPhase.COMPLETION]

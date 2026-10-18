@@ -7,6 +7,7 @@ import pytest
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.classes.barbarian import RelentlessRage
 from dnd.classes.fighter import Indomitable, Survivor
 from dnd.classes.rage import Raging
@@ -23,6 +24,7 @@ from dnd.content.characters.fighter_grants import apply_fighter_level
 from dnd.content.characters.barbarian_grants import apply_barbarian_level
 from tests.progression.test_direct_fighter_progression import _fighter_level
 from tests.progression.test_direct_barbarian_progression import _barbarian_level
+from dnd.core.cells import mask_positions
 
 
 @pytest.fixture
@@ -164,7 +166,7 @@ def test_presence_observation_carries_native_mode_and_only_observed_cells(scene,
     effects = [effect for effect in observer.senses.spatial_effects.values()
         if effect.presence_mode is not None]
     assert len(effects) == 1 and effects[0].presence_mode == mode
-    assert set(effects[0].positions) <= set(observer.senses.visible)
+    assert set(effects[0].positions) <= set(mask_positions(capture_senses_snapshot(observer.senses).visible))
     assert effects[0].anchor_entity_uuid == actor.uuid
 
 

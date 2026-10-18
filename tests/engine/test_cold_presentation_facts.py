@@ -18,7 +18,6 @@ from dnd.core.aoe import (
     Cylinder,
     Line,
     Sphere,
-    snapshot_aoe_presentation_geometry,
 )
 from dnd.core.base_actions import ActionEvent
 from dnd.core.events import EventPhase, EventQueue, EventType
@@ -89,60 +88,15 @@ def _reset_grid() -> None:
 def test_shape_snapshots_preserve_every_runtime_geometry_parameter() -> None:
     """Every concrete AoE shape has one exact immutable cold representation."""
     _reset_grid()
-    source_uuid = uuid4()
     caster_position = (2, 2)
     target = (5, 4)
 
-    sphere = snapshot_aoe_presentation_geometry(
-        Sphere(source_entity_uuid=source_uuid, radius_feet=20),
-        caster_position,
-        target_override=target,
-    )
-    cone = snapshot_aoe_presentation_geometry(
-        Cone(
-            source_entity_uuid=source_uuid,
-            length_feet=30,
-            angle_degrees=70,
-        ),
-        caster_position,
-        target_override=target,
-    )
-    line = snapshot_aoe_presentation_geometry(
-        Line(
-            source_entity_uuid=source_uuid,
-            length_feet=100,
-            width_feet=10,
-        ),
-        caster_position,
-        target_override=target,
-    )
-    centered_cube = snapshot_aoe_presentation_geometry(
-        Cube(
-            source_entity_uuid=source_uuid,
-            size_feet=30,
-            centered=True,
-        ),
-        caster_position,
-        target_override=target,
-    )
-    directional_cube = snapshot_aoe_presentation_geometry(
-        Cube(
-            source_entity_uuid=source_uuid,
-            size_feet=15,
-            centered=False,
-        ),
-        caster_position,
-        target_override=target,
-    )
-    cylinder = snapshot_aoe_presentation_geometry(
-        Cylinder(
-            source_entity_uuid=source_uuid,
-            radius_feet=20,
-            height_feet=40,
-        ),
-        caster_position,
-        target_override=target,
-    )
+    sphere = Sphere(radius_feet=20).presentation_geometry(target, caster_position)
+    cone = Cone(length_feet=30, angle_degrees=70).presentation_geometry(target, caster_position)
+    line = Line(length_feet=100, width_feet=10).presentation_geometry(target, caster_position)
+    centered_cube = Cube(size_feet=30, centered=True).presentation_geometry(target, caster_position)
+    directional_cube = Cube(size_feet=15, centered=False).presentation_geometry(target, caster_position)
+    cylinder = Cylinder(radius_feet=20, height_feet=40).presentation_geometry(target, caster_position)
 
     assert sphere == SpherePresentationGeometry(center=target, radius_feet=20)
     assert cone == ConePresentationGeometry(

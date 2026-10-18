@@ -1,4 +1,4 @@
-"""Four ordinary frozen builds consumed by the direct character path."""
+"""Ordinary frozen builds consumed by the direct character path."""
 
 from dataclasses import replace
 from types import MappingProxyType
@@ -11,6 +11,7 @@ from dnd.content.characters.builds import (
     create_character,
 )
 from dnd.content.items.item_loadouts import ItemLoadoutEntry
+from dnd.content.characters.class_definitions import class_level_choices, next_class_level
 from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.entity import Entity
 from dnd.types.character_progression import (
@@ -20,6 +21,7 @@ from dnd.types.character_progression import (
     CharacterSubclass,
     ClassChoiceSelection,
     OriginChoiceSelection,
+    PreparedSpellSelection,
     Species,
 )
 
@@ -28,6 +30,9 @@ BARBARIAN_PREMADE_ID = "hero.barbarian_l5_berserker_torch"
 FIGHTER_PREMADE_ID = "hero.fighter_l5_shield_torch"
 SORCERER_PREMADE_ID = "hero.sorcerer_l5_standard_torch"
 SPELLBLADE_PREMADE_ID = "hero.fighter_2_sorcerer_3_spellblade"
+CLERIC_PREMADE_ID = "hero.cleric_l5_life"
+PALADIN_PREMADE_ID = "hero.paladin_l5_devotion"
+WIZARD_PREMADE_ID = "hero.wizard_l5_evocation"
 
 _HUMAN_ORIGIN = (
     OriginChoiceSelection(
@@ -290,7 +295,79 @@ _FIGHTER_PACKAGE = (
     ItemLoadoutEntry("shield.shield", equipment_slot=WeaponSlot.MELEE_OFF),
 )
 
+
+def _prepared_levels(class_id: CharacterClass) -> tuple[AppliedClassLevel, ...]:
+    """Five authored sample levels, validated by the same ordinary choices."""
+    subclass = {CharacterClass.CLERIC:CharacterSubclass.LIFE_DOMAIN,
+        CharacterClass.PALADIN:CharacterSubclass.OATH_OF_DEVOTION,
+        CharacterClass.WIZARD:CharacterSubclass.SCHOOL_OF_EVOCATION}[class_id]
+    stem=class_id.value.rsplit(".",1)[1]
+    book=(
+        ("spell.magic_missile","spell.shield","spell.mage_armor","spell.grease","spell.burning_hands","spell.sleep"),
+        ("spell.false_life","spell.longstrider"),
+        ("spell.mirror_image","spell.scorching_ray"),
+        ("spell.invisibility","spell.misty_step"),
+        ("spell.fireball","spell.haste"),
+    )
+    levels=()
+    for n in range(1,6):
+        row=next_class_level(class_id,levels)
+        choices={
+            "starting_equipment":(f"starting_equipment.{stem}."+{
+                CharacterClass.CLERIC:"mace_shield",CharacterClass.PALADIN:"sword_shield",
+                CharacterClass.WIZARD:"quarterstaff"}[class_id],),
+            "skills":("arcana","investigation") if class_id is CharacterClass.WIZARD else ("insight","religion"),
+            "subclass":(subclass.value,),
+            "cantrips":(("spell.sacred_flame","spell.guidance","spell.thaumaturgy")
+                if class_id is CharacterClass.CLERIC else ("spell.fire_bolt","spell.ray_of_frost","spell.acid_splash"))
+                if n==1 else (("spell.resistance",) if class_id is CharacterClass.CLERIC else ("spell.shocking_grasp",)),
+            "spellbook":book[n-1],
+            "fighting_style":("class_feature.paladin.fighting_style.dueling",),
+            "asi_or_feat":("ability_score."+{CharacterClass.CLERIC:"wisdom",
+                CharacterClass.PALADIN:"strength",CharacterClass.WIZARD:"intelligence"}[class_id]+".2",),
+        }
+        row=replace(row,choices=tuple(ClassChoiceSelection(choice.choice_id,
+            choices[choice.choice_id.rsplit(".",1)[1]])
+            for choice in class_level_choices(row,first_class=n==1)))
+        levels=(*levels,row)
+    return levels
+
 PREMADE_CHARACTER_BUILDS: Mapping[str, CharacterBuild] = MappingProxyType({
+    CLERIC_PREMADE_ID: CharacterBuild(
+        name="Life Cleric",species=Species.HUMAN,background=Background.ADVENTURER,
+        base_ability_scores=(("strength",14),("dexterity",10),("constitution",14),
+            ("intelligence",8),("wisdom",15),("charisma",10)),
+        flexible_ability_bonuses=(("constitution",1),("wisdom",2)),origin_choices=_HUMAN_ORIGIN,
+        class_levels=_prepared_levels(CharacterClass.CLERIC),
+        prepared_spells=(PreparedSpellSelection("class.cleric.spellcasting",
+            ("spell.guiding_bolt","spell.healing_word","spell.spirit_guardians","spell.spiritual_weapon")),),
+        item_loadout=(ItemLoadoutEntry("armor.chain_mail",equipment_slot=BodyPart.BODY),
+            ItemLoadoutEntry("weapon.mace",equipment_slot=WeaponSlot.MELEE_MAIN),
+            ItemLoadoutEntry("shield.shield",equipment_slot=WeaponSlot.MELEE_OFF),*_COMMON_SUPPLEMENT),
+        appearance=CharacterAppearance(),
+    ),
+    PALADIN_PREMADE_ID: CharacterBuild(
+        name="Devotion Paladin",species=Species.HUMAN,background=Background.ADVENTURER,
+        base_ability_scores=(("strength",15),("dexterity",10),("constitution",14),
+            ("intelligence",8),("wisdom",10),("charisma",14)),
+        flexible_ability_bonuses=(("strength",2),("charisma",1)),origin_choices=_HUMAN_ORIGIN,
+        class_levels=_prepared_levels(CharacterClass.PALADIN),
+        prepared_spells=(PreparedSpellSelection("class.paladin.spellcasting",
+            ("spell.bless","spell.cure_wounds","spell.aid")),),
+        item_loadout=(*_FIGHTER_PACKAGE,*_COMMON_SUPPLEMENT),appearance=CharacterAppearance(),
+    ),
+    WIZARD_PREMADE_ID: CharacterBuild(
+        name="Evocation Wizard",species=Species.HUMAN,background=Background.ADVENTURER,
+        base_ability_scores=(("strength",8),("dexterity",14),("constitution",14),
+            ("intelligence",15),("wisdom",12),("charisma",8)),
+        flexible_ability_bonuses=(("constitution",1),("intelligence",2)),origin_choices=_HUMAN_ORIGIN,
+        class_levels=_prepared_levels(CharacterClass.WIZARD),
+        prepared_spells=(PreparedSpellSelection("class.wizard.spellcasting",
+            ("spell.magic_missile","spell.shield","spell.mage_armor","spell.scorching_ray","spell.fireball","spell.haste")),),
+        item_loadout=(ItemLoadoutEntry("weapon.quarterstaff",equipment_slot=WeaponSlot.MELEE_MAIN),
+            ItemLoadoutEntry("apparel.robes.wizard",equipment_slot=BodyPart.BODY),*_COMMON_SUPPLEMENT),
+        appearance=CharacterAppearance(),
+    ),
     BARBARIAN_PREMADE_ID: CharacterBuild(
         name="Berserker",
         species=Species.HUMAN,
@@ -414,6 +491,9 @@ def create_premade_character(
 
 __all__ = [
     "BARBARIAN_PREMADE_ID",
+    "CLERIC_PREMADE_ID",
+    "PALADIN_PREMADE_ID",
+    "WIZARD_PREMADE_ID",
     "FIGHTER_PREMADE_ID",
     "PREMADE_CHARACTER_BUILDS",
     "SORCERER_PREMADE_ID",

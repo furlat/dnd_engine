@@ -1,5 +1,8 @@
 """Manual Chapter 17 checks for encounters, turns, and controllers."""
 
+import numpy as np
+from dnd.core.view import NO_CELLS, CellLayer
+from dnd.blocks.sensory import capture_senses_snapshot
 from uuid import UUID, uuid4
 
 from pydantic import Field
@@ -17,10 +20,11 @@ from dnd.core.modifiers import (
     AutoHitModifier,
     AutoHitStatus,
 )
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.core.cells import mask_positions
 
 
 class RecordingController(Controller):
@@ -72,7 +76,7 @@ def reset_encounter_tutorial_state(width: int = 16, height: int = 10) -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseCondition._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
     Controller.clear_registry()
@@ -118,12 +122,12 @@ def make_melee_attack_auto_hit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,
     )
-    return entity.equipment.melee_attack_bonus.self_static.add_auto_hit_modifier(modifier)
+    return add_modifier(entity.equipment.melee_attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, modifier)
 
 
 def clear_melee_attack_modifier(entity: Entity, modifier_uuid: UUID) -> None:
     """Remove an explicit melee attack modifier from an entity."""
-    entity.equipment.melee_attack_bonus.self_static.remove_modifier(modifier_uuid)
+    remove_modifier(entity.equipment.melee_attack_bonus, modifier_uuid, Channel.SELF_STATIC)
 
 
 def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
@@ -131,9 +135,10 @@ def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
     reset_encounter_tutorial_state(width=8, height=3)
     hero = create_goblin(name="Turn Observer", position=(1, 1), faction="heroes")
     monster = create_skeleton(name="Turn Target", position=(5, 1), faction="monsters")
-    hero.senses.visible.clear()
-    hero.senses.seen.clear()
-    hero.senses.entities.clear()
+    # A fresh observer: nothing published yet.
+    hero.senses.cells = NO_CELLS
+    hero.senses.seen = CellLayer(0, 0, np.zeros((0, 0), dtype=bool))
+    hero.senses.entities = {}
     encounter = start_ordered_encounter(
         hero,
         monster,
@@ -157,7 +162,7 @@ def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
     assert (5, 1) in {
         position
         for update in updates
-        for position in update.seen_cells_added
+        for position in mask_positions(update.seen_cells_added)
     }
     assert EventQueue.get_events_by_type(EventType.SENSORY_UPDATE)
 

@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from typing import cast
 from uuid import UUID, uuid4
 
+from dnd.characters.preparation import preparation_error
+from dnd.content.characters.spellcasting_grants import shared_slot_capacities, reconcile_prepared_spell_entitlements
+from dnd.types.class_spells import WIZARD_SPELL_RANKS
 from dnd.actions_functional import setup_standard_actions, update_weapon_templates
 from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
@@ -12,7 +15,7 @@ from dnd.blocks.health import HealthConfig
 from dnd.content.characters.class_definitions import (
     resolve_barbarian_level,
     resolve_fighter_level,
-    resolve_sorcerer_level,
+    resolve_sorcerer_level, resolve_prepared_class_level,
 )
 from dnd.content.characters.origin_definitions import ResolvedOrigin, resolve_origin
 from dnd.content.characters.origin_grants import apply_origin
@@ -42,6 +45,11 @@ SUPPORTED_FEATURE_TOGGLE_IDS = frozenset({
     "class_feature.fighter.fighting_style.protection",
     "class_feature.fighter.indomitable",
     "class_feature.barbarian.retaliation",
+    "class_feature.paladin.fighting_style.great_weapon_fighting",
+    "class_feature.paladin.fighting_style.protection",
+    "class_feature.paladin.divine_smite",
+    "class_feature.cleric.divine_strike",
+    "class_feature.wizard.overchannel",
     "feat.lucky",
 })
 
@@ -63,6 +71,9 @@ def _multiclass_prerequisite(
         return abilities["strength"] >= 13
     if class_id is CharacterClass.FIGHTER:
         return abilities["strength"] >= 13 or abilities["dexterity"] >= 13
+    if class_id is CharacterClass.CLERIC:return abilities["wisdom"]>=13
+    if class_id is CharacterClass.WIZARD:return abilities["intelligence"]>=13
+    if class_id is CharacterClass.PALADIN:return abilities["strength"]>=13 and abilities["charisma"]>=13
     return abilities["charisma"] >= 13
 
 
@@ -138,12 +149,14 @@ def resolve_character_build(build: CharacterBuild) -> ResolvedCharacterBuild:
                 applied,
                 initial_first_class=index == 0,
             )
-        else:
+        elif level.class_id is CharacterClass.SORCERER:
             resolved_level = resolve_sorcerer_level(
                 level,
                 applied,
                 initial_first_class=index == 0,
             )
+        else:
+            resolved_level=resolve_prepared_class_level(level,applied,initial_first_class=index==0, scribed_spell_ids=build.scribed_spell_ids)
         for ability, amount in resolved_level.ability_increases:
             abilities[ability] += amount
             if abilities[ability] > 20:
@@ -152,6 +165,10 @@ def resolve_character_build(build: CharacterBuild) -> ResolvedCharacterBuild:
         applied = (*applied, level)
         class_ids.add(level.class_id)
 
+    if len(set(build.scribed_spell_ids)) != len(build.scribed_spell_ids) or any(spell not in WIZARD_SPELL_RANKS for spell in build.scribed_spell_ids):
+        raise ValueError("Scribed spell identities must be unique implemented Wizard spells")
+    if len(set(build.permanent_feature_uses)) != len(build.permanent_feature_uses) or any(value != "class_feature.cleric.divine_intervention" for value in build.permanent_feature_uses):
+        raise ValueError("Unsupported permanent feature use")
     source_ids = tuple(row.source_id for row in build.prepared_spells)
     if len(set(source_ids)) != len(source_ids):
         raise ValueError("prepared spell sources must be unique")
@@ -159,7 +176,16 @@ def resolve_character_build(build: CharacterBuild) -> ResolvedCharacterBuild:
     known_spells = set(known_spell_ids)
     for row in build.prepared_spells:
         if row.source_id != "class.sorcerer.spellcasting":
-            raise ValueError(f"unsupported prepared spell source {row.source_id!r}")
+            class_sources = {class_id.value+".spellcasting": class_id for class_id in (CharacterClass.CLERIC, CharacterClass.PALADIN, CharacterClass.WIZARD)}
+            class_id = class_sources.get(row.source_id)
+            if class_id is None:
+                raise ValueError(f"unsupported prepared spell source {row.source_id!r}")
+            ability = {CharacterClass.CLERIC: "wisdom", CharacterClass.PALADIN: "charisma", CharacterClass.WIZARD: "intelligence"}[class_id]
+            error = preparation_error(class_id, build.class_levels, build.scribed_spell_ids, row.spell_ids,
+                (abilities[ability]-10)//2, max(shared_slot_capacities(build.class_levels), default=0))
+            if error:
+                raise ValueError(error)
+            continue
         unknown = set(row.spell_ids) - known_spells
         if unknown:
             raise ValueError(
@@ -249,7 +275,9 @@ def prepare_character(
     try:
         entity.set_character_body_identity(build.character_body_id)
         install_body_response(entity, BLOOD_BODY_RESPONSE)
-        entity.prepared_spell_selections = build.prepared_spells
+        entity.prepared_spell_selections = ()
+        entity.scribed_spell_ids = build.scribed_spell_ids
+        entity.permanent_feature_uses = build.permanent_feature_uses
         entity.feature_toggle_selections = build.feature_toggles
         setup_standard_actions(entity)
         apply_origin(
@@ -258,6 +286,15 @@ def prepare_character(
             character_level=len(build.class_levels),
         )
         apply_initial_class_levels(entity, build.class_levels)
+        entity.prepared_spell_selections = build.prepared_spells
+        reconcile_prepared_spell_entitlements(entity)
+        for handler in entity.event_handlers.values():
+            if not handler.player_toggleable or handler.behavior_binding is None:
+                continue
+            selection = next((row for row in build.feature_toggles
+                if row.feature_id == handler.behavior_binding.provided_by_id), None)
+            if selection is not None:
+                entity.set_handler_enabled_by_uuid(handler.uuid, selection.enabled)
 
         placements = tuple(
             (

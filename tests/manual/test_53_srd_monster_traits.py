@@ -25,7 +25,7 @@ from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, ValueRead, read_value, parts
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.monsters.srd_roster import (
@@ -45,7 +45,7 @@ def reset_srd_trait_state(width: int = 12, height: int = 12) -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseCondition._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Entity._entity_registry.clear()
     GridMap.reset()
     get_map().create_rectangle(0, 0, width, height)
@@ -179,7 +179,7 @@ def test_natural_bite_discloses_natural_attack_outcome_profile() -> None:
 
     bite = gnoll.get_action_template("Bite")
     assert bite is not None
-    profile = bite.get_outcome_profile(gnoll)
+    profile = bite.get_outcome_profile()
 
     assert profile is not None
     assert profile.effect_id == "natural_attack.bite"
@@ -201,17 +201,15 @@ def test_pack_tactics_sunlight_and_keen_senses_use_contextual_values() -> None:
     attack_bonus = kobold.attack_bonus(WeaponSlot.MELEE_MAIN, target.uuid)
     assert attack_bonus.advantage == AdvantageStatus.ADVANTAGE
 
-    lonely_attack_bonus = ally.attack_bonus(WeaponSlot.MELEE_MAIN, target.uuid)
-    lonely_attack_bonus.set_context({"sunlight": True})
-    assert lonely_attack_bonus.advantage == AdvantageStatus.NONE
+    def attack_in(entity, context):
+        value, _ = entity.weapon_attack_value(ValueRead(entity.uuid, target.uuid), WeaponSlot.MELEE_MAIN)
+        return read_value(value, ValueRead(entity.uuid, target.uuid, context))
 
-    kobold_sunlight_bonus = kobold.attack_bonus(WeaponSlot.MELEE_MAIN, target.uuid)
-    kobold_sunlight_bonus.set_context({"sunlight": True})
-    assert kobold_sunlight_bonus.advantage == AdvantageStatus.NONE
+    assert attack_in(ally, {"sunlight": True}).advantage == AdvantageStatus.NONE
+    assert attack_in(kobold, {"sunlight": True}).advantage == AdvantageStatus.NONE
 
     wolf = _materialize_srd_fixture("wolf", position=(5, 5), faction="monsters")
-    perception = wolf.skill_set.perception.skill_bonus.model_copy(deep=True)
-    perception.set_context({"sense": "hearing"})
+    perception = read_value(parts(wolf.skill_set.perception.skill_bonus), ValueRead(wolf.uuid, context={"sense": "hearing"}))
     assert perception.advantage == AdvantageStatus.ADVANTAGE
 
 
@@ -458,7 +456,7 @@ def test_active_monster_actions_apply_their_marker_conditions() -> None:
     priest = _materialize_srd_fixture("priest", position=(1, 1), faction="monsters")
     action = priest.get_action_template("Divine Eminence")
     assert action is not None
-    setup = action.get_self_setup_profile(priest)
+    setup = action.get_self_setup_profile()
     assert setup is not None
     assert setup.semantic_id == "setup.divine_eminence"
     assert setup.increases_weapon_damage is True
@@ -489,7 +487,7 @@ def test_active_monster_actions_apply_their_marker_conditions() -> None:
     knight = _materialize_srd_fixture("knight", position=(1, 1), faction="monsters")
     leadership = knight.get_action_template("Leadership")
     assert leadership is not None
-    setup = leadership.get_self_setup_profile(knight)
+    setup = leadership.get_self_setup_profile()
     assert setup is not None
     assert setup.semantic_id == "support.leadership"
     assert setup.maximum_duration_rounds == 10

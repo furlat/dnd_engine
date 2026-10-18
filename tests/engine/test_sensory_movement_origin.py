@@ -7,19 +7,18 @@ import pytest
 from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.conditions import Invisible
 from dnd.core.base_block import LightLevel, SenseMode, SensesType
-from dnd.core.events import EventPhase, EventQueue, EventType, SpatialChangeEvent
+from dnd.core.events import Event, EventPhase, EventQueue, EventType, SpatialChangeEvent
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalDoor
 from dnd.types.world import CardinalDirection
 from dnd.player.event_record import decode_event, encode_event
 from dnd.spatial.environmental_conditions import SpikeTrap
-from dnd.spells.abjuration import AntimagicFieldZone
 from dnd.spells.conjuration import DarknessZone, FogCloudZone
-from dnd.types.senses import OpticalObscurement
-from dnd.types.senses import reduce_senses_snapshot
 from tests.engine.test_senses_light_stealth import create_skeleton, reset_senses_state
 from tests.engine.test_sensory_initial_replay import sensory_since
+from dnd.types.cells import cell_in, value_at
+from dnd.core.sensory_fold import reduce_senses_snapshot
 
 
 @pytest.mark.parametrize("sense", [SensesType.DARKVISION, SensesType.TRUESIGHT])
@@ -60,7 +59,7 @@ def test_movement_range_is_correct_at_every_sensory_completion(sense, attached_l
                     "A committed sensory prefix measured range from the previous cell",
                     event.update_reason, destination, replayed.entities)
                 if sense is SensesType.DARKVISION:
-                    assert (target.position in replayed.visible) == expected_contact
+                    assert cell_in(replayed.visible, target.position) == expected_contact
             assert event.cause_event_uuid == event.parent_event
             assert EventQueue.get_event_by_uuid(event.cause_event_uuid) is not None
         assert replayed.position == destination
@@ -74,9 +73,9 @@ def test_movement_range_is_correct_at_every_sensory_completion(sense, attached_l
             and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
             and event.phase is EventPhase.COMPLETION]
         assert len(light_completions) == int(attached_light)
-        if attached_light:
-            assert any(EventQueue.get_event_by_uuid(event.cause_event_uuid).event_type
-                is EventType.SPATIAL_LIGHT_CHANGED for event in observations)
+        # The step's light fact settles with the step: its one update is caused by the arrival.
+        assert all(EventQueue.get_event_by_uuid(event.cause_event_uuid).event_type
+            is EventType.SPATIAL_ENTITY_ENTERED for event in observations)
         # The public full refresh is a reference for retained-field reuse. It
         # may materialize navigation but must not correct perception or emit
         # another sensory delta after the committed movement boundary.
@@ -104,32 +103,32 @@ def test_moving_light_and_explicit_obscurement_with_nonoptical_trap():
         Entity.update_entity_position(carrier, destination)
         assert (target.uuid in observer.senses.entities) is visible
         updates = sensory_since(observer.uuid, cursor)
-        assert updates
-        assert any(EventQueue.get_event_by_uuid(event.cause_event_uuid).event_type
-            is EventType.SPATIAL_LIGHT_CHANGED for event in updates)
-    grid.apply_optical_obscurement(trap.uuid, {(3, 1)}, OpticalObscurement.HEAVY)
+        # The carrier's step, its light fact included, settles the observer once.
+        assert len(updates) == 1
+        assert EventQueue.get_event_by_uuid(updates[0].cause_event_uuid).event_type is EventType.SPATIAL_ENTITY_ENTERED
+    fog = FogCloudZone(source_entity_uuid=observer.uuid, position=(3, 1), affected_positions={(3, 1)})
+    fog.activate(parent_event=None)
     assert target.uuid not in observer.senses.entities
-    grid.remove_optical_obscurement(trap.uuid)
+    fog.deactivate()
     assert target.uuid in observer.senses.entities
     assert grid.has_spatial_condition(trap.uuid)
 
 
-def test_partly_suppressed_fog_still_blocks_and_restores_sight():
+def test_partial_fog_footprint_still_blocks_and_removal_restores_sight():
     reset_senses_state(width=8, height=3)
     observer = create_skeleton(name="Observer", position=(0, 1), darkvision=False)
     target = create_skeleton(name="Target", position=(6, 1), darkvision=False)
-    caster = create_skeleton(name="Field carrier", position=(3, 0), darkvision=False)
     fog = FogCloudZone(source_entity_uuid=observer.uuid, position=(3, 1),
         affected_positions={(3, 1), (4, 1)})
     fog.activate(parent_event=None)
     assert target.uuid not in observer.senses.entities
-    field = AntimagicFieldZone(source_entity_uuid=caster.uuid, anchor_uuid=caster.uuid,
-        position=caster.position, zone_radius_feet=5)
-    field.activate(parent_event=None)
-    assert target.uuid not in observer.senses.entities  # The second fog cell still contributes.
-    Entity.update_entity_position(caster, (3, 1))
+    cause = Event(source_entity_uuid=observer.uuid, event_type=EventType.BASE_ACTION,
+                  phase=EventPhase.EFFECT)
+    fog.change_footprint({(4, 1)}, parent_event=cause)
+    assert target.uuid not in observer.senses.entities
+    fog.change_footprint({(4, 0)}, parent_event=cause)
     assert target.uuid in observer.senses.entities
-    Entity.update_entity_position(caster, (3, 0))
+    fog.change_footprint({(3, 1)}, parent_event=cause)
     assert target.uuid not in observer.senses.entities
     fog.deactivate()
     assert target.uuid in observer.senses.entities
@@ -185,7 +184,7 @@ def test_opening_door_reveals_settled_light_at_the_existing_causal_boundary():
     grid.add_light_source((0, 0), bright_radius_feet=5, dim_radius_feet=20)
     grid.add_light_source((0, 0), bright_radius_feet=20, dim_radius_feet=5)
     before = capture_senses_snapshot(observer.senses)
-    assert (2, 0) not in before.visible
+    assert not cell_in(before.visible, (2, 0))
     cursor = EventQueue.event_cursor()
     door.open()
     replayed = before
@@ -193,10 +192,10 @@ def test_opening_door_reveals_settled_light_at_the_existing_causal_boundary():
     assert observations
     for event in observations:
         replayed = reduce_senses_snapshot(observer.uuid, replayed, decode_event(encode_event(event)))
-        if (2, 0) in replayed.visible:
-            assert replayed.effective_light_levels[(2, 0)] is LightLevel.BRIGHT_LIGHT
+        if cell_in(replayed.visible, (2, 0)):
+            assert value_at(replayed.effective_light_levels, (2, 0)) == LightLevel.BRIGHT_LIGHT
         cause = EventQueue.get_event_by_uuid(event.cause_event_uuid)
         assert cause is not None
         assert cause.event_type is EventType.SPATIAL_OBJECT_CHANGED
-    assert (2, 0) in replayed.visible
+    assert cell_in(replayed.visible, (2, 0))
     assert replace(replayed, paths_dirty=False) == replace(capture_senses_snapshot(observer.senses), paths_dirty=False)

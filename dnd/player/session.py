@@ -10,26 +10,29 @@ from collections import OrderedDict
 from uuid import UUID, uuid4
 
 from dnd.action_dispatch import dispatch_available_action
-from dnd.actions_functional import get_available_actions, get_extra_position_options, preview_available_selection
+from dnd.actions_functional import (get_available_actions, get_extra_position_options, is_free_aim,
+    preview_available_selection, secondary_candidates, selection_admission_error)
 from dnd.ai.runtime.controller import NativeAIController
+from dnd.ai.runtime.knowledge_system import AIKnowledgeSystem, bind_ai_knowledge, unbind_ai_knowledge
 from dnd.ai.runtime.decision_epoch import clear_epoch_value_caches
-from dnd.ai.runtime.subjective_projection import clear_subjective_projection_fact_cache
 from dnd.content.characters.premades import (
     FIGHTER_PREMADE_ID, SORCERER_PREMADE_ID, create_premade_character,
 )
+from dnd.characters.mastery import study_spell_mastery,SpellMasteryStudy
+from dnd.content.characters.spellcasting_grants import change_prepared_spells
+from dnd.types.character_progression import PreparedSpellSelection
 from dnd.content.characters.builds import CharacterBuild, create_character, resolve_character_build
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.controller import HumanController
-from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, AvailableTarget, AvailableSelectionPreview, TargetType
+from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, AvailableTarget, TargetType
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.blocks.equipment import EquippableItem
-from dnd.player.facts import PlayerCharacterSheet, PlayerHUDSnapshot, PlayerResource, CombatLogAppend
+from dnd.player.facts import PlayerCharacterSheet, PlayerHUDSnapshot, PlayerResource
 from dnd.player.audience import PlayerAudience, SeatAssignment
 from dnd.player.commands import CommandRejected
-from dnd.player.choices import PlayerChoices
-from dnd.player.choice_projection import capture_choices
-from dnd.subjective_combat_log import project_combat_log
+from dnd.player.choices import PlayerChoices, PlayerSelectionPreview
+from dnd.player.choice_projection import project_choices, project_selection_preview
 from dnd.core.combat_log import CombatLogEntry
 from typing import Callable
 from dnd.core.base_actions import CostType, spell_slot_cost_type
@@ -61,8 +64,13 @@ class DiscoveryCache:
     force_attack: bool = False
     original: AvailableActionsResult | None = None
     compact: PlayerChoices | None = None
+    # The compact choices' wire encoding, made at most once per discovery.
+    compact_json: bytes | None = None
     rich_complete: bool = False
-    previews: OrderedDict[tuple[int, tuple[int, ...], tuple[tuple[int, int], ...], bool, bool], tuple[AvailableSelectionPreview, int]] = field(default_factory=OrderedDict)
+    # Projected previews of this discovery, by (row, target indices, positions,
+    # prefer_safe, include_aoe_effects, cast_at_level); frozen and never copied.
+    previews: OrderedDict[tuple[int, tuple[int, ...], tuple[tuple[int, int], ...], bool, bool, int | None],
+                          PlayerSelectionPreview] = field(default_factory=OrderedDict)
 
 
 @dataclass(slots=True)
@@ -83,6 +91,7 @@ class Session:
     player_uuids: tuple[UUID, ...]
     ai_controllers: tuple[NativeAIController, ...]
     births: tuple[EntityCreatedEvent, ...]
+    ai_knowledge: AIKnowledgeSystem
     summoning: SummoningSystem | None = None
     discovery: DiscoveryCache = field(default_factory=DiscoveryCache)
     seats: dict[str, PlayerAudience] = field(default_factory=dict)
@@ -101,8 +110,6 @@ class Operation:
     end_cursor: int
     roots: tuple[Event, ...]
     boundary: AdvanceResult | None = None
-    hud_snapshot: PlayerHUDSnapshot | None = None
-    combat_log_appends: tuple[CombatLogAppend, ...] = ()
     original_logs: tuple[tuple[int, CombatLogEntry], ...] = ()
     hud_by_seat: tuple[tuple[str, PlayerHUDSnapshot], ...] = ()
 
@@ -153,6 +160,8 @@ def _snapshot_sheets(session: Session, identities: tuple[UUID, ...]) -> tuple[Pl
             maximum_hp=actor.get_max_hp(), species=actor.character_species,
             species_variant=actor.character_species_variant, background=actor.character_background,
             origin=actor.applied_origin_state, class_levels=actor.applied_class_levels,
+            scribed_spell_ids=actor.scribed_spell_ids, permanent_feature_uses=actor.permanent_feature_uses,
+            prepared_spell_selections=actor.prepared_spell_selections,
             abilities=tuple((ability.name, ability.ability_score.score) for ability in actor.ability_scores.abilities_list),
             skills=tuple(skill.name for skill in actor.skill_set.proficiencies),
             expertise=tuple(skill.name for skill in actor.skill_set.expertise),
@@ -221,10 +230,11 @@ def create_session(
         game.deploy_entity(actor, actor.position)
     Entity.update_all_entities_senses()
     encounter = Encounter(name="Goblin skirmish", source_entity_uuid=uuid4())
+    ai_knowledge = bind_ai_knowledge()
     enemy_controller = NativeAIController.create(
         source_entity_uuid=enemies[0].uuid,
         game_id=str(encounter.uuid), assignment_id=f"{encounter.uuid}:enemies",
-        controlled_entity_uuids=tuple(enemy.uuid for enemy in enemies),
+        controlled_entity_uuids=tuple(enemy.uuid for enemy in enemies), knowledge=ai_knowledge,
     )
     for player in players:
         encounter.add_combatant(player, HumanController(source_entity_uuid=player.uuid))
@@ -234,7 +244,7 @@ def create_session(
     births = tuple(event for _, event in EventQueue.iter_events_since(0)
                    if isinstance(event, EntityCreatedEvent) and event.entity_uuid in game.entities)
     return _bind_log_capture(Session(game, encounter, battlefield, tuple(player.uuid for player in players), (enemy_controller,), births,
-                   bind_summoning(game, encounter), seats={"party": PlayerAudience(
+                   ai_knowledge, bind_summoning(game, encounter, ai_knowledge), seats={"party": PlayerAudience(
                        tuple(player.uuid for player in players), tuple(player.uuid for player in players))}))
 
 
@@ -292,11 +302,12 @@ def create_authored_session(recipe: EncounterRecipe, *,
             for address in (seat.observers if seat.observers is not None else seat.controlled)))
         for seat in assignments}
     controllers = []
+    ai_knowledge = bind_ai_knowledge()
     for (slot_id, policy), addresses in ai_addresses.items():
         actors = [assembled.entities_by_member_address[address] for address in addresses]
         controller = NativeAIController.create(source_entity_uuid=actors[0].uuid,
             game_id=str(encounter.uuid), assignment_id=f"{encounter.uuid}:{slot_id}:{policy}",
-            controlled_entity_uuids=tuple(actor.uuid for actor in actors), policy_id=policy)
+            controlled_entity_uuids=tuple(actor.uuid for actor in actors), knowledge=ai_knowledge, policy_id=policy)
         controllers.append(controller)
         for actor in actors:
             encounter.set_controller_for(actor.uuid, controller)
@@ -307,11 +318,15 @@ def create_authored_session(recipe: EncounterRecipe, *,
         if isinstance(event, EntityCreatedEvent) and event.entity_uuid in game.entities)
     return _bind_log_capture(Session(game, encounter, assembled.battlefield,
         tuple(actor.uuid for actor in external.values()), tuple(controllers), births,
-        bind_summoning(game, encounter), seats=seats))
+        ai_knowledge, bind_summoning(game, encounter, ai_knowledge), seats=seats))
 
 
 def _current_player(session: Session, actor_uuid: UUID) -> Entity:
     encounter = session.encounter
+    if encounter.state is EncounterState.ENDED and actor_uuid in session.player_uuids:
+        actor = session.game.entities.get(actor_uuid)
+        if actor is not None and actor.active_encounter_uuid is None:
+            return actor
     actor = encounter.get_current_entity()
     if (encounter.state is not EncounterState.ACTIVE
             or encounter.turn_state is not TurnState.IN_PROGRESS
@@ -344,10 +359,12 @@ def _player_choices_for_transport(session: Session, actor_uuid: UUID, *, force_a
         row.discovery_index = index
         row.discovery_runtime = EventQueue.generation_id()
         row.discovery_actor_uuid = actor.uuid
-    retained, compact = capture_choices(original, actor.position)
+    # Discovery rows are fresh per call and their targets are never mutated
+    # afterwards, so the native result itself is retained (plan PD2).
+    compact = project_choices(original, actor.position)
     cache.generation = generation
     cache.seat_generations[seat_id] = generation
-    cache.original, cache.compact = retained, compact
+    cache.original, cache.compact, cache.compact_json = original, compact, None
     cache.rich_complete = False
     cache.cursor = EventQueue.event_cursor()
     cache.discovery_revision = cache.revision
@@ -355,6 +372,16 @@ def _player_choices_for_transport(session: Session, actor_uuid: UUID, *, force_a
     cache.force_attack = force_attack
     cache.previews.clear()
     return compact
+
+
+def encoded_player_choices(session: Session, choices: PlayerChoices) -> bytes:
+    """The wire encoding of these retained compact choices, encoded once per discovery (plan PD2)."""
+    cache = session.discovery
+    if cache.compact is not choices:
+        raise ValueError("These choices are not the retained discovery")
+    if cache.compact_json is None:
+        cache.compact_json = choices.model_dump_json().encode()
+    return cache.compact_json
 
 
 def discover_player_actions(session: Session, actor_uuid: UUID, *, force_attack: bool = False,
@@ -402,38 +429,48 @@ def _retained_row(session: Session, action: AvailableActionInfo) -> AvailableAct
 def preview_player_selection(session: Session, actor_uuid: UUID, action: AvailableActionInfo,
                              selected: tuple[AvailableTarget, ...] = (),
                              positions: tuple[tuple[int, int], ...] = (), *,
-                             prefer_safe: bool = True, include_aoe_effects: bool = True) -> AvailableSelectionPreview:
+                             prefer_safe: bool = True, include_aoe_effects: bool = True,
+                             cast_at_level: int | None = None) -> PlayerSelectionPreview:
+    """The projected preview of one ordered selection, cached per discovery as its frozen projection."""
     actor = _current_player(session, actor_uuid)
     original = _retained_row(session, action)
     key = (original.discovery_index,
-           tuple(target.index for target in selected), positions, prefer_safe, include_aoe_effects)
+           tuple(target.index for target in selected), positions, prefer_safe, include_aoe_effects, cast_at_level)
     cache = session.discovery.previews
-    if key not in cache:
-        primary = next((target for target in original.valid_targets if selected and target.index == selected[0].index), None)
-        pool = (primary.secondary_targets if primary is not None and primary.secondary_targets is not None
-                else original.valid_targets)
-        by_index = {target.index: target for target in pool}
-        if any(chosen.index not in by_index for chosen in selected[1:]):
-            raise CommandRejected("This allocation is not admitted")
-        retained = (() if primary is None else (primary, *tuple(
-            by_index[chosen.index] for chosen in selected[1:])))
-        if selected and primary is None:
-            raise CommandRejected("This target is not admitted")
-        if positions and original.position_selection is None:
-            raise CommandRejected("This action does not select additional positions")
-        value = preview_available_selection(actor, original, retained, positions, prefer_safe=prefer_safe,
-            include_aoe_effects=include_aoe_effects)
-        size = len(value.model_dump_json().encode())
-        if size > 8 * 1024 * 1024:
-            return value.model_copy(deep=True)
-        while cache and (len(cache) >= 128 or sum(row[1] for row in cache.values()) + size > 8 * 1024 * 1024):
-            cache.popitem(last=False)
-        cache[key] = (value.model_copy(deep=True), size)
-    cache.move_to_end(key)
-    return cache[key][0].model_copy(deep=True)
+    projected = cache.get(key)
+    if projected is not None:
+        cache.move_to_end(key)
+        return projected
+    primary = next((target for target in original.valid_targets if selected and target.index == selected[0].index),
+                   selected[0] if selected and is_free_aim(original, selected[0]) else None)
+    # The row's targets, then anything else the actor perceives, by the same
+    # numbering preview offers them (secondaries are picked on demand, plan §14.4).
+    pool = secondary_candidates(actor, original, actor.action_scan(subjective=True))
+    by_index = {target.index: target for target in pool}
+    if any(chosen.index not in by_index for chosen in selected[1:]):
+        raise CommandRejected("This allocation is not admitted")
+    retained = (() if primary is None else (primary, *tuple(
+        by_index[chosen.index] for chosen in selected[1:])))
+    if selected and primary is None:
+        raise CommandRejected("This target is not admitted")
+    if positions and original.position_selection is None:
+        raise CommandRejected("This action does not select additional positions")
+    projected = project_selection_preview(preview_available_selection(actor, original, retained, positions,
+        prefer_safe=prefer_safe, include_aoe_effects=include_aoe_effects, cast_at_level=cast_at_level))
+    if len(cache) >= 128:
+        cache.popitem(last=False)
+    cache[key] = projected
+    return projected
 
 
 def _operation(session: Session, start_cursor: int, boundary: AdvanceResult | None = None) -> Operation:
+    # Outside combat there is no retained turn to spend or end. Each bounded
+    # operation closes its ordinary turn budget, without a rest or effect tick.
+    if session.encounter.state is EncounterState.ENDED:
+        for identity in session.player_uuids:
+            actor = session.game.entities.get(identity)
+            if actor is not None:
+                actor.action_economy.reset_all_costs()
     end_cursor = EventQueue.event_cursor()
     session.discovery.revision += 1
     session.discovery.previews.clear()
@@ -442,16 +479,10 @@ def _operation(session: Session, start_cursor: int, boundary: AdvanceResult | No
                   and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
     originals = tuple(session.logs.log_appends)
     session.logs.log_appends.clear()
-    audience = player_audience(session)
-    appends = tuple(CombatLogAppend(generation=EventQueue.generation_id(), observer_uuid=audience.observers[0],
-        encounter_log_index=index, operation_end_cursor=end_cursor, entry=projected)
-        for index, entry in originals if (projected := project_combat_log(entry,
-            controlled_entity_uuids=frozenset(map(str, audience.controlled)),
-            observer_entity_uuids=frozenset(map(str, audience.observers)))) is not None)
     sheets = _snapshot_sheets(session, session.player_uuids)
     hud = tuple((key, snapshot_player_hud(session, audience=value, evaluated_sheets=sheets))
                 for key, value in session.seats.items())
-    return Operation(start_cursor, end_cursor, roots, boundary, hud[0][1], appends, originals, hud)
+    return Operation(start_cursor, end_cursor, roots, boundary, originals, hud)
 
 
 def execute_player_action(
@@ -463,28 +494,33 @@ def execute_player_action(
     extra_target_uuids: tuple[UUID, ...] = (),
     extra_target_positions: tuple[tuple[int, int], ...] = (),
     prefer_safe: bool = True,
+    cast_at_level: int | None = None,
 ) -> Operation:
     """Submit the current human's exact discovered choice to the rules engine."""
     actor = _current_player(session, actor_uuid)
     original = _retained_row(session, action)
-    retained = next((candidate for candidate in original.valid_targets if candidate.index == target.index), None)
+    retained = next((candidate for candidate in original.valid_targets if candidate.index == target.index),
+                    target if is_free_aim(original, target) else None)
     if retained is None:
         raise CommandRejected("selected target does not belong to the discovered action")
-    pool = retained.secondary_targets if retained.secondary_targets is not None else original.valid_targets
+    pool = secondary_candidates(actor, original, actor.action_scan(subjective=True))
     by_uuid = {candidate.target_uuid: candidate for candidate in pool}
     if any(identity not in by_uuid for identity in extra_target_uuids):
         raise CommandRejected("This allocation is not admitted")
     selected = (retained, *(by_uuid[identity] for identity in extra_target_uuids))
-    preview = preview_player_selection(session, actor_uuid, original, selected, extra_target_positions,
-        prefer_safe=prefer_safe, include_aoe_effects=False)
-    if not preview.can_confirm:
-        raise CommandRejected(preview.reason or "This selection is incomplete")
+    if extra_target_positions and original.position_selection is None:
+        raise CommandRejected("This action does not select additional positions")
+    # The bare admission of the selection (plan PD2); preview's display work is not repeated.
+    reason = selection_admission_error(actor, original, selected, extra_target_positions, cast_at_level=cast_at_level)
+    if reason is not None:
+        raise CommandRejected(reason)
     start = EventQueue.event_cursor()
     dispatch_available_action(
         actor, action_info=original, target=retained,
         extra_target_uuids=tuple(str(identity) for identity in extra_target_uuids),
         extra_target_positions=extra_target_positions,
         prefer_safe=prefer_safe,
+        cast_at_level=cast_at_level,
     )
     session.encounter.check_deaths()
     return _operation(session, start)
@@ -535,6 +571,30 @@ def unequip_player_item(session: Session, actor_uuid: UUID, slot: EquipmentSlot,
     return _operation(session, start)
 
 
+def prepare_player_spells(session: Session, actor_uuid: UUID, selection: PreparedSpellSelection) -> Operation:
+    actor = session.game.entities.get(actor_uuid)
+    if actor is None or actor_uuid not in session.player_uuids:
+        raise CommandRejected("This actor is not an admitted player character")
+    start = EventQueue.event_cursor()
+    try:
+        change_prepared_spells(actor, selection)
+    except (ValueError, RuntimeError) as error:
+        raise CommandRejected("invalid_selection") from error
+    return _operation(session, start)
+
+
+def study_player_spell_mastery(session: Session, actor_uuid: UUID, selection: SpellMasteryStudy) -> Operation:
+    actor=session.game.entities.get(actor_uuid)
+    if actor is None or actor_uuid not in session.player_uuids:
+        raise CommandRejected("This actor is not an admitted player character")
+    start=EventQueue.event_cursor()
+    try:
+        study_spell_mastery(actor,selection)
+    except (ValueError,RuntimeError) as error:
+        raise CommandRejected("invalid_selection") from error
+    return _operation(session,start)
+
+
 def toggle_player_handler(session: Session, actor_uuid: UUID, handler_uuid: UUID, enabled: bool) -> Operation:
     actor = _current_player(session, actor_uuid)
     if not any(row.uuid == handler_uuid for row in actor.get_player_toggleable_handler_infos()):
@@ -549,6 +609,8 @@ def toggle_player_handler(session: Session, actor_uuid: UUID, handler_uuid: UUID
 
 def end_player_turn(session: Session, actor_uuid: UUID) -> Operation:
     """End this human turn without starting the next actor's decision."""
+    if session.encounter.state is not EncounterState.ACTIVE:
+        raise CommandRejected("not_your_turn")
     _current_player(session, actor_uuid)
     start = EventQueue.event_cursor()
     session.encounter.complete_current_turn()
@@ -568,5 +630,5 @@ def close_session(session: Session) -> None:
     for controller in session.ai_controllers:
         controller.close()
     session.game.close()
+    unbind_ai_knowledge(session.ai_knowledge)
     clear_epoch_value_caches()
-    clear_subjective_projection_fact_cache()

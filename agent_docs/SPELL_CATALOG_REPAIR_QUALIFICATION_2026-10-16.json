@@ -1,0 +1,236 @@
+{
+  "date": "2026-10-16",
+  "worktree": "/home/tommaso/.codex/worktrees/spells-rank-one-two/dnd_engine",
+  "checkpoint_commit": "059ad0af4c9",
+  "environment": {
+    "python": "3.13.12",
+    "runtime": "/home/tommaso/.cache/dnd-engine/venv/bin/python",
+    "platform": "WSL Linux"
+  },
+  "counts_overlap": true,
+  "repair_lane": {
+    "passed": 140,
+    "failed": 0,
+    "command": "python -m pytest tests/engine/test_spell_catalog_audit_admission_regressions.py tests/engine/test_spell_catalog_audit_gameplay_regressions.py tests/engine/test_spell_catalog_audit_damage_regressions.py tests/engine/test_spell_catalog_audit_duration_regressions.py tests/engine/test_spell_catalog_repair_interactions.py tests/engine/test_spell_reaction_admission_repairs.py tests/player/test_retired_magic_recording_contract.py tests/progression/test_removed_spell_cold_inputs.py --assert=plain -q --tb=short"
+  },
+  "final_shared_engine": {
+    "passed": 960,
+    "failed": 6,
+    "test_files": [
+      "tests/engine/test_anchored_condition_inputs.py",
+      "tests/engine/test_banishment_dimension_door.py",
+      "tests/engine/test_bg3_rank_one_two_spells.py",
+      "tests/engine/test_bg3_spell_hit_riders.py",
+      "tests/engine/test_bg3_spell_items_and_repeats.py",
+      "tests/engine/test_chain_lightning_selection.py",
+      "tests/engine/test_condition_transform_ownership.py",
+      "tests/engine/test_continual_flame_items.py",
+      "tests/engine/test_globe_propagation.py",
+      "tests/engine/test_high_level_spell_fields.py",
+      "tests/engine/test_high_level_spell_payloads.py",
+      "tests/engine/test_high_level_spell_review_regressions.py",
+      "tests/engine/test_high_level_spell_summons.py",
+      "tests/engine/test_jaw_traps.py",
+      "tests/engine/test_local_optical_inputs.py",
+      "tests/engine/test_low_level_spell_review_regressions.py",
+      "tests/engine/test_natural_attack_source.py",
+      "tests/engine/test_nature_spell_delivery.py",
+      "tests/engine/test_prepared_condition_lifecycle.py",
+      "tests/engine/test_remaining_walls.py",
+      "tests/engine/test_sanctuary_contract.py",
+      "tests/engine/test_sensory_movement_origin.py",
+      "tests/engine/test_shared_sensory_conditions.py",
+      "tests/engine/test_spatial_crossing_candidates.py",
+      "tests/engine/test_spell_catalog_audit_admission_regressions.py",
+      "tests/engine/test_spell_catalog_audit_damage_regressions.py",
+      "tests/engine/test_spell_catalog_audit_duration_regressions.py",
+      "tests/engine/test_spell_catalog_audit_gameplay_regressions.py",
+      "tests/engine/test_spell_catalog_repair_interactions.py",
+      "tests/engine/test_spell_families.py",
+      "tests/engine/test_spell_handler_ownership_regressions.py",
+      "tests/engine/test_spell_handoff_necromancy.py",
+      "tests/engine/test_spell_reaction_admission_repairs.py",
+      "tests/engine/test_structural_item_condition_immunity.py",
+      "tests/engine/test_summon_terminal_consequences.py",
+      "tests/engine/test_summoning_lifecycle.py",
+      "tests/engine/test_wall_of_fire.py",
+      "tests/engine/test_weather_solar_spells.py"
+    ],
+    "pytest_options": [
+      "--assert=plain",
+      "-q",
+      "--tb=short"
+    ],
+    "failed_node_ids": [
+      "tests/engine/test_banishment_dimension_door.py::test_dimension_door_commits_all_travelers_before_arrival_reactions[False]",
+      "tests/engine/test_banishment_dimension_door.py::test_dimension_door_commits_all_travelers_before_arrival_reactions[True]",
+      "tests/engine/test_globe_propagation.py::test_fireball_spreads_around_open_doorway_within_original_radius[False-36]",
+      "tests/engine/test_globe_propagation.py::test_fireball_spreads_around_open_doorway_within_original_radius[True-49]",
+      "tests/engine/test_globe_propagation.py::test_connected_reference_l_wall_and_corridor[l-wall-26]",
+      "tests/engine/test_globe_propagation.py::test_connected_reference_l_wall_and_corridor[corridor-23]"
+    ],
+    "timing_note": "Before the final two bounded review fixes, which have subsequent repair/boundary coverage."
+  },
+  "final_boundary_followup": {
+    "passed": 101,
+    "failed": 0,
+    "test_files": [
+      "tests/player/test_recorded_boundary.py",
+      "tests/player/test_capture_payload_isolation.py",
+      "tests/player/test_protocol_schema_review.py",
+      "tests/player/test_retired_magic_recording_contract.py",
+      "tests/engine/test_prepared_entity_birth.py",
+      "tests/engine/test_item_destruction_events.py",
+      "tests/engine/test_condition_lifecycle.py",
+      "tests/engine/test_sanctuary_contract.py",
+      "tests/engine/test_spellcasting.py"
+    ]
+  },
+  "player_suite": {
+    "passed": 225,
+    "failed": 0,
+    "note": "Before final adapter owner-key extension, covered by final boundary follow-up."
+  },
+  "python_sdk_player_progression_codegen": {
+    "passed": 587,
+    "failed": 0,
+    "command": "PYTHONPATH=sdk/python/src python -m pytest sdk/python/tests tests/player tests/progression tests/test_player_python_codegen.py --ignore=tests/player/test_application_review.py --assert=plain -q --tb=short"
+  },
+  "typescript_sdk": {
+    "passed": 63,
+    "failed": 0,
+    "command": "npm test",
+    "cwd": "sdk/player-typescript"
+  },
+  "optical_sensory": {
+    "passed": 50,
+    "failed": 0,
+    "test_files": [
+      "tests/engine/test_local_optical_inputs.py",
+      "tests/engine/test_sensory_movement_origin.py"
+    ]
+  },
+  "frozen_icon_architecture": {
+    "passed": 1,
+    "failed": 0,
+    "deselected": 5,
+    "command": "python -m pytest tests/architecture/test_content_recovery_cr0_evidence.py -k frozen_icon_snapshot --assert=plain -q --tb=short"
+  },
+  "intermediate_full_engine": {
+    "passed": 3288,
+    "failed": 92,
+    "command": "python -m pytest tests/engine --ignore=tests/engine/test_solid_walls.py --assert=plain -q --tb=short",
+    "note": "Run during implementation. 69 failures reproduced at checkpoint; 23 introduced/migration failures subsequently fixed and affected files qualified."
+  },
+  "checkpoint_reproduction": {
+    "source": "isolated git archive of checkpoint, separate from current worktree",
+    "passed": 385,
+    "failed": 69,
+    "failed_node_ids": [
+      "tests/engine/test_banishment_dimension_door.py::test_dimension_door_commits_all_travelers_before_arrival_reactions[False]",
+      "tests/engine/test_banishment_dimension_door.py::test_dimension_door_commits_all_travelers_before_arrival_reactions[True]",
+      "tests/engine/test_body_residues.py::test_inert_residue_changes_tile_facts_without_rebuilding_routes",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_a1-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_a1-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_a1-jammed-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_a1-jammed-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_a1-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_a1-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_a1-jammed-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_a1-jammed-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_c1-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_c1-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_c1-jammed-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_c1-jammed-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_c3-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_c3-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_c3-jammed-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_c3-jammed-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_c5-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_c5-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_c5-jammed-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.fantasy_c5-jammed-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c1-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c1-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c1-jammed-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c1-jammed-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c3-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c3-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c3-jammed-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c3-jammed-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c5-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c5-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c5-jammed-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c5-jammed-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c7-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c7-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c7-jammed-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c7-jammed-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c9-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c9-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c9-jammed-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.desert_c9-jammed-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.indoor_door_shabby-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.indoor_door_shabby-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.indoor_door_shabby_plain-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.indoor_door_shabby_plain-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.indoor_door_shabby_battens-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.indoor_door_shabby_battens-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.indoor_door_shabby_patched-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.indoor_door_shabby_patched-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.indoor_door_elegant-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.indoor_door_elegant-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.indoor_door_elegant_three_panel-clear-True-inward]",
+      "tests/engine/test_environment_destruction.py::test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains[environment.door.indoor_door_elegant_three_panel-clear-True-outward]",
+      "tests/engine/test_environment_destruction.py::test_door_close_still_rejects_an_occupied_opening_and_retains_swing",
+      "tests/engine/test_event_lifecycle.py::test_eb_04_005_completion_collects_child_combat_logs_top_level_only",
+      "tests/engine/test_event_lifecycle.py::test_eb_04_007_push_combat_log_bypasses_event_storage",
+      "tests/engine/test_event_lifecycle.py::test_eb_04_008_completion_log_callback_runs_before_completion_storage",
+      "tests/engine/test_globe_propagation.py::test_fireball_spreads_around_open_doorway_within_original_radius[False-36]",
+      "tests/engine/test_globe_propagation.py::test_fireball_spreads_around_open_doorway_within_original_radius[True-49]",
+      "tests/engine/test_globe_propagation.py::test_connected_reference_l_wall_and_corridor[l-wall-26]",
+      "tests/engine/test_globe_propagation.py::test_connected_reference_l_wall_and_corridor[corridor-23]",
+      "tests/engine/test_window_attack_access.py::test_hand_operated_door_requires_nearby_contact[position1-True]",
+      "tests/engine/test_world_entity_initialization.py::test_rich_entity_birth_matches_all_declared_aggregate_fields",
+      "tests/engine/test_world_prop_cold_initialization.py::test_cold_furniture_publishes_birth_then_owned_dynamics_and_replays_after_reset[environment.furniture.bed-intact]",
+      "tests/engine/test_world_prop_cold_initialization.py::test_cold_furniture_publishes_birth_then_owned_dynamics_and_replays_after_reset[environment.furniture.bed-destroyed]",
+      "tests/engine/test_world_prop_cold_initialization.py::test_cold_furniture_publishes_birth_then_owned_dynamics_and_replays_after_reset[environment.furniture.wardrobe-intact]",
+      "tests/engine/test_world_prop_cold_initialization.py::test_cold_furniture_publishes_birth_then_owned_dynamics_and_replays_after_reset[environment.furniture.wardrobe-destroyed]"
+    ],
+    "failed_by_file": {
+      "tests/engine/test_banishment_dimension_door.py": 2,
+      "tests/engine/test_body_residues.py": 1,
+      "tests/engine/test_environment_destruction.py": 53,
+      "tests/engine/test_event_lifecycle.py": 3,
+      "tests/engine/test_globe_propagation.py": 4,
+      "tests/engine/test_window_attack_access.py": 1,
+      "tests/engine/test_world_entity_initialization.py": 1,
+      "tests/engine/test_world_prop_cold_initialization.py": 4
+    },
+    "test_files": [
+      "tests/engine/test_banishment_dimension_door.py",
+      "tests/engine/test_body_residues.py",
+      "tests/engine/test_environment_destruction.py",
+      "tests/engine/test_event_lifecycle.py",
+      "tests/engine/test_globe_propagation.py",
+      "tests/engine/test_window_attack_access.py",
+      "tests/engine/test_world_entity_initialization.py",
+      "tests/engine/test_world_prop_cold_initialization.py"
+    ],
+    "pytest_options": [
+      "--assert=plain",
+      "-q",
+      "--tb=short"
+    ]
+  },
+  "unchanged_collection_exclusions": {
+    "tests/engine/test_solid_walls.py": "Missing tests.game.door_destruction_scenarios",
+    "tests/player/test_application_review.py": "Missing game.runtime_* modules"
+  },
+  "deferred_rule_decision": "Bestow Curse bonus for saved, automatic and ongoing non-attack spell damage; attack packets repaired and qualified.",
+  "live_protocol": {
+    "protocol_version": 1,
+    "player_schema_version": 11,
+    "schema_digest": "527c25d3f0050deb5147cdb376f22bd3ab5eda1d7ec519a3bbb93ab5a3021213"
+  }
+}

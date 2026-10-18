@@ -1,0 +1,129 @@
+file,domain,lines,search_basis,coverage,inspected_scopes,native_evidence
+dnd/actions.py,shared owners (outside 117-file inventory),5889,followed concrete candidate owner,selected-body,Selected shared owner: SpellAction.apply_owned_condition,
+dnd/actions_functional.py,shared owners (outside 117-file inventory),925,followed concrete candidate owner,selected-body,Selected shared owner: register_spell; item use boundary,
+dnd/blocks/base_item.py,shared owners (outside 117-file inventory),1632,followed concrete candidate owner,selected-body,Selected shared owner: placement/use/resource lifecycle,
+dnd/blocks/equipment.py,shared owners (outside 117-file inventory),2020,followed concrete candidate owner,native-scenarios,Selected shared owner: armor requirement data/runtime composition,GA-07: real armor equip; GA-02 bow/quiver/coating setups
+dnd/blocks/inventory.py,shared owners (outside 117-file inventory),369,followed concrete candidate owner,native-scenarios,Selected shared owner: initial validation/add/transfer,GA-05: real transfer; GA-02 native item acquisition
+dnd/characters/spellbook.py,shared owners (outside 117-file inventory),57,followed concrete candidate owner,selected-body,Body review: spellbook and scroll-learning ownership,
+dnd/classes/__init__.py,dnd/classes,9,pattern and AST inventory,search-only,,
+dnd/classes/barbarian.py,dnd/classes,1614,pattern and AST inventory,selected-body,Selected: RelentlessRage/Retaliation/IndomitableMight processors; IntimidatingPresence validation/apply/end-handler construction,
+dnd/classes/cleric.py,dnd/classes,279,pattern and AST inventory,selected-body,Selected: action implementations and healing/damage processors,
+dnd/classes/divine.py,dnd/classes,289,pattern and AST inventory,selected-body,Selected: Turned; turn_creature; turning_targets,
+dnd/classes/divine_intervention.py,dnd/classes,424,pattern and AST inventory,search-only,,
+dnd/classes/feats.py,dnd/classes,144,pattern and AST inventory,native-scenarios,Selected: LuckyFeature and lucky_processor,GA-03: LuckyFeature admitted/refused
+dnd/classes/fighter.py,dnd/classes,1621,pattern and AST inventory,native-scenarios,Selected: SecondWind/Feature; ActionSurge/Feature; ExtraAttackFeature cleanup; protection/indomitable/survivor processors and construction,GA-01: SecondWind/ActionSurge admitted/refused; GA-03: both feature grant conditions
+dnd/classes/paladin.py,dnd/classes,1684,pattern and AST inventory,native-scenarios,Selected: AuraBenefit cleanup tail; AuraMembership/Zone/Root refresh/placement; HolyNimbus turn-handler boundary,GA-P1: native change/turn operations at 1/25/100 distant actors; existing Paladin controls
+dnd/classes/rage.py,dnd/classes,1199,pattern and AST inventory,native-scenarios,Selected: Rage action; maintenance processor/factory; armor-equip processor; purge helper,GA-01: Rage admitted/refused
+dnd/classes/sorcerer.py,dnd/classes,1612,pattern and AST inventory,native-scenarios,Selected: ElementalAffinityResistanceAction; DragonWings; MetamagicActive override preparation/cast-and-cancel auto-removal trigger; DraconicPresence aura; Font conversions,GA-01: five Sorcerer actions admitted/refused
+dnd/classes/wizard.py,dnd/classes,331,pattern and AST inventory,selected-body,Selected: RecoveryState/ArcaneRecovery; sculpt/potent/empowered/overchannel processors,
+dnd/content/characters/__init__.py,dnd/content/characters,2,pattern and AST inventory,search-only,,
+dnd/content/characters/barbarian_grants.py,dnd/content/characters,1226,pattern and AST inventory,search-only,,
+dnd/content/characters/build_types.py,dnd/content/characters,69,pattern and AST inventory,selected-body,Selected: character build/loadout data and validation,
+dnd/content/characters/builds.py,dnd/content/characters,354,pattern and AST inventory,native-scenarios,Selected: build resolution/materialization; rejection cleanup,GA-06: rejected wall/torch/unknown ID loadouts; native valid weapon control; existing direct-build controls
+dnd/content/characters/caster_chassis.py,dnd/content/characters,330,pattern and AST inventory,selected-body,Selected: caster slot/preparation composition,
+dnd/content/characters/class_definitions.py,dnd/content/characters,1793,pattern and AST inventory,selected-body,Selected: class choice/composition callers,
+dnd/content/characters/cleric_grants.py,dnd/content/characters,330,pattern and AST inventory,selected-body,Selected: apply/receipt/resource portions,
+dnd/content/characters/fighter_grants.py,dnd/content/characters,901,pattern and AST inventory,selected-body,Selected: apply/remove/styles/receipts,
+dnd/content/characters/origin_definitions.py,dnd/content/characters,485,pattern and AST inventory,search-only,,
+dnd/content/characters/origin_grants.py,dnd/content/characters,1153,pattern and AST inventory,selected-body,Selected: install/remove/reconcile; receipt exception paths,
+dnd/content/characters/paladin_grants.py,dnd/content/characters,362,pattern and AST inventory,selected-body,Selected: apply/receipt/resource portions,
+dnd/content/characters/premades.py,dnd/content/characters,502,pattern and AST inventory,selected-body,Selected: premade composition,
+dnd/content/characters/progression.py,dnd/content/characters,631,pattern and AST inventory,selected-body,Selected: progression composition and grant dispatch,
+dnd/content/characters/sorcerer_grants.py,dnd/content/characters,1287,pattern and AST inventory,search-only,,
+dnd/content/characters/spellcasting_grants.py,dnd/content/characters,437,pattern and AST inventory,search-only,,
+dnd/content/characters/wizard_grants.py,dnd/content/characters,350,pattern and AST inventory,selected-body,Selected: apply/receipt/resource portions,
+dnd/content/items/__init__.py,dnd/content/items,1,pattern and AST inventory,search-only,,
+dnd/content/items/authored_item_builders.py,dnd/content/items,624,pattern and AST inventory,native-scenarios,Selected: weapon/wearable/fixed/world/powered materialization,GA-02 item materialization; GA-06 rejected environment loadouts; GA-07 wearable definition/control
+dnd/content/items/authored_item_definitions.py,dnd/content/items,1484,pattern and AST inventory,selected-body,Selected: item dataclasses and heavy armor definitions,
+dnd/content/items/door_profiles.py,dnd/content/items,39,pattern and AST inventory,search-only,,
+dnd/content/items/environment_item_builders.py,dnd/content/items,548,pattern and AST inventory,native-scenarios,Selected: directional wall and wall torch construction/source UUID ownership,GA-06: wall and wall torch rejected-build items
+dnd/content/items/ground_hardware_builders.py,dnd/content/items,104,pattern and AST inventory,search-only,,
+dnd/content/items/item_composition.py,dnd/content/items,49,pattern and AST inventory,native-scenarios,Body review: item property composition,GA-07: explicit armor-penalty control
+dnd/content/items/item_loadouts.py,dnd/content/items,87,pattern and AST inventory,selected-body,Body review: authored item loadouts,
+dnd/content/items/object_defenses.py,dnd/content/items,19,pattern and AST inventory,search-only,,
+dnd/content/items/roster_item_definitions.py,dnd/content/items,149,pattern and AST inventory,search-only,,
+dnd/content/items/trap_hardware_builders.py,dnd/content/items,94,pattern and AST inventory,search-only,,
+dnd/content/items/window_builders.py,dnd/content/items,98,pattern and AST inventory,search-only,,
+dnd/content/items/window_definitions.py,dnd/content/items,81,pattern and AST inventory,search-only,,
+dnd/content/items/world_prop_builders.py,dnd/content/items,802,pattern and AST inventory,search-only,,
+dnd/content_system/__init__.py,dnd/content_system,1,pattern and AST inventory,search-only,,
+dnd/content_system/action_definitions.py,dnd/content_system,413,pattern and AST inventory,search-only,,
+dnd/content_system/artifact_digest.py,dnd/content_system,210,pattern and AST inventory,search-only,,
+dnd/content_system/behavior_bindings.py,dnd/content_system,294,pattern and AST inventory,search-only,,
+dnd/content_system/body_definitions.py,dnd/content_system,44,pattern and AST inventory,search-only,,
+dnd/content_system/bootstrap.py,dnd/content_system,51,pattern and AST inventory,search-only,,
+dnd/content_system/builtin.py,dnd/content_system,64,pattern and AST inventory,search-only,,
+dnd/content_system/builtin_inventory.py,dnd/content_system,169,pattern and AST inventory,search-only,,
+dnd/content_system/cli.py,dnd/content_system,142,pattern and AST inventory,search-only,,
+dnd/content_system/condition_definitions.py,dnd/content_system,696,pattern and AST inventory,search-only,,
+dnd/content_system/configuration.py,dnd/content_system,42,pattern and AST inventory,search-only,,
+dnd/content_system/creature_bindings.py,dnd/content_system,88,pattern and AST inventory,search-only,,
+dnd/content_system/creature_materialization.py,dnd/content_system,155,pattern and AST inventory,native-scenarios,Body review: authored creature materialization,GA-01: Priest/Knight materialization; existing creature/gear/preset controls
+dnd/content_system/creature_possessions.py,dnd/content_system,84,pattern and AST inventory,native-scenarios,Body review: creature possession composition,GA-01 default possessions; existing creature/gear/preset controls
+dnd/content_system/icon_bindings.py,dnd/content_system,465,pattern and AST inventory,search-only,,
+dnd/content_system/import_boundary.py,dnd/content_system,10,pattern and AST inventory,search-only,,
+dnd/content_system/installed_creature_materialization.py,dnd/content_system,163,pattern and AST inventory,search-only,,
+dnd/content_system/pack_loader.py,dnd/content_system,1808,pattern and AST inventory,search-only,,
+dnd/content_system/reaction_definitions.py,dnd/content_system,261,pattern and AST inventory,search-only,,
+dnd/content_system/runtime.py,dnd/content_system,126,pattern and AST inventory,search-only,,
+dnd/content_system/spell_catalog_composition.py,dnd/content_system,202,pattern and AST inventory,search-only,,
+dnd/core/base_actions.py,shared owners (outside 117-file inventory),3044,followed concrete candidate owner,selected-body,Selected shared owner: target-batch and action apply admission boundaries; attack consequence ordering,
+dnd/core/base_block.py,shared owners (outside 117-file inventory),2172,followed concrete candidate owner,selected-body,Selected shared owner: prepare/discard condition tree,
+dnd/core/base_conditions.py,shared owners (outside 117-file inventory),1374,followed concrete candidate owner,selected-body,Selected shared owner: prepare/discard runtime cleanup,
+dnd/entity.py,shared owners (outside 117-file inventory),8195,followed concrete candidate owner,selected-body,Selected shared owner: uncommitted cleanup; register/unregister action; item install/retirement; initial item admission,
+dnd/items/__init__.py,dnd/items,5,pattern and AST inventory,search-only,,
+dnd/items/authored_variant_inventory.py,dnd/items,350,pattern and AST inventory,search-only,,
+dnd/items/consumables.py,dnd/items,1311,pattern and AST inventory,native-scenarios,Selected: four potion actions; shared all-five-coat action/ownership,GA-02: four potions and five coatings admitted/refused
+dnd/items/created_items.py,dnd/items,162,pattern and AST inventory,selected-body,Selected: Goodberry/FlameBlade lifetimes,
+dnd/items/divine_rewards.py,dnd/items,210,pattern and AST inventory,selected-body,Selected: incense/action/Devotee construction,
+dnd/items/environment.py,dnd/items,478,pattern and AST inventory,search-only,,
+dnd/items/environment_controls.py,dnd/items,42,pattern and AST inventory,search-only,,
+dnd/items/environment_interactables.py,dnd/items,726,pattern and AST inventory,search-only,,
+dnd/items/property_composition.py,dnd/items,113,pattern and AST inventory,selected-body,Body review: native item-property composition,
+dnd/items/scroll_learning.py,dnd/items,42,pattern and AST inventory,selected-body,Body review: scroll learning,
+dnd/items/spell_items.py,dnd/items,688,pattern and AST inventory,native-scenarios,Selected: spell grant dispatch; EmberQuiverActivation,GA-02: Ember Quiver admitted/refused
+dnd/items/spell_payloads.py,dnd/items,812,pattern and AST inventory,search-only,,
+dnd/items/torches.py,dnd/items,716,pattern and AST inventory,native-scenarios,Selected: portable torch action/light/holding/drop lifecycle,GA-02: ignite/extinguish admitted/refused; GA-05: transfer and original-carrier control
+dnd/items/visual_variants.py,dnd/items,14,pattern and AST inventory,search-only,,
+dnd/monsters/__init__.py,dnd/monsters,0,pattern and AST inventory,search-only,,
+dnd/monsters/beasts.py,dnd/monsters,199,pattern and AST inventory,search-only,,
+dnd/monsters/bestiary.py,dnd/monsters,886,pattern and AST inventory,native-scenarios,Selected: generic/goblin caster construction; default possession/configuration callers,GA-01: skeleton archer and recipient factory; existing roster controls
+dnd/monsters/bestiary_content.py,dnd/monsters,616,pattern and AST inventory,search-only,,
+dnd/monsters/circus_fighter.py,dnd/monsters,150,pattern and AST inventory,search-only,,
+dnd/monsters/circus_fighter_conditions.py,dnd/monsters,546,pattern and AST inventory,selected-body,Selected: elemental_advantage/dual_wielder_ac_bonus helpers,
+dnd/monsters/configured_srd_creatures.py,dnd/monsters,235,pattern and AST inventory,selected-body,Body review: authored creature composition,
+dnd/monsters/demon_variants.py,dnd/monsters,80,pattern and AST inventory,search-only,,
+dnd/monsters/fiends.py,dnd/monsters,133,pattern and AST inventory,search-only,,
+dnd/monsters/goblins.py,dnd/monsters,287,pattern and AST inventory,native-scenarios,Body review: goblin construction/configuration,Existing creature/gear/preset controls
+dnd/monsters/high_level_spell_summons.py,dnd/monsters,913,pattern and AST inventory,search-only,,
+dnd/monsters/multiattack_definitions.py,dnd/monsters,316,pattern and AST inventory,search-only,,
+dnd/monsters/skeleton_abilities.py,dnd/monsters,293,pattern and AST inventory,native-scenarios,Selected: Marked/MarkCooldown/MarkTargetAction,GA-01: actual skeleton-archer MarkTargetAction admitted/refused
+dnd/monsters/spell_summon_actions.py,dnd/monsters,2543,pattern and AST inventory,selected-body,Selected: NativeSaveBurst/Immolation/DrainingKiss/DragonBreath/cadence; RagingVortex contact; Sweetplum membership/turn,
+dnd/monsters/spell_summons.py,dnd/monsters,271,pattern and AST inventory,search-only,,
+dnd/monsters/srd_roster.py,dnd/monsters,1694,pattern and AST inventory,native-scenarios,Selected: constructors/possession helpers; grant table; Guard/Hobgoblin/Gnoll and caster configuration bodies,GA-01: actual Priest/Knight recipes; 65 existing creature/gear/preset controls
+dnd/monsters/traits.py,dnd/monsters,1701,pattern and AST inventory,native-scenarios,Selected: ParryFeature; MultiattackAction execution; bonus-damage/hit-save rider guards; Leadership/DivineEminence; Rampage feature/grant; MagicResistance/InnateFlight/InnateInvisibility,GA-01: Priest DivineEminence/Knight Leadership; GA-03: RampageAvailable; admitted/refused
+dnd/spatial/area_conditions.py,shared owners (outside 117-file inventory),1619,followed concrete candidate owner,selected-body,Selected shared owner: zone trigger declarations/wrapping/occupancy,
+dnd/spells/__init__.py,dnd/spells,6,pattern and AST inventory,search-only,,
+dnd/spells/abjuration.py,dnd/spells,3938,pattern and AST inventory,selected-body,Selected: HolyAura discovery; HolyAuraEffect hit/cleanup; AidEffect; BreakEnchantment targeting/partial apply; exhaustion/Freedom of Movement/Resistance helpers,
+dnd/spells/base.py,dnd/spells,8,pattern and AST inventory,search-only,,
+dnd/spells/catalog_content.py,dnd/spells,1162,pattern and AST inventory,search-only,,
+dnd/spells/conjuration.py,dnd/spells,5153,pattern and AST inventory,native-scenarios,Selected: AcidSplash apply; DaylightZone/declaration; overlapping Darkness cleanup,GA-08: AcidSplash admitted and child-refused
+dnd/spells/content_metadata.py,dnd/spells,481,pattern and AST inventory,search-only,,
+dnd/spells/divination.py,dnd/spells,545,pattern and AST inventory,selected-body,Selected: TrueSeeingEffect/TrueSeeing apply; Guidance processor/condition apply,
+dnd/spells/effect_ids.py,dnd/spells,6,pattern and AST inventory,search-only,,
+dnd/spells/enchantment.py,dnd/spells,2792,pattern and AST inventory,native-scenarios,Selected: CharmMonster apply; HeroismEffect commit/cleanup; Bane and Bless apply,GA-08: Bless admitted and child-refused
+dnd/spells/evocation.py,dnd/spells,6806,pattern and AST inventory,native-scenarios,Selected: MagicMissile and MassHeal apply; Sunburst apply ending/finalize AOE,"GA-08: MagicMissile, MassHeal admitted and child-refused"
+dnd/spells/hit_effects.py,dnd/spells,307,pattern and AST inventory,search-only,,
+dnd/spells/ice_knife.py,dnd/spells,167,pattern and AST inventory,search-only,,
+dnd/spells/illusion.py,dnd/spells,1713,pattern and AST inventory,selected-body,Selected: BlurEffect; Invisibility/GreaterInvisibility apply/validation; MirrorImage partial handler; ColorSpray apply,
+dnd/spells/infernal.py,dnd/spells,339,pattern and AST inventory,search-only,,
+dnd/spells/necromancy.py,dnd/spells,2870,pattern and AST inventory,selected-body,Selected: Revivify selection/discovery/validation; VampiricTouch completion heal; BlindnessDeafness apply,
+dnd/spells/reaction_costs.py,dnd/spells,137,pattern and AST inventory,search-only,,
+dnd/spells/reaction_spell_content.py,dnd/spells,257,pattern and AST inventory,search-only,,
+dnd/spells/spell_utils.py,dnd/spells,289,pattern and AST inventory,selected-body,Selected: condition_save; source-turn expiry; healing finalization,
+dnd/spells/summoning.py,dnd/spells,175,pattern and AST inventory,search-only,,
+dnd/spells/surfaces.py,dnd/spells,188,pattern and AST inventory,selected-body,Selected: AcidSurfacePenalty/AcidSurfaceMembership; SpellAcidSurface; SimpleToxinExposure apply,
+dnd/spells/transmutation.py,dnd/spells,2741,pattern and AST inventory,native-scenarios,Selected: EnhanceAbility effect and action; RegeneratingEffect and Regenerate partial apply; FleshToStoneEffect; MagicWeapon contribution cleanup,GA-04: EnhanceAbility constitution condition admitted/refused
+dnd/spells/wall_constructions.py,dnd/spells,973,pattern and AST inventory,search-only,,
+dnd/spells/wall_fields.py,dnd/spells,412,pattern and AST inventory,search-only,,
+dnd/spells/walls.py,dnd/spells,315,pattern and AST inventory,search-only,,

@@ -5,6 +5,7 @@ import pytest
 from dnd.action_dispatch import dispatch_available_action
 from dnd.actions import SpellEvent
 from dnd.actions_functional import execute_by_index, execute_available_action, get_extra_position_options, register_spell
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.items.environment_item_builders import build_spell_device
 from dnd.content.items.world_prop_builders import build_world_prop
 from dnd.spells.abjuration import GlobeOfInvulnerability
@@ -19,10 +20,13 @@ from dnd.core.events import DamageAppliedEvent, EventPhase, EventQueue, SensoryU
 from dnd.core.gridmap import get_map
 from dnd.core.presentation_geometry import WallPresentationGeometry
 from dnd.entity import Entity
+from dnd.spells.conjuration import FogCloudZone
 from dnd.spells.walls import WallOfFire, WallOfFireZone
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.world import CardinalDirection, OccupancyLayer
 from tests.manual.spell_regression_support import create_spell_regression_actor, force_save_result, reset_spell_regression_arena
+from tests.engine.support import admitted_in_discovery
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def scene(*, level=4):
@@ -79,7 +83,9 @@ def test_wall_damage_records_exact_source_and_physical_contact(position, exposur
     assert source is not None and source.spatial_effect_uuid == zone.uuid
     assert source.position == (7, 5) and source.target_position == position
     assert source.exposure == exposure and source.base_height_steps == zone.geometry.base_height_steps
-    assert DamageAppliedEvent.model_validate_json(applied[0].model_dump_json(), context=PASSIVE_EVENT_REPLAY).spatial_source == source
+    # A retained (passive) fact keeps no live damage packets, as the player capture retains it.
+    retained = applied[0].model_copy(update={"damages": []})
+    assert DamageAppliedEvent.model_validate_json(retained.model_dump_json(), context=PASSIVE_EVENT_REPLAY).spatial_source == source
 
 
 def test_overlapping_walls_keep_their_separate_damage_sources():
@@ -106,7 +112,7 @@ def test_overlapping_walls_keep_their_separate_damage_sources():
 def test_fire_immunity_produces_no_applied_wall_damage_accent():
     caster = scene()
     target = actor("Immune", (7, 6))
-    target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
         source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
         value=ResistanceStatus.IMMUNITY, damage_type=DamageType.FIRE, name="Fire immunity"))
     cast(caster)
@@ -310,7 +316,8 @@ def test_endpoint_selection_rechecks_changed_world_before_spending(change):
     template = WallOfFire(source_entity_uuid=caster.uuid, template=True)
     assert (9, 5) in template.get_valid_extra_target_positions((5, 5))
     if change == "hidden":
-        caster.senses.visible[(9, 5)] = False
+        FogCloudZone(source_entity_uuid=caster.uuid, position=(9, 5), affected_positions={(9, 5)}).activate(
+            parent_event=None)
     elif change == "solid":
         get_map().set_tile(7, 5, tile=Tile.create((7, 5), blocks_propagation=True), fire_event=False)
     else:
@@ -363,8 +370,7 @@ def test_discovered_first_point_does_not_substitute_a_witness_for_missing_extra_
     template = WallOfFire(source_entity_uuid=caster.uuid, template=True)
     anchor = (15, 5)
     partial = template.instantiate(end_position=anchor)
-    assert partial.validate_requirements_for_discovery(allow_partial_position=True)
-    assert not partial.validate_requirements_for_discovery()
+    assert not admitted_in_discovery(partial)
     result = partial.apply()
     assert result is not None and result.canceled
     assert caster.action_economy.actions.normalized_score == 1 and caster.has_spell_slot(4)

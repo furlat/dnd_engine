@@ -3,7 +3,7 @@ import pytest
 from uuid import uuid4
 
 from dnd.actions import SpellEvent
-from dnd.actions_functional import execute_action
+from dnd.actions_functional import execute_available_action
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import ConditionApplicationEvent
@@ -126,26 +126,6 @@ def test_continual_flame_discovery_includes_own_gear_without_exposing_another_in
     identities = {target.target_uuid for target in action.valid_targets}
     assert own.uuid in identities and floor.uuid in identities and hidden.uuid not in identities
     selected = next(target for target in action.valid_targets if target.target_uuid == own.uuid)
-    result = execute_action(caster, action.template_name, selected)
+    result = execute_available_action(caster, action, selected)
     assert result is not None and not result.canceled
     assert own.to_item_presentation_state().item_effects
-
-
-def test_continual_flame_suppression_resumes_same_retained_light(game):
-    caster = actor(game)
-    item = build_authored_item("weapon.club", caster.uuid)
-    item.place_on_grid((3, 2))
-    cast(ContinualFlame, caster, item)
-    condition = item.active_conditions["Continual Flame"]
-    light, = item.get_attached_light_sources()
-    provider = uuid4()
-    condition.set_suppression(provider, True)
-    get_map().refresh_contribution_lights()
-    assert level((3, 2)) is LightLevel.DARKNESS
-    assert item.get_attached_light_sources() == {light}
-    assert item.to_item_presentation_state().item_effects[0].suppression_provider_uuids == (provider,)
-    condition.set_suppression(provider, False)
-    get_map().refresh_contribution_lights()
-    assert level((3, 2)) is LightLevel.BRIGHT_LIGHT
-    assert item.get_attached_light_sources() == {light}
-

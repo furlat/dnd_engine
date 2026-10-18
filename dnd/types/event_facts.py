@@ -15,6 +15,15 @@ class EventType(str, Enum):
     """Kinds of state transitions that handlers and logs can subscribe to."""
 
     BASE_ACTION = "base_action"
+    ACTION_APPLICATION_COMMITTED = "action_application_committed"
+    ACTION_COSTS_COMMITTED = "action_costs_committed"
+    CONDITION_MEMBERSHIP_COMMITTED = "condition_membership_committed"
+    REST_RESOURCES_RECOVERED = "rest_resources_recovered"
+    PERMANENT_FEATURE_USED = "permanent_feature_used"
+    REST_COMPLETED = "rest_completed"
+    SPELL_MASTERY_STUDIED = "spell_mastery_studied"
+    SPELLBOOK_CHANGED = "spellbook_changed"
+    SPELL_PREPARATION_CHANGED = "spell_preparation_changed"
     ATTACK = "attack"
     MOVEMENT = "movement"
     STEP_MOVEMENT = "step_movement"
@@ -28,6 +37,8 @@ class EventType(str, Enum):
     TAKE_DAMAGE = "take_damage"
     DAMAGE_APPLIED = "damage_applied"
     HEAL = "heal"
+    HEALING_APPLIED = "healing_applied"
+    MAXIMUM_HIT_POINT_REDUCTION = "maximum_hit_point_reduction"
     TEMPORARY_HIT_POINTS_CHANGED = "temporary_hit_points_changed"
     CAST_SPELL = "cast_spell"
     ATTACK_MISS = "attack_miss"
@@ -62,6 +73,8 @@ class EventType(str, Enum):
     SAVE_D20_ROLL_RESULT = "save_d20_roll"
     CHECK_D20_ROLL_RESULT = "check_d20_roll"
     DAMAGE_ROLL_RESULT = "damage_roll_result"
+    SPELL_DAMAGE_ROLL_RESULT = "spell_damage_roll_result"
+    EFFECT_APPLICATION = "spatial_effect_application"
     HEAL_ROLL_RESULT = "heal_roll_result"
     ENEMY_SPOTTED = "enemy_spotted"
     ENEMY_KILLED = "enemy_killed"
@@ -123,6 +136,7 @@ class SpatialChangeType(str, Enum):
     ENTITY_ENTERED = "entity_entered"
     ENTITY_LEFT = "entity_left"
     TILE_CHANGED = "tile_changed"
+    TILES_CHANGED = "tiles_changed"
     TILE_CREATED = "tile_created"
     TILE_REMOVED = "tile_removed"
     OBJECT_PLACED = "object_placed"
@@ -133,6 +147,42 @@ class SpatialChangeType(str, Enum):
     OBJECT_CHANGED = "object_changed"
     MOVEMENT_COLLISION = "movement_collision"
 
+
+
+class GroupEntryKind(str, Enum):
+    """Where one simultaneous group was opened (plan §5.2)."""
+
+    AREA_APPLICATION = "area_application"
+    ZONE_INSTALL = "zone_install"
+    ZONE_MOVE = "zone_move"
+    ZONE_REMOVE = "zone_remove"
+    REACTION = "reaction"
+    WALL_FORMATION = "wall_formation"
+    CAST_LOOP = "cast_loop"
+    NESTED_BATCH = "nested_batch"
+    ROUND_STEP = "round_step"
+    TRAP_FIRE = "trap_fire"
+    PORTAL_TRANSFER = "portal_transfer"
+    MATERIAL_INTERACTION = "material_interaction"
+    DEPLOYMENT = "deployment"
+    # One creature's move step: its facts (left, entered, the zones and lights that follow it)
+    # settle perception once; it is not simultaneous, so handlers run as without a group.
+    MOVE_STEP = "move_step"
+
+
+# The entries whose facts happen at once: inside them, after-group handlers, summon departures and
+# reactions wait for the group's settlement (plan §5.3). A move step is one creature's own step.
+SIMULTANEOUS_ENTRIES: frozenset[GroupEntryKind] = frozenset(GroupEntryKind) - {GroupEntryKind.MOVE_STEP}
+# What a move step causes and joins it: the zones anchored to the mover follow it. Any other entry
+# opened inside a step starts after the step's facts settled.
+JOINS_A_STEP: frozenset[GroupEntryKind] = frozenset({GroupEntryKind.ZONE_MOVE})
+
+
+class HandlerGroupDispatch(str, Enum):
+    """When a handler runs relative to an open simultaneous group (plan §5.3)."""
+
+    INLINE = "inline"
+    AFTER_GROUP = "after_group"
 
 
 class EventPhase(str, Enum):
@@ -192,7 +242,6 @@ class WorldTileChanges(TypedDict, total=False):
     surface_kind: ElevationSurfaceKind
     slope_axis: Optional[SlopeAxis]
     default_light: LightLevel
-    resolved_light: LightLevel
     condition_names: Tuple[str, ...]
     residues: tuple[TileResidueState, ...]
 

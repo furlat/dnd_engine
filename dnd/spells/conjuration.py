@@ -3,14 +3,18 @@
 Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web, Cloudkill,
           SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud
 """
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll, resolve_saved_spell_damage
+from dnd.conditions import Restrained
+from dnd.spells.hit_effects import AttackBackedSpell
 from dnd.types.physical_access import PhysicalAccess
 from typing import Any, ClassVar, Literal, Optional, List, Set, Tuple, cast as type_cast
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
 
 from dnd.core.base_actions import (
+    cell_occupied,
     ActionCategory,
     ActionEvent,
     ActionInformationOperation,
@@ -32,7 +36,8 @@ from dnd.core.base_actions import (
     TopologyEffectProfile,
 )
 from dnd.core.aoe import Sphere
-from dnd.core.action_types import ActionVariantFacet, EntityDestinationSelection
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, EntityDestinationSelection, selection_facet
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.core.positioning import PositionPublicationError
 from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent, Duration
 from dnd.core.content.descriptors import (
@@ -57,14 +62,24 @@ from dnd.core.content.registration import (
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.condition_types import (
     ConditionCategory,
+    ConditionRemovalTrigger,
     ConditionTag,
     DurationType,
     HazardFilter,
 )
 from dnd.blocks.base_item import BaseItem, UsableItem
-from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
+from dnd.types.senses import OBSCUREMENT_BITS, OpticalObscurement, PerceivedSpatialEffect
 from dnd.core.dice import AttackOutcome, Dice, RollType
-from dnd.core.values import ModifiableValue
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    read_value,
+    Channel,
+    Kind,
+    add_modifier,
+    remove_modifier,
+    parts,
+)
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, ExposedFlameEvent, SpatialChangeEvent, SpatialEffectInteractionEvent
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
@@ -77,16 +92,26 @@ from dnd.core.modifiers import (
 )
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag, SavingThrowContext
 from dnd.core.events import SavingThrowEvent
-from dnd.core.aoe import AoEShape, Cylinder
+from dnd.core.aoe import AoEShape, Cube, Cylinder
 from dnd.core.base_block import BaseBlock, LightLevel
-from dnd.core.presentation_geometry import CubePresentationGeometry
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import CrossingChannel, get_map
+from dnd.core.view import visible_positions
 from dnd.entity import Entity
-from dnd.types.world import OccupancyLayer
+from dnd.types.world import OccupancyLayer, SpatialChannel
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
+from dnd.actions import (
+    AttackEvent,
+    SpellAction,
+    SpellEvent,
+    entity_action_economy_cost_evaluator,
+    entity_action_economy_cost_applier,
+    resolve_paid_entry_retreats,
+    Move,
+)
 from dnd.spells.content_metadata import srd_action_identity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
+from dnd.spatial.ignition import resolve_interaction
+from dnd.types.event_facts import GroupEntryKind
 from dnd.spatial.environmental_conditions import (
     BURNING_WEB_RECIPE,
     build_environmental_replacement,
@@ -102,7 +127,6 @@ from dnd.spatial.memberships import (
 )
 from dnd.spatial.transitions import bind_spatial_interactions
 from dnd.types.spatial_effects import (
-    AreaPropagation,
     SpatialDamageSource,
     SpatialEffectChangeOperation,
     SpatialEffectAnchorKind,
@@ -117,19 +141,17 @@ from dnd.types.spatial_effects import (
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.elevation import support_distance_feet
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
-from dnd.core.events import DamageAppliedEvent, SavingThrowEvent, PortalTransferEvent
-from dnd.spells.spell_utils import validate_line_of_sight
+from dnd.core.events import DamageAppliedEvent, TakeDamageEvent, SavingThrowEvent, PortalTransferEvent
+from dnd.spells.spell_utils import deliver_spell_damage, seen_point_error, seen_recipients_error, target_count_error
 
 
-def _call_lightning_target_error(spell: SpellAction) -> Optional[str]:
-    caster = Entity.get(spell.source_entity_uuid)
-    if caster is None or spell.end_position is None:
-        return "Caster or strike point missing"
-    error = spell.target_position_error(spell.end_position)
-    if error is not None:
-        return error
-    if not caster.senses.visible.get(spell.end_position, False):
-        return "Strike point is not visible"
+def _acid_splash_spread_error(positions: List[Tuple[int, int]]) -> Optional[str]:
+    """Two Acid Splash targets must stand within 5ft of each other."""
+    if len(positions) == 2:
+        a, b = positions
+        distance = max(abs(a[0] - b[0]), abs(a[1] - b[1])) * 5
+        if distance > 5:
+            return f"Targets must be within 5ft of each other (distance: {distance}ft)"
     return None
 
 
@@ -138,22 +160,24 @@ def _call_lightning_positions(spell: SpellAction) -> List[Tuple[int, int]]:
     caster = Entity.get(spell.source_entity_uuid)
     if caster is None:
         return []
-    return [point for point, visible in caster.senses.visible.items()
-            if visible and spell.target_position_error(point) is None]
+    return [point for point in visible_positions(caster.senses.cells)
+            if spell.target_position_error(point) is None]
 
 
 def _apply_call_lightning(spell: SpellAction, event: SpellEvent, *, dc: int) -> SpellEvent:
     """One initial or repeated bolt application through ordinary spell results."""
     caster = Entity.get(spell.source_entity_uuid)
-    target = Entity.get(spell.target_entity_uuid) if spell.target_entity_uuid else None
+    target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
     if caster is None or target is None:
         return event.cancel(status_message="Caster or target not found")
     effect, _, success = spell.resolve_saving_throw(
         event, caster=caster, target=target, ability_name="dexterity", dc=dc)
+    if effect.canceled:
+        return effect
     damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
         damage_dice=10, dice_numbers=3 + spell.get_upcast_bonus(),
         damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.LIGHTNING)
-    roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+    roll = roll_spell_damage(damage, parent_event=event, effect_origin=spell.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
     amount = roll.total // 2 if success else roll.total
     target.receive_damage(amount=amount, damage_type=DamageType.LIGHTNING,
         source_entity_uuid=caster.uuid, parent_event=effect.uuid)
@@ -198,20 +222,19 @@ class CallLightningStrike(SpellAction):
             if target is not None:
                 self.end_position = target.position
         if self.aoe_shape is None:
-            self.aoe_shape = Sphere(source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0), radius_feet=7)
+            self.aoe_shape = Sphere(radius_feet=7)
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
         return self._resolve_area_targets()
 
-    def _validate(self, event: SpellEvent) -> Optional[ActionEvent]:
-        error = _call_lightning_target_error(self)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        error = seen_point_error(self, scan, selection)
         if error is not None:
-            return event.cancel(status_message=error)
+            return error
         caster = Entity.get(self.source_entity_uuid)
         if caster is None or self.grant_condition_uuid not in caster.active_conditions_by_uuid:
-            return event.cancel(status_message="The Call Lightning grant has ended")
-        return super()._validate(event)
+            return "The Call Lightning grant has ended"
+        return None
 
     def _apply(self, event: SpellEvent) -> SpellEvent:
         return _apply_call_lightning(self, event, dc=self.spell_dc)
@@ -219,6 +242,7 @@ class CallLightningStrike(SpellAction):
 
 class CallLightning(SpellAction):
     """BG3 adaptation: one bolt now, action-cost activations for ten turns."""
+    creates = (*SpellAction.creates, CallLightningStrike, ConcentrationActionMarker)
     name: str = "Call Lightning"
     description: str = "Strike a seven-foot area within 60 feet; repeat for ten turns while concentrating."
     spell_level: int = 3
@@ -242,15 +266,13 @@ class CallLightning(SpellAction):
             if target is not None:
                 self.end_position = target.position
         if self.aoe_shape is None:
-            self.aoe_shape = Sphere(source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0), radius_feet=7)
+            self.aoe_shape = Sphere(radius_feet=7)
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
         return self._resolve_area_targets()
 
-    def _validate(self, event: SpellEvent) -> Optional[ActionEvent]:
-        error = _call_lightning_target_error(self)
-        return event.cancel(status_message=error) if error is not None else super()._validate(event)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, event: SpellEvent) -> SpellEvent:
         caster = Entity.get(self.source_entity_uuid)
@@ -304,29 +326,13 @@ class PoisonSpray(SpellAction):
     include_self: bool = Field(default=False, description="Whether poison spray can include the caster among valid targets.")
     valid_target_filter: str = Field(default="enemies", description="Relationship filter used when collecting valid targets for poison spray.")
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate LOS and 10ft range."""
-
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source or not target:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        distance = self.get_target_distance(target.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Out of range ({distance}ft > {self.effective_range}ft)")
-
-        return los_event.phase_to(EventPhase.EXECUTION, status_message="Validated Poison Spray")
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """CON save or poison damage."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Entity not found")
@@ -341,13 +347,6 @@ class PoisonSpray(SpellAction):
         )
         _, _save_roll, success = target.saving_throw(save_request)
 
-        if success:
-            return execution_event.phase_to(
-                EventPhase.EFFECT,
-                save_success=True,
-                total_damage=0,
-                status_message=f"{target.name} saves against Poison Spray"
-            )
 
         num_dice = self._get_cantrip_dice_count(self.caster_level)
         damage_bonus = caster.get_spell_damage_bonus()
@@ -361,22 +360,24 @@ class PoisonSpray(SpellAction):
             damage_type=DamageType.POISON
         )
 
-        damage_dice = poison_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        effect_event = execution_event.phase_to(EventPhase.EFFECT, save_success=success)
+        if effect_event.canceled:
+            return effect_event
+        packet = resolve_saved_spell_damage(poison_damage, parent_event=effect_event, saved=success, success_fraction=0)
+        damage_roll = packet.final_roll
 
         target.receive_damage(
-            amount=damage_roll.total,
+            amount=packet.applied_amount,
             damage_type=DamageType.POISON,
             source_entity_uuid=caster.uuid,
             parent_event=execution_event.uuid
         )
 
-        return execution_event.phase_to(
-            EventPhase.EFFECT,
-            save_success=False,
+        return effect_event.with_updates(
+            save_success=success,
             damages=[poison_damage],
             damage_rolls=[damage_roll],
-            total_damage=damage_roll.total,
+            total_damage=packet.applied_amount,
             status_message=f"Poison Spray: {damage_roll.total} poison to {target.name}"
         )
 
@@ -419,54 +420,18 @@ class AcidSplash(SpellAction):
         targets.extend(self.extra_target_entity_uuids)
         return targets[:2]
 
-    def selection_preview_error(self) -> str | None:
-        positions = [target.position for identity in self.get_all_targets()
-                     if (target := Entity.get(identity)) is not None]
-        if len(positions) == 2:
-            a, b = positions
-            distance = max(abs(a[0] - b[0]), abs(a[1] - b[1])) * 5
-            if distance > 5:
-                return f"Targets must be within 5ft of each other (distance: {distance}ft)"
-        return None
-
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range, LOS, and 5ft proximity for 2-target case."""
-        source = Entity.get(self.source_entity_uuid)
-        if not source:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        all_targets = self.get_all_targets()
-        if not all_targets:
-            return declaration_event.cancel(status_message="No targets specified")
-
-        target_entities = []
-        for target_uuid in all_targets:
-            target = Entity.get(target_uuid)
-            if not target:
-                return declaration_event.cancel(status_message="Target not found")
-
-            contact = source.senses.entities.get(target_uuid)
-            if contact is None or not contact.visual:
-                return declaration_event.cancel(status_message=f"{target.name} not in line of sight")
-
-            distance = self.get_target_distance(target.position)
-            if distance > self.effective_range:
-                return declaration_event.cancel(
-                    status_message=f"{target.name} out of range ({distance}ft > {self.effective_range}ft)"
-                )
-            target_entities.append(target)
-
-        selection_error = self.selection_preview_error()
-        if selection_error is not None:
-            return declaration_event.cancel(status_message=selection_error)
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """At most two seen targets in range, within 5ft of each other."""
+        error = target_count_error(self, selection, 2) or seen_recipients_error(self, scan, selection.target_uuids)
+        if error is not None:
+            return error
+        return _acid_splash_spread_error([target.position for identity in selection.target_uuids
+                                          if (target := Entity.get(identity)) is not None])
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply acid splash damage to current target."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -481,7 +446,7 @@ class AcidSplash(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
+        save_bonus = save_roll.bonus  # the bonus the save applied
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -493,12 +458,9 @@ class AcidSplash(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
-        if success:
-            return effect_event.with_updates(
-                total_damage=0,
-                status_message=f"{target.name} avoids the acid"
-            )
 
         num_dice = self._get_cantrip_dice_count(self.caster_level)
         damage_bonus = caster.get_spell_damage_bonus()
@@ -512,11 +474,11 @@ class AcidSplash(SpellAction):
             damage_type=DamageType.ACID
         )
 
-        damage_dice = acid_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
+        packet = resolve_saved_spell_damage(acid_damage, parent_event=effect_event, saved=success, success_fraction=0)
+        damage_roll = packet.final_roll
 
         target.receive_damage(
-            amount=damage_roll.total,
+            amount=packet.applied_amount,
             damage_type=DamageType.ACID,
             source_entity_uuid=caster.uuid,
             parent_event=effect_event.uuid
@@ -525,12 +487,14 @@ class AcidSplash(SpellAction):
         return effect_event.with_updates(
             damages=[acid_damage],
             damage_rolls=[damage_roll],
-            total_damage=damage_roll.total,
+            total_damage=packet.applied_amount,
             status_message=f"Acid Splash: {damage_roll.total} acid to {target.name}"
         )
 
 
 class MistyStep(SpellAction):
+    creates = (*SpellAction.creates, Move)
+    magical_transfer: bool = True
     """Misty Step - 2nd level Conjuration
 
     Briefly surrounded by silvery mist, you teleport up to 30 feet to an
@@ -562,37 +526,18 @@ class MistyStep(SpellAction):
         """Expose destination reach with the same authored override as other spells."""
         return Range(type=RangeType.RANGE, normal=self.alt_range if self.alt_range is not None else self.teleport_range)
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate destination is visible and within range."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No destination specified")
-
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(status_message=f"Destination {target_pos} not visible")
-
-        distance = self.get_target_distance(target_pos)
-        if distance > self.get_range().normal:
-            return declaration_event.cancel(
-                status_message=f"Destination out of range ({distance}ft > {self.get_range().normal}ft)"
-            )
-
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """The destination is visible, within range, unoccupied and walkable."""
+        error = seen_point_error(self, scan, selection)
+        if error is not None:
+            return error
+        target_pos = selection.positions[0]
         grid = get_map()
-        entities_at_dest = grid.get_entities_at(target_pos)
-        if entities_at_dest:
-            return declaration_event.cancel(status_message=f"Destination {target_pos} is occupied")
-
-        if not grid.is_walkable_for(target_pos[0], target_pos[1], caster.uuid):
-            return declaration_event.cancel(status_message=f"Destination {target_pos} is not accessible")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        if cell_occupied(scan, target_pos):
+            return f"Destination {target_pos} is occupied"
+        if not grid.is_walkable_for(target_pos[0], target_pos[1], self.source_entity_uuid, subjective=scan.subjective):
+            return f"Destination {target_pos} is not accessible"
+        return None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Teleport caster to destination."""
@@ -604,18 +549,23 @@ class MistyStep(SpellAction):
         if not target_pos:
             return execution_event.cancel(status_message="No destination")
 
-        start_pos = caster.senses.position
+        start_pos = caster.position
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} teleports from {start_pos} to {target_pos}"
         )
 
+        if effect_event.canceled: return effect_event
+        transfer = EventQueue.publish_declaration(PortalTransferEvent(source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid, start_position=start_pos, end_position=target_pos,
+            effect_origin=execution_event.get_effect_origin(), parent_event=effect_event.uuid, use_register=False))
+        for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
+            if not transfer.canceled: transfer = transfer.phase_to(phase)
+        if transfer.canceled: return effect_event.with_updates(status_message="Misty Step transfer prevented")
         entry_cursor = EventQueue.event_cursor()
-        Entity.update_entity_position(
-            caster, target_pos, parent_event=effect_event.uuid,
-            occupancy_layer=OccupancyLayer.GROUND,
-        )
+        Entity.update_entity_position(caster, target_pos, parent_event=transfer.uuid, occupancy_layer=OccupancyLayer.GROUND)
+        transfer.phase_to(EventPhase.COMPLETION, committed=True)
         resolve_paid_entry_retreats(caster, since_cursor=entry_cursor, parent_event=effect_event)
 
         distance = abs(target_pos[0] - start_pos[0]) * 5 + abs(target_pos[1] - start_pos[1]) * 5
@@ -648,8 +598,9 @@ class GreaseZone(AreaCondition):
 
     Applied to the caster, manages the zone via position-indexed handlers.
     """
+    creates = (Prone,)
     # Terrain/obscurement contributions do not reject crossing segments.
-    crossing_channels: ClassVar[frozenset[str] | None] = frozenset()
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
     name: str = Field(default="Grease Zone", description="Display name for the grease zone zone condition.")
     has_visible_presence: bool = True
     description: str = Field(default="Slippery grease - DEX save or fall prone", description="Rules-facing summary for the grease zone zone condition.")
@@ -677,8 +628,7 @@ class GreaseZone(AreaCondition):
             SpatialEffectTriggerKind.TURN_END,
         }),
     )
-    zone_shape: str = Field(default="cube", description="Area shape used by grease zone to compute affected grid positions.")
-    zone_radius_feet: int = Field(default=10, description="Zone radius in feet used by grease zone.")
+    area: AoEShape = Cube(size_feet=10, centered=True)
     adds_difficult_terrain: bool = Field(default=True, description="Whether grease zone makes affected tiles difficult terrain.")
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
@@ -786,6 +736,7 @@ class Grease(SpellAction):
     Duration: 1 minute (non-concentration in SRD, but we treat as concentration
     for BG3-style cleanup convenience)
     """
+    creates = (*SpellAction.creates, GreaseZone)
     name: str = Field(default="Grease", description="Display name for the grease spell.")
     description: str = Field(default="10ft square difficult terrain, DEX save or prone", description="Rules-facing summary for the grease spell.")
     spell_level: int = Field(default=1, description="Spell slot level required to cast grease; cantrips use 0.")
@@ -805,9 +756,10 @@ class Grease(SpellAction):
         Cost(name="Grease Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute grease.")
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare Grease's Dexterity-save prone branch."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return ActionTargetEffectProfile(
             semantic_id="control.grease",
@@ -824,29 +776,8 @@ class Grease(SpellAction):
             ),
         )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate target position is in range and visible."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position specified")
-
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Cast Grease - create zone, apply to creatures already there, concentration."""
@@ -903,6 +834,7 @@ class EscapeWebAction(EscapeSpatialRestraintAction):
 
 class WebRestrained(SpatialRestraintSource):
     """Exact membership contributed by one Web zone."""
+    creates = (*SpatialRestraintSource.creates, EscapeWebAction)
 
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, frozen=True)
     name: str = Field(default="Web restraint")
@@ -944,6 +876,7 @@ class WebZone(RestrainingAreaCondition):
     The independent condition owns its footprint, restraint memberships, and
     environmental transition directly.
     """
+    creates = (WebRestrained,)
     name: str = Field(default="Web Zone", description="Display name for the web zone zone condition.")
     description: str = Field(default="Sticky webs - DEX save or restrained", description="Rules-facing summary for the web zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the web zone for cleanup and filtering.")
@@ -962,9 +895,9 @@ class WebZone(RestrainingAreaCondition):
             SpatialEffectTriggerKind.TURN_START,
         }),
     )
-    zone_shape: str = Field(default="cube")
-    zone_radius_feet: int = Field(default=20)
+    area: AoEShape = Cube(size_feet=20, centered=True)
     adds_difficult_terrain: bool = Field(default=True)
+    dims_light: bool = Field(default=True, description="The webs lower light one level (human Q5).")
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
     spell_dc: int = Field(default=10, description="Spell save DC used by web zone saving throws.")
     anchored_or_layered: bool = Field(
@@ -1077,7 +1010,7 @@ class WebZone(RestrainingAreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -1151,6 +1084,7 @@ class Web(SpellAction):
 
     Duration: Concentration, up to 1 hour
     """
+    creates = (*SpellAction.creates, WebZone)
     name: str = Field(default="Web", description="Display name for the web spell.")
     description: str = Field(default="20ft cube of webs, DEX save or restrained, can escape with STR check", description="Rules-facing summary for the web spell.")
     spell_level: int = Field(default=2, description="Spell slot level required to cast web; cantrips use 0.")
@@ -1174,9 +1108,10 @@ class Web(SpellAction):
         description="Whether the cast Web is anchored between solid masses or layered across a floor, wall, or ceiling.",
     )
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare Web's Dexterity-save restrained branch."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return ActionTargetEffectProfile(
             semantic_id="control.web",
@@ -1196,29 +1131,8 @@ class Web(SpellAction):
             ),
         )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate target position is in range and visible."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position specified")
-
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Cast Web - create zone, restrain creatures already there, concentration."""
@@ -1270,9 +1184,7 @@ class Web(SpellAction):
         return effect_event.post(
             status_message=f"Web active: 20ft cube at {target_pos}",
             aoe_position=zone.position,
-            area_geometry=CubePresentationGeometry(
-                origin=zone.position, size_feet=zone.zone_radius_feet, centered=True,
-            ),
+            area_geometry=zone.area.presentation_geometry(zone.area_aim(zone.position), zone.position),
             resolved_area_positions=tuple(sorted(zone.affected_positions)),
         )
 
@@ -1289,6 +1201,7 @@ class EscapeEntangleAction(EscapeSpatialRestraintAction):
 
 class EntangleRestrained(SpatialRestraintSource):
     """Independent restraint lease contributed by one Entangle field."""
+    creates = (*SpatialRestraintSource.creates, EscapeEntangleAction)
 
     description: str = Field(
         default="Restrained by one exact Entangle field until escaping.",
@@ -1310,6 +1223,7 @@ ENTANGLE_ZONE_CONTENT_REF = ContentRef(
 
 class EntangleZone(RestrainingAreaCondition):
     """Fixed Entangle field with cast-time saves and difficult terrain."""
+    creates = (EntangleRestrained,)
 
     name: str = Field(default="Entangle Zone")
     description: str = Field(
@@ -1330,8 +1244,7 @@ class EntangleZone(RestrainingAreaCondition):
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=lambda: frozenset({SpatialEffectTriggerKind.APPEAR}),
     )
-    zone_shape: str = Field(default="cube")
-    zone_radius_feet: int = Field(default=20)
+    area: AoEShape = Cube(size_feet=20, centered=True)
     adds_difficult_terrain: bool = Field(default=True)
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
     spell_dc: int = Field(default=10, ge=0)
@@ -1365,6 +1278,7 @@ class EntangleZone(RestrainingAreaCondition):
 
 class Entangle(SpellAction):
     """Create a concentration field of grasping plants."""
+    creates = (*SpellAction.creates, EntangleZone)
 
     name: str = Field(default="Entangle")
     description: str = Field(
@@ -1394,11 +1308,9 @@ class Entangle(SpellAction):
         ],
     )
 
-    def get_target_effect_profile(
-        self,
-        actor: Any,
-    ) -> Optional[ActionTargetEffectProfile]:
-        if not isinstance(actor, Entity):
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return ActionTargetEffectProfile(
             semantic_id="control.entangle",
@@ -1418,26 +1330,8 @@ class Entangle(SpellAction):
             ),),
         )
 
-    def _validate(
-        self,
-        declaration_event: SpellEvent,
-    ) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not isinstance(caster, Entity):
-            return declaration_event.cancel(status_message="Caster not found")
-        target_pos = self.end_position
-        if target_pos is None:
-            return declaration_event.cancel(status_message="No target position")
-        if not caster.senses.visible.get(target_pos, False):
-            return declaration_event.cancel(
-                status_message=f"Position {target_pos} not visible",
-            )
-        if self.get_target_distance(target_pos) > self.effective_range:
-            return declaration_event.cancel(status_message="Position out of range")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}",
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1497,6 +1391,7 @@ class EscapeBlackTentaclesDexterityAction(EscapeSpatialRestraintAction):
 
 class BlackTentaclesRestrained(SpatialRestraintSource):
     """Independent restraint lease and both authored escape choices."""
+    creates = (*SpatialRestraintSource.creates, EscapeBlackTentaclesDexterityAction, EscapeBlackTentaclesStrengthAction)
 
     description: str = Field(
         default="Restrained by one exact Evard's Black Tentacles field.",
@@ -1521,6 +1416,7 @@ BLACK_TENTACLES_ZONE_CONTENT_REF = ContentRef(
 
 class BlackTentaclesZone(RestrainingAreaCondition):
     """Damaging and restraining field for Evard's Black Tentacles."""
+    creates = (BlackTentaclesRestrained,)
 
     name: str = Field(default="Evard's Black Tentacles Zone")
     description: str = Field(
@@ -1550,8 +1446,7 @@ class BlackTentaclesZone(RestrainingAreaCondition):
             SpatialEffectTriggerKind.TURN_START,
         }),
     )
-    zone_shape: str = Field(default="cube")
-    zone_radius_feet: int = Field(default=20)
+    area: AoEShape = Cube(size_feet=20, centered=True)
     adds_difficult_terrain: bool = Field(default=True)
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
     spell_dc: int = Field(default=10, ge=0)
@@ -1576,11 +1471,11 @@ class BlackTentaclesZone(RestrainingAreaCondition):
         damage_bonus = (
             caster.get_spell_damage_bonus()
             if isinstance(caster, Entity)
-            else ModifiableValue.create(
+            else parts(ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=0,
-                value_name="Spell Damage",
-            )
+                base=0,
+                name="Spell Damage",
+            ))
         )
         damage = Damage(
             source_entity_uuid=self.source_entity_uuid,
@@ -1590,7 +1485,7 @@ class BlackTentaclesZone(RestrainingAreaCondition):
             damage_bonus=damage_bonus,
             damage_type=DamageType.BLUDGEONING,
         )
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         entity.receive_damage(
             roll.total,
             DamageType.BLUDGEONING,
@@ -1663,7 +1558,7 @@ class BlackTentaclesZone(RestrainingAreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT,
+                event_phase=EventPhase.EXECUTION,
             )],
             event_processor=processor,
         )
@@ -1671,6 +1566,7 @@ class BlackTentaclesZone(RestrainingAreaCondition):
 
 class EvardsBlackTentacles(SpellAction):
     """Create a concentration field of grasping tentacles."""
+    creates = (*SpellAction.creates, BlackTentaclesZone)
 
     name: str = Field(default="Evard's Black Tentacles")
     description: str = Field(
@@ -1698,11 +1594,9 @@ class EvardsBlackTentacles(SpellAction):
         )],
     )
 
-    def get_target_effect_profile(
-        self,
-        actor: Any,
-    ) -> Optional[ActionTargetEffectProfile]:
-        if not isinstance(actor, Entity):
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return ActionTargetEffectProfile(
             semantic_id="control.evards_black_tentacles",
@@ -1722,26 +1616,8 @@ class EvardsBlackTentacles(SpellAction):
             ),),
         )
 
-    def _validate(
-        self,
-        declaration_event: SpellEvent,
-    ) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not isinstance(caster, Entity):
-            return declaration_event.cancel(status_message="Caster not found")
-        target_pos = self.end_position
-        if target_pos is None:
-            return declaration_event.cancel(status_message="No target position")
-        if not caster.senses.visible.get(target_pos, False):
-            return declaration_event.cancel(
-                status_message=f"Position {target_pos} not visible",
-            )
-        if self.get_target_distance(target_pos) > self.effective_range:
-            return declaration_event.cancel(status_message="Position out of range")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}",
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1837,9 +1713,7 @@ class CloudkillZone(AreaCondition):
             SpatialEffectTriggerKind.TURN_START,
         }),
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by cloudkill zone to compute affected grid positions.")
-    area_propagation: AreaPropagation = "connected"
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by cloudkill zone.")
+    area: AoEShape = Sphere(radius_feet=20, propagation="connected")
     adds_difficult_terrain: bool = Field(default=False, description="Whether cloudkill zone makes affected tiles difficult terrain.")
 
     optical_obscurement: Optional[OpticalObscurement] = Field(
@@ -1891,11 +1765,11 @@ class CloudkillZone(AreaCondition):
         damage_bonus = (
             caster.get_spell_damage_bonus()
             if caster is not None
-            else ModifiableValue.create(
+            else parts(ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=0,
-                value_name="Spell Damage",
-            )
+                base=0,
+                name="Spell Damage",
+            ))
         )
         damage = Damage(
             source_entity_uuid=self.source_entity_uuid,
@@ -1905,7 +1779,7 @@ class CloudkillZone(AreaCondition):
             damage_bonus=damage_bonus,
             damage_type=DamageType.POISON,
         )
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         entity.receive_damage(
             roll.total // 2 if success else roll.total,
             DamageType.POISON,
@@ -1966,7 +1840,7 @@ class CloudkillZone(AreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -2041,6 +1915,7 @@ class Cloudkill(SpellAction):
 
     Duration: Concentration, up to 10 minutes
     """
+    creates = (*SpellAction.creates, CloudkillZone)
     name: str = Field(default="Cloudkill", description="Display name for the cloudkill spell.")
     description: str = Field(default="20ft sphere poison fog, 5d8 poison (CON half), moves away from caster", description="Rules-facing summary for the cloudkill spell.")
     spell_level: int = Field(default=5, description="Spell slot level required to cast cloudkill; cantrips use 0.")
@@ -2066,29 +1941,8 @@ class Cloudkill(SpellAction):
         Cost(name="Cloudkill Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute cloudkill.")
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate target position is in range and visible."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position specified")
-
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Cast Cloudkill and establish its independent cloud condition."""
@@ -2166,7 +2020,7 @@ class SpiritGuardiansSlowed(BaseCondition):
         for speed in entity.action_economy.speed_values:
             modifier = ArithmeticFactor(name="Spirit Guardians Slowed", numerator=1, denominator=2,
                 source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid)
-            speed.self_static.add_factor(modifier)
+            add_modifier(speed, Channel.SELF_STATIC, Kind.FACTOR, modifier)
             outs.append((speed.uuid, modifier.uuid))
 
         effect_event = declaration_event.phase_to(
@@ -2179,6 +2033,7 @@ class SpiritGuardiansSlowed(BaseCondition):
 
 class SpiritGuardiansSlowSource(SpatialConditionMembershipSource):
     """One exact Spirit Guardians source sharing the native public slow child."""
+    creates = (SpiritGuardiansSlowed,)
 
     slow_manifestation_uuid: Optional[UUID] = Field(default=None, exclude=True)
 
@@ -2226,6 +2081,7 @@ class SpiritGuardiansZone(MembershipAreaCondition):
 
     Explicit cast-time exclusions are unaffected, regardless of faction.
     """
+    creates = (SpiritGuardiansSlowSource,)
     name: str = Field(default="Spirit Guardians Zone", description="Display name for the spirit guardians zone zone condition.")
     description: str = Field(default="Spectral warriors damage nonexcluded creatures entering the zone", description="Rules-facing summary for the spirit guardians zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the spirit guardians zone for cleanup and filtering.")
@@ -2257,8 +2113,7 @@ class SpiritGuardiansZone(MembershipAreaCondition):
         SpatialEffectTriggerKind.ENTER, SpatialEffectTriggerKind.TURN_START})
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=100))
     excluded_entity_uuids: frozenset[UUID] = frozenset()
-    zone_shape: str = Field(default="sphere", description="Area shape used by spirit guardians zone to compute affected grid positions.")
-    zone_radius_feet: int = Field(default=15, description="Zone radius in feet used by spirit guardians zone.")
+    area: AoEShape = Sphere(radius_feet=15)
     adds_difficult_terrain: bool = Field(default=False, description="Whether spirit guardians zone makes affected tiles difficult terrain.")
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for spirit guardians zone hazards.")
@@ -2280,6 +2135,9 @@ class SpiritGuardiansZone(MembershipAreaCondition):
 
     def membership_applies_to(self, entity: Entity) -> bool:
         return entity.uuid != self.source_entity_uuid and entity.uuid not in self.excluded_entity_uuids
+
+    def spatial_channels(self) -> frozenset[SpatialChannel]:
+        return super().spatial_channels() | {SpatialChannel.MOVEMENT}
 
     def is_hazardous_for(self, entity_uuid: UUID | None = None, *,
                          occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND) -> bool:
@@ -2306,11 +2164,11 @@ class SpiritGuardiansZone(MembershipAreaCondition):
         damage_bonus = (
             caster.get_spell_damage_bonus()
             if caster is not None
-            else ModifiableValue.create(
+            else parts(ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=0,
-                value_name="Spell Damage",
-            )
+                base=0,
+                name="Spell Damage",
+            ))
         )
         damage = Damage(
             source_entity_uuid=self.source_entity_uuid,
@@ -2320,7 +2178,7 @@ class SpiritGuardiansZone(MembershipAreaCondition):
             damage_bonus=damage_bonus,
             damage_type=self.damage_type,
         )
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         rolled = roll.total
         entity.receive_damage(
             rolled // 2 if success else rolled,
@@ -2356,10 +2214,13 @@ class SpiritGuardiansZone(MembershipAreaCondition):
         entity = Entity.get(target_entity_uuid)
         if entity is None or not self.membership_applies_to(entity):
             return False
-        if (kind in self.membership_trigger_kinds and not entity.ignore_magical_speed_reduction
+        # Admit first: a rejected trigger never leases the slow (bug N); the
+        # continuous slow is maintained by the zone's own entry/exit effects.
+        admitted = AreaCondition._admit_trigger(self, kind, target_entity_uuid, event)
+        if (admitted and kind in self.membership_trigger_kinds and not entity.ignore_magical_speed_reduction
                 and self._occupancy_admits_trigger(kind, target_entity_uuid, event)):
             self.apply_membership(entity, parent_event=event)
-        return AreaCondition._admit_trigger(self, kind, target_entity_uuid, event)
+        return admitted
 
     def _create_zone_entry_handler(self) -> EventHandler:
         """Creature entry damages independently of continuously maintained slow."""
@@ -2411,7 +2272,7 @@ class SpiritGuardiansZone(MembershipAreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -2468,6 +2329,7 @@ class SpiritGuardians(SpellAction):
 
     Visible creatures explicitly excluded at cast time remain unaffected.
     """
+    creates = (*SpellAction.creates, SpiritGuardiansZone)
     name: str = Field(default="Spirit Guardians", description="Display name for the spirit guardians spell.")
     description: str = Field(default="15ft sphere around caster, nonexcluded creatures take 3d8 radiant/necrotic (WIS half), speed halved", description="Rules-facing summary for the spirit guardians spell.")
     spell_level: int = Field(default=3, description="Spell slot level required to cast spirit guardians; cantrips use 0.")
@@ -2491,33 +2353,25 @@ class SpiritGuardians(SpellAction):
         self.spell_damage_type = self.damage_type
         super().model_post_init(__context)
 
-    def get_discovery_variants(self, entity: Any) -> list[BaseAction]:
-        return [variant.model_copy(deep=True, update={"uuid": uuid4(), "damage_type": kind,
-            "spell_damage_type": kind, "registered_template_uuid": self.registered_template_uuid or self.uuid})
-            for variant in super().get_discovery_variants(entity)
-            for kind in (DamageType.RADIANT, DamageType.NECROTIC)]
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="damage_type", value=kind.value.lower(), label=kind.value),)
+                     for kind in (DamageType.RADIANT, DamageType.NECROTIC))
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        return (ActionVariantFacet(key="damage_type", value=self.damage_type.value.lower(),
-                                   label=self.damage_type.value),)
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__{self.damage_type.value.lower()}"
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        kind = DamageType(selection_facet(selection, "damage_type").title())
+        return {**super()._selection_overrides(selection), "damage_type": kind, "spell_damage_type": kind}
 
     def get_discovery_display_name(self) -> str:
         return f"{super().get_discovery_display_name()} ({self.damage_type.value.lower()})"
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Spirit Guardians is self-targeted, minimal validation needed."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """Excluded creatures must be seen when the spell is cast."""
         for identity in self.excluded_entity_uuids:
-            contact = caster.senses.entities.get(identity)
-            if identity != caster.uuid and (contact is None or not contact.visual):
-                return declaration_event.cancel(status_message="Excluded creatures must be visible when cast")
-        return type_cast(Optional[SpellEvent], super()._validate(declaration_event))
+            record = scan.creatures.get(identity)
+            if identity != self.source_entity_uuid and (record is None or not record.visual):
+                return "Excluded creatures must be visible when cast"
+        return None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Cast Spirit Guardians - create zone centered on caster."""
@@ -2588,6 +2442,9 @@ FOG_CLOUD_ZONE_TRANSITIONS = (
 )
 
 
+FOG_CLOUD_AREA = Sphere(radius_feet=20, propagation="connected")
+
+
 class FogCloudZone(AreaCondition):
     """Zone control condition for Fog Cloud spell.
 
@@ -2595,7 +2452,7 @@ class FogCloudZone(AreaCondition):
     Uses obscurement so darkvision cannot see through it.
     """
     # Terrain/obscurement contributions do not reject crossing segments.
-    crossing_channels: ClassVar[frozenset[str] | None] = frozenset()
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
     name: str = Field(default="Fog Cloud Zone", description="Display name for the fog cloud zone zone condition.")
     description: str = Field(default="Heavily obscured fog — blocks vision including darkvision", description="Rules-facing summary for the fog cloud zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the fog cloud zone for cleanup and filtering.")
@@ -2607,9 +2464,7 @@ class FogCloudZone(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING,
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by fog cloud zone to compute affected grid positions.")
-    area_propagation: AreaPropagation = "connected"
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by fog cloud zone.")
+    area: AoEShape = FOG_CLOUD_AREA
 
     optical_obscurement: Optional[OpticalObscurement] = Field(
         default=OpticalObscurement.HEAVY,
@@ -2645,6 +2500,7 @@ class FogCloud(SpellAction):
 
     Duration: Concentration, up to 1 hour
     """
+    creates = (*SpellAction.creates, FogCloudZone)
     name: str = Field(default="Fog Cloud", description="Display name for the fog cloud spell.")
     description: str = Field(default="20ft sphere heavily obscured fog (blocks darkvision)", description="Rules-facing summary for the fog cloud spell.")
     spell_level: int = Field(default=1, description="Spell slot level required to cast fog cloud; cantrips use 0.")
@@ -2664,7 +2520,7 @@ class FogCloud(SpellAction):
         Cost(name="Fog Cloud Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute fog cloud.")
 
-    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+    def get_world_effect_profile(self) -> ActionWorldEffectProfile:
         """Declare Fog Cloud's slot-scaled concealment and vision blocker.
 
         Args:
@@ -2696,28 +2552,8 @@ class FogCloud(SpellAction):
             ),),
         )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position specified")
-
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -2739,7 +2575,7 @@ class FogCloud(SpellAction):
             source_entity_uuid=caster.uuid,
             position=target_pos,
             faction=caster.faction,
-            zone_radius_feet=radius,
+            area=Sphere(radius_feet=radius, propagation=FOG_CLOUD_AREA.propagation),
             effect_origin=execution_event.to_effect_origin(),
         )
         zone_completion = zone.activate(parent_event=effect_event)
@@ -2790,9 +2626,7 @@ class DarknessZone(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by darkness zone to compute affected grid positions.")
-    area_propagation: AreaPropagation = "connected"
-    zone_radius_feet: int = Field(default=15, description="Zone radius in feet used by darkness zone.")
+    area: AoEShape = Sphere(radius_feet=15, propagation="connected")
 
     sets_light_level: Optional[LightLevel] = Field(default=LightLevel.DARKNESS, description="Darkness caps objective illumination in affected cells.")
     light_is_cap: bool = Field(default=True, description="Darkness caps rather than adds objective illumination.")
@@ -2817,6 +2651,7 @@ class Darkness(SpellAction):
 
     Duration: Concentration, up to 10 minutes
     """
+    creates = (*SpellAction.creates, DarknessZone)
     name: str = Field(default="Darkness", description="Display name for the darkness spell.")
     description: str = Field(default="15ft sphere magical darkness (blocks darkvision)", description="Rules-facing summary for the darkness spell.")
     spell_level: int = Field(default=2, description="Spell slot level required to cast darkness; cantrips use 0.")
@@ -2869,7 +2704,7 @@ class Darkness(SpellAction):
             raise RuntimeError("Darkness registered template is missing")
         template.active_concentration_slot_uuid = slot_uuid
 
-    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+    def get_world_effect_profile(self) -> ActionWorldEffectProfile:
         """Declare Darkness's concealment and magical vision blocker.
 
         Args:
@@ -2899,28 +2734,8 @@ class Darkness(SpellAction):
             ),),
         )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position specified")
-
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -2973,6 +2788,9 @@ DAYLIGHT_ZONE_CONTENT_REF = ContentRef(
 )
 
 
+DAYLIGHT_AREA = Sphere(radius_feet=60)
+
+
 class DaylightZone(AreaCondition):
     """Zone control condition for Daylight spell.
 
@@ -2990,8 +2808,7 @@ class DaylightZone(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by daylight zone to compute affected grid positions.")
-    zone_radius_feet: int = Field(default=60, description="Zone radius in feet used by daylight zone.")
+    area: AoEShape = DAYLIGHT_AREA
 
     sets_light_level: Optional[LightLevel] = Field(default=LightLevel.VERY_BRIGHT, description="Light level applied to affected tiles by daylight zone.")
     light_is_obscurement: bool = Field(default=False, description="Whether daylight zone blocks sight through its light level.")
@@ -3003,8 +2820,7 @@ def _is_daylight_targetable_darkness(position: Tuple[int, int]) -> bool:
     grid = get_map()
     return (
         grid.get_tile(*position) is not None
-        and OpticalObscurement.MAGICAL_DARKNESS
-        in grid.get_optical_obscurements_at(position)
+        and bool(grid.optical_obscurement_bits_at(position) & OBSCUREMENT_BITS[OpticalObscurement.MAGICAL_DARKNESS])
     )
 
 
@@ -3019,6 +2835,9 @@ def _remove_overlapping_darkness_zones(
             continue
         if condition.affected_positions.isdisjoint(daylight_zone.affected_positions):
             continue
+        level = condition.effect_origin.effective_spell_level if condition.effect_origin is not None else None
+        if level is not None and level > 3:
+            continue  # Only darkness from a spell of 3rd level or lower is dispelled (SRD; bug L9).
         condition.deactivate(parent_event=parent_event)
         removed += 1
     return removed
@@ -3041,6 +2860,7 @@ class Daylight(SpellAction):
 
     Duration: 1 hour (using Concentration for cleanup)
     """
+    creates = (*SpellAction.creates, DaylightZone)
     name: str = Field(default="Daylight", description="Display name for the daylight spell.")
     description: str = Field(default="60ft sphere very bright light, reveals hidden, dispels darkness", description="Rules-facing summary for the daylight spell.")
     spell_level: int = Field(default=3, description="Spell slot level required to cast daylight; cantrips use 0.")
@@ -3056,7 +2876,7 @@ class Daylight(SpellAction):
         Cost(name="Daylight Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute daylight.")
 
-    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+    def get_world_effect_profile(self) -> ActionWorldEffectProfile:
         """Declare Daylight's illumination and Darkness-specific removal.
 
         Args:
@@ -3074,7 +2894,7 @@ class Daylight(SpellAction):
                     anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
                     scope=ActionWorldEffectScope.REGION,
                     shape=ActionWorldEffectShape.SPHERE,
-                    radius_feet=60,
+                    radius_feet=DAYLIGHT_AREA.radius_feet,
                 ),
                 InformationEffectProfile(
                     operation=ActionInformationOperation.REVEAL_REGION,
@@ -3082,7 +2902,7 @@ class Daylight(SpellAction):
                     anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
                     scope=ActionWorldEffectScope.REGION,
                     shape=ActionWorldEffectShape.SPHERE,
-                    radius_feet=60,
+                    radius_feet=DAYLIGHT_AREA.radius_feet,
                 ),
             ),
             topology_effects=(TopologyEffectProfile(
@@ -3091,36 +2911,16 @@ class Daylight(SpellAction):
                 anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
                 scope=ActionWorldEffectScope.MAGICAL_DARKNESS,
                 shape=ActionWorldEffectShape.SPHERE,
-                radius_feet=60,
+                radius_feet=DAYLIGHT_AREA.radius_feet,
                 affects_vision=True,
             ),),
         )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position specified")
-
-        if (
-            (target_pos not in caster.senses.visible or not caster.senses.visible[target_pos])
-            and not _is_daylight_targetable_darkness(target_pos)
-        ):
-            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen point, or a magical darkness Daylight may dispel, within range."""
+        if selection.positions and _is_daylight_targetable_darkness(selection.positions[0]):
+            return self.target_position_error(selection.positions[0])
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3142,22 +2942,25 @@ class Daylight(SpellAction):
             faction=caster.faction,
             effect_origin=execution_event.to_effect_origin(),
         )
-        zone_completion = zone.activate(parent_event=effect_event)
-        if (
-            zone_completion is None
-            or zone_completion.canceled
-            or not zone.applied
-        ):
-            return effect_event.with_updates(
-                status_message="Daylight could not establish its area",
-            )
-        removed_darkness = _remove_overlapping_darkness_zones(zone, effect_event)
+        # The light and the darkness it dispels change in one instant.
+        with EventQueue.group(GroupEntryKind.ZONE_INSTALL, root=effect_event):
+            zone_completion = zone.activate(parent_event=effect_event)
+            if (
+                zone_completion is None
+                or zone_completion.canceled
+                or not zone.applied
+            ):
+                return effect_event.with_updates(
+                    status_message="Daylight could not establish its area",
+                )
+            removed_darkness = _remove_overlapping_darkness_zones(zone, effect_event)
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
 
         return effect_event.with_updates(
-            status_message=f"Daylight active: 60ft sphere at {target_pos}; dispelled {removed_darkness} darkness zone(s)"
+            status_message=(f"Daylight active: {DAYLIGHT_AREA.radius_feet}ft sphere at {target_pos}; "
+                f"dispelled {removed_darkness} darkness zone(s)")
         )
 
 
@@ -3200,9 +3003,7 @@ class InsectPlagueZone(AreaCondition):
             SpatialEffectTriggerKind.TURN_END,
         }),
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by insect plague zone to compute affected grid positions.")
-    area_propagation: AreaPropagation = "connected"
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by insect plague zone.")
+    area: AoEShape = Sphere(radius_feet=20, propagation="connected")
     adds_difficult_terrain: bool = Field(default=True, description="Whether insect plague zone makes affected tiles difficult terrain.")
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for insect plague zone hazards.")
@@ -3232,11 +3033,11 @@ class InsectPlagueZone(AreaCondition):
         damage_bonus = (
             caster.get_spell_damage_bonus()
             if caster is not None
-            else ModifiableValue.create(
+            else parts(ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=0,
-                value_name="Spell Damage",
-            )
+                base=0,
+                name="Spell Damage",
+            ))
         )
         damage = Damage(
             source_entity_uuid=self.source_entity_uuid,
@@ -3246,7 +3047,7 @@ class InsectPlagueZone(AreaCondition):
             damage_bonus=damage_bonus,
             damage_type=DamageType.PIERCING,
         )
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         entity.receive_damage(
             roll.total // 2 if success else roll.total,
             DamageType.PIERCING,
@@ -3306,7 +3107,7 @@ class InsectPlagueZone(AreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_END,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -3319,6 +3120,7 @@ class InsectPlague(SpellAction):
     Damages when the area appears, on entry, and at turn end. At Higher
     Levels: +1d10 per level above 5th.
     """
+    creates = (*SpellAction.creates, InsectPlagueZone)
     name: str = Field(default="Insect Plague", description="Display name for the insect plague spell.")
     description: str = Field(default="20ft sphere swarming locusts, 4d10 piercing (CON half)", description="Rules-facing summary for the insect plague spell.")
     spell_level: int = Field(default=5, description="Spell slot level required to cast insect plague; cantrips use 0.")
@@ -3337,23 +3139,8 @@ class InsectPlague(SpellAction):
         Cost(name="Insect Plague Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute insect plague.")
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position")
-
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
-
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"Validated {self.name}")
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3442,9 +3229,7 @@ class IncendiaryCloudZone(AreaCondition):
             SpatialEffectTriggerKind.TURN_END,
         }),
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by incendiary cloud zone to compute affected grid positions.")
-    area_propagation: AreaPropagation = "connected"
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by incendiary cloud zone.")
+    area: AoEShape = Sphere(radius_feet=20, propagation="connected")
     adds_difficult_terrain: bool = Field(default=False, description="Whether incendiary cloud zone makes affected tiles difficult terrain.")
     optical_obscurement: Optional[OpticalObscurement] = Field(
         default=OpticalObscurement.HEAVY,
@@ -3477,11 +3262,11 @@ class IncendiaryCloudZone(AreaCondition):
         damage_bonus = (
             caster.get_spell_damage_bonus()
             if caster is not None
-            else ModifiableValue.create(
+            else parts(ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=0,
-                value_name="Spell Damage",
-            )
+                base=0,
+                name="Spell Damage",
+            ))
         )
         damage = Damage(
             source_entity_uuid=self.source_entity_uuid,
@@ -3491,7 +3276,7 @@ class IncendiaryCloudZone(AreaCondition):
             damage_bonus=damage_bonus,
             damage_type=DamageType.FIRE,
         )
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         entity.receive_damage(
             roll.total // 2 if success else roll.total,
             DamageType.FIRE,
@@ -3558,7 +3343,7 @@ class IncendiaryCloudZone(AreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_END,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -3611,6 +3396,7 @@ class IncendiaryCloud(SpellAction):
     Damages on entry and turn start. Cloud moves 10ft away from caster each turn.
     Heavily obscured area.
     """
+    creates = (*SpellAction.creates, IncendiaryCloudZone)
     name: str = Field(default="Incendiary Cloud", description="Display name for the incendiary cloud spell.")
     description: str = Field(default="20ft sphere fire cloud, 10d8 fire (DEX half), heavily obscured", description="Rules-facing summary for the incendiary cloud spell.")
     spell_level: int = Field(default=8, description="Spell slot level required to cast incendiary cloud; cantrips use 0.")
@@ -3628,23 +3414,8 @@ class IncendiaryCloud(SpellAction):
         Cost(name="Incendiary Cloud Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute incendiary cloud.")
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position")
-
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
-
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"Validated {self.name}")
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3693,7 +3464,7 @@ class NauseatedCondition(BaseCondition):
     """Entity is nauseated and spends its action retching.
 
     Applied by Stinking Cloud when CON save fails at turn start.
-    Duration: 1 round (auto-expires via advance_duration).
+    Duration: the rest of that turn; it ends at the creature's turn end.
     """
     name: str = Field(default="Nauseated", description="Display name for the nauseated condition condition.")
     description: str = Field(default="Nauseated - spends action retching", description="Rules-facing summary for the nauseated condition condition.")
@@ -3706,24 +3477,30 @@ class NauseatedCondition(BaseCondition):
         outs: List[Tuple[UUID, UUID]] = []
         target_uuid = target.uuid
 
-        actions_uuid = target.action_economy.actions.self_static.add_max_constraint(
-            NumericalModifier(
+        actions_uuid = add_modifier(target.action_economy.actions, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(
                 name="Nauseated",
                 value=0,
                 source_entity_uuid=target_uuid,
                 target_entity_uuid=self.source_entity_uuid,
-            )
-        )
+            ))
         outs.append((target.action_economy.actions.uuid, actions_uuid))
 
-        self.duration.duration_type = DurationType.ROUNDS
-        self.duration.duration = 1
+        # "Spends its action that turn": zone turn triggers run at EXECUTION,
+        # before the turn's duration advance, so the turn end owns the expiry.
+        def retching_over(boundary: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            target.remove_condition_by_uuid(self.uuid, parent_event=boundary)
+            return None
+
+        turn_end = EventHandler(name="Nauseated turn end", source_entity_uuid=target_uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target_uuid)], event_processor=retching_over)
+        target.add_event_handler(turn_end)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             status_message=f"{target.name} is nauseated"
         )
-        return outs, [], [], [], effect_event
+        return outs, [turn_end.uuid], [], [], effect_event
 
 
 STINKING_CLOUD_ZONE_CONTENT_REF = ContentRef(
@@ -3758,6 +3535,7 @@ class StinkingCloudZone(AreaCondition):
     20ft radius sphere of heavily obscured noxious gas.
     Turn start: CON save or spend action retching.
     """
+    creates = (NauseatedCondition,)
     name: str = Field(default="Stinking Cloud Zone", description="Display name for the stinking cloud zone zone condition.")
     description: str = Field(default="Nauseating gas - CON save or spend action", description="Rules-facing summary for the stinking cloud zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the stinking cloud zone for cleanup and filtering.")
@@ -3774,9 +3552,7 @@ class StinkingCloudZone(AreaCondition):
             SpatialEffectTriggerKind.TURN_START,
         }),
     )
-    zone_shape: str = Field(default="sphere", description="Area shape used by stinking cloud zone to compute affected grid positions.")
-    area_propagation: AreaPropagation = "connected"
-    zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by stinking cloud zone.")
+    area: AoEShape = Sphere(radius_feet=20, propagation="connected")
     adds_difficult_terrain: bool = Field(default=False, description="Whether stinking cloud zone makes affected tiles difficult terrain.")
 
     optical_obscurement: Optional[OpticalObscurement] = Field(
@@ -3836,7 +3612,7 @@ class StinkingCloudZone(AreaCondition):
             source_entity_uuid=source_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION
             )],
             event_processor=processor
         )
@@ -3863,6 +3639,7 @@ class StinkingCloud(SpellAction):
 
     Duration: Concentration, up to 1 minute
     """
+    creates = (*SpellAction.creates, StinkingCloudZone)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Stinking Cloud", description="Display name for the stinking cloud spell.")
     description: str = Field(default="20ft sphere nauseating fog, CON save or spend action", description="Rules-facing summary for the stinking cloud spell.")
@@ -3887,19 +3664,8 @@ class StinkingCloud(SpellAction):
         Cost(name="Stinking Cloud Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute stinking cloud.")
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position")
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Position out of range ({distance}ft)")
-        return declaration_event.phase_to(new_phase=EventPhase.EXECUTION, status_message=f"Validated {self.name}")
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3962,6 +3728,7 @@ class SleetStormZone(AreaCondition):
     Entry + turn start: DEX save or Prone.
     Turn start: concentration disruption against spell save DC.
     """
+    creates = (Prone,)
     name: str = Field(default="Sleet Storm Zone", description="Display name for the sleet storm zone zone condition.")
     description: str = Field(default="Icy sleet - DEX save or prone, concentration disruption", description="Rules-facing summary for the sleet storm zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the sleet storm zone for cleanup and filtering.")
@@ -3982,8 +3749,7 @@ class SleetStormZone(AreaCondition):
     first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=lambda: frozenset({SpatialEffectTriggerKind.ENTER}),
     )
-    zone_shape: str = Field(default="cylinder", description="Area shape used by sleet storm zone to compute affected grid positions.")
-    zone_radius_feet: int = Field(default=40, description="Zone radius in feet used by sleet storm zone.")
+    area: AoEShape = Cylinder(radius_feet=40, height_feet=20)
     adds_difficult_terrain: bool = Field(default=True, description="Whether sleet storm zone makes affected tiles difficult terrain.")
 
     optical_obscurement: Optional[OpticalObscurement] = Field(
@@ -3995,10 +3761,6 @@ class SleetStormZone(AreaCondition):
 
     spell_dc: int = Field(default=10, description="Spell save DC used by sleet storm zone saving throws.")
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
-
-    def _area_shape(self, anchor: Tuple[int, int]) -> AoEShape:
-        return Cylinder(source_entity_uuid=self.source_entity_uuid, target=anchor,
-                        radius_feet=40, height_feet=20)
 
     def _save(self, target: Entity, ability: Literal["dexterity", "constitution"], event: Event) -> bool:
         request = SavingThrowEvent(source_entity_uuid=self.source_entity_uuid,
@@ -4096,13 +3858,7 @@ class SleetStormZone(AreaCondition):
             parent_event=parent_event.uuid if parent_event is not None else None,
             phase=EventPhase.DECLARATION,
         )
-        interaction = interaction.phase_to(EventPhase.EXECUTION)
-        if interaction.canceled:
-            return
-        interaction = interaction.phase_to(EventPhase.EFFECT)
-        if interaction.canceled:
-            return
-        interaction.phase_to(EventPhase.COMPLETION)
+        resolve_interaction(interaction)
 
     def _create_exposed_flame_handler(self) -> EventHandler:
         """Create a handler that douses flames ignited inside the storm."""
@@ -4223,6 +3979,7 @@ class SleetStorm(SpellAction):
 
     Duration: Concentration, up to 1 minute
     """
+    creates = (*SpellAction.creates, SleetStormZone)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Sleet Storm", description="Display name for the sleet storm spell.")
     description: str = Field(default="40ft cylinder: difficult terrain, heavily obscured, DEX save/prone, conc disruption", description="Rules-facing summary for the sleet storm spell.")
@@ -4243,19 +4000,8 @@ class SleetStorm(SpellAction):
         Cost(name="Sleet Storm Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute sleet storm.")
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position")
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Position out of range ({distance}ft)")
-        return declaration_event.phase_to(new_phase=EventPhase.EXECUTION, status_message=f"Validated {self.name}")
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -4299,6 +4045,8 @@ class SleetStorm(SpellAction):
 
 
 class DimensionDoor(SpellAction):
+    creates = (*SpellAction.creates, Move)
+    magical_transfer: bool = True
     """A paid teleport with an optional nearby willing companion."""
     name: str = "Dimension Door"
     description: str = "Teleport alone or with a willing companion within 500ft; blocked arrival deals 4d6 force."
@@ -4326,16 +4074,16 @@ class DimensionDoor(SpellAction):
         return [(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)
                 if self.target_position_error((x, y)) is None]
 
-    def _participants(self) -> tuple[Entity, ...]:
+    def _participants(self, selection: ActionSelection) -> tuple[Entity, ...]:
         caster = Entity.get(self.source_entity_uuid)
-        companion = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        companion = Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
         if caster is None or companion is None:
             return ()
         return (caster,) if companion is caster else (caster, companion)
 
-    def _selection_error(self) -> str | None:
-        participants = self._participants()
-        if not participants or self.end_position is None or len(self.get_all_targets()) != 1:
+    def _selection_error(self, selection: ActionSelection) -> str | None:
+        participants = self._participants(selection)
+        if not participants or not selection.positions or len(selection.target_uuids) != 1:
             return "Choose yourself or one companion, then a destination"
         caster = participants[0]
         if not caster.is_deployed:
@@ -4351,17 +4099,14 @@ class DimensionDoor(SpellAction):
             if companion.uuid not in caster.senses.entities:
                 return "Companion is not perceived"
         x0, y0, x1, y1 = get_map().bounds
-        x, y = self.end_position
+        destination = selection.positions[0]
+        x, y = destination
         if not (x0 <= x <= x1 and y0 <= y <= y1):
             return "Destination lies outside this map"
-        return self.target_position_error(self.end_position)
+        return self.target_position_error(destination)
 
-    def selection_preview_error(self) -> str | None:
-        return self._selection_error()
-
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        error = self._selection_error()
-        return declaration_event.cancel(status_message=error) if error else declaration_event.phase_to(EventPhase.EXECUTION)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return self._selection_error(selection)
 
     def _destinations(self, participants: tuple[Entity, ...]) -> tuple[Tuple[int, int], ...]:
         assert self.end_position is not None
@@ -4392,8 +4137,8 @@ class DimensionDoor(SpellAction):
         caster = participants[0]
         damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
             dice_numbers=4, damage_dice=6, damage_type=DamageType.FORCE,
-            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0))
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid, base=0)))
+        roll = roll_spell_damage(damage, parent_event=effect, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         for actor in participants:
             actor.receive_damage(amount=roll.total, damage_type=DamageType.FORCE,
                 source_entity_uuid=caster.uuid, parent_event=effect.uuid,
@@ -4403,10 +4148,11 @@ class DimensionDoor(SpellAction):
             status_message="Dimension Door arrival was obstructed; neither traveler moved")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        error = self._selection_error()
+        selection = self.current_selection()
+        error = self._selection_error(selection)
         if error:
             return execution_event.cancel(status_message=error)
-        participants = self._participants()
+        participants = self._participants(selection)
         caster = participants[0]
         effect = execution_event.phase_to(EventPhase.EFFECT)
         if effect.canceled:
@@ -4431,7 +4177,7 @@ class DimensionDoor(SpellAction):
                     if not admitted.canceled:
                         admitted.cancel(status_message="One traveler could not transfer")
                 return effect.with_updates(status_message="Dimension Door transfer prevented")
-        selection_error = self._selection_error()
+        selection_error = self._selection_error(selection)
         obstructed = self._destinations(participants) != destinations
         if selection_error or obstructed:
             for transfer in transfers:
@@ -4457,7 +4203,6 @@ GUARDIAN_FOOTPRINT_OFFSETS = ((0, 0), (1, 0), (0, 1), (1, 1))
 
 
 class GuardianOfFaithObject(BaseItem):
-    magically_created: bool = True
     """Spectral world-object anchor for the direct guardian condition."""
     name: str = Field(default="Guardian of Faith", description="Display name for the guardian of faith object item.")
     description: str = Field(default="A large spectral guardian hovers in this space", description="Rules-facing summary for the guardian of faith object item.")
@@ -4518,8 +4263,7 @@ class GuardianOfFaithZone(AreaCondition):
     first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=lambda: frozenset({SpatialEffectTriggerKind.ENTER}),
     )
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=10)
+    area: AoEShape = Sphere(radius_feet=10)
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ENEMIES)
     spell_dc: int = Field(default=0, ge=0)
     damage_budget: int = Field(default=60, ge=1)
@@ -4535,6 +4279,9 @@ class GuardianOfFaithZone(AreaCondition):
         return {cell for cell in candidates if any(support_distance_feet(origin,
             grid.get_support_elevation_feet(origin), cell, grid.get_support_elevation_feet(cell)) <= 10
             for origin in occupied)}
+
+    def spatial_channels(self) -> frozenset[SpatialChannel]:
+        return super().spatial_channels() | {SpatialChannel.MOVEMENT}
 
     def is_hazardous_for(self, entity_uuid: UUID | None = None, *,
                          occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND) -> bool:
@@ -4578,19 +4325,20 @@ class GuardianOfFaithZone(AreaCondition):
                 saving_throw_context=SavingThrowContext(cause_id=zone.content_ref.content_id,
                     effect_id="spell.guardian_of_faith.damage", is_magical=True))
             _, _, success = entity.saving_throw(request)
-            cursor = EventQueue.event_cursor()
+            applied_damage = 0
+
+            def record_damage(_incoming: TakeDamageEvent, result: DamageAppliedEvent | None) -> None:
+                nonlocal applied_damage
+                if result is not None and result.phase is EventPhase.COMPLETION:
+                    applied_damage = result.applied_damage
+
             entity.receive_damage(amount=10 if success else 20, damage_type=DamageType.RADIANT,
                 source_entity_uuid=zone.source_entity_uuid, independent_resolution=True,
                 effect_origin=zone.effect_origin, parent_event=event.uuid, source_condition_uuid=zone.uuid,
                 spatial_source=SpatialDamageSource(spatial_effect_uuid=zone.uuid, position=entity.position,
                     target_position=entity.position, base_height_steps=get_map().get_support_elevation_feet(entity.position) // 5,
-                    exposure="contact"))
-            zone.damage_dealt += sum(result.applied_damage for _, result in EventQueue.iter_events_since(cursor)
-                if isinstance(result, DamageAppliedEvent) and result.phase is EventPhase.COMPLETION
-                and result.source_condition_uuid == zone.uuid and result.target_entity_uuid == entity.uuid
-                and result.parent_event is not None
-                and (incoming := EventQueue.get_event_by_uuid(result.parent_event)) is not None
-                and incoming.parent_event == event.uuid)
+                    exposure="contact"), on_completed=record_damage)
+            zone.damage_dealt += applied_damage
             if zone.damage_dealt >= zone.damage_budget:
                 guardian = BaseItem.get(zone.anchor_uuid)
                 if isinstance(guardian, GuardianOfFaithObject):
@@ -4629,6 +4377,7 @@ class GuardianOfFaith(SpellAction):
 
     Duration: 8 hours (NOT concentration).
     """
+    creates = (*SpellAction.creates, GuardianOfFaithZone)
     name: str = Field(default="Guardian of Faith", description="Display name for the guardian of faith spell.")
     description: str = Field(default="Summon spectral guardian: 20 radiant (DEX half), 60 damage budget", description="Rules-facing summary for the guardian of faith spell.")
     spell_level: int = Field(default=4, description="Spell slot level required to cast guardian of faith; cantrips use 0.")
@@ -4638,27 +4387,23 @@ class GuardianOfFaith(SpellAction):
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for guardian of faith.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30), description="Range contract used when validating targets for guardian of faith.")
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-        if not self.end_position:
-            return declaration_event.cancel(status_message="No target position")
-
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A visible, unoccupied, level Large space within range."""
+        if not selection.positions:
+            return "No target position"
         grid = get_map()
-        pos = self.end_position
+        pos = selection.positions[0]
         if (error := self.target_position_error(pos)) is not None:
-            return declaration_event.cancel(status_message=error)
+            return error
         height = grid.get_support_elevation_feet(pos) if grid.has_tile(*pos) else None
         for dx, dy in GUARDIAN_FOOTPRINT_OFFSETS:
             cell = (pos[0] + dx, pos[1] + dy)
-            if (not grid.has_tile(*cell) or not caster.senses.visible.get(cell, False)
-                    or not grid.is_walkable_for(*cell) or grid.get_entities_at(cell)
+            if (not grid.has_tile(*cell) or cell not in scan.visible
+                    or not grid.is_walkable_for(*cell, scan.actor_uuid, subjective=scan.subjective)
+                    or cell_occupied(scan, cell)
                     or grid.get_support_elevation_feet(cell) != height):
-                return declaration_event.cancel(status_message="Guardian requires a visible unoccupied Large space")
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+                return "Guardian requires a visible unoccupied Large space"
+        return None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -4697,7 +4442,6 @@ class GuardianOfFaith(SpellAction):
             ),
             effect_origin=execution_event.get_effect_origin(),
         )
-        guardian.creation_condition_uuid = zone.uuid
         zone_result = zone.activate(parent_event=effect_event)
         if zone_result is None or zone_result.canceled or not zone.applied:
             guardian.retire(parent_event=effect_event)
@@ -4727,14 +4471,14 @@ class HeroesFeastBuff(BaseCondition):
         target.add_condition_immunity_source("Poisoned", self.uuid)
         target.add_condition_immunity_source("Frightened", self.uuid)
         wisdom = target.saving_throws.get_saving_throw("wisdom").bonus
-        advantage = wisdom.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+        advantage = add_modifier(wisdom, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
             value=AdvantageStatus.ADVANTAGE, source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid))
         reduction = target.health.damage_reduction
-        immunity = reduction.self_static.add_resistance_modifier(ResistanceModifier(name=self.name,
+        immunity = add_modifier(reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(name=self.name,
             value=ResistanceStatus.IMMUNITY, damage_type=DamageType.POISON,
             source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid))
         maximum = target.health.max_hit_points_bonus
-        self.modifier_uuid = maximum.self_static.add_value_modifier(NumericalModifier(name=self.name,
+        self.modifier_uuid = add_modifier(maximum, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name=self.name,
             value=0, source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid))
         return [(wisdom.uuid, advantage), (reduction.uuid, immunity), (maximum.uuid, self.modifier_uuid)], [], [], [], event.phase_to(EventPhase.EFFECT)
 
@@ -4773,7 +4517,7 @@ class HeroesFeastBuff(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is not None and self.modifier_uuid is not None:
             previous = target.get_normal_hp()
-            target.health.max_hit_points_bonus.remove_modifier(self.modifier_uuid)
+            remove_modifier(target.health.max_hit_points_bonus, self.modifier_uuid)
             self.modifers_uuids.pop(target.health.max_hit_points_bonus.uuid, None)
             self.modifier_uuid = None
             target.health.preserve_normal_hit_points(previous, maximum_hp=target.get_max_hp())
@@ -4798,6 +4542,7 @@ class HeroesFeastBuff(BaseCondition):
 
 class HeroesFeastSource(BaseCondition):
     """One accepted feast serving, retaining its exact source and ten-turn clock."""
+    creates = (HeroesFeastBuff,)
     name: str = "Heroes' Feast Source"
     condition_category: ConditionCategory = ConditionCategory.INTERNAL
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
@@ -4831,11 +4576,6 @@ class HeroesFeastSource(BaseCondition):
         if self._changed_effect is not None and not self._changed_effect.refresh(committing=self):
             self._changed_effect = None
 
-    def on_suppression_changed(self) -> None:
-        for identity in self.sub_conditions:
-            child = BaseCondition.get(identity)
-            if isinstance(child, HeroesFeastBuff) and child.applied:
-                child.refresh()
 
     def _remove(self, event: Event | None = None):
         for identity in self.sub_conditions:
@@ -4885,6 +4625,7 @@ class HeroesFeastSource(BaseCondition):
 )
 class EatFromFeast(BaseAction):
     """Action to eat from the Heroes' Feast and gain the buff."""
+    creates = (HeroesFeastSource,)
     name: str = Field(default="Eat from Feast", description="Display name for the eat from feast action.")
     description: str = Field(default="Eat from the Heroes' Feast to gain its buff", description="Rules-facing summary for the eat from feast action.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode used by action discovery and validation for eat from feast.")
@@ -4899,18 +4640,18 @@ class EatFromFeast(BaseAction):
     def _apply_costs(self, event: ActionEvent) -> Optional[ActionEvent]:
         return type_cast(Optional[ActionEvent], entity_action_economy_cost_applier(event, self.source_entity_uuid))
 
-    def _validate(self, event: ActionEvent) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """The selected feast is still served and this creature has not eaten from it."""
         feast = BaseItem.get(self.feast_uuid)
-        if (entity is None or not isinstance(feast, HeroesFeastObject) or not feast.is_active
-                or get_map().get_object_placement(feast.uuid) is None or self.source_item_uuid != feast.uuid
+        if (not isinstance(feast, HeroesFeastObject) or not feast.is_active
+                or get_map().get_object_placement(feast.uuid) is None or selection.source_item_uuid != feast.uuid
                 or feast.caster_uuid != self.caster_uuid or feast.charges <= 0):
-            return event.cancel(status_message="Feast no longer available")
-        if entity.uuid in feast.consumed_by:
-            return event.cancel(status_message="This creature already ate from this feast")
-        if entity.uuid != feast.caster_uuid and len(feast.consumed_by - {feast.caster_uuid}) >= 12:
-            return event.cancel(status_message="All twelve guest servings have been consumed")
-        return type_cast(Optional[ActionEvent], super()._validate(event))
+            return "Feast no longer available"
+        if self.source_entity_uuid in feast.consumed_by:
+            return "This creature already ate from this feast"
+        if self.source_entity_uuid != feast.caster_uuid and len(feast.consumed_by - {feast.caster_uuid}) >= 12:
+            return "All twelve guest servings have been consumed"
+        return None
 
     def _apply(self, event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -4921,7 +4662,8 @@ class EatFromFeast(BaseAction):
         if effect.canceled:
             return effect
         roll = Dice(count=2, value=10, roll_type=RollType.HEAL,
-            bonus=ModifiableValue.create(source_entity_uuid=entity.uuid, base_value=0, value_name="Feast HP")).roll
+            bonus=read_value(parts(ModifiableValue(source_entity_uuid=entity.uuid, base=0, name="Feast HP")),
+                             ValueRead(entity.uuid))).roll
         source = HeroesFeastSource(source_entity_uuid=self.caster_uuid, target_entity_uuid=entity.uuid,
             feast_uuid=feast.uuid, hp_bonus=roll.total, effect_origin=feast.effect_origin)
         result = entity.add_condition(source, parent_event=effect)
@@ -4938,10 +4680,10 @@ class EatFromFeast(BaseAction):
 
 
 class HeroesFeastObject(UsableItem):
-    magically_created: bool = True
     """A magnificent feast that appears on the ground.
     Creatures can eat from it to gain the Heroes' Feast buff.
     """
+    creates = (EatFromFeast,)
     name: str = Field(default="Heroes' Feast", description="Display name for the heroes feast object item.")
     description: str = Field(default="A magnificent feast — eat to gain immunity to poison/frightened and +HP", description="Rules-facing summary for the heroes feast object item.")
     is_pickable: bool = Field(default=False, description="Whether heroes feast object can be picked up as an item.")
@@ -4986,6 +4728,7 @@ def build_heroes_feast_object(
 
 class HeroesFeastLifetime(SpatialCondition):
     """Existing world round clock owns this finite prop independently of its caster."""
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
     has_visible_presence: bool = True
     name: str = "Heroes' Feast Lifetime"
     condition_category: ConditionCategory = ConditionCategory.INTERNAL
@@ -5015,6 +4758,7 @@ class HeroesFeast(SpellAction):
     - Advantage on WIS saves
     - +2d10 max HP
     """
+    creates = (*SpellAction.creates, HeroesFeastLifetime, HeroesFeastObject)
     name: str = Field(default="Heroes' Feast", description="Display name for the heroes feast spell.")
     description: str = Field(default="Summon feast: eat for poison/fear immunity, WIS save advantage, +HP", description="Rules-facing summary for the heroes feast spell.")
     spell_level: int = Field(default=6, description="Spell slot level required to cast heroes feast; cantrips use 0.")
@@ -5023,15 +4767,8 @@ class HeroesFeast(SpellAction):
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for heroes feast.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30), description="Range contract used when validating targets for heroes feast.")
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-        if not self.end_position:
-            return declaration_event.cancel(status_message="No target position")
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return None if selection.positions else "No target position"
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -5053,7 +4790,6 @@ class HeroesFeast(SpellAction):
         feast.place_on_grid(position, parent_event=effect_event.uuid)
         lifetime = HeroesFeastLifetime(source_entity_uuid=caster.uuid, position=position,
             anchor_uuid=feast.uuid, effect_origin=feast.effect_origin)
-        feast.creation_condition_uuid = lifetime.uuid
         admitted = lifetime.activate(parent_event=effect_event)
         if admitted is None or admitted.canceled or not lifetime.applied:
             feast.retire(parent_event=effect_event)
@@ -5081,21 +4817,16 @@ class ProduceFlame(SpellAction):
     def performs_attack(self) -> bool:
         return True
 
-    def _validate(self, event: SpellEvent):
-        if self.target_entity_uuid == self.source_entity_uuid:
-            return event.cancel(status_message="Flame requires another creature")
-        admitted = super()._validate(event)
-        if admitted is None or admitted.canceled:
-            return admitted
-        assert isinstance(admitted, SpellEvent)
-        return self.validate_single_recipient(admitted)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """Another creature the caster sees, within the flame's range."""
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self, event: SpellEvent):
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
         if caster is None or target is None or target.uuid == caster.uuid:
             return event.cancel(status_message="Flame requires another creature")
-        if (error := self.physical_access_error()) is not None:
+        if (error := self.target_access_error(target.uuid)) is not None:
             return event.cancel(status_message=error)
         resolution = self.resolve_spell_attack(caster, target, event.uuid)
         effect = event.phase_to(EventPhase.EFFECT, attack_bonus=resolution.attack_bonus,
@@ -5106,9 +4837,56 @@ class ProduceFlame(SpellAction):
         damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
             damage_dice=8, dice_numbers=self._get_cantrip_dice_count(self.caster_level),
             damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.FIRE)
-        roll = damage.get_dice(resolution.outcome,
-            crit_extra_dice=caster.get_spell_crit_extra_dice() if resolution.outcome == AttackOutcome.CRIT else 0).roll
-        target.receive_damage(amount=roll.total, damage_type=DamageType.FIRE, source_entity_uuid=caster.uuid,
-            parent_event=effect.uuid, damages=[damage], damage_rolls=[roll], effect_origin=event.get_effect_origin(),
-            critical_hit=resolution.outcome == AttackOutcome.CRIT)
-        return effect.with_updates(damages=[damage], damage_rolls=[roll])
+        roll = roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=resolution.outcome, crit_extra_dice=caster.get_spell_crit_extra_dice() if resolution.outcome == AttackOutcome.CRIT else 0)
+        return deliver_spell_damage(effect,target,damage,roll)
+
+
+class EnsnaringStrikeEffect(Restrained):
+    name: str = "Ensnaring Strike"
+    description: str = "Restrained with start-turn piercing damage; ally Help removes vines."
+    immunity_names: tuple[str,...] = ("Restrained",)
+    blocks_opportunity_attacks: bool = True
+    dice_count: int = 1
+    duration: Duration = Field(default_factory=lambda:Duration(duration=10,duration_type=DurationType.ROUNDS))
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
+    removal_triggers: frozenset[ConditionRemovalTrigger] = frozenset({ConditionRemovalTrigger.ALLY_HELP})
+
+    def _apply(self,event: Event):
+        modifiers,handlers,children,spatial,effect=super()._apply(event)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None or effect is None or effect.canceled:
+            return modifiers,handlers,children,spatial,effect
+        def tick(boundary: Event,_: UUID):
+            damage=Damage(name=self.name,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid,
+                damage_dice=6,dice_numbers=self.dice_count,damage_type=DamageType.PIERCING,
+                damage_bonus=parts(ModifiableValue(source_entity_uuid=self.source_entity_uuid,base=0)),effect_origin=self.effect_origin)
+            roll=roll_spell_damage(damage, parent_event=boundary, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
+            target.receive_damage(roll.total,DamageType.PIERCING,self.source_entity_uuid,parent_event=boundary.uuid,
+                damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,
+                independent_resolution=True,source_condition_uuid=self.uuid)
+            return None
+        handler=EventHandler(name="Ensnaring Strike piercing",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_START,event_phase=EventPhase.EFFECT,event_source_entity_uuid=target.uuid)],event_processor=tick)
+        target.add_event_handler(handler)
+        return modifiers,[*handlers,handler.uuid],children,spatial,effect
+
+
+class EnsnaringStrike(AttackBackedSpell):
+    creates = (*AttackBackedSpell.creates, EnsnaringStrikeEffect)
+    name: str = "Ensnaring Strike"
+    description: str = "Weapon attempt; on hit pay bonus action/slot, STR save or ensnared."
+    spell_level: int = 1
+    spell_school: str = "conjuration"
+    concentration: bool = True
+
+    def apply_hit(self,event: SpellEvent,attack: AttackEvent) -> AttackEvent:
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+        if caster is None or target is None:
+            return attack
+        effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="strength",
+            dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
+        if not saved and not effect.canceled:
+            self.apply_hit_condition(effect,EnsnaringStrikeEffect(source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,dice_count=self.cast_at_level))
+        return attack

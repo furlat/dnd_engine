@@ -40,6 +40,7 @@ from tests.spell_test_exports import (
     ScorchingRay,
     Thunderwave,
 )
+from dnd.core.values import ValueRead, value_score
 
 
 def test_eldritch_blast_discloses_independent_beam_outcomes() -> None:
@@ -56,7 +57,7 @@ def test_eldritch_blast_discloses_independent_beam_outcomes() -> None:
         caster_level=5,
     )
 
-    profile = spell.get_outcome_profile(caster)
+    profile = spell.get_outcome_profile()
 
     assert profile is not None
     assert profile.resolution is OutcomeResolution.ATTACK_ROLL
@@ -85,15 +86,15 @@ def test_immediate_damage_spells_disclose_execution_honest_outcomes() -> None:
     guiding = GuidingBolt(
         source_entity_uuid=caster.uuid,
         cast_at_level=3,
-    ).get_outcome_profile(caster)
+    ).get_outcome_profile()
     chill = ChillTouch(
         source_entity_uuid=caster.uuid,
         caster_level=11,
-    ).get_outcome_profile(caster)
+    ).get_outcome_profile()
     finger = FingerOfDeath(
         source_entity_uuid=caster.uuid,
         cast_at_level=8,
-    ).get_outcome_profile(caster)
+    ).get_outcome_profile()
 
     assert guiding is not None
     assert guiding.resolution is OutcomeResolution.ATTACK_ROLL
@@ -148,7 +149,7 @@ def test_chill_touch_profile_and_execution_share_spell_critical_threshold() -> N
         caster_level=5,
     )
 
-    profile = spell.get_outcome_profile(caster)
+    profile = spell.get_outcome_profile()
     with fixed_dice_faces(19, 4, 4, 4, 4):
         result = spell.apply()
 
@@ -176,9 +177,9 @@ def test_spell_outcome_profiles_declare_target_application_scope() -> None:
     missile = MagicMissile(source_entity_uuid=caster.uuid, cast_at_level=1)
     rays = ScorchingRay(source_entity_uuid=caster.uuid, cast_at_level=2)
 
-    fireball_profile = fireball.get_outcome_profile(caster)
-    missile_profile = missile.get_outcome_profile(caster)
-    ray_profile = rays.get_outcome_profile(caster)
+    fireball_profile = fireball.get_outcome_profile()
+    missile_profile = missile.get_outcome_profile()
+    ray_profile = rays.get_outcome_profile()
 
     assert fireball_profile is not None
     assert missile_profile is not None
@@ -200,8 +201,8 @@ def test_close_area_spells_disclose_save_damage_and_upcast_scaling() -> None:
 
     burning_hands = BurningHands(source_entity_uuid=caster.uuid, cast_at_level=2)
     thunderwave = Thunderwave(source_entity_uuid=caster.uuid, cast_at_level=3)
-    burning_profile = burning_hands.get_outcome_profile(caster)
-    thunder_profile = thunderwave.get_outcome_profile(caster)
+    burning_profile = burning_hands.get_outcome_profile()
+    thunder_profile = thunderwave.get_outcome_profile()
 
     assert burning_profile is not None
     assert burning_profile.resolution is OutcomeResolution.SAVING_THROW
@@ -233,7 +234,7 @@ def test_necrotic_bless_declares_conditional_target_effects() -> None:
     profile = NecroticBless(
         source_entity_uuid=caster.uuid,
         cast_at_level=2,
-    ).get_target_effect_profile(caster)
+    ).get_target_effect_profile()
 
     assert profile is not None
     assert profile.semantic_id == "spell.necrotic_bless"
@@ -417,13 +418,13 @@ def test_spell_discovery_variants_share_the_read_only_definition_graph() -> None
     template = caster.get_action_template("Magic Missile")
 
     assert isinstance(template, SpellAction)
-    variant = template._create_variant(cast_at_level=2)
+    variant, = template.discovery_forms(caster.action_scan(subjective=True))
 
     assert variant.uuid != template.uuid
     assert variant.costs is not template.costs
     assert variant.spell_range is template.spell_range
     assert variant.is_variant is True
-    assert variant.cast_at_level == 2
+    assert variant.cast_at_level == 1 and variant.castable_levels == (1, 2)
 
 
 def find_action(actions, template_name: str) -> AvailableActionInfo:
@@ -661,14 +662,14 @@ def test_spell_numbers_compose_from_ability_proficiency_and_modifiers(capsys) ->
 
     assert caster.spell_attack_bonus().normalized_score == 9
     assert caster.spell_save_dc() == 16
-    assert caster.get_spell_damage_bonus().normalized_score == 3
+    assert value_score(caster.get_spell_damage_bonus(), ValueRead(caster.uuid), normalized=True) == 3
     assert caster.get_spell_crit_threshold() == 19
     assert caster.get_spell_crit_extra_dice() == 2
     number_lines = [
         f"spell ability: {caster.spellcasting.spellcasting_ability}",
         f"spell attack bonus: {caster.spell_attack_bonus().normalized_score}",
         f"spell save dc: {caster.spell_save_dc()}",
-        f"spell damage bonus: {caster.get_spell_damage_bonus().normalized_score}",
+        f"spell damage bonus: {value_score(caster.get_spell_damage_bonus(), ValueRead(caster.uuid), normalized=True)}",
         f"spell crit threshold: {caster.get_spell_crit_threshold()}",
         f"spell crit extra dice: {caster.get_spell_crit_extra_dice()}",
     ]

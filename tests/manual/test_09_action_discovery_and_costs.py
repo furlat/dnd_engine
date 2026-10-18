@@ -35,7 +35,7 @@ from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, modifiers_of
 from dnd.entity import Entity, EntityConfig
 from dnd.items.spell_items import build_fireball_scroll, build_fire_bolt_scroll
 from tests.manual.reactive_fixture_support import PrepareIntercept
@@ -140,14 +140,12 @@ def entity_target_name(target) -> str:
 
 def deny_nonreaction_actions(actor: Entity) -> None:
     """Set the neutral action-permission gate to zero for discovery tests."""
-    actor.action_economy.action_permission.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(actor.action_economy.action_permission, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=actor.uuid,
             target_entity_uuid=actor.uuid,
             name="Discovery permission denied",
             value=-1,
-        )
-    )
+        ))
     assert actor.can_take_actions() is False
 
 
@@ -679,14 +677,12 @@ def test_generic_position_row_reports_requirements_not_target_cost(
     """A rules-invalid position is not mislabeled target-cost unaffordable."""
     reset_action_state()
     actor = create_tutorial_actor(position=(2, 2))
-    actor.action_economy.spell_slot_2.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(actor.action_economy.spell_slot_2, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=actor.uuid,
             target_entity_uuid=actor.uuid,
             name="Misty Step regression slot",
             value=1,
-        )
-    )
+        ))
     actor.register_action(
         MistyStep(
             source_entity_uuid=actor.uuid,
@@ -902,13 +898,13 @@ def test_dash_adds_current_speed_after_speed_bonuses_and_movement_spending() -> 
     reset_action_state()
     actor = create_tutorial_actor()
     movement = actor.action_economy.walking_speed
-    movement.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(movement, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name="Fast Movement",
         value=10,
         source_entity_uuid=actor.uuid,
         target_entity_uuid=actor.uuid,
     ))
-    movement.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(movement, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         name="movement cost",
         value=-15,
         source_entity_uuid=actor.uuid,
@@ -925,7 +921,7 @@ def test_dash_adds_current_speed_after_speed_bonuses_and_movement_spending() -> 
     assert movement.normalized_score == 65
     dashing_modifiers = [
         modifier
-        for modifier in movement.self_static.value_modifiers.values()
+        for modifier in modifiers_of(movement, Channel.SELF_STATIC, Kind.VALUE)
         if modifier.name == "Dashing"
     ]
     assert [modifier.value for modifier in dashing_modifiers] == [40]
@@ -1276,8 +1272,19 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
 
 
 def test_move_executes_affordable_disclosed_path_when_safe_alternative_is_too_costly() -> None:
-    """Execution must not replace a legal epoch path with an unaffordable route."""
+    """Execution must not replace a legal epoch path with an unaffordable route.
+
+    A disclosed hazard line from (2, 4) to (8, 4) leaves the direct route to (5, 6)
+    hazardous (15 ft) and the safe detour around its end at 40 ft, past the scout's
+    30 ft of movement.
+    """
     reset_action_state()
+    grid = get_map()
+    for x in range(2, 9):
+        tile = grid.get_tile(x, 4)
+        assert tile is not None
+        tile.add_condition(BaseCondition(name="Burning Ground", source_entity_uuid=uuid4(),
+                                         target_entity_uuid=tile.uuid, hazard_filter=HazardFilter.ALL))
     scout = create_skeleton(name="Scout", position=(5, 3), faction="heroes")
     Entity.update_all_entities_senses()
 
@@ -1291,21 +1298,9 @@ def test_move_executes_affordable_disclosed_path_when_safe_alternative_is_too_co
     assert target.path is not None
     assert target.path_cost is not None
     assert target.path_cost <= scout.action_economy.movement_remaining()
-
-    unaffordable_safe_path = [
-        (5, 3),
-        (4, 3),
-        (3, 3),
-        (2, 4),
-        (2, 5),
-        (3, 6),
-        (4, 6),
-        (5, 6),
-    ]
-    target.is_path_hazardous = True
-    target.safe_path = unaffordable_safe_path
-    target.safe_path_cost = 35
-    scout.senses.safe_paths[target.position] = unaffordable_safe_path
+    assert target.is_path_hazardous
+    assert target.safe_path is not None and target.safe_path_cost == 40
+    assert target.safe_path_cost > scout.action_economy.movement_remaining()
 
     result = execute_by_index(
         scout,

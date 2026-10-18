@@ -33,8 +33,12 @@ from dnd.ai.runtime.assignment_lifecycle import (
     DEFAULT_MAXIMUM_CONSECUTIVE_CANCELED_ACTIONS,
     DEFAULT_MAXIMUM_DECISIONS_PER_TURN,
     assignment_turn_key,
-    require_controlled_entities,
     validate_assignment_ownership,
+)
+from dnd.ai.runtime.knowledge_system import (
+    AIKnowledgeSystem,
+    close_assignment_knowledge,
+    open_assignment_knowledge,
 )
 from dnd.ai.runtime.state_projection import (
     AIDecisionState,
@@ -59,6 +63,8 @@ class NativeAIAssignment:
         policy_id: str,
         registry: CanonicalPolicyRegistry,
         instrumentation: AIInstrumentation,
+        knowledge: AIKnowledgeSystem,
+        knowledge_key: UUID,
         maximum_decisions_per_turn: int | None = None,
         maximum_consecutive_canceled_actions: int = (
             DEFAULT_MAXIMUM_CONSECUTIVE_CANCELED_ACTIONS
@@ -92,6 +98,8 @@ class NativeAIAssignment:
             maximum_consecutive_canceled_actions
         )
         self._instrumentation = instrumentation
+        self._knowledge = knowledge
+        self._knowledge_key = knowledge_key
         self._state = AIAssignmentState.CREATED
         self._budget = AIDecisionBudget(
             maximum_decisions_per_turn=maximum,
@@ -126,6 +134,8 @@ class NativeAIAssignment:
             self._projector = SubjectiveAIStateProjector(
                 assignment_id=assignment_id,
                 controlled_entity_uuids=self.controlled_entity_uuids,
+                knowledge=knowledge,
+                knowledge_key=knowledge_key,
             )
             self._runner: InstrumentedPolicyRunner[
                 SubjectiveWorldState,
@@ -155,10 +165,12 @@ class NativeAIAssignment:
         return self._binding
 
     def start(self, entities: list[Entity]) -> None:
-        """Start once after exact encounter ownership has been established."""
+        """Start once after exact encounter ownership has been established; its knowledge opens here."""
         if self._state is AIAssignmentState.CLOSED:
             raise RuntimeError("native AI assignment is closed")
         validate_assignment_ownership(self.controlled_entity_uuids, entities)
+        if self._state is AIAssignmentState.CREATED:
+            open_assignment_knowledge(self._knowledge, self._knowledge_key, self.controlled_entity_uuids)
         self._state = AIAssignmentState.STARTED
 
     def close(self) -> None:
@@ -178,6 +190,7 @@ class NativeAIAssignment:
         ):
             self._state = AIAssignmentState.CLOSED
             self._budget.close_turn()
+            close_assignment_knowledge(self._knowledge, self._knowledge_key)
 
     def execute_next_action(
         self,
@@ -186,7 +199,7 @@ class NativeAIAssignment:
     ) -> ControllerStepResult:
         """Project, decide, validate, dispatch, and reduce one policy decision."""
         if self._state is AIAssignmentState.CREATED:
-            self.start(require_controlled_entities(self.controlled_entity_uuids))
+            raise RuntimeError("native AI assignment has not started")
         if self._state is AIAssignmentState.CLOSED:
             return ControllerStepResult(end_turn=True)
         if entity.uuid not in self.controlled_entity_uuids:

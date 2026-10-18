@@ -3,6 +3,7 @@
 from uuid import uuid4
 from pydantic import ValidationError
 
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier, parts
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType, fixed_dice_faces
 from dnd.core.modifiers import (
@@ -13,13 +14,18 @@ from dnd.core.modifiers import (
     CriticalModifier,
     CriticalStatus,
 )
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import ModifiableValue
+
+
+def reading(value, target_uuid=None):
+    """The value read by its owner against an optional target."""
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
 
 
 def reset_dice_state() -> None:
     """Clear global indexes touched by these dice examples."""
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Dice._registry.clear()
     DiceRoll._registry.clear()
 
@@ -29,15 +35,15 @@ def test_first_dice_example_prints_visible_roll_record(capsys) -> None:
     reset_dice_state()
 
     hero_id = uuid4()
-    attack_bonus = ModifiableValue.create(
+    attack_bonus = ModifiableValue(
         source_entity_uuid=hero_id,
-        value_name="Attack Bonus",
-        base_value=5,
+        name="Attack Bonus",
+        base=5,
     )
     d20 = Dice(
         count=1,
         value=20,
-        bonus=attack_bonus,
+        bonus=reading(attack_bonus),
         roll_type=RollType.ATTACK,
     )
 
@@ -80,15 +86,15 @@ def test_d20_roll_records_print_result_bonus_total_and_identity(capsys) -> None:
     reset_dice_state()
     hero_id = uuid4()
 
-    attack_bonus = ModifiableValue.create(
+    attack_bonus = ModifiableValue(
         source_entity_uuid=hero_id,
-        value_name="Attack Bonus",
-        base_value=5,
+        name="Attack Bonus",
+        base=5,
     )
     d20 = Dice(
         count=1,
         value=20,
-        bonus=attack_bonus,
+        bonus=reading(attack_bonus),
         roll_type=RollType.ATTACK,
     )
 
@@ -137,22 +143,20 @@ def test_advantage_and_disadvantage_print_both_d20_faces(capsys) -> None:
     reset_dice_state()
     hero_id = uuid4()
 
-    advantaged_bonus = ModifiableValue.create(
+    advantaged_bonus = ModifiableValue(
         source_entity_uuid=hero_id,
-        value_name="Attack Bonus",
-        base_value=5,
+        name="Attack Bonus",
+        base=5,
     )
-    advantaged_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(advantaged_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=hero_id,
             name="High Ground",
             value=AdvantageStatus.ADVANTAGE,
-        )
-    )
+        ))
     advantaged_d20 = Dice(
         count=1,
         value=20,
-        bonus=advantaged_bonus,
+        bonus=reading(advantaged_bonus),
         roll_type=RollType.ATTACK,
     )
 
@@ -163,22 +167,20 @@ def test_advantage_and_disadvantage_print_both_d20_faces(capsys) -> None:
     assert advantaged_roll.advantage_status == AdvantageStatus.ADVANTAGE
     assert advantaged_roll.total == 22
 
-    disadvantaged_bonus = ModifiableValue.create(
+    disadvantaged_bonus = ModifiableValue(
         source_entity_uuid=hero_id,
-        value_name="Attack Bonus",
-        base_value=5,
+        name="Attack Bonus",
+        base=5,
     )
-    disadvantaged_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(disadvantaged_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=hero_id,
             name="Long Range",
             value=AdvantageStatus.DISADVANTAGE,
-        )
-    )
+        ))
     disadvantaged_d20 = Dice(
         count=1,
         value=20,
-        bonus=disadvantaged_bonus,
+        bonus=reading(disadvantaged_bonus),
         roll_type=RollType.ATTACK,
     )
 
@@ -219,29 +221,25 @@ def test_roll_state_snapshots_print_critical_and_auto_hit_flags(capsys) -> None:
     reset_dice_state()
     hero_id = uuid4()
 
-    attack_bonus = ModifiableValue.create(
+    attack_bonus = ModifiableValue(
         source_entity_uuid=hero_id,
-        value_name="Attack Bonus",
-        base_value=5,
+        name="Attack Bonus",
+        base=5,
     )
-    attack_bonus.self_static.add_critical_modifier(
-        CriticalModifier(
+    add_modifier(attack_bonus, Channel.SELF_STATIC, Kind.CRITICAL, CriticalModifier(
             source_entity_uuid=hero_id,
             name="Paralyzed Target",
             value=CriticalStatus.AUTOCRIT,
-        )
-    )
-    attack_bonus.self_static.add_auto_hit_modifier(
-        AutoHitModifier(
+        ))
+    add_modifier(attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, AutoHitModifier(
             source_entity_uuid=hero_id,
             name="Guided Strike",
             value=AutoHitStatus.AUTOHIT,
-        )
-    )
+        ))
     d20 = Dice(
         count=1,
         value=20,
-        bonus=attack_bonus,
+        bonus=reading(attack_bonus),
         roll_type=RollType.ATTACK,
     )
 
@@ -277,15 +275,15 @@ def test_damage_rolls_print_attack_outcome_and_critical_dice(capsys) -> None:
     reset_dice_state()
     hero_id = uuid4()
 
-    damage_bonus = ModifiableValue.create(
+    damage_bonus = ModifiableValue(
         source_entity_uuid=hero_id,
-        value_name="Damage Bonus",
-        base_value=3,
+        name="Damage Bonus",
+        base=3,
     )
     normal_damage = Dice(
         count=2,
         value=6,
-        bonus=damage_bonus,
+        bonus=reading(damage_bonus),
         roll_type=RollType.DAMAGE,
         attack_outcome=AttackOutcome.HIT,
     )
@@ -301,7 +299,7 @@ def test_damage_rolls_print_attack_outcome_and_critical_dice(capsys) -> None:
     critical_damage = Dice(
         count=1,
         value=8,
-        bonus=damage_bonus,
+        bonus=reading(damage_bonus),
         roll_type=RollType.DAMAGE,
         attack_outcome=AttackOutcome.CRIT,
         crit_extra_dice=1,
@@ -343,10 +341,10 @@ def test_dice_validation_prints_rejected_roll_shapes(capsys) -> None:
     """Dice validation prints rejected non-damage and damage expressions."""
     reset_dice_state()
     hero_id = uuid4()
-    bonus = ModifiableValue.create(
+    bonus = ModifiableValue(
         source_entity_uuid=hero_id,
-        value_name="Check Bonus",
-        base_value=0,
+        name="Check Bonus",
+        base=0,
     )
     rejection_lines = []
 
@@ -354,7 +352,7 @@ def test_dice_validation_prints_rejected_roll_shapes(capsys) -> None:
         Dice(
             count=2,
             value=20,
-            bonus=bonus,
+            bonus=reading(bonus),
             roll_type=RollType.CHECK,
         )
     except ValidationError as exc:
@@ -367,7 +365,7 @@ def test_dice_validation_prints_rejected_roll_shapes(capsys) -> None:
         Dice(
             count=1,
             value=8,
-            bonus=bonus,
+            bonus=reading(bonus),
             roll_type=RollType.DAMAGE,
         )
     except ValidationError as exc:
@@ -380,7 +378,7 @@ def test_dice_validation_prints_rejected_roll_shapes(capsys) -> None:
         Dice(
             count=1,
             value=20,
-            bonus=bonus,
+            bonus=reading(bonus),
             roll_type=RollType.ATTACK,
             attack_outcome=AttackOutcome.HIT,
         )
@@ -394,7 +392,7 @@ def test_dice_validation_prints_rejected_roll_shapes(capsys) -> None:
         Dice(
             count=1,
             value=2,
-            bonus=bonus,
+            bonus=reading(bonus),
             roll_type=RollType.CHECK,
         )
     except ValidationError as exc:

@@ -5,9 +5,10 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import Field
 
-import dnd.core.gridmap as gridmap_module
+from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder
 from dnd.blocks.base_item import BaseItem
-from dnd.core.aoe import Cone, Cylinder, Line, Sphere
+from dnd.blocks.sensory import capture_senses_snapshot
+from dnd.core.aoe import AoEShape, Cone, Cylinder, Line, Sphere, objective_footprint
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory, HazardFilter
@@ -25,7 +26,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.actions import Jump, Move, Shove
 from dnd.entity import Entity
 from dnd.game import Game
@@ -38,7 +39,9 @@ from dnd.types.spatial_effects import (
     SpatialEffectTriggerKind,
 )
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
-from tests.engine.support import reset_combat_state
+from tests.engine.support import reset_combat_state, search_tables
+from dnd.core.navigation import has_route, route, route_count
+from dnd.types.cells import cell_in
 
 
 _grid_game: Game | None = None
@@ -70,13 +73,11 @@ class PerceptionBoost(BaseCondition):
             return [], [], [], [], None
 
         skill = target.skill_set.get_skill("perception")
-        modifier_uuid = skill.skill_bonus.self_static.add_value_modifier(
-            NumericalModifier.create(
+        modifier_uuid = add_modifier(skill.skill_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid,
                 name="Perception Boost",
                 value=self.boost_amount,
-            )
-        )
+            ))
         effect_event = declaration_event.phase_to(EventPhase.EFFECT)
         return [(skill.skill_bonus.uuid, modifier_uuid)], [], [], [], effect_event
 
@@ -103,8 +104,7 @@ class EntryCleanupZone(AreaCondition):
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=lambda: frozenset({SpatialEffectTriggerKind.ENTER}),
     )
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=5)
+    area: AoEShape = Sphere(radius_feet=5)
     adds_difficult_terrain: bool = Field(default=True)
     hazard_filter: HazardFilter = Field(default=HazardFilter.ALL)
 
@@ -125,7 +125,7 @@ def reset_grid_state(width: int = 8, height: int = 8, x: int = 0, y: int = 0) ->
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(x, y, width, height)
     _grid_game = Game()
 
@@ -181,20 +181,18 @@ def test_eb_11_003_dijkstra_paths_sum_tile_costs_and_can_ignore_difficult_terrai
     grid = get_map()
     difficult_tile = grid.get_tile(2, 0)
     assert difficult_tile is not None
-    difficult_tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(difficult_tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=difficult_tile.uuid,
             name="Difficult Terrain",
             value=1,
-        )
-    )
+        ))
 
-    distances, paths = grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING)
-    easy_distances, _ = grid.compute_paths(
+    distances, paths = search_tables(grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING))
+    easy_distances, _ = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
         ignore_difficult_terrain=True,
-    )
+    ))
 
     assert distances[(1, 0)] == 1
     assert distances[(2, 0)] == 3
@@ -208,12 +206,12 @@ def test_eb_11_012_diagonal_cost_return_and_exact_max_distance_match() -> None:
     reset_grid_state(width=2, height=2)
     grid = get_map()
 
-    distances, paths = grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING)
-    limited_distances, limited_paths = grid.compute_paths(
+    distances, paths = search_tables(grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING))
+    limited_distances, limited_paths = search_tables(grid.compute_paths(
         (0, 0),
         max_distance=1,
         movement_mode=MovementMode.WALKING,
-    )
+    ))
 
     assert distances[(1, 0)] == 1
     assert distances[(0, 1)] == 1
@@ -242,10 +240,10 @@ def test_eb_11_021_diagonal_transitions_need_one_cardinal_bridge_route() -> None
         (0, 0),
         boundary_direction=CardinalDirection.EAST,
     )
-    one_bridge_distances, one_bridge_paths = grid.compute_paths(
+    one_bridge_distances, one_bridge_paths = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
-    )
+    ))
 
     assert not grid.can_transition((0, 0), (1, 0))
     assert grid.can_transition((0, 0), (0, 1))
@@ -262,10 +260,10 @@ def test_eb_11_021_diagonal_transitions_need_one_cardinal_bridge_route() -> None
         (0, 0),
         boundary_direction=CardinalDirection.NORTH,
     )
-    no_bridge_distances, no_bridge_paths = grid.compute_paths(
+    no_bridge_distances, no_bridge_paths = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
-    )
+    ))
 
     assert not grid.can_transition((0, 0), (1, 0))
     assert not grid.can_transition((0, 0), (0, 1))
@@ -285,8 +283,8 @@ def test_eb_11_013_negative_coordinate_tiles_are_reachable() -> None:
     assert grid.has_tile(0, 0)
     assert grid.can_transition((-2, 0), (-1, 0))
 
-    distances, paths = grid.compute_paths((-2, 0), movement_mode=MovementMode.WALKING)
-    edge_distances, edge_paths = grid.compute_paths((-1, 0), movement_mode=MovementMode.WALKING)
+    distances, paths = search_tables(grid.compute_paths((-2, 0), movement_mode=MovementMode.WALKING))
+    edge_distances, edge_paths = search_tables(grid.compute_paths((-1, 0), movement_mode=MovementMode.WALKING))
 
     assert distances[(1, 0)] == 3
     assert paths[(1, 0)] == [(-2, 0), (-1, 0), (0, 0), (1, 0)]
@@ -302,13 +300,11 @@ def test_eb_11_004_move_action_converts_tile_cost_units_to_feet() -> None:
     grid = get_map()
     difficult_tile = grid.get_tile(2, 0)
     assert difficult_tile is not None
-    difficult_tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(difficult_tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=difficult_tile.uuid,
             name="Difficult Terrain",
             value=1,
-        )
-    )
+        ))
     entity = create_skeleton(name="Mover", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -363,8 +359,8 @@ def test_eb_11_015_dead_entities_become_non_blocking_for_paths() -> None:
 
     assert blocker.blocks_walking(requesting_entity_uuid=mover.uuid) is True
     assert not grid.is_walkable_for(2, 0, mover.uuid)
-    assert (2, 0) not in mover.senses.paths
-    assert (4, 0) not in mover.senses.paths
+    assert not has_route(mover.senses.paths, (2, 0))
+    assert not has_route(mover.senses.paths, (4, 0))
     assert blocker.uuid in mover.senses.entities
 
     blocker.receive_damage(blocker.get_hp() + 5, DamageType.BLUDGEONING, mover.uuid)
@@ -379,8 +375,8 @@ def test_eb_11_015_dead_entities_become_non_blocking_for_paths() -> None:
     mover.get_available_actions()
 
     assert mover.senses._paths_dirty is False
-    assert mover.senses.paths[(2, 0)] == [(0, 0), (1, 0), (2, 0)]
-    assert mover.senses.paths[(4, 0)] == [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
+    assert route(mover.senses.paths, (2, 0)) == [(0, 0), (1, 0), (2, 0)]
+    assert route(mover.senses.paths, (4, 0)) == [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
 
 
 def test_eb_11_006_boundary_structures_block_edges_and_emit_exact_facts() -> None:
@@ -415,7 +411,7 @@ def test_eb_11_006_boundary_structures_block_edges_and_emit_exact_facts() -> Non
     assert event is not None
     assert event.directional_position == (1, 0)
     assert event.directional_directions == ["east"]
-    assert event.directional_channels == ["movement"]
+    assert event.directional_channels == [WorldEdgeChannel.MOVEMENT]
     assert event.placement == grid.get_object_placement(wall.uuid)
     assert event.object_boundary_structure == wall.get_boundary_structure()
     assert {(1, 0), (2, 0)} <= event.get_affected_positions()
@@ -518,27 +514,30 @@ def test_eb_11_022_fov_cache_invalidates_when_vision_blockers_change() -> None:
     assert (1, 1) in second_fov
 
 
-def test_eb_11_023_propagation_cache_reuses_results_and_invalidates_on_blockers(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_eb_11_023_propagation_cache_reuses_results_and_invalidates_on_blockers() -> None:
     """EB-11-023: AoE propagation caches follow physical blocker revisions."""
     reset_grid_state(width=6, height=3)
     grid = get_map()
-    original_compute_fov = gridmap_module.compute_fov
-    compute_calls = 0
+    computed: list[str] = []
 
-    def track_compute_fov(*args, **kwargs):
-        nonlocal compute_calls
-        compute_calls += 1
-        return original_compute_fov(*args, **kwargs)
+    def record(phase: str, _started: float) -> None:
+        if phase == "grid.compute_propagation_fov.cache_miss_ms":
+            computed.append(phase)
 
-    monkeypatch.setattr(gridmap_module, "compute_fov", track_compute_fov)
+    token = set_action_timing_recorder(record)
+    try:
+        check_propagation_cache(grid, computed)
+    finally:
+        reset_action_timing_recorder(token)
+
+
+def check_propagation_cache(grid, computed: list[str]) -> None:
     first_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
     first_revision = grid.propagation_revision
     first_fov.append((99, 99))
     second_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
 
-    assert compute_calls == 1
+    assert len(computed) == 1
     assert (99, 99) not in second_fov
     assert (5, 1) in second_fov
 
@@ -553,7 +552,7 @@ def test_eb_11_023_propagation_cache_reuses_results_and_invalidates_on_blockers(
     third_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
 
     assert grid.propagation_revision > first_revision
-    assert compute_calls == 2
+    assert len(computed) == 2
     assert (5, 1) not in third_fov
 
 
@@ -591,8 +590,8 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
     assert not grid.can_transition((1, 1), (2, 1), actor.uuid)
 
     jump = Jump(source_entity_uuid=actor.uuid, template=True)
-    assert (3, 1) in actor.senses.visible
-    assert not grid.raycast_clear((1, 1), (3, 1), channel="propagation")
+    assert cell_in(capture_senses_snapshot(actor.senses).visible, (3, 1))
+    assert not grid.raycast_clear((1, 1), (3, 1), channel=WorldEdgeChannel.PROPAGATION)
     assert (3, 1) not in jump.get_valid_positions()
 
     jump_attempt = Jump(source_entity_uuid=actor.uuid, end_position=(3, 1))
@@ -621,16 +620,16 @@ def test_eb_11_008_hazards_can_be_excluded_from_safe_paths() -> None:
     )
     hazard_tile.add_condition(hazard)
 
-    normal_distances, normal_paths = grid.compute_paths(
+    normal_distances, normal_paths = search_tables(grid.compute_paths(
         (0, 0),
         requesting_entity_uuid=entity.uuid,
         walk_in_danger=True,
-    )
-    safe_distances, safe_paths = grid.compute_paths(
+    ))
+    safe_distances, safe_paths = search_tables(grid.compute_paths(
         (0, 0),
         requesting_entity_uuid=entity.uuid,
         walk_in_danger=False,
-    )
+    ))
 
     assert grid.is_position_hazardous_for(1, 0, entity.uuid)
     assert normal_paths[(2, 0)] == [(0, 0), (1, 0), (2, 0)]
@@ -661,10 +660,10 @@ def test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths() -> No
     Entity.update_all_entities_senses(max_distance=20)
 
     destination = (4, 1)
-    initial_path = observer.senses.paths[destination]
+    initial_path = route(observer.senses.paths, destination)
     assert (2, 1) in initial_path
     assert not grid.is_position_hazardous_for(2, 1, observer.uuid)
-    assert observer.senses.safe_paths == {}
+    assert route_count(observer.senses.safe_paths) == 0
     assert observer.senses._paths_dirty is False
 
     observer.add_condition(
@@ -679,12 +678,12 @@ def test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths() -> No
     assert observer.get_passive_perception() > hidden_trap.condition_stealth_dc
     assert grid.is_position_hazardous_for(2, 1, observer.uuid)
     assert observer.senses._paths_dirty is True
-    assert observer.senses.safe_paths == {}
+    assert route_count(observer.senses.safe_paths) == 0
 
     observer.get_available_actions()
 
-    recomputed_path = observer.senses.paths[destination]
-    safe_path = observer.senses.safe_paths[destination]
+    recomputed_path = route(observer.senses.paths, destination)
+    safe_path = route(observer.senses.safe_paths, destination)
     assert (2, 1) in recomputed_path
     assert (2, 1) not in safe_path
     assert observer.senses._paths_dirty is False
@@ -716,15 +715,11 @@ def test_eb_11_009_geometry_and_aoe_are_grid_aware_where_needed() -> None:
     assert supercover_line((0, 0), (3, 2))[0] == (0, 0)
     assert supercover_line((0, 0), (3, 2))[-1] == (3, 2)
 
-    sphere = Sphere(source_entity_uuid=caster.uuid, target=(1, 1), radius_feet=15)
-    sphere.compute_objective(caster.position)
-    cylinder = Cylinder(source_entity_uuid=caster.uuid, target=(1, 1), radius_feet=15)
-    cylinder.compute_objective(caster.position)
+    sphere = objective_footprint(Sphere(radius_feet=15), (1, 1), caster.position)
+    cylinder = objective_footprint(Cylinder(radius_feet=15), (1, 1), caster.position)
 
-    assert target.uuid not in sphere.affected_entity_uuids
-    assert (3, 1) not in sphere.affected_positions
-    assert target.uuid in cylinder.affected_entity_uuids
-    assert (3, 1) in cylinder.affected_positions
+    assert (3, 1) not in sphere and target.uuid in grid.get_entities_at((3, 1))
+    assert (3, 1) in cylinder
 
 
 def test_eb_11_018_area_condition_cone_and_line_use_directional_geometry() -> None:
@@ -732,10 +727,8 @@ def test_eb_11_018_area_condition_cone_and_line_use_directional_geometry() -> No
     reset_grid_state(width=10, height=5)
     source_uuid = uuid4()
 
-    direct_cone = Cone(source_entity_uuid=source_uuid, target=(8, 2), length_feet=30)
-    direct_cone.compute_objective(caster_pos=(2, 2))
-    direct_line = Line(source_entity_uuid=source_uuid, target=(8, 2), length_feet=30, width_feet=5)
-    direct_line.compute_objective(caster_pos=(2, 2))
+    direct_cone = objective_footprint(Cone(length_feet=30), (8, 2), (2, 2))
+    direct_line = objective_footprint(Line(length_feet=30, width_feet=5), (8, 2), (2, 2))
 
     generic_cone_zone = AreaCondition(
         source_entity_uuid=source_uuid,
@@ -743,9 +736,8 @@ def test_eb_11_018_area_condition_cone_and_line_use_directional_geometry() -> No
         position=(2, 2),
         layer=SpatialEffectLayer.FIELD,
         occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
-        zone_shape="cone",
-        zone_radius_feet=30,
-        zone_direction=(1, 0),
+        area=Cone(length_feet=30),
+        area_aim_offset=(1, 0),
     )
     generic_line_zone = AreaCondition(
         source_entity_uuid=source_uuid,
@@ -753,66 +745,19 @@ def test_eb_11_018_area_condition_cone_and_line_use_directional_geometry() -> No
         position=(2, 2),
         layer=SpatialEffectLayer.FIELD,
         occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
-        zone_shape="line",
-        zone_radius_feet=30,
-        zone_direction=(1, 0),
+        area=Line(length_feet=30, width_feet=5),
+        area_aim_offset=(1, 0),
     )
 
-    assert (3, 2) in direct_cone.affected_positions
-    assert (5, 2) in direct_cone.affected_positions
-    assert (1, 2) not in direct_cone.affected_positions
-    assert (2, 2) in direct_line.affected_positions
-    assert (8, 2) in direct_line.affected_positions
-    assert (2, 3) not in direct_line.affected_positions
+    assert (3, 2) in direct_cone
+    assert (5, 2) in direct_cone
+    assert (1, 2) not in direct_cone
+    assert (2, 2) in direct_line
+    assert (8, 2) in direct_line
+    assert (2, 3) not in direct_line
 
-    assert generic_cone_zone._compute_affected_positions() == direct_cone.affected_positions
-    assert generic_line_zone._compute_affected_positions() == direct_line.affected_positions
-
-
-def test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint() -> None:
-    """EB-11-019: cylinder subjective previews use the same full footprint as targeting."""
-    reset_grid_state(width=5, height=3)
-    grid = get_map()
-    grid.set_tile(
-        2,
-        1,
-        walking_cost=0,
-        flying_cost=0,
-        blocks_optics=True,
-        blocks_propagation=True,
-        name="Wall",
-    )
-    caster = create_skeleton(name="Caster", position=(0, 1), faction="heroes")
-    target = create_skeleton(name="Behind Wall", position=(3, 1), faction="monsters")
-    Entity.update_all_entities_senses(max_distance=20)
-
-    subjective = Cylinder(source_entity_uuid=caster.uuid, target=(1, 1), radius_feet=15)
-    subjective.compute_subjective(
-        caster.position,
-        caster.senses,
-        barrier_positions=grid.get_barrier_positions(),
-        caster_uuid=caster.uuid,
-    )
-
-    targeting = Cylinder(source_entity_uuid=caster.uuid, target=(1, 1), radius_feet=15)
-    targeting.compute_for_targeting(
-        caster.position,
-        caster.senses,
-        barrier_positions=grid.get_barrier_positions(),
-        caster_uuid=caster.uuid,
-    )
-
-    objective = Cylinder(source_entity_uuid=caster.uuid, target=(1, 1), radius_feet=15)
-    objective.compute_objective(caster.position)
-
-    assert (3, 1) in subjective.affected_positions
-    assert (3, 1) in targeting.affected_positions
-    assert (3, 1) in objective.affected_positions
-    assert subjective.affected_positions == targeting.affected_positions
-    assert subjective.affected_positions == objective.affected_positions
-    assert target.uuid not in subjective.affected_entity_uuids
-    assert target.uuid not in targeting.affected_entity_uuids
-    assert target.uuid in objective.affected_entity_uuids
+    assert generic_cone_zone._compute_affected_positions() == direct_cone
+    assert generic_line_zone._compute_affected_positions() == direct_line
 
 
 def test_eb_11_020_area_removal_cleans_handlers_terrain_and_tile_references() -> None:
@@ -883,13 +828,11 @@ def test_eb_11_010_walkability_is_derived_from_the_mode_cost() -> None:
     assert tile.get_movement_cost(MovementMode.WALKING) == 1
     assert grid.is_walkable(1, 0)
 
-    tile.edit_movement_cost(MovementMode.WALKING).self_static.add_max_constraint(
-        NumericalModifier.create(
+    add_modifier(tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.MAX, NumericalModifier.create(
             source_entity_uuid=tile.uuid,
             name="Closed",
             value=0,
-        )
-    )
+        ))
     assert not grid.is_walkable(1, 0)
 
 
@@ -967,7 +910,6 @@ if __name__ == "__main__":
         test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths,
         test_eb_11_009_geometry_and_aoe_are_grid_aware_where_needed,
         test_eb_11_018_zone_control_cone_and_line_use_directional_geometry,
-        test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint,
         test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers,
         test_eb_11_010_walkability_is_cost_driven_not_the_legacy_flag,
         test_eb_11_011_replacing_object_position_removes_old_grid_membership,

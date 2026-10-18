@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 from typing import cast
+from dnd.core.aoe import AoEShape, Sphere
 from dnd.conditions import Concentrating, InvisibilityEffect
 from dnd.core.base_conditions import ConditionStateChangedEvent
 from dnd.core.condition_types import ConditionTag
 from dnd.core.saving_throw_types import SAVING_THROW_CONTEXT_KEY, SavingThrowContext
+from dnd.types.discovery import ActorScan, Relationship, ScanRecord
 from dnd.types.world import MovementMode
-from typing import Callable, Literal, Optional, Tuple, List
+from typing import Callable, ClassVar, Literal, Optional, Tuple, List
 from uuid import UUID, uuid4
 
 from dnd.types.physical_access import PhysicalAccess
 from pydantic import BaseModel, Field, model_validator
 from pydantic_core import PydanticUndefined
 
+from dnd.core.action_types import ActionSelection, ActionVariantFacet
 from dnd.core.attack_types import NaturalWeaponSpec
 from dnd.blocks.base_item import BaseItem
 from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, Move, entity_action_economy_cost_applier, entity_action_economy_cost_evaluator
@@ -63,7 +66,17 @@ from dnd.core.modifiers import (
     ContextualAdvantageModifier,
     NumericalModifier,
 )
-from dnd.core.values import ModifiableValue
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    read_value,
+    reading_with_value_row,
+    Channel,
+    Kind,
+    add_modifier,
+    modifier_of,
+    parts,
+)
 from dnd.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
 from dnd.core.condition_types import ConditionCategory, DurationType
@@ -303,7 +316,7 @@ class PackTacticsFeature(BaseCondition):
             target_entity_uuid=owner.uuid,
             callable=pack_tactics_advantage,
         )
-        mod_uuid = owner.equipment.attack_bonus.self_contextual.add_advantage_modifier(modifier)
+        mod_uuid = add_modifier(owner.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, modifier)
         effect_event = declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{owner.name} has Pack Tactics")
         return [(owner.equipment.attack_bonus.uuid, mod_uuid)], [], [], [], effect_event
 
@@ -344,8 +357,8 @@ class SunlightSensitivityFeature(BaseCondition):
             target_entity_uuid=owner.uuid,
             callable=_sunlight_perception_disadvantage,
         )
-        attack_uuid = owner.equipment.attack_bonus.self_contextual.add_advantage_modifier(attack_mod)
-        perception_uuid = owner.skill_set.perception.skill_bonus.self_contextual.add_advantage_modifier(perception_mod)
+        attack_uuid = add_modifier(owner.equipment.attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, attack_mod)
+        perception_uuid = add_modifier(owner.skill_set.perception.skill_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, perception_mod)
         effect_event = declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{owner.name} has Sunlight Sensitivity")
         return [(owner.equipment.attack_bonus.uuid, attack_uuid), (owner.skill_set.perception.skill_bonus.uuid, perception_uuid)], [], [], [], effect_event
 
@@ -393,7 +406,7 @@ class ConditionalSaveAdvantageFeature(BaseCondition):
                 target_entity_uuid=owner.uuid,
                 callable=_condition_context_save_advantage(self.condition_contexts, self.name),
             )
-            mod_uuid = save.bonus.self_contextual.add_advantage_modifier(modifier)
+            mod_uuid = add_modifier(save.bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, modifier)
             outs.append((save.bonus.uuid, mod_uuid))
         effect_event = declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{owner.name} has {self.name}")
         return outs, [], [], [], effect_event
@@ -454,7 +467,7 @@ class KeenPerceptionFeature(BaseCondition):
             target_entity_uuid=owner.uuid,
             callable=_keen_perception_advantage(self.modes, self.name),
         )
-        mod_uuid = owner.skill_set.perception.skill_bonus.self_contextual.add_advantage_modifier(modifier)
+        mod_uuid = add_modifier(owner.skill_set.perception.skill_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, modifier)
         effect_event = declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{owner.name} has {self.name}")
         return [(owner.skill_set.perception.skill_bonus.uuid, mod_uuid)], [], [], [], effect_event
 
@@ -506,23 +519,20 @@ class AggressiveMoveAction(Move):
     description: str = Field(default="Move up to speed toward a visible hostile as a bonus action.", description="Rules summary.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Aggressive Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="Bonus action cost.")
 
-    def _validate(self, declaration_event):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         actor = Entity.get(self.source_entity_uuid)
-        if actor is None or self.end_position is None:
-            return declaration_event.cancel(status_message="Aggressive requires actor and destination")
-        enemies = [
-            entity
-            for entity_uuid, contact in actor.senses.entities.items()
-            if contact.visual
-            if (entity := Entity.get(entity_uuid)) is not None and actor.is_enemy(entity)
-        ]
+        if actor is None or not selection.positions:
+            return "Aggressive requires actor and destination"
+        destination = selection.positions[0]
+        enemies = [record.facts.position for record in scan.creatures.values()
+                   if record.visual and record.relationship is Relationship.ENEMY]
         if not enemies:
-            return declaration_event.cancel(status_message="No visible enemy for Aggressive")
-        before = min(actor.senses.get_feet_distance(enemy.position) for enemy in enemies)
-        after = min((abs(self.end_position[0] - enemy.position[0]) + abs(self.end_position[1] - enemy.position[1])) * 5 for enemy in enemies)
+            return "No visible enemy for Aggressive"
+        before = min(actor.senses.get_feet_distance(enemy) for enemy in enemies)
+        after = min((abs(destination[0] - enemy[0]) + abs(destination[1] - enemy[1])) * 5 for enemy in enemies)
         if after >= before:
-            return declaration_event.cancel(status_message="Aggressive destination must move closer to a visible enemy")
-        return super()._validate(declaration_event)
+            return "Aggressive destination must move closer to a visible enemy"
+        return Move.rule_error(self, scan, selection)
 
 
 class AttackReplacement(BaseModel):
@@ -536,6 +546,7 @@ class AttackReplacement(BaseModel):
 
 class MultiattackAction(BaseAction):
     """Monster stat-block action that composes existing weapon attacks."""
+    creates = (Attack,)
 
     name: str = Field(default="Multiattack", description="Action name.")
     description: str = Field(default="Make multiple stat-block weapon attacks.", description="Rules summary.")
@@ -566,42 +577,47 @@ class MultiattackAction(BaseAction):
         weapon = actor.equipment.get_weapon(slot)
         return weapon is not None and weapon.weapon_kind == replacement.weapon_kind
 
-    def get_discovery_variants(self, entity: object) -> list[BaseAction]:
-        if not isinstance(entity, Entity):
-            return []
-        # A full stat-block sequence is not an eligible restricted-budget action.
-        # Its ordinary action cost still permits Action Surge.
-        variants: list[BaseAction] = [self]
-        if self.attack_replacement is not None and self._substitution_available(entity) and not self.use_attack_substitution:
-            variants += [variant.model_copy(deep=True, update={"uuid":uuid4(),
-                "use_attack_substitution":True, "name":f"{self.name} ({self.attack_replacement.action.name})",
-                "registered_template_uuid":self.registered_template_uuid or self.uuid}) for variant in tuple(variants)]
-        return variants
+    # A full stat-block sequence is not an eligible restricted-budget action.
+    # Its ordinary action cost still permits Action Surge.
+    restricted_budget_eligible: ClassVar[bool] = False
 
-    def _selected_attacks(self) -> list[Attack]:
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """The stat-block sequence, and its authored attack substitution when the held weapon allows it."""
+        actor = Entity.get(self.source_entity_uuid)
+        if self.attack_replacement is None or actor is None or not self._substitution_available(actor):
+            return ((),)
+        return ((), (ActionVariantFacet(key="form", value="substitution", label=self.attack_replacement.action.name),))
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection),
+                "use_attack_substitution": any(facet.key == "form" for facet in selection.facets)}
+
+    def _selected_attacks(self, target_uuid: Optional[UUID]) -> list[Attack]:
         result: list[Attack] = []
         replacement = self.attack_replacement if self.use_attack_substitution else None
         for entry_index, (slot,count) in enumerate(self.attack_sequence):
             for attack_index in range(count):
                 if replacement is not None and entry_index == replacement.sequence_index and attack_index < replacement.max_replacements:
                     result.append(replacement.action.model_copy(deep=True,update={"uuid":uuid4(),
-                        "source_entity_uuid":self.source_entity_uuid,"target_entity_uuid":self.target_entity_uuid,
+                        "source_entity_uuid":self.source_entity_uuid,"target_entity_uuid":target_uuid,
                         "costs":[],"template":False,"use_register":False}))
                 else:
                     result.append(Attack(name=f"{self.name}: Attack",source_entity_uuid=self.source_entity_uuid,
-                        target_entity_uuid=self.target_entity_uuid,weapon_slot=slot,costs=[],use_register=False,
+                        target_entity_uuid=target_uuid,weapon_slot=slot,costs=[],use_register=False,
                         behavior_binding=BehaviorBinding(behavior_id="action.attack",
                             provided_by_id="action.monster.multiattack", runtime_owner_uuid=self.source_entity_uuid)))
         return result
 
 
-    def get_outcome_profile(self, actor: object) -> Optional[ActionOutcomeProfile]:
+    def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
         """Return a repeated-attack profile when every attack shares one shape."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         profiles: list[ActionOutcomeProfile] = []
-        for attack in self._selected_attacks():
-            profile = attack.get_outcome_profile(actor)
+        for attack in self._selected_attacks(self.target_entity_uuid):
+            profile = attack.get_outcome_profile()
             if profile is None:
                 return None
             profiles.append(profile)
@@ -616,36 +632,34 @@ class MultiattackAction(BaseAction):
             "applications": len(profiles),
         })
 
-    def physical_access_error(self, *, subjective: bool = False) -> Optional[str]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """An available substitution, and some attack of the sequence that is legal against the target."""
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return "Multiattack actor missing"
+        if self.use_attack_substitution and not self._substitution_available(actor):
+            return "Selected Multiattack substitution unavailable"
         for slot, count in self.attack_sequence:
             if count <= 0:
                 continue
-            attack = Attack(source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid, weapon_slot=slot,
-                costs=[], use_register=False)
-            if attack.validate_requirements_for_discovery(subjective=subjective):
+            attack = Attack(source_entity_uuid=self.source_entity_uuid, weapon_slot=slot, costs=[], use_register=False)
+            sub_selection = ActionSelection(template_uuid=attack.uuid, target_uuids=selection.target_uuids[:1])
+            if attack.requirements_error(scan, sub_selection) is None:
                 return None
         return "No legal attacks for Multiattack"
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        actor = Entity.get(self.source_entity_uuid)
-        if actor is None:
-            return declaration_event.cancel(status_message="Multiattack actor missing")
-        if self.use_attack_substitution and not self._substitution_available(actor):
-            return declaration_event.cancel(status_message="Selected Multiattack substitution unavailable")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Multiattack validated")
-
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         actor = Entity.get(self.source_entity_uuid)
-        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = BaseBlock.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if actor is None or not isinstance(target, (Entity, BaseItem)):
             return execution_event.cancel(status_message="Multiattack actor or target missing")
         effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message=f"{actor.name} uses {self.name}")
-        for attack in self._selected_attacks():
+        if effect_event.canceled:return effect_event
+        for attack in self._selected_attacks(target.uuid):
             if target.get_hp() <= 0:
                 break
             if attack.pre_validate():
-                attack.apply(parent_event=effect_event)
+                actor.perform(attack, attack.current_selection(), parent_event=effect_event)
         return effect_event.with_updates(status_message=f"{self.name} completed")
 
     def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
@@ -674,8 +688,11 @@ class NaturalAttack(Attack):
             range=self.natural_range, magical=self.magical, fixed_attack_bonus=self.fixed_attack_bonus,
             fixed_damage_bonus=self.fixed_damage_bonus)
 
-    def get_outcome_profile(self, actor: object) -> Optional[ActionOutcomeProfile]:
-        profile = super().get_outcome_profile(actor)
+    def get_outcome_profile(self) -> Optional[ActionOutcomeProfile]:
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
+        profile = super().get_outcome_profile()
         return profile.model_copy(update={"effect_id": f"natural_attack.{self.name.lower().replace(' ', '_')}"}) if profile is not None else None
 
     def get_range(self) -> Range:
@@ -697,9 +714,12 @@ class BonusDamageFeature(BaseCondition):
     melee_only: bool = Field(default=False, description="Whether only reach attacks qualify.")
     weapon_only: bool = Field(default=True, description="Whether only weapon damage events qualify.")
 
-    def get_action_damage_roll_profiles(self, action: object, actor: object) -> tuple[DamageRollProfile, ...]:
+    def get_action_damage_roll_profiles(self, action: object) -> tuple[DamageRollProfile, ...]:
         """Declare actor-known bonus damage when it is not target-dependent."""
-        if not isinstance(actor, Entity) or not isinstance(action, Attack):
+        if not isinstance(action, Attack):
+            return ()
+        actor = Entity.get(action.source_entity_uuid)
+        if actor is None:
             return ()
         if self.once_per_turn and f"{self.name} Used" in actor.active_conditions:
             return ()
@@ -746,7 +766,7 @@ class BonusDamageFeature(BaseCondition):
         return event
 
     def _processor(self, event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-        if not isinstance(event, DamageRollResultEvent):
+        if not isinstance(event, DamageRollResultEvent) or event.attack_kind=="spell":
             return None
         owner = Entity.get(source_entity_uuid)
         target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
@@ -756,7 +776,7 @@ class BonusDamageFeature(BaseCondition):
             return None
         if event.attack_outcome not in {AttackOutcome.HIT, AttackOutcome.CRIT}:
             return None
-        if self.melee_only and owner.get_weapon_range(event.weapon_slot).type != RangeType.REACH:
+        if self.melee_only and (event.weapon_slot is None or owner.get_weapon_range(event.weapon_slot).type != RangeType.REACH):
             return None
         if self.requires_adjacent_ally and not _has_adjacent_ally(owner, target):
             return None
@@ -765,16 +785,17 @@ class BonusDamageFeature(BaseCondition):
         if self.requires_unseen_attacker and not _is_unseen_attacker(owner, target):
             return None
         damage_type = self.damage_type or event.damage_packets[0].damage.damage_type
-        bonus = ModifiableValue.create(source_entity_uuid=owner.uuid, base_value=0, value_name=f"{self.name} Bonus")
-        dice = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=bonus, roll_type=RollType.DAMAGE, attack_outcome=event.attack_outcome)
+        bonus = ModifiableValue(source_entity_uuid=owner.uuid, base=0, name=f"{self.name} Bonus")
+        dice = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=read_value(parts(bonus), ValueRead(owner.uuid)), roll_type=RollType.DAMAGE, attack_outcome=event.attack_outcome)
         roll = dice.roll
         damage = Damage(
             damage_type=damage_type,
             dice_numbers=self.dice_numbers,
             damage_dice=self.damage_dice,
-            damage_bonus=bonus,
+            damage_bonus=parts(bonus),
             source_entity_uuid=owner.uuid,
             target_entity_uuid=target.uuid,
+            attack_magical=event.damage_packets[0].damage.attack_magical,
         )
         modified_event = event.append_damage_roll(
             damage,
@@ -866,9 +887,13 @@ class SimpleMarkerCondition(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         return [], [], [], [], declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{self.name} applied")
 
+# BonusDamageFeature (defined above) creates SimpleMarkerCondition.
+BonusDamageFeature.creates = (*BonusDamageFeature.creates, SimpleMarkerCondition)
+
 
 class HitSaveRiderFeature(BaseCondition):
     """Feature that applies a save-based condition rider after an exact authored item hit."""
+    creates = (Prone,)
 
     name: str = Field(default="Hit Save Rider", description="Condition name.")
     description: str = Field(
@@ -884,9 +909,12 @@ class HitSaveRiderFeature(BaseCondition):
     condition_name: str = Field(default="Prone", description="Condition to apply.")
     excluded_creature_types: tuple[str, ...] = Field(default_factory=tuple, description="Creature types excluded from the rider.")
 
-    def get_action_target_effect_profile(self, action: object, actor: object) -> Optional[ActionTargetEffectProfile]:
+    def get_action_target_effect_profile(self, action: object) -> Optional[ActionTargetEffectProfile]:
         """Declare the save-based rider carried by matching attack actions."""
-        if not isinstance(actor, Entity) or not isinstance(action, Attack):
+        if not isinstance(action, Attack):
+            return None
+        actor = Entity.get(action.source_entity_uuid)
+        if actor is None:
             return None
         metadata = action.get_attack_source_metadata()
         weapon = actor.equipment.get_weapon(action.weapon_slot)
@@ -1009,6 +1037,7 @@ class GhoulClawsParalysisFeature(HitSaveRiderFeature):
 
 class GhoulParalysisEffect(BaseCondition):
     """Ghoul paralysis effect with end-of-turn repeat save."""
+    creates = (Paralyzed,)
 
     name: str = Field(default="Ghoul Paralysis", description="Condition name.")
     description: str = Field(default="Paralyzed by ghoul claws; repeat CON save at end of turn.", description="Rules summary.")
@@ -1040,6 +1069,9 @@ class GhoulParalysisEffect(BaseCondition):
         if success and self.name in target.active_conditions:
             target.remove_condition(self.name, parent_event=event)
         return event
+
+# HitSaveRiderFeature (defined above) creates GhoulParalysisEffect.
+HitSaveRiderFeature.creates = (*HitSaveRiderFeature.creates, GhoulParalysisEffect)
 
 
 class UndeadFortitudeFeature(BaseCondition):
@@ -1129,16 +1161,15 @@ class ParryFeature(BaseCondition):
             return event
         if event.ac is None:
             return event
-        event.ac.self_static.add_value_modifier(
-            NumericalModifier(
-                name="Parry",
-                value=self.ac_bonus,
-                source_entity_uuid=defender.uuid,
-                target_entity_uuid=defender.uuid,
-            )
-        )
+        parried = reading_with_value_row(event.ac, NumericalModifier(
+            name="Parry",
+            value=self.ac_bonus,
+            source_entity_uuid=defender.uuid,
+            target_entity_uuid=defender.uuid,
+        ))
         defender.action_economy.consume("reactions", 1)
         return event.with_updates(
+            ac=parried,
             status_message=(
                 f"{defender.name} uses Parry for +{self.ac_bonus} AC"
             ),
@@ -1166,9 +1197,10 @@ class DivineEminenceAction(BaseAction):
             )
         ]
 
-    def get_self_setup_profile(self, actor: object) -> Optional[ActionSelfSetupProfile]:
+    def get_self_setup_profile(self) -> Optional[ActionSelfSetupProfile]:
         """Describe the short-lived radiant weapon setup for AI policy."""
-        if not isinstance(actor, Entity) or actor.get_lowest_spell_slot(1) is None:
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None or actor.get_lowest_spell_slot(1) is None:
             return None
         return ActionSelfSetupProfile(
             semantic_id="setup.divine_eminence",
@@ -1225,27 +1257,30 @@ class DivineEminenceActive(BonusDamageFeature):
         self.dice_numbers = 3 + max(0, self.slot_level - 1)
         self.damage_dice = 6
 
+# DivineEminenceAction (defined above) creates DivineEminenceActive.
+DivineEminenceAction.creates = (*DivineEminenceAction.creates, DivineEminenceActive)
+
 
 class LeadershipAction(BaseAction):
     """Knight leadership action that grants nearby allies attack/save d4."""
+    creates = (SimpleMarkerCondition,)
 
     name: str = Field(default="Leadership", description="Action name.")
     description: str = Field(default="For 1 minute, nearby allies add 1d4 to attack rolls and saves.", description="Rules summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Self action.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Leadership Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="Action cost.")
 
-    def validate_requirements_for_discovery(self) -> bool:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Require Leadership to remain unused, independently of its cost."""
         actor = Entity.get(self.source_entity_uuid)
-        return bool(
-            actor
-            and "Leadership Used" not in actor.active_conditions
-            and super().validate_requirements_for_discovery()
-        )
+        if actor is None or "Leadership Used" in actor.active_conditions:
+            return "Leadership was already used"
+        return None
 
-    def get_self_setup_profile(self, actor: object) -> Optional[ActionSelfSetupProfile]:
+    def get_self_setup_profile(self) -> Optional[ActionSelfSetupProfile]:
         """Describe the ally-support aura as a typed setup action."""
-        if not isinstance(actor, Entity) or "Leadership Used" in actor.active_conditions:
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None or "Leadership Used" in actor.active_conditions:
             return None
         return ActionSelfSetupProfile(
             semantic_id="support.leadership",
@@ -1311,8 +1346,7 @@ class LeadershipAura(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
     )
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=30)
+    area: AoEShape = Sphere(radius_feet=30)
 
     def _apply(self, execution_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Event]:
         leader = Entity.get(self.source_entity_uuid)
@@ -1368,13 +1402,16 @@ class LeadershipAura(AreaCondition):
         if roller.position not in self.affected_positions:
             return None
         roll = event.get_effective_roll()
-        d4 = Dice(count=1, value=4, bonus=ModifiableValue.create(source_entity_uuid=leader.uuid, base_value=0, value_name="Leadership"), roll_type=roll.roll_type).roll
+        d4 = Dice(count=1, value=4, bonus=read_value(parts(ModifiableValue(source_entity_uuid=leader.uuid, base=0, name="Leadership")), ValueRead(leader.uuid)), roll_type=roll.roll_type).roll
         new_roll = roll.model_copy(update={"total": roll.total + d4.total})
         return event.replace_roll(
             new_roll,
             "Leadership",
             f"+{d4.total} (1d4)",
         )
+
+# LeadershipAction (defined above) creates LeadershipAura.
+LeadershipAction.creates = (*LeadershipAction.creates, LeadershipAura)
 
 
 class RampageFeature(BaseCondition):
@@ -1419,6 +1456,7 @@ class RampageFeature(BaseCondition):
 
 class RampageAvailable(BaseCondition):
     """Temporary condition that grants Rampage Bite."""
+    creates = (NaturalAttack,)
 
     name: str = Field(default="Rampage Available", description="Condition name.")
     description: str = Field(
@@ -1454,6 +1492,9 @@ class RampageAvailable(BaseCondition):
         if owner:
             owner.unregister_action("Rampage Bite")
         return super()._remove(event)
+
+# RampageFeature (defined above) creates RampageAvailable.
+RampageFeature.creates = (*RampageFeature.creates, RampageAvailable)
 
 
 def _has_adjacent_ally(source: Entity, target: Entity) -> bool:
@@ -1545,7 +1586,7 @@ class MagicResistance(BaseCondition):
                 owner.saving_throws.charisma_saving_throw):
             modifier = ContextualAdvantageModifier(name=self.name, source_entity_uuid=owner.uuid,
                 target_entity_uuid=owner.uuid, callable=magical_save_advantage)
-            handle = saving_throw.bonus.self_contextual.add_advantage_modifier(modifier)
+            handle = add_modifier(saving_throw.bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, modifier)
             handles.append((saving_throw.bonus.uuid, handle))
         return handles, [], [], [], event.phase_to(EventPhase.EFFECT)
 
@@ -1576,6 +1617,7 @@ class InnateFlight(BaseCondition):
 
 
 class InnateInvisibility(BaseAction):
+    creates = (Concentrating, InvisibilityEffect)
     name: str = "Innate Invisibility"
     target_type: TargetType = TargetType.SELF
     costs: list[Cost] = Field(default_factory=lambda: [Cost(name="Innate Invisibility", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)])
@@ -1614,11 +1656,16 @@ class LifeDrainReduction(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None:
             return [], [], [], [], event.cancel(status_message="Victim missing")
+        admission = target.health.prepare_maximum_hit_point_reduction(self.amount,
+            self.source_entity_uuid, parent_event=event.uuid, source_condition_uuid=self.uuid)
+        if admission.canceled:
+            return [], [], [], [], event.cancel(status_message=admission.status_message)
+        self.amount = admission.amount
         current_hp = max(0, target.get_normal_hp())
         value = target.health.max_hit_points_bonus
         modifier = NumericalModifier(name=self.name, value=-self.amount,
             source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid)
-        value.self_static.add_value_modifier(modifier)
+        add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, modifier)
         target.health.damage_taken = max(0, target.get_max_hp()-min(current_hp, max(0,target.get_max_hp())))
         if target.get_max_hp() <= 0:
             target.receive_instant_death(self.source_entity_uuid, "Life Drain reduced maximum HP to zero", event.uuid)
@@ -1626,12 +1673,17 @@ class LifeDrainReduction(BaseCondition):
 
     def add_reduction(self, amount: int, event: Event) -> None:
         victim=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if victim is None or amount <= 0:
+        if victim is None or amount <= 0 or not self.applied:
             return
+        admission = victim.health.prepare_maximum_hit_point_reduction(amount,
+            event.source_entity_uuid, parent_event=event.uuid, source_condition_uuid=self.uuid)
+        if admission.canceled:
+            return
+        amount = admission.amount
         hp=max(0,victim.get_normal_hp())
         value=victim.health.max_hit_points_bonus
         for handle in self.modifers_uuids.get(value.uuid,[]):
-            value.self_static.value_modifiers[handle].value -= amount
+            modifier_of(value, Channel.SELF_STATIC, Kind.VALUE, handle).value -= amount
         self.amount += amount
         victim.health.damage_taken=max(0,victim.get_max_hp()-min(hp,max(0,victim.get_max_hp())))
         ConditionStateChangedEvent(source_entity_uuid=event.source_entity_uuid,target_entity_uuid=victim.uuid,
@@ -1650,6 +1702,7 @@ class LifeDrainReduction(BaseCondition):
 
 
 class WightLifeDrain(NaturalAttack):
+    creates = (*NaturalAttack.creates, LifeDrainReduction)
     name: str = "Life Drain"
     description: str = "Melee +4, 1d6+2 necrotic; DC 13 Constitution gates lost maximum HP."
     natural_damage_dice: Literal[4,6,8,10,12,20] = 6

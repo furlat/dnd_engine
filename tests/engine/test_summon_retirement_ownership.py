@@ -23,7 +23,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemLocation
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.items.consumables import build_timed_fire_weapon_coat
@@ -62,13 +62,11 @@ def give(entity, identity, slot=None):
 
 
 def value_identities(value):
-    channels = (value.self_static, value.self_contextual, value.to_target_static, value.to_target_contextual)
-    return {value.uuid, *(channel.uuid for channel in channels),
-            *(identity for channel in channels for identity in channel.get_all_modifier_uuids())}
+    return {value.uuid, *(row.modifier.uuid for row in value.modifiers)}
 
 
 def still_registered(identity):
-    return any(owner.get(identity) is not None for owner in (BaseBlock, BaseValue, BaseObject))
+    return any(owner.get(identity) is not None for owner in (BaseBlock, ModifiableValue, BaseObject))
 
 
 def test_canonical_creature_retirement_releases_hit_dice_and_owned_bonus_lists_only():
@@ -87,7 +85,7 @@ def test_canonical_creature_retirement_releases_hit_dice_and_owned_bonus_lists_o
         removed.update(value_identities(die.hit_dice_count))
     bite = entity.equipment.get_weapon(WeaponSlot.MELEE_MAIN)
     assert bite is not None and bite.intrinsic_owner_uuid == entity.uuid
-    bonuses = [ModifiableValue.create(source_entity_uuid=entity.uuid, base_value=2, value_name=name)
+    bonuses = [ModifiableValue(source_entity_uuid=entity.uuid, base=2, name=name)
                for name in ('Body damage', 'Attack damage', 'Spell damage')]
     bite.extra_damage_dices.append(4)
     bite.extra_damage_dices_numbers.append(1)
@@ -103,8 +101,7 @@ def test_canonical_creature_retirement_releases_hit_dice_and_owned_bonus_lists_o
     entity.spellcasting.extra_spell_damage_bonus.append(bonuses[2])
     for bonus in bonuses:
         removed.update(value_identities(bonus))
-    retained = ModifiableValue.create(source_entity_uuid=entity.uuid, base_value=3, value_name='Independent')
-    bonuses[0].from_target_static = retained.to_target_static
+    retained = ModifiableValue(source_entity_uuid=entity.uuid, base=3, name='Independent')
     kept = value_identities(retained)
     sword = give(entity, 'weapon.circus.flaming_scimitar')
     assert sword.extra_damage_bonus

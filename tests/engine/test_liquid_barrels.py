@@ -11,6 +11,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.condition_types import ConditionTag
 from dnd.core.creature_types import DamageType
@@ -18,7 +19,7 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     DamageAppliedEvent, Event, EventPhase, EventQueue, ItemDestructionEvent,
-    SavingThrowEvent, SpatialEffectChangeEvent, SpatialEffectInteractionEvent,
+    SavingThrowEvent, SpatialChangeEvent, SpatialChangeType, SpatialEffectChangeEvent, SpatialEffectInteractionEvent,
 )
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemIntegrity
@@ -34,6 +35,7 @@ from dnd.spells.conjuration import GreaseZone
 from dnd.types.residues import ResidueEllipse
 from dnd.types.spatial_effects import SpatialEffectInteractionIntensity, SpatialEffectInteractionOperation
 from dnd.types.world import OccupancyLayer
+from dnd.types.cells import cell_in
 
 
 CONTENTS = ("oil", "water", "grease", "blood", "poison", "dread_blood")
@@ -120,7 +122,8 @@ def test_attack_spills_once_under_destruction_and_material_survives_wreck_retire
     assert destruction.resulting_state is not None and destruction.resulting_state.item_uuid == barrel.uuid
     assert get_map().is_walkable_for(1, 1)
     effects = [event for event in completed(cursor)
-               if isinstance(event, (SpatialEffectChangeEvent, ConditionApplicationEvent))]
+               if isinstance(event, (SpatialEffectChangeEvent, ConditionApplicationEvent))
+               or isinstance(event, SpatialChangeEvent) and event.change_type is SpatialChangeType.TILES_CHANGED]
     assert effects
     for effect in effects:
         ancestor = effect
@@ -353,7 +356,7 @@ def test_visible_material_publishes_only_its_observed_cells(world: Game, content
     cause = completed(0)[-1]
     hidden.activate(parent_event=cause)
     observer.update_entity_senses()
-    assert (4, 1) in observer.senses.visible
+    assert cell_in(capture_senses_snapshot(observer.senses).visible, (4, 1))
     assert hidden.uuid not in observer.senses.spatial_effects
 
 

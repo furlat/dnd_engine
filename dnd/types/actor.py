@@ -63,7 +63,6 @@ class ConditionState(BaseModel):
     agency_denial: ConditionAgencyDenial
     outcome_protections: tuple[OutcomeProtection, ...]
     applied_source_event_cursor: int | None = None
-    suppression_provider_uuids: tuple[UUID, ...] = ()
     duplicate_count: int | None = Field(default=None, ge=0)
     size_change: Literal["enlarge", "reduce"] | None = None
     energy_type: DamageType | None = None

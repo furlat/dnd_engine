@@ -19,6 +19,7 @@ from dnd.scenarios import battlefield_catalog
 from dnd.types.actor_facts import ConditionFact
 from dnd.types.world import MovementMode
 from dnd.world_facts import WorldFacts, apply_world_fact
+from dnd.player.audience import PlayerAudience
 from dnd.player.event_record import RecordedEvent
 from dnd.player.capture import _retained_event
 
@@ -82,12 +83,13 @@ def test_cold_furniture_publishes_birth_then_owned_dynamics_and_replays_after_re
                for point, tile in get_map().get_all_tiles().items() if point in body.placement.positions)
 
     observer = uuid4()
+    audience = PlayerAudience((observer,), (observer,))
     snapshots: list[tuple[bytes, bool, int]] = []
     for dispose in (False, True):
         if dispose:
             bed.retire()
         snapshots.append((ROWS.dump_json([
-            (_retained_event(event, observer), condition_fact(event, source_index=index))
+            (_retained_event(event, audience), condition_fact(event, source_index=index))
             for index, event in EventQueue.iter_events_since(0)
         ]), not dispose, 1 if dispose else 2))
 

@@ -19,7 +19,9 @@ Level 18: Indomitable Might
 Level 20: Primal Champion
 """
 
+from dnd.core.geometry import grid_distance_feet
 from dnd.core.base_conditions import BaseCondition
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier, parts
 from dnd.types.class_features import RelentlessRageIntervention
 from dnd.core.condition_types import DurationType
 from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
@@ -27,10 +29,11 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
     BaseAction, ActionEvent, Cost, TargetType, BaseCost
 )
+from dnd.types.event_facts import HandlerGroupDispatch
 from dnd.core.events import (
     Event, EventPhase, EventType,
     Trigger, EventHandler,
-    DamageAppliedEvent, RangeType, TakeDamageEvent, SkillCheckEvent
+    DamageAppliedEvent, Range, RangeType, TakeDamageEvent, SkillCheckEvent
 )
 from dnd.core.equipment_types import ArmorType, WeaponSlot
 from dnd.core.modifiers import (
@@ -48,6 +51,9 @@ from dnd.actions import (
 from dnd.conditions import Frightened
 from pydantic import Field
 from typing import Any, Optional, List, Tuple, cast
+from dnd.core.action_types import ActionSelection
+from dnd.types.discovery import ActorScan
+from dnd.spells.spell_utils import seen_recipients_error
 from uuid import UUID, uuid4
 from functools import partial
 
@@ -189,8 +195,7 @@ class RecklessAttacking(BaseCondition):
             callable=reckless_attack_check,
         )
         mod_uuid = (
-            target.equipment.melee_attack_bonus.self_contextual
-            .add_advantage_modifier(melee_adv_mod)
+            add_modifier(target.equipment.melee_attack_bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, melee_adv_mod)
         )
         outs.append((target.equipment.melee_attack_bonus.uuid, mod_uuid))
 
@@ -200,7 +205,7 @@ class RecklessAttacking(BaseCondition):
             source_entity_uuid=self.target_entity_uuid,
             target_entity_uuid=self.target_entity_uuid
         )
-        mod_uuid = target.equipment.ac_bonus.to_target_static.add_advantage_modifier(attacker_adv_mod)
+        mod_uuid = add_modifier(target.equipment.ac_bonus, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, attacker_adv_mod)
         outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -241,6 +246,7 @@ class RecklessAttack(BaseAction):
         costs: Reckless Attack has no action or resource costs.
         active_reckless_condition_uuid: Exact active root owned by this template.
     """
+    creates = (RecklessAttacking,)
     name: str = Field(default="Reckless Attack", description="Action name displayed for Reckless Attack.")
     description: str = Field(
         default="Attack recklessly - advantage on attacks, but exposed to counter-attacks",
@@ -275,18 +281,11 @@ class RecklessAttack(BaseAction):
             source_entity_name=source_name
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if entity is None:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        if "Reckless Attacking" in entity.active_conditions:
-            return declaration_event.cancel(status_message="Already attacking recklessly")
-
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Reckless Attack ready"
-        )
+        if entity is None or "Reckless Attacking" in entity.active_conditions:
+            return "Already attacking recklessly"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[Event]:
         entity = Entity.get(self.source_entity_uuid)
@@ -341,6 +340,7 @@ class RecklessAttackFeature(BaseCondition):
         name: Feature condition name for Reckless Attack lookup and cleanup.
         description: Short rules-facing summary of the Reckless Attack feature.
     """
+    creates = (RecklessAttack,)
     name: str = Field(
         default="Reckless Attack Feature",
         description="Feature condition name for Reckless Attack lookup and cleanup.",
@@ -467,7 +467,7 @@ class DangerSense(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             callable=danger_sense_check
         )
-        mod_uuid = dex_save.bonus.self_contextual.add_advantage_modifier(danger_mod)
+        mod_uuid = add_modifier(dex_save.bonus, Channel.SELF_CONTEXTUAL, Kind.ADVANTAGE, danger_mod)
         outs.append((dex_save.bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -546,7 +546,7 @@ class FastMovement(BaseCondition):
             callable=fast_movement_check
         )
         for speed in target.action_economy.speed_values:
-            mod_uuid = speed.self_contextual.add_value_modifier(speed_mod)
+            mod_uuid = add_modifier(speed, Channel.SELF_CONTEXTUAL, Kind.VALUE, speed_mod)
             outs.append((speed.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -559,7 +559,6 @@ class FastMovement(BaseCondition):
 
 def mindless_rage_immunity_check(
     entity: 'BaseBlock',
-    target_entity: Optional['BaseBlock'],
     context: Optional[dict]
 ) -> bool:
     """
@@ -567,7 +566,7 @@ def mindless_rage_immunity_check(
 
     Returns True (immune) only if the entity is currently raging.
     """
-    _ = target_entity, context
+    _ = context
 
     if "Raging" in entity.active_conditions or "Frenzied" in entity.active_conditions:
         return True
@@ -673,7 +672,7 @@ class FeralInstinct(BaseCondition):
             target_entity_uuid=self.target_entity_uuid
         )
 
-        mod_uuid = target.initiative.self_static.add_advantage_modifier(init_adv)
+        mod_uuid = add_modifier(target.initiative, Channel.SELF_STATIC, Kind.ADVANTAGE, init_adv)
         outs.append((target.initiative.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -727,7 +726,7 @@ class BrutalCritical(BaseCondition):
             name="Brutal Critical",
             value=self.extra_dice
         )
-        mod_uuid = target.equipment.crit_extra_dice_melee.self_static.add_value_modifier(brutal_mod)
+        mod_uuid = add_modifier(target.equipment.crit_extra_dice_melee, Channel.SELF_STATIC, Kind.VALUE, brutal_mod)
         outs.append((target.equipment.crit_extra_dice_melee.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -774,7 +773,7 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
 
     con_save = entity.saving_throws.get_saving_throw("constitution")
     dice_roll = entity.roll_d20(
-        con_save.bonus,
+        read_value(parts(con_save.bonus), ValueRead(entity.uuid)),
         RollType.SAVE,
         ability_name="constitution",
         parent_event=event.uuid,
@@ -1050,7 +1049,7 @@ class PrimalChampion(BaseCondition):
             name="Primal Champion (STR)",
             value=4
         )
-        mod_uuid = target.ability_scores.strength.ability_score.self_static.add_value_modifier(str_mod)
+        mod_uuid = add_modifier(target.ability_scores.strength.ability_score, Channel.SELF_STATIC, Kind.VALUE, str_mod)
         outs.append((target.ability_scores.strength.ability_score.uuid, mod_uuid))
 
         con_mod = NumericalModifier.create(
@@ -1058,7 +1057,7 @@ class PrimalChampion(BaseCondition):
             name="Primal Champion (CON)",
             value=4
         )
-        mod_uuid = target.ability_scores.constitution.ability_score.self_static.add_value_modifier(con_mod)
+        mod_uuid = add_modifier(target.ability_scores.constitution.ability_score, Channel.SELF_STATIC, Kind.VALUE, con_mod)
         outs.append((target.ability_scores.constitution.ability_score.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -1092,7 +1091,7 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
     if not attacker:
         return None
 
-    distance = entity.senses.get_feet_distance(attacker.senses.position)
+    distance = grid_distance_feet(entity.position, attacker.position)
     if distance > 5:
         return None
 
@@ -1119,7 +1118,7 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
             evaluator=entity_action_economy_cost_evaluator,
         )],
     )
-    attack.apply(parent_event=event)
+    entity.perform(attack, attack.current_selection(), parent_event=event)
 
     return event
 
@@ -1138,6 +1137,7 @@ def create_retaliation_handler(
         uuid=handler_uuid if handler_uuid is not None else uuid4(),
         name="Retaliation",
         semantic_key="feature.barbarian.retaliation",
+        group_dispatch=HandlerGroupDispatch.AFTER_GROUP,
         content_kind=RuntimeBehaviorKind.REACTION,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
@@ -1252,7 +1252,7 @@ def intimidating_presence_end_check_processor(
     if not frightened or frightened.source_entity_uuid != barbarian_uuid:
         return None
 
-    distance = creature.senses.get_feet_distance(barbarian.senses.position)
+    distance = grid_distance_feet(creature.position, barbarian.position)
     should_end = distance > 60
 
     if not should_end:
@@ -1308,6 +1308,7 @@ class IntimidatingPresence(BaseAction):
         target_type: Intimidating Presence targets one visible entity within range.
         costs: Action cost rebuilt after model initialization.
     """
+    creates = (Frightened, IntimidatingPresenceImmunity)
     name: str = Field(
         default="Intimidating Presence",
         description="Action name displayed for the Berserker frighten action.",
@@ -1363,36 +1364,24 @@ class IntimidatingPresence(BaseAction):
                 return True
         return False
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
+    def get_range(self) -> Range:
+        return Range(type=RangeType.RANGE, normal=30)
 
-        if not self.target_entity_uuid:
-            return declaration_event.cancel(status_message="No target specified")
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return declaration_event.cancel(status_message="Target not found")
-
-        distance = entity.senses.get_feet_distance(target.senses.position)
-        if distance > 30:
-            return declaration_event.cancel(status_message="Target beyond 30ft")
-
-        contact = entity.senses.entities.get(self.target_entity_uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Target not visible")
-
-        if self._is_target_immune(target):
-            return declaration_event.cancel(status_message="Target is immune (saved within 24h)")
-
-        return declaration_event.phase_to(EventPhase.EXECUTION)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen creature within 30 feet that has not resisted this barbarian in the last 24 hours."""
+        error = seen_recipients_error(self, scan, selection.target_uuids)
+        if error is not None:
+            return error
+        target = Entity.get(selection.target_uuids[0])
+        if target is not None and self._is_target_immune(target):
+            return "Target is immune (saved within 24h)"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
-        if not entity or not target or not self.target_entity_uuid:
+        if not entity or not target:
             return execution_event.cancel(status_message="Entity or target not found")
 
         proficiency = entity.proficiency_bonus.normalized_score
@@ -1400,7 +1389,7 @@ class IntimidatingPresence(BaseAction):
         dc = 8 + proficiency + cha_mod
 
         request = entity.create_saving_throw_request(
-            target_entity_uuid=self.target_entity_uuid,
+            target_entity_uuid=target.uuid,
             ability_name="wisdom",
             dc=dc
         )
@@ -1409,7 +1398,7 @@ class IntimidatingPresence(BaseAction):
         if success:
             immunity = IntimidatingPresenceImmunity(
                 source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid
+                target_entity_uuid=target.uuid
             )
             target.add_condition(immunity, parent_event=execution_event)
 
@@ -1420,7 +1409,7 @@ class IntimidatingPresence(BaseAction):
         else:
             frightened = Frightened(
                 source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid
+                target_entity_uuid=target.uuid
             )
             frightened.duration.duration_type = DurationType.ROUNDS
             frightened.duration.duration = 1
@@ -1428,7 +1417,7 @@ class IntimidatingPresence(BaseAction):
             target.add_condition(frightened, parent_event=execution_event)
 
             end_handler = create_intimidating_presence_end_handler(
-                source_entity_uuid=self.target_entity_uuid,
+                source_entity_uuid=target.uuid,
                 barbarian_uuid=self.source_entity_uuid
             )
             target.add_event_handler(end_handler)
@@ -1506,34 +1495,22 @@ class ExtendIntimidatingPresence(BaseAction):
             return False
         return frightened.source_entity_uuid == self.source_entity_uuid
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
+    def get_range(self) -> Range:
+        return Range(type=RangeType.RANGE, normal=30)
 
-        if not self.target_entity_uuid:
-            return declaration_event.cancel(status_message="No target specified")
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return declaration_event.cancel(status_message="Target not found")
-
-        distance = entity.senses.get_feet_distance(target.senses.position)
-        if distance > 30:
-            return declaration_event.cancel(status_message="Target beyond 30ft")
-
-        contact = entity.senses.entities.get(self.target_entity_uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Target not visible")
-
-        if not self._is_frightened_by_me(target):
-            return declaration_event.cancel(status_message="Target not frightened by you")
-
-        return declaration_event.phase_to(EventPhase.EXECUTION)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen creature within 30 feet that this barbarian frightens."""
+        error = seen_recipients_error(self, scan, selection.target_uuids)
+        if error is not None:
+            return error
+        target = Entity.get(selection.target_uuids[0])
+        if target is not None and not self._is_frightened_by_me(target):
+            return "Target not frightened by you"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not entity or not target:
             return execution_event.cancel(status_message="Entity or target not found")
@@ -1558,6 +1535,7 @@ class IntimidatingPresenceFeature(BaseCondition):
         name: Feature condition name for Intimidating Presence action registration.
         description: Short rules-facing summary of the Intimidating Presence feature.
     """
+    creates = (ExtendIntimidatingPresence, IntimidatingPresence)
     name: str = Field(
         default="Intimidating Presence Feature",
         description="Feature condition name for Intimidating Presence action registration.",

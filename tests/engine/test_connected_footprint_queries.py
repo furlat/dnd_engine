@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 
 from dnd.blocks.base_item import BaseItem
-from dnd.core.aoe import Sphere
+from dnd.core.aoe import Sphere, objective_footprint
 from dnd.core.events import EventQueue
 from dnd.items.environment import DirectionalDoor
 from dnd.runtime_reset import reset_engine_runtime
@@ -21,9 +21,7 @@ def corridor():
 
 def footprint(origin, radius_feet):
     cursor = EventQueue.event_cursor()
-    shape = Sphere(source_entity_uuid=uuid4(), target=origin,
-        radius_feet=radius_feet, propagation="connected")
-    positions = shape.compute_objective(origin).affected_positions
+    positions = objective_footprint(Sphere(radius_feet=radius_feet, propagation="connected"), origin, origin)
     assert EventQueue.event_cursor() == cursor
     return positions
 

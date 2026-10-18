@@ -6,7 +6,6 @@ not already asserted by the active engine-book suite.
 """
 
 from uuid import uuid4
-from unittest.mock import patch
 
 import pytest
 
@@ -73,17 +72,39 @@ from tests.manual.spell_regression_support import (
 )
 
 
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    outgoing_of,
+    read_value,
+    Channel,
+    Kind,
+    add_modifier,
+    parts,
+)
+from tests.engine.support import search_tables
+
+
+def situated(value, target_uuid):
+    """The value read against a target."""
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
+
+
+def outgoing_read(value, reader_uuid):
+    """What a value's outgoing rows give a reader: an empty reader value read against the owner."""
+    probe = ModifiableValue(source_entity_uuid=reader_uuid, use_register=False)
+    return read_value(parts(probe), ValueRead(reader_uuid, value.source_entity_uuid, opponent=outgoing_of(parts(value), None)))
+
+
 def _make_difficult(position: tuple[int, int]) -> None:
     """Add one difficult-terrain cost unit to an existing tile."""
     tile = get_map().get_tile(*position)
     assert tile is not None
-    tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=tile.uuid,
             name="Legacy difficult terrain",
             value=1,
-        )
-    )
+        ))
 
 
 def _equip_dagger(entity: Entity) -> None:
@@ -150,12 +171,12 @@ def test_freedom_of_movement_changes_path_and_committed_step_costs() -> None:
             _make_difficult((x, y))
     Entity.update_all_entities_senses(max_distance=40)
 
-    distances_before, _ = get_map().compute_paths(
+    distances_before, _ = search_tables(get_map().compute_paths(
         target.position,
         max_distance=20,
         requesting_entity_uuid=target.uuid,
         subjective=True,
-    )
+    ))
     result = FreedomOfMovement(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,
@@ -165,13 +186,13 @@ def test_freedom_of_movement_changes_path_and_committed_step_costs() -> None:
     assert not result.canceled
     assert target.ignore_difficult_terrain
 
-    distances_after, _ = get_map().compute_paths(
+    distances_after, _ = search_tables(get_map().compute_paths(
         target.position,
         max_distance=20,
         requesting_entity_uuid=target.uuid,
         subjective=True,
         ignore_difficult_terrain=target.ignore_difficult_terrain,
-    )
+    ))
     assert distances_before[(6, 3)] == 7
     assert distances_after[(6, 3)] == 4
 
@@ -206,10 +227,7 @@ def test_resistance_modifies_one_save_then_cleans_concentration() -> None:
         ability_name="wisdom",
         dc=12,
     )
-    with (
-        fixed_dice_faces(10),
-        patch("dnd.spells.abjuration.random.randint", return_value=4),
-    ):
+    with fixed_dice_faces(10, 4):
         _, roll, _ = target.saving_throw(request)
 
     assert roll.total == 14
@@ -264,13 +282,11 @@ def test_inflict_wounds_miss_deals_no_damage() -> None:
         spell_slots={1: 1},
     )
     target = create_spell_regression_actor("Wounds Target", (3, 2), "monsters")
-    caster.equipment.attack_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(caster.equipment.attack_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=caster.uuid,
             name="Deterministic spell miss",
             value=-100,
-        )
-    )
+        ))
     Entity.update_all_entities_senses(max_distance=40)
     hp_before = get_hp(target)
 
@@ -636,14 +652,11 @@ def test_bestow_curse_ability_and_contextual_attack_options() -> None:
             caster_uuid=caster.uuid,
         )
     )
-    target.equipment.attack_bonus.set_target_entity(caster.uuid)
     assert (
-        target.equipment.attack_bonus.advantage
+        situated(target.equipment.attack_bonus, caster.uuid).advantage
         is AdvantageStatus.DISADVANTAGE
     )
-    target.equipment.attack_bonus.set_target_entity(other.uuid)
-    assert target.equipment.attack_bonus.advantage is AdvantageStatus.NONE
-    target.equipment.attack_bonus.clear_target_entity()
+    assert situated(target.equipment.attack_bonus, other.uuid).advantage is AdvantageStatus.NONE
 
 
 def test_bestow_curse_inaction_option_spends_and_releases_one_action() -> None:

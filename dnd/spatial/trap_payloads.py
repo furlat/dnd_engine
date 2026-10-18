@@ -11,7 +11,7 @@ from dnd.core.dice import AttackOutcome
 from dnd.core.events import Damage, Event, EventPhase, EventQueue, EventType, ForcedMovementEvent, SpatialChangeEvent
 from dnd.core.gridmap import get_map
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.types.traps import TrapPayload
 from dnd.types.world import OccupancyLayer
@@ -50,11 +50,11 @@ def apply_trap_payload(entity: Entity, payload: TrapPayload, *, source_uuid: UUI
                        half_damage: bool = False, apply_condition: bool = True) -> None:
     """Apply authored consequences after the owning mechanism resolves avoidance."""
     for component in payload.damages:
-        bonus = ModifiableValue.create(source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid,
-            base_value=0, value_name="Trap damage")
+        bonus = ModifiableValue(source_entity_uuid=source_uuid,
+            base=0, name="Trap damage")
         damage = Damage(name=name, source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid,
             damage_dice=component.dice_sides, dice_numbers=component.dice_count,
-            damage_bonus=bonus, damage_type=component.damage_type)
+            damage_bonus=parts(bonus), damage_type=component.damage_type)
         roll = damage.get_dice(AttackOutcome.HIT).roll
         amount = roll.total // 2 if half_damage else roll.total
         if amount > 0:

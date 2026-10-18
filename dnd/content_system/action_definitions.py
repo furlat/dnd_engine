@@ -12,9 +12,15 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 import dnd.items.spell_items as spell_items
+from dnd.items.scroll_learning import LearnSpellFromScroll
 import dnd.actions as actions
 import dnd.classes.barbarian as barbarian
 import dnd.classes.fighter as fighter
+import dnd.classes.cleric as cleric
+import dnd.classes.divine_intervention as intervention
+import dnd.items.divine_rewards as divine_rewards
+import dnd.classes.paladin as paladin
+import dnd.classes.wizard as wizard
 import dnd.classes.rage as rage
 import dnd.extensions.aegis_spark as aegis_spark
 import dnd.extensions.field_focus as field_focus
@@ -28,7 +34,12 @@ import dnd.spells.abjuration as abjuration
 import dnd.spells.conjuration as conjuration
 import dnd.spatial.jaws as jaws
 import dnd.spells.enchantment as enchantment
+import dnd.spells.divination as divination
 import dnd.spells.evocation as evocation
+import dnd.items.created_items as created_items
+import dnd.monsters.spell_summons as spell_summons
+import dnd.monsters.spell_summon_actions as summon_actions
+import dnd.items.spell_payloads as payloads
 import dnd.spells.necromancy as necromancy
 import dnd.spells.transmutation as transmutation
 import dnd.summoning.actions as summoning
@@ -91,10 +102,11 @@ def _srd(
     granted_action_types: tuple[type[BaseAction], ...] = (),
     root_owned: bool = False,
     icon_key: str | None = None,
+    srd_version: str = "5.1",
 ) -> ActionBehaviorIdentitySpec:
     return ActionBehaviorIdentitySpec(
         action_type=action_type,
-        pack_id=SRD_5_1_PACK_ID,
+        pack_id=f"content.srd_{srd_version.replace('.','_')}_cc",
         content_id=content_id,
         display_name=display_name,
         description=description,
@@ -132,6 +144,37 @@ def _original(
 
 
 ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
+    _srd(intervention.SunderHeretical,"action.class.cleric.divine_intervention.sunder_heretical","Divine Intervention: Sunder the Heretical","Once per character, a50ft enemy radiant burst.",root_owned=True),
+    _srd(intervention.OpulentRevival,"action.class.cleric.divine_intervention.opulent_revival","Divine Intervention: Opulent Revival","Once per character, bounded allied recovery and half-HP companion revival.",root_owned=True),
+    _srd(intervention.ArmThyServant,"action.class.cleric.divine_intervention.arm_thy_servant","Divine Intervention: Arm Thy Servant","Once per character, a permanent Devotee mace.",root_owned=True),
+    _srd(intervention.GoldenGenerosity,"action.class.cleric.divine_intervention.golden_generosity","Divine Intervention: Golden Generosity","Once per character, a permanent native chest containing seven potions.",root_owned=True),
+    _original(divine_rewards.HealingIncense,"action.item.devotees_mace.healing_incense","Healing Incense Aura","The equipped mace grants a ten-turn healing aura once per long rest."),
+    _srd(paladin.DivineSense, "action.class.paladin.divine_sense", "Divine Sense", "Gain two-turn attack advantage against celestial, fiend and undead.", root_owned=True),
+    _srd(paladin.LayOnHands, "action.class.paladin.lay_on_hands", "Lay on Hands", "Spend native healing charges to heal or cure a touched ally.", root_owned=True),
+    _srd(paladin.TurnUnholy, "action.class.paladin.turn_unholy", "Turn the Unholy", "Turn visible fiends and undead using Paladin CHA.", root_owned=True),
+    _srd(paladin.SacredWeapon, "action.class.paladin.sacred_weapon", "Sacred Weapon", "Enchant an exact held weapon for ten turns.", root_owned=True),
+    _srd(paladin.CleansingTouch, "action.class.paladin.cleansing_touch", "Cleansing Touch", "End one exact eligible spell on a willing touched recipient.", root_owned=True),
+    _srd(paladin.HolyNimbus, "action.class.paladin.holy_nimbus", "Holy Nimbus", "Shine for ten turns and damage nearby enemies at their turn start.", root_owned=True),
+    _srd(wizard.ArcaneRecovery, "action.class.wizard.arcane_recovery", "Arcane Recovery", "Recover a spent shared slot outside combat using Wizard recovery points.", root_owned=True),
+    _srd(cleric.TurnUndead, "action.class.cleric.turn_undead", "Turn Undead", "Turn visible undead within30 feet for three turns.", root_owned=True),
+    _srd(cleric.PreserveLife, "action.class.cleric.preserve_life", "Preserve Life", "Heal nearby living allies with Channel Divinity.", root_owned=True),
+    _srd(LearnSpellFromScroll, "action.wizard.learn_scroll", "Learn Spell", "Transcribe an eligible scroll into the Wizard book without gold cost."),
+    *tuple(_srd(kind,identity,kind.model_fields["name"].default,"Approved summon creature technique using native actions.")
+        for kind,identity in summon_actions.SUMMON_ACTION_IDENTITIES),
+    _srd(payloads.ThrowSpellPayload,"action.spell.payload.throw","Throw Spell Sphere","Throw a retained sphere, retiring the item before its explosion."),
+    _srd(payloads.TouchDelayedFireball,"action.spell.delayed_blast_fireball.touch","Touch Delayed Fireball","Touch the bead: DEX failure detonates; success permits pickup or a same-action throw."),
+    _srd(spell_summons.FlamingSphereRam,"action.spell.flaming_sphere.ram","Flaming Sphere Ram","Bonus-action saved fire contact from the autonomous sphere."),
+    _srd(spell_summons.SpiritualWeaponStrike,"action.spell.spiritual_weapon.strike","Spiritual Weapon Strike","Bonus-action force attack from the autonomous weapon."),
+    _srd(created_items.EatGoodberry,"action.spell.goodberry.eat","Eat Goodberry","Consume one berry as a bonus action to heal 1d4."),
+    _srd(transmutation.ExhaleDragonsBreath,"action.spell.dragons_breath.exhale","Exhale Dragon's Breath","Use the retained elemental cone.",srd_version="5.2"),
+    _srd(necromancy.VampiricTouchStrike,"action.spell.vampiric_touch.strike","Vampiric Touch Strike","Repeat a melee necrotic attack and own-component healing."),
+    _srd(evocation.MoveMoonbeam,"action.spell.moonbeam.move","Move Moonbeam","Relocate the retained beam within sixty feet."),
+    _srd(abjuration.BreakEnchantment,"action.spell.dispel_evil_and_good.break_enchantment","Break Enchantment","Touch to cure an eligible control and end the ward."),
+    _srd(evocation.ArcaneSwordStrike,"action.spell.arcane_sword.strike","Arcane Sword Strike","Move the sword anchor and make its melee spell attack."),
+    _srd(evocation.MoveArcaneSword,"action.spell.arcane_sword.move","Move Arcane Sword","Relocate the sword without attacking."),
+    _srd(evocation.MoveDancingLights,"action.spell.dancing_lights.move","Move Dancing Lights","Relocate the retained light within 60 feet."),
+    _srd(divination.ReapplyHuntersMark,"action.spell.hunters_mark.reapply","Reapply Hunter's Mark","Choose a new quarry after the previous quarry is defeated."),
+    _srd(enchantment.ReapplyHex,"action.spell.hex.reapply","Reapply Hex","Choose a new quarry after the previous quarry is defeated."),
     _original(actions.TraverseConnector, "action.traverse_connector", "Traverse Connector", "Traverse an admitted existing passage using its native costs and endpoints."),
     _original(summoning.DismissSummon, "action.summon.dismiss", "Dismiss Summon", "Spend one action to dismiss a temporary creature whose control is retained."),
     _srd(monster_traits.InnateInvisibility,"action.monster.innate_invisibility","Innate Invisibility","Concentrate on indefinite innate invisibility.",root_owned=True),

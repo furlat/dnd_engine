@@ -5,6 +5,8 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import TypeAdapter
 
+from dnd.blocks.sensory import capture_senses_snapshot
+from dnd.core.aoe import Sphere
 from dnd.actor_projection import condition_fact
 from dnd.ai.contracts.observation import ObservationTileFact
 from dnd.ai.runtime.subjective_projection import project_visible_tile_fact
@@ -20,7 +22,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.transmutation import SpikeGrowthZone
 from dnd.types.actor_facts import ConditionFact
-from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
+from dnd.types.senses import SensesSnapshot
 from dnd.types.world import CardinalDirection
 from dnd.world_authoring import set_world_tile
 from dnd.world_facts import WorldFacts, apply_world_fact
@@ -28,6 +30,9 @@ from dnd.player.event_record import RecordedEvent
 from dnd.player.capture import _retained_event
 from dnd.player.audience import resolve_audience
 from tests.engine.support import create_test_entity
+from dnd.types.cells import no_cells, value_at
+from dnd.core.cells import mask_positions
+from dnd.core.sensory_fold import reduce_senses_snapshot
 
 
 ROWS = TypeAdapter(list[tuple[RecordedEvent, ConditionFact | None]])
@@ -59,7 +64,7 @@ def tile_checkpoint(observer_uuid: UUID) -> tuple[bytes, list[ObservationTileFac
     observer = Entity.get(observer_uuid)
     assert observer is not None
     expected = [project_visible_tile_fact(position, from_observer)
-                for position in sorted(observer.senses.visible)]
+                for position in sorted(mask_positions(capture_senses_snapshot(observer.senses).visible))]
     return recorded(observer_uuid), expected
 
 
@@ -144,22 +149,22 @@ def test_tile_condition_and_independent_area_hazards_publish_without_contact_cha
     assert applied is not None and not applied.canceled
     updates = [event for _, event in EventQueue.iter_events_since(cursor)
                if isinstance(event, SensoryUpdateEvent) and event.observer_uuid == observer.uuid
-               and event.hazardous_cells_changed.get("2,1") is True]
-    assert updates and all(not event.visible_cells_added and not event.visible_cells_removed
+               and value_at(event.hazardous_cells_changed, (2, 1)) == 1]
+    assert updates and all(no_cells(event.visible_cells_added) and no_cells(event.visible_cells_removed)
                            and not event.entity_contacts_changed and not event.object_contacts_changed
                            for event in updates)
     trapped = tile_checkpoint(observer.uuid)
     assert tile.remove_condition("Exposed trap")
     cleared = tile_checkpoint(observer.uuid)
     cause = Event(source_entity_uuid=observer.uuid, event_type=EventType.BASE_ACTION, phase=EventPhase.EFFECT)
-    zone = SpikeGrowthZone(source_entity_uuid=uuid4(), position=(2, 1), zone_radius_feet=0, spell_dc=0)
+    zone = SpikeGrowthZone(source_entity_uuid=uuid4(), position=(2, 1), area=Sphere(radius_feet=0), spell_dc=0)
     assert zone.activate(parent_event=cause) is not None
     area = tile_checkpoint(observer.uuid)
     assert tile.active_conditions == {}
-    assert observer.senses.hazardous_cells[(2, 1)] is True
+    assert value_at(capture_senses_snapshot(observer.senses).hazardous_cells, (2, 1)) == 1
     assert zone.remove_from_runtime_owner(parent_event=cause)
     ended = tile_checkpoint(observer.uuid)
-    assert observer.senses.hazardous_cells[(2, 1)] is False
+    assert value_at(capture_senses_snapshot(observer.senses).hazardous_cells, (2, 1)) == 0
     observer_uuid = observer.uuid
     check_saved_tiles([initial, trapped, cleared, area, ended], observer_uuid)
     area_world, _ = replay(area[0], observer_uuid)

@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 from pydantic import Field, model_validator
 
-from dnd.actions import resolve_paid_entry_retreats
+from dnd.actions import resolve_paid_entry_retreats, Move
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType, HazardFilter
@@ -13,16 +13,19 @@ from dnd.core.events import (
     Event, EventHandler, EventPhase, EventQueue, EventType, PortalTransferEvent,
     SpatialChangeEvent, Trigger,
 )
-from dnd.core.gridmap import get_map
+from typing import ClassVar
+
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import SpatialCondition
+from dnd.types.event_facts import GroupEntryKind
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import (
     SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy,
     SpatialEffectTriggerKind,
 )
 from dnd.types.traps import TrapState
-from dnd.types.world import OccupancyLayer
+from dnd.types.world import OccupancyLayer, SpatialChannel
 
 
 PORTAL_CONTENT_REF = ContentRef(
@@ -43,6 +46,8 @@ class Portal(SpatialCondition):
     Content identity selects its appearance. State and ground contact select
     its behavior; neither the sprite nor a spell/caster is a gameplay owner.
     """
+    creates = (Move,)
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Portal"
     description: str = "A magical passage to another location."
@@ -70,6 +75,9 @@ class Portal(SpatialCondition):
         senses = observer.get_senses() if observer is not None else None
         return bool(senses is not None and self.uuid in senses.spatial_effects) or super().is_hazard_perceived_by(
             requesting_entity_uuid)
+
+    def spatial_channels(self) -> frozenset[SpatialChannel]:
+        return super().spatial_channels() | {SpatialChannel.MOVEMENT}
 
     def is_hazardous_for(self, entity_uuid: UUID | None = None, *,
                          occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND) -> bool:
@@ -110,10 +118,12 @@ class Portal(SpatialCondition):
     def _transfer_occupants(self, *, parent_event: Event) -> None:
         occupants = {identity for position in self.affected_positions
                      for identity in get_map().get_entities_at(position)}
-        for identity in sorted(occupants, key=str):
-            entity = Entity.get(identity)
-            if isinstance(entity, Entity):
-                self.transfer(entity, parent_event=parent_event)
+        # Everyone standing on an opening portal crosses at once.
+        with EventQueue.group(GroupEntryKind.PORTAL_TRANSFER, root=parent_event):
+            for identity in sorted(occupants, key=str):
+                entity = Entity.get(identity)
+                if isinstance(entity, Entity):
+                    self.transfer(entity, parent_event=parent_event)
 
     def transfer(self, entity: Entity, *, parent_event: Event) -> PortalTransferEvent | None:
         """Commit one free crossing, then resolve the exit's ordinary consequences."""

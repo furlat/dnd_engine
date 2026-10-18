@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.events import Damage
@@ -95,7 +95,7 @@ class SpellcastingSource(BaseModel):
     maximum_spell_rank: int = Field(
         ge=0,
         le=9,
-        description="Highest spell rank this source can learn or prepare.",
+        description="Own-class spell rank ceiling; shared-slot book eligibility is validated separately.",
     )
     ritual_policy: RitualPreparationPolicy | None = Field(
         default=None,
@@ -140,6 +140,20 @@ class SpellcastingSource(BaseModel):
                 f"progression and provider level: expected {expected_rank}",
             )
         return self
+
+
+class FreeSpellCastGrant(BaseModel):
+    """One exact source's base-rank alternative to paying a normal slot."""
+
+    model_config = ConfigDict(frozen=True)
+    grant_id: UUID
+    provider_id: str
+    source_id: UUID
+    spell_id: str
+    cast_rank: int = Field(ge=1, le=9)
+    label: str
+    resource_name: str | None = None
+    outside_encounter_only: bool = False
 
 
 class LearnedReactionSpellSource(BaseModel):
@@ -212,6 +226,13 @@ class SpellDamageAffinityContribution(BaseModel):
     )
 
 
+class DivineSmiteEntitlement(BaseModel):
+    """Exact source authority, separate from the shared automatic slot toggles."""
+    model_config = ConfigDict(frozen=True)
+    maximum_slot_rank: int = Field(default=5, ge=1, le=5)
+    origin_kind: Literal["class", "spell"] = "class"
+
+
 class SpellcastingBlock(BaseBlock):
     """Spell-specific modifiers that are always present on an entity.
 
@@ -230,6 +251,12 @@ class SpellcastingBlock(BaseBlock):
         default_factory=dict,
         description="Spellcasting abilities keyed by exact progression source.",
     )
+    spell_entitlements: Dict[UUID, Tuple[str, ...]] = Field(default_factory=dict)
+    free_cast_grants: Dict[UUID, FreeSpellCastGrant] = Field(default_factory=dict)
+    overchannel_uses: int = Field(default=0, ge=0)
+    divine_smite_entitlements: Dict[UUID,DivineSmiteEntitlement] = Field(default_factory=dict)
+    divine_smite_handler_uuids: Dict[int,UUID] = Field(default_factory=dict)
+
     learned_reaction_spell_handlers: Dict[
         str,
         LearnedReactionSpellOwnership,
@@ -240,6 +267,8 @@ class SpellcastingBlock(BaseBlock):
             "lifetime."
         ),
     )
+    learned_reaction_preferences: Dict[str, bool] = Field(default_factory=dict, exclude=True,
+        description="Runtime automatic-reaction choices retained across preparation changes.")
     spell_damage_affinity_contributions: Dict[
         UUID,
         SpellDamageAffinityContribution,
@@ -250,45 +279,45 @@ class SpellcastingBlock(BaseBlock):
         ),
     )
     _consumed_spell_damage_affinity_executions: dict[UUID, set[UUID]] = (
-        PrivateAttr(default_factory=dict)
+        PrivateAttr(default={})
     )
     spell_attack_bonus: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=UUID('00000000-0000-0000-0000-000000000000'),
-            base_value=0,
-            value_name="Spell Attack Bonus"
+            base=0,
+            name="Spell Attack Bonus"
         ),
         description="Spell-specific attack bonus (e.g., Wand of the War Mage)"
     )
     spell_damage_bonus: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=UUID('00000000-0000-0000-0000-000000000000'),
-            base_value=0,
-            value_name="Spell Damage Bonus"
+            base=0,
+            name="Spell Damage Bonus"
         ),
         description="Spell-specific damage bonus (e.g., Elemental Affinity)"
     )
     spell_dc_bonus: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=UUID('00000000-0000-0000-0000-000000000000'),
-            base_value=0,
-            value_name="Spell DC Bonus"
+            base=0,
+            name="Spell DC Bonus"
         ),
         description="Spell-specific DC bonus beyond 8+prof+ability"
     )
     spell_crit_threshold: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=UUID('00000000-0000-0000-0000-000000000000'),
-            base_value=0,
-            value_name="Spell Crit Threshold"
+            base=0,
+            name="Spell Crit Threshold"
         ),
         description="Spell-specific crit threshold modifier (stacks with Equipment.crit_threshold)"
     )
     spell_crit_extra_dice: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=UUID('00000000-0000-0000-0000-000000000000'),
-            base_value=0,
-            value_name="Spell Crit Extra Dice"
+            base=0,
+            name="Spell Crit Extra Dice"
         ),
         description="Spell-specific extra dice on critical hits (stacks with Equipment.crit_extra_dice)"
     )
@@ -309,6 +338,12 @@ class SpellcastingBlock(BaseBlock):
         default_factory=list,
         description="Damage type for each extra spell damage"
     )
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (
+            self.spell_attack_bonus, self.spell_damage_bonus, self.spell_dc_bonus, self.spell_crit_threshold,
+            self.spell_crit_extra_dice)
 
     @model_validator(mode="after")
     def check_extra_damage_consistency(self) -> Self:
@@ -592,16 +627,16 @@ class SpellcastingBlock(BaseBlock):
         del self.learned_reaction_spell_handlers[spell_id]
         return True
 
-    def get_extra_spell_damage(self) -> List[Damage]:
-        """Return extra damage payloads that apply to spell damage."""
+    def get_extra_spell_damage(self, target_entity_uuid: Optional[UUID]) -> List[Damage]:
+        """Return extra damage payloads that apply to spell damage against a target."""
         damages: List[Damage] = []
         for i in range(len(self.extra_spell_damage_dices)):
             damages.append(Damage(
                 source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid,
+                target_entity_uuid=target_entity_uuid,
                 damage_dice=self.extra_spell_damage_dices[i],
                 dice_numbers=self.extra_spell_damage_dices_numbers[i],
-                damage_bonus=self.extra_spell_damage_bonus[i],
+                damage_bonus=parts(self.extra_spell_damage_bonus[i]),
                 damage_type=self.extra_spell_damage_type[i]
             ))
         return damages
@@ -632,91 +667,79 @@ class SpellcastingBlock(BaseBlock):
         if config is None:
             config = SpellcastingConfig()
 
-        spell_attack_bonus = ModifiableValue.create(
+        spell_attack_bonus = ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=0,
-            value_name="Spell Attack Bonus"
+            base=0,
+            name="Spell Attack Bonus"
         )
         for mod_name, mod_value in config.spell_attack_modifiers:
-            spell_attack_bonus.self_static.add_value_modifier(
-                NumericalModifier.create(
+            add_modifier(spell_attack_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                     source_entity_uuid=source_entity_uuid,
                     name=mod_name,
                     value=mod_value
-                )
-            )
+                ))
 
-        spell_damage_bonus = ModifiableValue.create(
+        spell_damage_bonus = ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=0,
-            value_name="Spell Damage Bonus"
+            base=0,
+            name="Spell Damage Bonus"
         )
         for mod_name, mod_value in config.spell_damage_modifiers:
-            spell_damage_bonus.self_static.add_value_modifier(
-                NumericalModifier.create(
+            add_modifier(spell_damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                     source_entity_uuid=source_entity_uuid,
                     name=mod_name,
                     value=mod_value
-                )
-            )
+                ))
 
-        spell_dc_bonus = ModifiableValue.create(
+        spell_dc_bonus = ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=0,
-            value_name="Spell DC Bonus"
+            base=0,
+            name="Spell DC Bonus"
         )
         for mod_name, mod_value in config.spell_dc_modifiers:
-            spell_dc_bonus.self_static.add_value_modifier(
-                NumericalModifier.create(
+            add_modifier(spell_dc_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                     source_entity_uuid=source_entity_uuid,
                     name=mod_name,
                     value=mod_value
-                )
-            )
+                ))
 
-        spell_crit_threshold = ModifiableValue.create(
+        spell_crit_threshold = ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=0,
-            value_name="Spell Crit Threshold"
+            base=0,
+            name="Spell Crit Threshold"
         )
         for mod_name, mod_value in config.spell_crit_threshold_modifiers:
-            spell_crit_threshold.self_static.add_value_modifier(
-                NumericalModifier.create(
+            add_modifier(spell_crit_threshold, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                     source_entity_uuid=source_entity_uuid,
                     name=mod_name,
                     value=mod_value
-                )
-            )
+                ))
 
-        spell_crit_extra_dice = ModifiableValue.create(
+        spell_crit_extra_dice = ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=0,
-            value_name="Spell Crit Extra Dice"
+            base=0,
+            name="Spell Crit Extra Dice"
         )
         for mod_name, mod_value in config.spell_crit_extra_dice_modifiers:
-            spell_crit_extra_dice.self_static.add_value_modifier(
-                NumericalModifier.create(
+            add_modifier(spell_crit_extra_dice, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                     source_entity_uuid=source_entity_uuid,
                     name=mod_name,
                     value=mod_value
-                )
-            )
+                ))
 
         extra_spell_damage_bonus: List[ModifiableValue] = []
         for i, modifiers in enumerate(config.extra_spell_damage_bonus_modifiers):
-            bonus = ModifiableValue.create(
+            bonus = ModifiableValue(
                 source_entity_uuid=source_entity_uuid,
-                base_value=0,
-                value_name=f"Extra Spell Damage Bonus {i}"
+                base=0,
+                name=f"Extra Spell Damage Bonus {i}"
             )
             for mod_name, mod_value in modifiers:
-                bonus.self_static.add_value_modifier(
-                    NumericalModifier.create(
+                add_modifier(bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                         source_entity_uuid=source_entity_uuid,
                         name=mod_name,
                         value=mod_value
-                    )
-            )
+                    ))
             extra_spell_damage_bonus.append(bonus)
 
         extra_spell_damage_type = [DamageType(t) for t in config.extra_spell_damage_types]

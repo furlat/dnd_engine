@@ -60,8 +60,8 @@ def copy_world_facts(world: WorldFacts) -> WorldFacts:
 def world_objects_at(world: WorldFacts, positions: set[tuple[int, int]]) -> set[UUID]:
     """Objects on touched supports, including either incident side of a boundary."""
     identities: set[UUID] = set()
-    for position in positions:
-        identities.update(world.objects_by_position.get(position, ()))
+    for position in positions & world.objects_by_position.keys():
+        identities.update(world.objects_by_position[position])
     return identities
 
 
@@ -155,9 +155,6 @@ def world_event_positions(
     match event:
         case WorldInitializedEvent():
             return {row.position for row in event.tiles} | set(world.tiles)
-        case SensoryUpdateEvent():
-            positions.update(tuple(map(int, key.split(",", maxsplit=1)))
-                for key in event.objective_light_levels_changed.keys() | event.ambient_light_levels_changed.keys())
         case WorldModifiedEvent():
             if event.tile_position is not None:
                 positions.add(event.tile_position)
@@ -183,6 +180,8 @@ def world_event_positions(
             identity = event.object_uuid
             if event.old_position is not None:
                 positions.add(event.old_position)
+            # Every tile a TILES_CHANGED fact writes (residue fields) is a changed cell.
+            positions.update(row.position for row in event.tile_states)
             for placement in (event.placement, event.previous_placement):
                 if placement is not None:
                     positions.update(placement.positions)
@@ -209,8 +208,7 @@ def world_event_footprints(
 ) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
     """Separate Tile after-values from object/incident-support observation inputs."""
     if isinstance(event, SensoryUpdateEvent):
-        return {tuple(map(int, key.split(",", maxsplit=1)))
-                for key in event.objective_light_levels_changed.keys() | event.ambient_light_levels_changed.keys()}, set()
+        return set(), set()
     if (isinstance(event, SpatialChangeEvent)
             and event.change_type is SpatialChangeType.LIGHT_CHANGED
             and (condition is None or condition.resulting_tile is None and condition.resulting_item is None)):
@@ -253,18 +251,6 @@ def apply_world_fact(
             for obj in event.objects:
                 _put_object(world, obj.item.item_uuid, obj)
             world.connectors = {row.connector_uuid: row for row in event.connectors}
-        case SensoryUpdateEvent():
-            for key in event.objective_light_levels_changed.keys() | event.ambient_light_levels_changed.keys():
-                x, y = key.split(",", maxsplit=1)
-                position = int(x), int(y)
-                if (previous := world.tiles.get(position)) is not None:
-                    values = {}
-                    if key in event.objective_light_levels_changed:
-                        values["resolved_light"] = LightLevel(event.objective_light_levels_changed[key])
-                    if key in event.ambient_light_levels_changed:
-                        values["default_light"] = LightLevel(event.ambient_light_levels_changed[key])
-                    world.tiles[position] = previous.model_copy(update=values)
-            return bool(event.objective_light_levels_changed or event.ambient_light_levels_changed)
         case WorldModifiedEvent():
             if event.tile_position is not None:
                 if isinstance(event.after, WorldTileState):
@@ -331,7 +317,12 @@ def apply_world_fact(
                 "surface_kind": event.new_surface_kind, "slope_axis": event.new_slope_axis,
             })
         case SpatialChangeEvent():
-            if event.change_type is SpatialChangeType.TILE_CHANGED:
+            if event.change_type is SpatialChangeType.TILES_CHANGED:
+                if not event.tile_states:
+                    return False
+                for row in event.tile_states:
+                    world.tiles[row.position] = row
+            elif event.change_type is SpatialChangeType.TILE_CHANGED:
                 if event.tile_present is False:
                     world.tiles.pop(event.position, None)
                 elif event.tile_state is not None:

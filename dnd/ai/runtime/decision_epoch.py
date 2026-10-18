@@ -464,15 +464,10 @@ def _build_action_capabilities(
     """
     total_started = time.perf_counter()
     started = time.perf_counter()
-    registered_variants = (
-        registered_actions
-        if registered_actions is not None
-        else tuple(
-            variant
-            for template in actor.registered_actions
-            for variant in template.get_discovery_variants(actor)
-        )
-    )
+    if registered_actions is None:
+        scan = actor.action_scan(subjective=True)
+        registered_actions = tuple(form for template in actor.registered_actions for form in template.discovery_forms(scan))
+    registered_variants = registered_actions
     registered_sources = [(variant, None) for variant in registered_variants]
     _record_timing(record_timing, "build_capabilities.registered_variants_ms", started)
 
@@ -816,9 +811,9 @@ def _action_row_descriptor_cache_key(row: AvailableActionInfo) -> tuple[Any, ...
         row.weapon_name,
         tuple(row.damage_types),
         row.outcome_profile,
-        _frozen_model_key(row.self_setup_profile),
-        _frozen_model_key(row.target_effect_profile),
-        _frozen_model_key(row.world_effect_profile),
+        row.self_setup_profile,
+        row.target_effect_profile,
+        row.world_effect_profile,
         _enum_value(row.action_category),
         row.base_template_name,
         row.spell_level,
@@ -827,36 +822,13 @@ def _action_row_descriptor_cache_key(row: AvailableActionInfo) -> tuple[Any, ...
         row.requires_concentration,
         row.num_projectiles,
         row.allow_same_target,
-        _frozen_model_key(row.position_selection),
+        row.position_selection,
         row.is_item_use,
         str(row.source_item_uuid) if row.source_item_uuid is not None else None,
         row.item_stack_count,
         row.item_charge_cost,
         row.fixed_healing,
     )
-
-
-def _frozen_model_key(value: Any) -> Any:
-    """Return a hashable JSON-mode value for a small Pydantic model."""
-    if value is None:
-        return None
-    if hasattr(value, "model_dump"):
-        return _freeze_json_value(value.model_dump(mode="json"))
-    return _freeze_json_value(value)
-
-
-def _freeze_json_value(value: Any) -> Any:
-    """Turn JSON-like model data into a hashable deterministic structure."""
-    if isinstance(value, dict):
-        return tuple(
-            (key, _freeze_json_value(item))
-            for key, item in sorted(value.items(), key=lambda row: str(row[0]))
-        )
-    if isinstance(value, list):
-        return tuple(_freeze_json_value(item) for item in value)
-    if isinstance(value, tuple):
-        return tuple(_freeze_json_value(item) for item in value)
-    return value
 
 
 def _build_affordance_rows_from_actions(
@@ -1303,11 +1275,11 @@ def _build_action_economy_state_from_actor(
         if slot_attr is None:
             continue
         slot_started = time.perf_counter()
-        base_mod = slot_attr.get_base_modifier()
+        base = slot_attr.base if slot_attr.base is not None else 0
         _record_timing(record_timing, f"action_economy.spell_slot_{level}.base_modifier_ms", slot_started)
         max_val = installed_capacities.get(
             level,
-            base_mod.value if base_mod else 0,
+            base,
         )
         if max_val > 0:
             slot_started = time.perf_counter()

@@ -12,13 +12,15 @@ from dnd.player.choices import PlayerChoices, PlayerSelectionPreview
 from dnd.core.content.descriptors import ContentDescriptor
 from dnd.player.audience import PlayerAudience
 from dnd.player.commands import ActionSelection, EquipItem, UnequipItem, ToggleHandler
+from dnd.types.character_progression import PreparedSpellSelection
+from dnd.characters.mastery import SpellMasteryStudy
 from dnd.player.facts import PlayerInitialization, PlayerUpdate
 
 MAX_SAFE_INTEGER = 9007199254740991
 Counter = Annotated[int, Field(strict=True, ge=0, le=MAX_SAFE_INTEGER)]
 PositiveCounter = Annotated[int, Field(strict=True, ge=1, le=MAX_SAFE_INTEGER)]
 Token = Annotated[str, Field(min_length=1, max_length=128)]
-Lifecycle = Literal['starting', 'waiting_for_human', 'advancing', 'delivery_blocked', 'terminal', 'failed', 'closing', 'closed']
+Lifecycle = Literal['starting', 'waiting_for_human', 'advancing', 'outside_encounter', 'delivery_blocked', 'terminal', 'failed', 'closing', 'closed']
 FailureReason = Literal['recording_capacity', 'catch_up', 'reader_backpressure', 'worker_failure',
     'capture_failure', 'contract_failure', 'recording_failure', 'host_close']
 RejectionReason = Literal['stale_state', 'stale_discovery', 'not_your_turn', 'actor_unavailable',
@@ -41,7 +43,7 @@ class PlayerCursor(Identity):
 
 class ProtocolIdentity(Wire):
     protocol_version: Literal[1] = 1
-    player_schema_version: Literal[9] = 9
+    player_schema_version: Literal[15] = 15
     schema_digest: Annotated[str, Field(pattern='^[0-9a-f]{64}$')]
 
 
@@ -176,7 +178,17 @@ class ToggleHandlerIntent(Wire):
     handler: ToggleHandler
 
 
-PlayerIntent = Annotated[ExecuteSelectionIntent | EndTurnIntent | EquipIntent | UnequipIntent | ToggleHandlerIntent,
+class PrepareSpellsIntent(Wire):
+    kind: Literal['prepare_spells'] = 'prepare_spells'
+    selection: PreparedSpellSelection
+
+
+class StudySpellMasteryIntent(Wire):
+    kind: Literal['study_spell_mastery'] = 'study_spell_mastery'
+    selection: SpellMasteryStudy
+
+
+PlayerIntent = Annotated[ExecuteSelectionIntent | EndTurnIntent | EquipIntent | UnequipIntent | ToggleHandlerIntent | PrepareSpellsIntent | StudySpellMasteryIntent,
     Field(discriminator='kind')]
 
 

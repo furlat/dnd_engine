@@ -15,16 +15,17 @@ from dnd.content_system.creature_materialization import materialize_creature
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
-from dnd.core.events import Damage, DamageAppliedEvent, EventPhase, EventQueue, EventType, SpatialChangeEvent
+from dnd.core.events import Damage, DamageAppliedEvent, EventPhase, EventQueue, EventType, SpatialChangeEvent, SpatialChangeType
 from dnd.core.gridmap import get_map
-from dnd.core.values import ModifiableValue
+from dnd.core.navigation import has_route
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity, EntityConfig
 from dnd.items.environment import DirectionalDoor
 from dnd.game import Game
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.monsters.demon_variants import CORROSIVE_DEMON_RECIPE, DREAD_DEMON_RECIPE
 from dnd.monsters.srd_roster import SRD_CREATURE_RECIPES_BY_ID
-from dnd.residues import BLOOD_RESIDUE, BONE_RESIDUE, CORROSIVE_RESIDUE, deposit_residue
+from dnd.residues import BLOOD_RESIDUE, BONE_RESIDUE, CORROSIVE_RESIDUE, deposit_residue, remove_tile_residue
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spatial.environmental_conditions import materialize_spike_trap_condition
 from dnd.types.world import CardinalDirection, OccupancyLayer
@@ -100,7 +101,7 @@ def test_mixed_packet_releases_once_even_if_only_nonphysical_damage_gets_through
     install_body_response(creature, BLOOD_BODY_RESPONSE)
     components = [Damage(source_entity_uuid=creature.uuid, damage_type=kind,
                          damage_dice=4 if kind is DamageType.PIERCING else 8, dice_numbers=1,
-                         damage_bonus=ModifiableValue.create(source_entity_uuid=creature.uuid, base_value=0))
+                         damage_bonus=parts(ModifiableValue(source_entity_uuid=creature.uuid, base=0)))
                   for kind in (DamageType.PIERCING, DamageType.FIRE)]
     with fixed_dice_faces(2, 8):
         rolls = [damage.get_dice(AttackOutcome.HIT).roll for damage in components]
@@ -148,9 +149,9 @@ def test_repeated_and_lethal_wounds_leave_one_tile_owned_residue(world: Game) ->
     assert current.condition_uuid == first[0].condition_uuid and current.amount == 2
     assert current.contributions[0].ellipses == first[0].contributions[0].ellipses
     assert current.contributions[0].amount == 2
-    condition = tile.active_conditions_by_uuid[first[0].condition_uuid]
-    assert condition.source_entity_uuid == tile.uuid
-    assert condition.target_entity_uuid == tile.uuid
+    # One field per material owns every cell it lies on (plan §5.9); the cell keeps its stable identity.
+    field = get_map().residue_field(current.residue_id)
+    assert field is not None and tile.position in field.cells
     assert not creature.is_encounter_alive
 
 
@@ -178,17 +179,18 @@ def test_repeated_injuries_record_authored_amount_without_changing_membership_or
         assert injury.body_release is not None
         if prior:
             assert (grid.optical_revision, grid.movement_revision) == revisions
+            # One splatter is one change (plan R1): one fact whose rows are every cell's after-value.
             changes = [event for _, event in EventQueue.iter_events_since(cursor)
                        if isinstance(event, SpatialChangeEvent) and event.phase is EventPhase.COMPLETION
-                       and event.tile_state is not None]
+                       and event.change_type is SpatialChangeType.TILES_CHANGED]
             cells = {cell for region in injury.body_release.regions for cell in region.positions}
-            assert len(changes) == len(cells) * int(prior[0].amount != amount)
+            assert len(changes) == int(prior[0].amount != amount)
             if changes:
-                at_origin, = [change for change in changes
-                              if change.tile_state is not None and change.tile_state.position == creature.position]
-                assert at_origin.tile_state is not None and changes[0].parent_event is not None
-                assert at_origin.tile_state.residues == (residue,)
-                parent = EventQueue.get_event_by_uuid(changes[0].parent_event)
+                change, = changes
+                assert {row.position for row in change.tile_states} == cells and change.parent_event is not None
+                at_origin, = [row for row in change.tile_states if row.position == creature.position]
+                assert at_origin.residues == (residue,)
+                parent = EventQueue.get_event_by_uuid(change.parent_event)
                 assert parent is not None and parent.lineage_uuid == injury.lineage_uuid
 
 
@@ -267,13 +269,13 @@ def test_deposition_is_inert_until_entry_and_removal_restores_safe_route(world: 
     assert creature.get_hp() == hp - 6
     Entity.update_entity_position(creature, (1, 1))
     grid = get_map()
-    _, unsafe_paths = grid.compute_paths(creature.position, requesting_entity_uuid=creature.uuid,
-                                          walk_in_danger=False)
-    assert tile.position not in unsafe_paths
-    assert tile.remove_condition_by_uuid(residue.condition_uuid)
-    _, safe_paths = grid.compute_paths(creature.position, requesting_entity_uuid=creature.uuid,
+    unsafe_paths = grid.compute_paths(creature.position, requesting_entity_uuid=creature.uuid,
                                       walk_in_danger=False)
-    assert tile.position in safe_paths
+    assert not has_route(unsafe_paths, tile.position)
+    assert remove_tile_residue(tile, residue.residue_id)
+    safe_paths = grid.compute_paths(creature.position, requesting_entity_uuid=creature.uuid,
+                                    walk_in_danger=False)
+    assert has_route(safe_paths, tile.position)
     Entity.update_entity_position(creature, tile.position)
     assert creature.get_hp() == hp - 6
     assert tile.to_world_tile_state().residues == ()
@@ -322,12 +324,13 @@ def test_inert_residue_changes_tile_facts_without_rebuilding_routes(world: Game)
     cursor = EventQueue.event_cursor()
     state = deposit_residue(tile, BLOOD_RESIDUE)
     assert state is not None
-    assert tile.remove_condition_by_uuid(state.condition_uuid)
+    assert remove_tile_residue(tile, state.residue_id)
     assert get_map().movement_revision == revision
     changes = [event for _, event in EventQueue.iter_events_since(cursor)
                if event.phase is EventPhase.COMPLETION]
+    # The deposit and the removal are one inert tile fact each (plan §5.9).
     assert [event.event_type for event in changes] == [
-        EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL,
+        EventType.SPATIAL_TILE_CHANGED, EventType.SPATIAL_TILE_CHANGED,
     ]
 
 

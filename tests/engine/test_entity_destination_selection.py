@@ -6,6 +6,7 @@ from dnd.core.events import EventQueue
 from dnd.ai.contracts.control import DecisionEpochReason
 from dnd.ai.contracts.decision import ExecuteIntent
 from dnd.ai.runtime.execution import AIDecisionValidationError, ValidatedExecuteDecision, validate_policy_intent
+from dnd.ai.runtime.knowledge_system import bind_ai_knowledge, open_assignment_knowledge
 from dnd.ai.runtime.state_projection import SubjectiveAIStateProjector
 from dnd.controller import TurnContext
 from dnd.spells.transmutation import Telekinesis
@@ -60,7 +61,10 @@ def test_typed_ai_destination_intent_uses_same_native_options(scene):
     caster, target = scene
     target.faction = caster.faction
     register_spell(caster, Telekinesis)
-    projector = SubjectiveAIStateProjector(assignment_id="landing-test", controlled_entity_uuids=(caster.uuid,))
+    knowledge = bind_ai_knowledge()
+    open_assignment_knowledge(knowledge, caster.uuid, (caster.uuid,))
+    projector = SubjectiveAIStateProjector(assignment_id="landing-test", controlled_entity_uuids=(caster.uuid,),
+        knowledge=knowledge, knowledge_key=caster.uuid)
     context = TurnContext(source_entity_uuid=caster.uuid, entity_uuid=caster.uuid)
     state = projector.project_decision(caster, context, reason=DecisionEpochReason.SNAPSHOT)
     row = next(row for row in state.epoch_build.epoch.affordances.all_rows

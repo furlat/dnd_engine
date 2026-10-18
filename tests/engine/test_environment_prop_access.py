@@ -21,6 +21,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import FireBolt
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.world import CardinalDirection
+from tests.engine.support import admitted_in_discovery
 
 
 @pytest.fixture
@@ -58,7 +59,7 @@ def test_low_stove_blocks_shots_and_entry_until_actually_broken(arena: Game, spe
     action = (FireBolt(source_entity_uuid=source.uuid, target_entity_uuid=target.uuid)
               if spell else Attack(source_entity_uuid=source.uuid,
                   target_entity_uuid=target.uuid, weapon_slot=WeaponSlot.RANGED_MAIN))
-    assert not action.validate_requirements_for_discovery()
+    assert not admitted_in_discovery(action)
     hp, budget = target.get_hp(), source.action_economy.actions.normalized_score
     result = action.apply()
     assert result is not None and result.canceled
@@ -81,7 +82,7 @@ def test_low_stove_blocks_shots_and_entry_until_actually_broken(arena: Game, spe
     assert stove.uuid == identity and stove.integrity is ItemIntegrity.DESTROYED
     source.action_economy.reset_all_costs()
     Entity.update_all_entities_senses()
-    assert action.validate_requirements_for_discovery()
+    assert admitted_in_discovery(action)
     with fixed_dice_faces(20, 4, 4, 4):
         shot = action.apply()
     assert shot is not None and not shot.canceled and target.get_hp() < hp

@@ -2,13 +2,113 @@
 
 `player-api-v1.schema.json` is exported directly from existing native/player type
 owners and the finite `server/protocol.py` envelopes. It has 19 public roots,
-320 shared definitions and 1,700 object-field rows. `protocol-identity.json` binds
-protocol 1 and player schema 9 to the exact canonical schema digest.
+334 shared definitions and 1,797 object-field rows. `protocol-identity.json` binds
+protocol 1 and player schema 15 to the exact canonical schema digest.
 
 - `openapi.json`: actual HTTP paths, request/response types, identity headers,
   finite errors and SSE record types. Also served at the running host's `/openapi.json`.
 - `field-ledger.json`: each reachable field, required/default shape and source owner.
 - The Python and TypeScript packages carry the same schema and digest.
+
+## Shared cells, rows and references (schema 15)
+
+Each group's cells travel once. `SensoryRows` holds three row tables: `cells`
+(the rows of the visible and seen lists, in cell order), `light_levels` and
+`hazards` (the distinct (cell, value) pairs, by cell, then value, as layers).
+A sensory fact's five cell lists are `RowBits` `{start, bits}` subsets of those
+rows (row `8 * start + i` is bit `i` of the base64url `bits`); a value list
+leaves out 0 at a cell the same fact adds to view (the fold reads 0 there).
+A fact names its `observer` as an index into `uuids`. Contact rows are
+columns (`contact_positions`, `contact_visual` bits, `contact_special_senses`);
+light sources are `LightRow`s naming `uuids`. Sighting cell lists are
+`CellMask`s, unpacked in cell order. A node names its resolution as an index
+into its group's `resolutions` (`{lineage, application_id?}`, the seat's
+lineage index); a spell application names the seat's lineage index;
+`version_rows` is two columns. A world update's changed resolved light is one
+`CellValues`. Default-valued fields of nodes, observations, sightings and facts
+are left out. `agent_docs/GODOT_CLIENT_FOLD_SCHEMA_15_2026-10-18.md` lists the
+delta; `dnd/player/reduction.py` is the reference fold.
+
+## Shared sensory rows (schema 14)
+
+A seat with many observers receives the same perceived values in many
+observers' sensory facts. Each group (`PlayerLineage`, and the
+`PlayerInitialization`) now carries `sensory_rows` (`SensoryRows`): its
+distinct values, each once, as columns. `uuids` holds every identity a keyed
+row or a removed list names. Contact row i is `uuids[contact_uuid_index[i]]`
+perceived as `contacts[i]`; sighting row i is the effect
+`uuids[sighting_uuid_index[i]]` seen as `sightings[i]`; light removal row i is
+the source `uuids[light_removal_uuid_index[i]]` gone at
+`light_removal_revisions[i]`; `light_sources[i]` is a `PerceivedLightSource`
+(it carries its `source_uuid`). A `SensoryFact` names rows of its own group by
+index: `entity_contacts_changed` / `object_contacts_changed` contact rows,
+`spatial_effect_sightings` sighting rows, `light_sources_changed` light sources,
+`light_sources_removed` light removal rows, and `entity_contacts_removed`,
+`object_contacts_removed`, `spatial_effects_removed` indices into `uuids`. A
+one-observer seat has the same shape. A sensory field holding its default
+(an empty list or map, `false`, `null`) is left out; decoding restores the
+default. `dnd/player/reduction.py:sensory_changes` is the reference resolution.
+
+## Packed cells (schema 13)
+
+A set of map cells is one `CellMask` `{x0, y0, width, height, bits}`: cell
+`(x0 + i, y0 + j)` is bit `i * height + j` of the base64url `bits`, least
+significant bit first in each byte. The box is the set's bounding box, so an
+empty set has width and height 0. Per-cell values are a `CellValues`
+`{cells, values}`: one byte per cell of `cells`, in that bit order. The sensory
+cell fields (`visible_cells_added` / `_removed`, `seen_cells_added`,
+`effective_light_levels_changed`, `hazardous_cells_changed`, a light level or
+0 / 1) use these forms. An empty one is left out of the update: its default is the
+empty value. The native sensory event no longer carries objective or ambient
+light maps.
+
+## Patches and occurrence identities (schema 12)
+
+A seat receives what it does not hold yet, as patches against its own fold
+(`dnd/player/reduction.py` is the reference reducer):
+
+- `PlayerObservation` carries `changes` (`ActorChanges`) against the seat's body
+  of `actor_uuid`; against an absent body every field is present. An unchanged
+  re-acquisition carries no body fields.
+- Items: `VisualItem` is a loadout layer `(slot, item_uuid, item_id, is_lit)` and
+  `controlled_items` are item uuids. `ItemPatch` rows (on observations and on
+  `EquipmentFact`) carry the components the seat lacks or holds otherwise:
+  `ItemLook` for an item equipped on any observed body, `ItemProfile` and
+  `ItemState` for a controlled inventory. `EquipmentFact.changes` is a body patch.
+- The HUD is a `PlayerHUDPatch` against the seat's last display: its revision,
+  the initiative and sheet order when they changed, and `SheetPatch` rows.
+- `SensoryFact` carries `spatial_effect_sightings` and, once per effect and seat
+  (again only when it changed), `spatial_effect_content` (content_ref, name,
+  description). `observed_changes` is no longer sent.
+- Combat-log entries (`PlayerLogEntry`) have no nested copies; an entry's
+  children are composed from its node's `children_lineages` (a child lineage
+  without its own entry contributes its children's), and a multi-entity entry's
+  `target_entry_indices` index those children. `PlayerLineage.root` is an index
+  into `events`.
+- Versions are identified by the seat's occurrence index (`VersionRow.source_index`)
+  and lineages by the occurrence index of their first version the seat received;
+  nodes, version rows, observations, world updates and fact references carry
+  these integers instead of uuids. Uuids inside shared values (a condition's
+  `event_uuid`, concentration slots, application and resolution references)
+  remain opaque attributes.
+
+Saved `PlayerSequence` packets are schema 8 (schema 15's rows).
+
+## Antimagic removal (schema 11)
+
+Antimagic Field and its live suppression-provider UUID fields were removed from
+condition/item presentation states, visual items and floor items. The
+`SpellSuppression.antimagic` discriminator was removed; ordinary Globe clipping
+records remain. Current clients must use the schema-11 identity. Native
+RecordedSequence schema 2 and public PlayerSequence schema 5 are unchanged.
+The exact preceding contract is archived under
+[`recordings/pre-antimagic-removal`](recordings/pre-antimagic-removal/README.md).
+The native offline event reader accepts named empty retired metadata on its
+concrete model fields, preserves opaque context and explicitly rejects active
+retired suppression. See the
+[engine implementation handoff](../../agent_docs/SPELL_CATALOG_REPAIR_AND_ANTIMAGIC_REMOVAL_HANDOFF_2026-10-16.md)
+for the complete field list and qualification. Earlier schema notes below remain
+historical contract documentation.
 
 Disclosed floor items and visible equipment preserve their native light radii;
 equipment also preserves `is_lit`. The dim radius extends beyond the bright
@@ -56,8 +156,7 @@ footprint. The Python reference composition is `dnd/player/audience.py`.
 
 Ordinary native light/world events update the existing tile `resolved_light`
 and `default_light` fields through `WorldUpdate` tile patches. Compact emitter
-observations do not create a second per-observer illumination map. Optional
-objective/ambient sensory maps remain readable for archived schema-9 records.
+observations do not create a second per-observer illumination map.
 `resolved_light` is objective native MAX/cap illumination;
 `senses.light_levels` is the observer's effective level and can include
 darkvision. `default_light` is actual ambient illumination, independent of the

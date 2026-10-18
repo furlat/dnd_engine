@@ -1,6 +1,6 @@
 {
   "asset_index_digest": "3bd799f4ad12eb9d097f1a9c44790a2d0d0e75a8ee8b83e85ababce79aada632",
-  "binding_digest": "cc1fc694fc582a859eb5a2b5048259ef9be4bbbda10810a012dc93fe9c4bf0cc",
+  "binding_digest": "ffa8e58adbe4eb6b9e09e76ef5474dd5bb1193de128bc74bc1471bf68e2e5b17",
   "definitions": [
     {
       "asset_sha256": "540da9d7cb94419501c0c8c47d73ca05d826d8d70e2f18c6adae5e13e4c92892",
@@ -3629,20 +3629,6 @@
       "icon_key": "condition.dnd-spells-abjuration-aideffect"
     },
     {
-      "asset_sha256": "ed1c3d68ce73d131176a6a801caf70e500f04fcc7f3c0f7ef1892d31f452cfeb",
-      "content_ref": {
-        "content_id": "condition.spell.antimagic_field.zone",
-        "content_version": 1,
-        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa",
-        "definition_kind": "condition",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.spells.abjuration.AntimagicFieldZone",
-      "icon_key": "condition.dnd-spells-abjuration-antimagicfieldzone"
-    },
-    {
       "asset_sha256": "248c8b447e16b091008a944b637c7d19dc3bd2c668d15996176dafbc3e5eaca7",
       "content_ref": {
         "content_id": "condition.spell.bane",
@@ -6259,20 +6245,6 @@
       "evidence_kind": "authored_presentation",
       "evidence_token": "catalog:content.srd_5_1_cc:spell:spell.aid@1",
       "icon_key": "spell.aid"
-    },
-    {
-      "asset_sha256": "920c1f2b59699f18967c126749407e24eae2f6afd2f4479e3180366158941e87",
-      "content_ref": {
-        "content_id": "spell.antimagic_field",
-        "content_version": 1,
-        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
-        "definition_kind": "spell",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "backend_spell_catalog",
-      "evidence_token": "backend_spell_catalog::antimagic_field",
-      "icon_key": "spell.antimagic-field"
     },
     {
       "asset_sha256": "617b56fa6efd81230bf824cdf9a08316d0b95328e9758251c32f4a3404553451",
@@ -9381,6 +9353,20 @@
       "evidence_kind": "intentional_non_icon_presentation",
       "evidence_token": "portrait_sprite_owned_presentation:content.srd_5_1_cc:creature:creature.dretch@1",
       "icon_key": null
+    },
+    {
+      "asset_sha256": "4fb24889a854998977766403cde974c4ef2e857622df97e10ad83244edcc8a76",
+      "content_ref": {
+        "content_id": "condition.spell.charm_person.effect",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa",
+        "definition_kind": "condition",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:condition:condition.spell.charm_person.effect@1->spell.charm-person",
+      "icon_key": "spell.charm-person"
     }
   ],
   "recipe_presets": [

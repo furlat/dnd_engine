@@ -34,20 +34,22 @@ __all__ = [
     "DeathSaveEvent", "InstantDeathEvent", "DeathEvent",
 ]
 
-from dnd.types.event_facts import (LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, WorldConnectorState as WorldConnectorState)
+from dnd.types.event_facts import (JOINS_A_STEP, SIMULTANEOUS_ENTRIES, GroupEntryKind, HandlerGroupDispatch, LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, WorldConnectorState as WorldConnectorState)
 
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from contextvars import ContextVar
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, StrictInt, field_serializer, model_validator
-from typing import Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
-from dnd.core.values import ModifiableValue
+from typing import FrozenSet, Union, List, Optional, Dict, Mapping, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
+from dnd.core.values import (AdvantageBreakdownRow, ComposedValue, ModifiableValue, ValueBreakdownRow, ValueRead,
+    ValueReading, read_value)
 from dnd.types.actor import TemporaryHitPointsGrant, ConditionState
 from dnd.types.class_features import IndomitableReroll, RelentlessRageIntervention
 from dnd.types.summoning import SummonOrigin, SummonSelection, TerminalOwnerRelease
 
 from dnd.core.combat_log import DeathLogData, DeathSaveLogData, ForcedMovementLogData, SpatialChangeLogData, SpatialInteractionLogData, StepMovementLogData, TurnLogData
-from dnd.core.combat_log import summarize_target_entries
+from dnd.core.combat_log import CombatLogData, summarize_target_entries
 from dnd.core.combat_log import (
     CombatLogEntry,
     CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
@@ -72,6 +74,8 @@ from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.creature_types import DamageType
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode
+from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues
+from dnd.core.cells import mask_positions, mask_union
 from dnd.types.traps import TrapState
 from dnd.types.residues import BodyReleaseResult
 from dnd.types.spatial_effects import (
@@ -95,7 +99,7 @@ from dnd.types.character_progression import (
     Species,
     SpeciesVariant,
 )
-from dnd.types.world import MovementMode, OccupancyLayer
+from dnd.types.world import MovementMode, OccupancyLayer, WorldEdgeChannel
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.core.traversal_connectors import (
@@ -106,13 +110,14 @@ from dnd.core.action_execution import MovementProvocationPolicy
 from uuid import UUID, uuid4
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
 from datetime import UTC, datetime
+from bisect import bisect_right
 from collections import defaultdict
 from typing import Callable, Tuple
 import logging
 import time
 
 from dnd.action_timing import action_timing_enabled, record_action_timing
-from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +140,71 @@ class PreCompletionSystem(Protocol):
 
     def __call__(self, event: 'Event') -> None: ...
 
+    def settle_group(self, group: 'OpenGroup') -> None:
+        """Settle work this system recorded while a simultaneous group was open."""
+        ...
+
     def reset(self) -> None: ...
+
+
+@dataclass
+class OpenGroup:
+    """One open simultaneous group (plan §5.2): its root, entry kinds and phase-B work.
+
+    Pending work stays with its owners (GridMap's pending lights, the sensory
+    reducer's recorded facts); the group carries only what identifies it.
+    """
+
+    root_uuid: Optional[UUID]
+    kinds: List[GroupEntryKind]
+    # Phase B, in arrival order: deferred handler dispatches and other work
+    # that acts on the group's settled result.
+    deferred: List[Callable[[], None]] = field(default_factory=list)
+    settling: bool = False
+    # Damage dealt to several targets at the same time is rolled once (PHB;
+    # human D6a): the group shares one Dice per (source, packet, outcome).
+    shares_damage_rolls: bool = False
+    shared_dice: Dict[Tuple[Any, ...], 'Dice'] = field(default_factory=dict)
+    # Owners holding work for this group (GridMap's light fact) flush it after
+    # the systems settle, whether or not a system absorbed it.
+    settlers: List[Callable[[Optional[UUID]], None]] = field(default_factory=list)
+    # Lineages of facts opened in the group that complete right after its
+    # settle (a zone's own change): settled observers need no second pass.
+    completes_after: Set[UUID] = field(default_factory=set)
+
+    def holds_simultaneous_entry(self) -> bool:
+        """Whether a simultaneous entry is open (`SIMULTANEOUS_ENTRIES`). A move step alone only
+        settles perception once: its handlers, departures and reactions run as without a group."""
+        return any(kind in SIMULTANEOUS_ENTRIES for kind in self.kinds)
+
+
+def merged_grants(grants: Dict[str, FrozenSet[str]], added: Mapping[str, FrozenSet[str]]) -> Dict[str, FrozenSet[str]]:
+    """The union of observer grants, as a shared frozen mapping.
+
+    `grants` itself when `added` adds no observer; otherwise a new mapping in which a value is
+    replaced only where the union adds observers. Neither input is edited.
+    """
+    merged = grants
+    for identity, observers in added.items():
+        held = merged.get(identity)
+        if held is not None and observers <= held:
+            continue
+        if merged is grants:
+            merged = dict(grants)
+        merged[identity] = observers if held is None else held | observers
+    return merged
+
+
+def value_log_rows(rows: Sequence[ValueBreakdownRow]) -> List[ModifierBreakdown]:
+    """Combat-log rows of a read's static numerical breakdown."""
+    return [ModifierBreakdown(name=row.name, value=row.value, source=row.source) for row in rows]
+
+
+def advantage_log_rows(rows: Sequence[AdvantageBreakdownRow]) -> List[ModifierBreakdown]:
+    """Combat-log rows of a read's applied advantage (+1) and disadvantage (-1) contributions."""
+    signs = {"advantage": 1, "disadvantage": -1}
+    return [ModifierBreakdown(name=row.name, value=signs[row.value], source=row.source)
+            for row in rows if row.value in signs]
 
 
 @runtime_checkable
@@ -189,6 +258,8 @@ class Event(BaseModel):
     versions. Subclasses add domain-specific payload fields and may override
     `generate_combat_log()`.
     """
+
+    __getattr__ = read_private_attribute
 
     name: str = Field(default="Event", description="Human-readable event label.")
     uuid: UUID = Field(
@@ -278,11 +349,13 @@ class Event(BaseModel):
     )
     lineage_children_events: List[UUID] = Field(
         default_factory=list,
-        description="Child event UUIDs accumulated across this lineage's earlier phases.",
+        description=("Child event UUIDs accumulated across this lineage's earlier phases, as stored; "
+                     "later children are read through EventQueue.child_links."),
     )
     children_events: List[UUID] = Field(
         default_factory=list,
-        description="Child event UUIDs attached during this event version's phase.",
+        description=("Child event UUIDs attached during this event version's phase, as stored; "
+                     "later children are read through EventQueue.child_links."),
     )
     parent_lineage: Optional[UUID] = Field(
         default=None,
@@ -304,7 +377,7 @@ class Event(BaseModel):
     # Passive archive admission may need current defaults without claiming they
     # were recorded. The recording codec alone owns this omission metadata.
     _recorded_omissions: frozenset[str] = PrivateAttr(default=frozenset())
-    identified_entity_observer_uuids: Dict[str, Set[str]] = Field(
+    identified_entity_observer_uuids: Dict[str, FrozenSet[str]] = Field(
         default_factory=dict,
         exclude=True,
         description=(
@@ -312,7 +385,7 @@ class Event(BaseModel):
             "values are observer UUIDs that identified that participant."
         ),
     )
-    located_entity_observer_uuids: Dict[str, Set[str]] = Field(
+    located_entity_observer_uuids: Dict[str, FrozenSet[str]] = Field(
         default_factory=dict,
         exclude=True,
         description=(
@@ -320,7 +393,7 @@ class Event(BaseModel):
             "unlike identity grants these are recomputed at every event version."
         ),
     )
-    located_position_observer_uuids: Dict[str, Set[str]] = Field(
+    located_position_observer_uuids: Dict[str, FrozenSet[str]] = Field(
         default_factory=dict,
         exclude=True,
         description=(
@@ -373,14 +446,11 @@ class Event(BaseModel):
 
     def completion_position_observer_evidence(
         self,
-        completion_locations: Dict[str, Set[str]],
-    ) -> Dict[str, Set[str]]:
+        completion_locations: Mapping[str, FrozenSet[str]],
+    ) -> Dict[str, FrozenSet[str]]:
         """Return coordinate grants to freeze onto the completion version."""
         del completion_locations
-        return {
-            key: set(observer_uuids)
-            for key, observer_uuids in self.located_position_observer_uuids.items()
-        }
+        return dict(self.located_position_observer_uuids)
 
     def model_post_init(self, __context: Any) -> None:
         if __context is PASSIVE_EVENT_REPLAY:
@@ -441,12 +511,8 @@ class Event(BaseModel):
         if new_phase == EventPhase.COMPLETION:
             EventQueue.run_pre_completion_callbacks(self)
             if EventQueue._identified_entity_observer_computer is not None:
-                phase_updates["located_entity_observer_uuids"] = {
-                    entity_uuid: set(observer_uuids)
-                    for entity_uuid, observer_uuids in (
-                        EventQueue._identified_entity_observer_computer(self).items()
-                    )
-                }
+                phase_updates["located_entity_observer_uuids"] = (
+                    EventQueue._identified_entity_observer_computer(self, self.located_entity_observer_uuids))
             completion_locations = phase_updates.get(
                 "located_entity_observer_uuids",
                 self.located_entity_observer_uuids,
@@ -455,7 +521,8 @@ class Event(BaseModel):
                 self.completion_position_observer_evidence(completion_locations)
             )
 
-            all_children = list(dict.fromkeys(self.lineage_children_events + self.children_events))
+            children, lineage_children = EventQueue.child_links(self)
+            all_children = list(dict.fromkeys(lineage_children + children))
             phase_updates['lineage_children_events'] = all_children
             phase_updates['children_events'] = all_children
 
@@ -473,7 +540,8 @@ class Event(BaseModel):
                     seen_lineages.add(child.lineage_uuid)
             phase_updates['children_lineages'] = child_lineages
         else:
-            phase_updates['lineage_children_events'] = self.lineage_children_events + self.children_events
+            children, lineage_children = EventQueue.child_links(self)
+            phase_updates['lineage_children_events'] = lineage_children + children
             phase_updates['children_events'] = []
 
         if new_phase == EventPhase.COMPLETION:
@@ -481,29 +549,27 @@ class Event(BaseModel):
                 temp_event = self.model_copy(update=phase_updates)
                 combat_log = temp_event.generate_combat_log()
                 if combat_log is not None:
-                    combat_log.identified_entity_observer_uuids = {
-                        entity_uuid: set(observer_uuids)
-                        for entity_uuid, observer_uuids in temp_event.identified_entity_observer_uuids.items()
-                    }
-                    combat_log.located_entity_observer_uuids = {
-                        entity_uuid: set(observer_uuids)
-                        for entity_uuid, observer_uuids in temp_event.located_entity_observer_uuids.items()
-                    }
-                    combat_log.located_position_observer_uuids = {
-                        position: set(observer_uuids)
-                        for position, observer_uuids in temp_event.located_position_observer_uuids.items()
+                    # Built by copy-update: a generated log may be the previous version's
+                    # frozen value. The log shares the version's frozen grant values.
+                    log_updates: Dict[str, Any] = {
+                        'identified_entity_observer_uuids': temp_event.identified_entity_observer_uuids,
+                        'located_entity_observer_uuids': temp_event.located_entity_observer_uuids,
+                        'located_position_observer_uuids': temp_event.located_position_observer_uuids,
                     }
                     if EventQueue._perceiver_computer:
-                        combat_log.perceiver_uuids = EventQueue.perceivers_for_event(temp_event)
+                        log_updates['perceiver_uuids'] = EventQueue.perceivers_for_event(temp_event)
 
                     child_logs = temp_event._collect_child_combat_logs()
                     if child_logs:
-                        combat_log.sub_entries = child_logs
-                        _enrich_multi_entity_log_from_children(combat_log, child_logs)
+                        log_updates['sub_entries'] = child_logs
+                        log_updates['data'] = _multi_entity_log_data(combat_log.data, child_logs)
 
                     if EventQueue._revealed_computer:
-                        combat_log.revealed_entity_uuids |= EventQueue._revealed_computer(temp_event, child_logs or [])
+                        revealed = set(combat_log.revealed_entity_uuids)
+                        revealed |= EventQueue._revealed_computer(temp_event, child_logs or [])
+                        log_updates['revealed_entity_uuids'] = revealed
 
+                    combat_log = combat_log.model_copy(update=log_updates)
                     phase_updates['combat_log'] = combat_log
 
                     if self.parent_event is None and EventQueue._combat_log_callback:
@@ -546,16 +612,6 @@ class Event(BaseModel):
             EventQueue._combat_log_callback(canceled)
         return canceled
 
-    def add_child_event(self, child_event: 'Event'):
-        """Add a child event to current-phase and lineage-level child lists.
-
-        Args:
-            child_event: Event version caused by this event.
-        """
-        self.children_events.append(child_event.uuid)
-        if child_event.uuid not in self.lineage_children_events:
-            self.lineage_children_events.append(child_event.uuid)
-
     def get_children_events(self) -> List['Event']:
         """Get all children events of the current event.
 
@@ -569,7 +625,7 @@ class Event(BaseModel):
                 if lineage_events:
                     result.append(lineage_events[-1])
             return result
-        resolved = [EventQueue.get_event_by_uuid(child_event) for child_event in self.children_events]
+        resolved = [EventQueue.get_event_by_uuid(child_event) for child_event in EventQueue.child_links(self)[0]]
         return [out for out in resolved if out is not None]
 
     def get_parent_event(self) -> Optional['Event']:
@@ -611,7 +667,7 @@ class Event(BaseModel):
                     child_logs.extend(events[-1]._collect_child_combat_logs())
         else:
             seen_lineages: Set[UUID] = set()
-            for child_uuid in self.lineage_children_events:
+            for child_uuid in EventQueue.child_links(self)[1]:
                 child = EventQueue.get_event_by_uuid(child_uuid)
                 if child is None or child.lineage_uuid in seen_lineages:
                     continue
@@ -635,7 +691,18 @@ class Event(BaseModel):
         self,
     ) -> tuple[EffectiveHandlerPresentation, ...]:
         """Return exact reaction evidence retained across this event lineage."""
-        return self._effective_handler_presentations
+        return EventQueue.handler_presentations(self)
+
+    def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
+        """A copy carries this version's reaction evidence as of now.
+
+        A stored version is frozen: reactions dispatched on it after its store are
+        held by the queue (`EventQueue.handler_presentations`), and every copy takes
+        the evidence current at copy time.
+        """
+        copied = super().model_copy(update=update, deep=deep)
+        copied._effective_handler_presentations = EventQueue.handler_presentations(self)
+        return copied
 
     def post(self, **updates) -> Self:
         """Create a modified version of this event and rebroadcast it.
@@ -654,6 +721,10 @@ class Event(BaseModel):
         updates['uuid'] = uuid4()
         if 'lineage_uuid' not in updates:
             updates['lineage_uuid'] = self.lineage_uuid
+        # A modified version continues this version's child links unless the update names its own.
+        children, lineage_children = EventQueue.child_links(self)
+        updates.setdefault('children_events', children)
+        updates.setdefault('lineage_children_events', lineage_children)
 
         updated_event = self.model_copy(update=updates)
 
@@ -839,6 +910,8 @@ class EntityCreatedEvent(Event):
     background: Optional[Background] = None
     applied_origin_state: Optional[AppliedOriginState] = None
     applied_class_levels: Tuple[AppliedClassLevel, ...] = ()
+    scribed_spell_ids: Tuple[str, ...] = ()
+    permanent_feature_uses: Tuple[str, ...] = ()
     ability_scores: Tuple[Tuple[AbilityName, StrictInt], ...] = ()
     skill_proficiencies: Tuple[SkillName, ...] = ()
     skill_expertise: Tuple[SkillName, ...] = ()
@@ -931,6 +1004,8 @@ class _EntityLevelFact(Event):
     resulting_class_levels: Tuple[Tuple[CharacterClass, StrictInt], ...] = ()
     applied_origin_state: Optional[AppliedOriginState] = None
     applied_class_levels: Tuple[AppliedClassLevel, ...] = ()
+    scribed_spell_ids: Tuple[str, ...] = ()
+    permanent_feature_uses: Tuple[str, ...] = ()
     prepared_spell_selections: Tuple[PreparedSpellSelection, ...] = ()
     feature_toggle_selections: Tuple[FeatureToggleSelection, ...] = ()
     changed_feature_ids: Tuple[str, ...] = ()
@@ -961,18 +1036,16 @@ class EntityLevelRemovedEvent(_EntityLevelFact):
     )
 
 
-def _enrich_multi_entity_log_from_children(
-    combat_log: CombatLogEntry, child_logs: List[CombatLogEntry],
-) -> None:
-    """Record target membership once alongside the one child-detail tree."""
-    if combat_log.data.kind != "multi_entity_action":
-        return
+def _multi_entity_log_data(data: CombatLogData, child_logs: List[CombatLogEntry]) -> CombatLogData:
+    """A log's data with target membership recorded once alongside the one child-detail tree."""
+    if data.kind != "multi_entity_action":
+        return data
     target_categories = {CombatLogEntryType.ACTION, CombatLogEntryType.ATTACK,
         CombatLogEntryType.HEAL, CombatLogEntryType.SPELL_DAMAGE, CombatLogEntryType.SPELL_SAVE}
     indices = tuple(i for i, child in enumerate(child_logs)
                     if child.entry_type in target_categories and child.target_uuid is not None)
-    indices = indices[:combat_log.data.total_targets]
-    combat_log.data = summarize_target_entries(combat_log.data, child_logs, indices)
+    indices = indices[:data.total_targets]
+    return summarize_target_entries(data, child_logs, indices)
 
 
 
@@ -1031,9 +1104,10 @@ class Trigger(BaseModel):
         """Return True when the trigger has no source or target filters."""
         return self.event_source_entity_uuid is None and self.event_target_entity_uuid is None
 
-    def get_simple_trigger(self) -> 'Trigger':
-        """Return a trigger that keeps only event type and phase."""
-        return Trigger(event_type=self.event_type, event_phase=self.event_phase)
+    def index_key(self) -> Tuple[EventType, EventPhase, Optional[UUID], Optional[UUID]]:
+        """Return the queue index key: type, phase and the optional source/target filters."""
+        return (self.event_type, self.event_phase,
+                self.event_source_entity_uuid, self.event_target_entity_uuid)
 
 class BaseHandler(BaseObject):
     """Shared callable wrapper for event and spatial handlers.
@@ -1068,11 +1142,21 @@ class BaseHandler(BaseObject):
         default=True,
         description="Whether queue dispatch should invoke this handler.",
     )
-    runs_while_suppressed: bool = Field(default=False,
+    runs_while_owner_inactive: bool = Field(default=False,
         description="Native duration/final cleanup reaction, independent of effect contribution.")
     player_toggleable: bool = Field(
         default=False,
         description="Whether player-facing controls may enable or disable this handler.",
+    )
+    application_preview_filter: Callable[[EffectOrigin, UUID, UUID], bool] | None = Field(default=None,exclude=True,repr=False,
+        description="Pure recipient admission predicate shared with selection preview; never emits events or mutates state.")
+    group_dispatch: HandlerGroupDispatch = Field(
+        default=HandlerGroupDispatch.INLINE,
+        description=(
+            "AFTER_GROUP handlers act on others or start new actions: inside an open "
+            "simultaneous group they run after it settles, in arrival order, and may "
+            "not rewrite the stored fact (plan §5.3)."
+        ),
     )
     validation_only: bool = Field(
         default=False,
@@ -1087,6 +1171,14 @@ class BaseHandler(BaseObject):
         exclude=True,
         description="Block that registered this handler, used to clean block-local handler indexes."
     )
+
+    def on_admitted(self) -> None:
+        """Concrete composed handlers may admit their exact owned contributions."""
+        return None
+
+    def on_removed(self) -> None:
+        """Release concrete owned contributions when this handler is detached."""
+        return None
 
     def get_semantic_key(self) -> str:
         """Return an explicit/bound key or an explicit unbound diagnostic."""
@@ -1107,7 +1199,7 @@ class BaseHandler(BaseObject):
         Returns:
             A modified/canceled event, the same event, or None for no change.
         """
-        if not self.enabled or (not self.runs_while_suppressed and not self.contributions_active()):
+        if not self.enabled or (not self.runs_while_owner_inactive and not self.contributions_active()):
             return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
@@ -1137,7 +1229,7 @@ class EventHandler(BaseHandler):
         Returns:
             A modified/canceled event, the same event, or None for no change.
         """
-        if not self.enabled or (not self.runs_while_suppressed and not self.contributions_active()):
+        if not self.enabled or (not self.runs_while_owner_inactive and not self.contributions_active()):
             return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
@@ -1202,7 +1294,7 @@ class SpatialHandler(BaseHandler):
         Returns:
             A modified/canceled event, the same event, or None for no change.
         """
-        if not self.enabled or (not self.runs_while_suppressed and not self.contributions_active()):
+        if not self.enabled or (not self.runs_while_owner_inactive and not self.contributions_active()):
             return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
@@ -1222,6 +1314,11 @@ class EventQueue:
     """
 
     _events_by_lineage: Dict[UUID, List[Event]] = defaultdict(list)
+    # Child links are the queue's (P7b): per lineage, the UUIDs of stored versions whose parent
+    # version belongs to it, in store order. A stored version is never edited when a child arrives.
+    _lineage_children: Dict[UUID, List[UUID]] = defaultdict(list)
+    # Reaction evidence dispatched on an already-stored version, by version UUID (P7b).
+    _dispatched_presentations: Dict[UUID, Tuple[EffectiveHandlerPresentation, ...]] = {}
     _events_by_uuid: Dict[UUID, Event] = {}
     _event_indexes_by_uuid: Dict[UUID, int] = {}
     _events_by_type: Dict[EventType, List[Event]] = defaultdict(list)
@@ -1241,8 +1338,12 @@ class EventQueue:
     _event_handlers: Dict[UUID, 'EventHandler'] = {}
     _event_handler_order: Dict[UUID, int] = {}
     _next_event_handler_order: int = 0
-    _event_handlers_by_trigger: Dict[Trigger, List['EventHandler']] = defaultdict(list)
-    _event_handlers_by_simple_trigger: Dict[Trigger, List['EventHandler']] = defaultdict(list)
+    # Keyed by `Trigger.index_key()` and by (type, phase) for simple triggers.
+    _event_handlers_by_trigger: Dict[
+        Tuple[EventType, EventPhase, Optional[UUID], Optional[UUID]],
+        List['EventHandler'],
+    ] = defaultdict(list)
+    _event_handlers_by_simple_trigger: Dict[Tuple[EventType, EventPhase], List['EventHandler']] = defaultdict(list)
     _event_handlers_by_source_entity_uuid: Dict[UUID, List['EventHandler']] = defaultdict(list)
 
     _spatial_handlers: Dict[UUID, 'SpatialHandler'] = {}
@@ -1280,6 +1381,10 @@ class EventQueue:
         "event_queue_preflight_depth",
         default=0,
     )
+    _open_group: ContextVar[Optional[OpenGroup]] = ContextVar(
+        "event_queue_open_group",
+        default=None,
+    )
     _pre_completion_callbacks: List[Callable[['Event'], None]] = []
     _pre_completion_systems: Dict[str, PreCompletionSystem] = {}
     _pre_completion_systems_by_event_type: Dict[
@@ -1290,7 +1395,8 @@ class EventQueue:
     _combat_log_callback: Optional[Callable[['Event'], None]] = None
     _perceiver_computer: Optional[Callable[['Event'], Set[str]]] = None
     _revealed_computer: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]] = None
-    _identified_entity_observer_computer: Optional[Callable[['Event'], Dict[str, Set[str]]]] = None
+    _identified_entity_observer_computer: Optional[Callable[
+        ['Event', Dict[str, FrozenSet[str]]], Dict[str, FrozenSet[str]]]] = None
 
     @classmethod
     def begin_turn_execution(cls, execution_id: Optional[UUID] = None) -> UUID:
@@ -1347,7 +1453,7 @@ class EventQueue:
     @classmethod
     def set_identified_entity_observer_computer(
         cls,
-        func: Optional[Callable[['Event'], Dict[str, Set[str]]]],
+        func: Optional[Callable[['Event', Dict[str, FrozenSet[str]]], Dict[str, FrozenSet[str]]]],
     ) -> None:
         """Register the event-time participant identity provider.
 
@@ -1357,15 +1463,17 @@ class EventQueue:
         possessed when the event began.
 
         Args:
-            func: Callback returning participant UUID keys and the observer
-                UUIDs that currently identify each participant.
+            func: Callback given the version and the grants mapping it carries,
+                returning the participant UUID keys mapped to the frozen observer
+                UUID sets that currently identify each participant: the carried
+                mapping itself when nothing changed. Versions share these values.
         """
         cls._identified_entity_observer_computer = func
 
     @classmethod
     def perceivers_for_event(cls, event: 'Event') -> Set[str]:
         """Use the installed event-time observation policy for informational entries."""
-        return set(cls._perceiver_computer(event)) if cls._perceiver_computer else set()
+        return cls._perceiver_computer(event) if cls._perceiver_computer else set()
 
     @classmethod
     def push_combat_log(cls, entry: 'CombatLogEntry', source_entity_uuid: UUID) -> None:
@@ -1443,6 +1551,29 @@ class EventQueue:
     @classmethod
     def _invoke_handler(cls, handler: BaseHandler, event: Event) -> Optional[Event]:
         """Invoke one matched handler and publish passive effect evidence."""
+        group = cls._open_group.get()
+        if (group is not None and not group.settling and group.holds_simultaneous_entry()
+                and handler.group_dispatch is HandlerGroupDispatch.AFTER_GROUP):
+            stored = event.model_copy(deep=True)
+            group.deferred.append(lambda: cls._replay_handler(handler.uuid, stored))
+            return None
+        return cls._run_handler(handler, event)
+
+    @classmethod
+    def _replay_handler(cls, handler_uuid: UUID, stored: Event) -> None:
+        """Run one deferred handler against its stored fact, if it still exists."""
+        handler = cls._event_handlers.get(handler_uuid) or cls._spatial_handlers.get(handler_uuid)
+        if handler is None:
+            return
+        result = cls._run_handler(handler, stored)
+        if result is not None and result != stored:
+            raise RuntimeError(
+                f"After-group handler {handler.name!r} rewrote a settled fact; split its rewrite inline"
+            )
+
+    @classmethod
+    def _run_handler(cls, handler: BaseHandler, event: Event) -> Optional[Event]:
+        """Run one handler now and publish passive effect evidence."""
         before_cursor = cls.event_cursor()
         before_event_index = len(cls._all_events)
         with runtime_behavior_provider(handler.behavior_binding):
@@ -1496,7 +1627,7 @@ class EventQueue:
                 emitted.lineage_uuid
                 for emitted in cls._all_events[before_event_index:]
             ))
-            result._effective_handler_presentations = (
+            presentations = (
                 *result.effective_handler_presentations,
                 EffectiveHandlerPresentation(
                     dispatch_index=evidence.dispatch_index,
@@ -1511,6 +1642,11 @@ class EventQueue:
                     outcome=evidence.outcome,
                 ),
             )
+            if cls._events_by_uuid.get(result.uuid) is result:
+                # The dispatched version is stored and frozen: the queue holds its evidence.
+                cls._dispatched_presentations[result.uuid] = presentations
+            else:
+                result._effective_handler_presentations = presentations
         cls._handler_dispatch_cursor += 1
         for callback in tuple(cls._on_handler_dispatch_callbacks):
             try:
@@ -1604,12 +1740,12 @@ class EventQueue:
         cls,
         callback: Callable[[Sequence['Event']], None],
     ) -> None:
-        """Add a passive callback that receives one completed causal batch.
+        """Add a callback that receives one completed causal batch.
 
         Events registered outside an explicit batch are delivered as a
         one-event sequence. Nested action applications share the outer action's
         batch, preserving authoritative storage order across reactions and
-        child actions.
+        child actions. A callback's error propagates to the dispatching scope.
 
         Args:
             callback: Passive observer invoked after the batch boundary.
@@ -1629,6 +1765,85 @@ class EventQueue:
         """
         if callback in cls._on_event_batch_callbacks:
             cls._on_event_batch_callbacks.remove(callback)
+
+    @classmethod
+    def open_group(cls) -> Optional[OpenGroup]:
+        """Return the simultaneous group open in this context, if any."""
+        return cls._open_group.get()
+
+    @classmethod
+    @contextmanager
+    def group(cls, kind: GroupEntryKind, root: Optional['Event'] = None, *,
+              shares_damage_rolls: bool = False) -> Iterator[OpenGroup]:
+        """Open (or join) one simultaneous group; the outermost close settles it once.
+
+        Objective writes inside stay immediate. Systems record their observer
+        work and settle it when the outermost entry closes, before the root
+        completes (plan §5.3-5.4).
+        """
+        current = cls._open_group.get()
+        if current is not None:
+            if not current.holds_simultaneous_entry() and kind not in JOINS_A_STEP:
+                # A move step's facts settle before an entry it does not cause starts inside it
+                # (another step, a transfer, a trap): never across steps.
+                cls._settle_open_group(current)
+            current.kinds.append(kind)
+            # A nested area shares its own roll inside a group that doesn't.
+            widened = shares_damage_rolls and not current.shares_damage_rolls
+            current.shares_damage_rolls = current.shares_damage_rolls or shares_damage_rolls
+            try:
+                yield current
+            finally:
+                current.kinds.pop()
+                if widened:
+                    current.shares_damage_rolls = False
+                    current.shared_dice.clear()
+            return
+        group = OpenGroup(root_uuid=root.uuid if root is not None else None, kinds=[kind],
+            shares_damage_rolls=shares_damage_rolls)
+        token = cls._open_group.set(group)
+        try:
+            yield group
+        finally:
+            group.settling = True
+            try:
+                for system in tuple(cls._pre_completion_systems.values()):
+                    system.settle_group(group)
+                for settle in group.settlers:
+                    settle(group.root_uuid)
+            finally:
+                cls._open_group.reset(token)
+        cls._replay_deferred(group)
+
+    @classmethod
+    def _settle_open_group(cls, group: OpenGroup) -> None:
+        """Settle what an open group recorded so far, and keep it open. Every system and settler
+        drains what it holds, so the group's close settles only what came after."""
+        group.settling = True
+        try:
+            for system in tuple(cls._pre_completion_systems.values()):
+                system.settle_group(group)
+            for settle in group.settlers:
+                settle(group.root_uuid)
+        finally:
+            group.settling = False
+
+    @classmethod
+    def _replay_deferred(cls, group: OpenGroup) -> None:
+        """Phase B: deferred work in arrival order, each as its own group (plan §5.1)."""
+        root = cls.get_event_by_uuid(group.root_uuid) if group.root_uuid is not None else None
+        for run in group.deferred:
+            with cls.group(GroupEntryKind.REACTION, root=root):
+                run()
+
+    @classmethod
+    def after_group(cls, run: Callable[[], None]) -> None:
+        """Run ``run`` in phase B of the open group, or now when none is open."""
+        group = cls._open_group.get()
+        if group is not None and not group.settling and group.holds_simultaneous_entry():
+            group.deferred.append(run)
+        else:
+            run()
 
     @classmethod
     def is_event_batch_active(cls) -> bool:
@@ -1666,18 +1881,13 @@ class EventQueue:
 
     @classmethod
     def _dispatch_event_batch(cls, events: Sequence['Event']) -> None:
-        """Notify passive batch observers without affecting engine execution."""
+        """Notify batch observers; an observer's error is fatal and propagates."""
         timing = action_timing_enabled()
         total_started = time.perf_counter() if timing else 0.0
         for callback in list(cls._on_event_batch_callbacks):
             callback_started = time.perf_counter() if timing else 0.0
             try:
                 callback(events)
-            except Exception:
-                logger.exception(
-                    "Passive event-batch observer %s failed",
-                    cls._timing_callback_name(callback),
-                )
             finally:
                 if timing:
                     callback_name = cls._timing_callback_name(callback)
@@ -1819,9 +2029,12 @@ class EventQueue:
         if stored_event is not None:
             raise ValueError(f"Event UUID collision for {event.uuid}")
         cls._store_event(event)
+        # Completion versions are facts: no handler runs on them.
+        if event.phase == EventPhase.COMPLETION:
+            return event
 
         handlers = cls._get_handlers_for_event(event)
-        if not handlers or event.phase == EventPhase.COMPLETION:
+        if not handlers:
             return event
 
         current_event = event
@@ -1843,10 +2056,10 @@ class EventQueue:
             if result.canceled:
                 if defer_cancellation:
                     return result
-                return cls._record_handler_result(result)
+                return cls._record_handler_result(result, current_event)
 
             if result.modified:
-                current_event = cls._record_handler_result(result)
+                current_event = cls._record_handler_result(result, current_event)
 
         return current_event
 
@@ -2011,23 +2224,29 @@ class EventQueue:
         if event.phase not in (EventPhase.EXECUTION, EventPhase.EFFECT):
             raise ValueError("Only execution and effect phases can be committed facts")
 
-        committed = cast(
-            EventT,
-            event.model_copy(update={
-                "use_register": True,
-                "timestamp": datetime.now(UTC),
-            }),
-        )
-        cls._store_event(committed)
+        # The owner's unregistered value becomes the stored version itself, as in
+        # publish_preflighted; callers hold only the returned version.
+        committed = event
+        committed.use_register = True
+        committed.timestamp = datetime.now(UTC)
+        errors: list[BaseException] = []
+        try:
+            cls._store_event(committed)
+        except BaseException as error:
+            errors.append(error)
         for handler in cls._get_handlers_for_event(committed):
             if handler.enabled:
-                cls._invoke_handler(
-                    handler,
-                    committed.model_copy(
-                        update={"use_register": False},
-                        deep=True,
-                    ),
-                )
+                try:
+                    cls._invoke_handler(
+                        handler,
+                        committed.model_copy(update={"use_register": False}, deep=True),
+                    )
+                except BaseException as error:
+                    errors.append(error)
+        if errors:
+            for error in errors[1:]:
+                errors[0].add_note(f"Another committed-fact observer failed: {error!r}")
+            raise errors[0]
         return committed
 
     @classmethod
@@ -2088,18 +2307,24 @@ class EventQueue:
         return tuple(stored)
 
     @classmethod
-    def _record_handler_result(cls, result: Event) -> Event:
-        """Store one handler-produced version without duplicating event identity."""
-        if not result.use_register:
-            result = result.model_copy(update={"use_register": True})
+    def _record_handler_result(cls, result: Event, dispatched: Event) -> Event:
+        """Store one handler-produced version without duplicating event identity.
+
+        The stored version continues the child links of the version its handler was dispatched with.
+        """
         stored_event = cls._events_by_uuid.get(result.uuid)
         if stored_event is result:
             return result
+        update: Dict[str, Any] = {}
+        if not result.use_register:
+            update["use_register"] = True
         if stored_event is not None:
-            result = result.model_copy(update={
-                "uuid": uuid4(),
-                "timestamp": datetime.now(UTC),
-            })
+            update.update(uuid=uuid4(), timestamp=datetime.now(UTC))
+        children, lineage_children = cls.child_links(dispatched)
+        if result.children_events != children or result.lineage_children_events != lineage_children:
+            update.update(children_events=children, lineage_children_events=lineage_children)
+        if update:
+            result = result.model_copy(update=update)
         cls._store_event(result)
         return result
 
@@ -2107,6 +2332,36 @@ class EventQueue:
     def get_event_by_uuid(cls, uuid: UUID) -> Optional[Event]:
         """Return an event version by UUID, if it is indexed."""
         return cls._events_by_uuid.get(uuid)
+
+    @classmethod
+    def handler_presentations(cls, event: Event) -> Tuple[EffectiveHandlerPresentation, ...]:
+        """One version's reaction evidence as of now.
+
+        The stored version itself: the evidence it was stored with, extended by the
+        reactions dispatched on it since. Any other value (a copy, an unstored
+        version): the evidence it carries.
+        """
+        if cls._events_by_uuid.get(event.uuid) is event:
+            return cls._dispatched_presentations.get(event.uuid, event._effective_handler_presentations)
+        return event._effective_handler_presentations
+
+    @classmethod
+    def child_links(cls, event: Event) -> Tuple[List[UUID], List[UUID]]:
+        """One version's (children_events, lineage_children_events) as of now.
+
+        A stored version keeps the lists it was stored with; every child of its lineage stored after
+        it follows, read from the queue's lineage index. A version this queue never stored has only
+        its own lists. The returned lists are shared values: callers do not edit them.
+        """
+        position = cls._event_indexes_by_uuid.get(event.uuid)
+        later = cls._lineage_children.get(event.lineage_uuid)
+        if position is None or not later:
+            return event.children_events, event.lineage_children_events
+        start = bisect_right(later, position, key=cls._event_indexes_by_uuid.__getitem__)
+        if start == len(later):
+            return event.children_events, event.lineage_children_events
+        tail = later[start:]
+        return event.children_events + tail, event.lineage_children_events + tail
 
     @classmethod
     def _store_event(
@@ -2123,29 +2378,19 @@ class EventQueue:
             raise ValueError(f"Event UUID collision for {event.uuid}")
         timing = action_timing_enabled()
         total_started = time.perf_counter() if timing else 0.0
-        started = time.perf_counter() if timing else 0.0
-        identified = {
-            entity_uuid: set(observer_uuids)
-            for entity_uuid, observer_uuids in event.identified_entity_observer_uuids.items()
-        }
-        located = {
-            entity_uuid: set(observer_uuids)
-            for entity_uuid, observer_uuids in event.located_entity_observer_uuids.items()
-        }
-        if timing:
-            record_action_timing("event_queue.store.copy_identified_ms", started)
-        if cls._identified_entity_observer_computer is not None:
+        # Grants are shared frozen values: a version keeps its predecessor's mapping
+        # unless a union adds observers, and no stored mapping is ever edited.
+        identified = event.identified_entity_observer_uuids
+        if cls._identified_entity_observer_computer is None:
+            located = event.located_entity_observer_uuids
+        else:
+            # Location grants are this version's own; identity accumulates.
             started = time.perf_counter() if timing else 0.0
-            captured = cls._identified_entity_observer_computer(event)
-            located = {
-                entity_uuid: set(observer_uuids)
-                for entity_uuid, observer_uuids in captured.items()
-            }
+            located = cls._identified_entity_observer_computer(event, event.located_entity_observer_uuids)
             if timing:
                 record_action_timing("event_queue.store.compute_identified_ms", started)
             started = time.perf_counter() if timing else 0.0
-            for entity_uuid, observer_uuids in captured.items():
-                identified.setdefault(entity_uuid, set()).update(observer_uuids)
+            identified = merged_grants(identified, located)
             if timing:
                 record_action_timing("event_queue.store.merge_identified_ms", started)
 
@@ -2156,8 +2401,7 @@ class EventQueue:
                 # Canceled children retain the same causal parent as completed
                 # ones; relationship identity exists before any terminal phase.
                 event.parent_lineage = parent_event.lineage_uuid
-            for entity_uuid, observer_uuids in parent_event.identified_entity_observer_uuids.items():
-                identified.setdefault(entity_uuid, set()).update(observer_uuids)
+            identified = merged_grants(identified, parent_event.identified_entity_observer_uuids)
         event.identified_entity_observer_uuids = identified
         event.located_entity_observer_uuids = located
         if timing:
@@ -2167,13 +2411,8 @@ class EventQueue:
         cls._events_by_lineage[event.lineage_uuid].append(event)
         cls._events_by_uuid[event.uuid] = event
 
-        if event.parent_event:
-            if parent_event and event.uuid not in parent_event.children_events:
-                parent_event.add_child_event(event)
-                for lineage_event in cls._events_by_lineage.get(parent_event.lineage_uuid, []):
-                    if lineage_event.uuid != parent_event.uuid:
-                        if event.uuid not in lineage_event.lineage_children_events:
-                            lineage_event.add_child_event(event)
+        if parent_event is not None:
+            cls._lineage_children[parent_event.lineage_uuid].append(event.uuid)
         if timing:
             record_action_timing("event_queue.store.lineage_ms", started)
 
@@ -2236,81 +2475,40 @@ class EventQueue:
         events use trigger indexes and trigger predicates.
         """
         positions = event.spatial_dispatch_positions()
-        if positions:
-            handlers: List['BaseHandler'] = []
-            seen: Set[UUID] = set()
-            for position in positions:
-                for handler in cls._get_handlers_for_spatial_event(
-                    event,
-                    position,
-                ):
-                    if handler.uuid in seen:
-                        continue
-                    handlers.append(handler)
-                    seen.add(handler.uuid)
-            return handlers
-
-        return cls._get_handlers_for_non_spatial_event(event)
-
-    @classmethod
-    def _get_handlers_for_spatial_event(
-        cls,
-        event: Event,
-        position: Tuple[int, int]
-    ) -> List['BaseHandler']:
-        """Return handlers for one spatial event at one grid position.
-
-        Position-indexed spatial handlers are discovered in O(1). Trigger-based
-        event handlers are still included for global spatial reactions such as
-        opportunity attacks.
-
-        Args:
-            event: Spatial event version being dispatched.
-            position: Grid position used for the spatial lookup.
-
-        Returns:
-            De-duplicated handlers in queue dispatch order.
-        """
-        event_key = (event.event_type, event.phase)
+        if not positions:
+            return cls._global_handlers_for_event(event, positioned=False)
+        # Position-indexed handlers of each cell in order; the global
+        # (simple and trigger-matched) handlers follow the first cell's,
+        # since they do not depend on the cell.
+        by_position = cls._spatial_handlers_by_position.get((event.event_type, event.phase), {})
         handlers: List['BaseHandler'] = []
         seen: Set[UUID] = set()
-
-        pos_handlers = cls._spatial_handlers_by_position[event_key].get(position, [])
-        for h in pos_handlers:
-            if h.uuid not in seen:
-                handlers.append(h)
-                seen.add(h.uuid)
-
-        simple_trigger = Trigger(event_type=event.event_type, event_phase=event.phase)
-        for h in cls._event_handlers_by_simple_trigger.get(simple_trigger, []):
-            if h.uuid not in seen:
-                handlers.append(h)
-                seen.add(h.uuid)
-
-        for handler in cls._event_trigger_candidates(event, include_simple=False):
-            if handler.uuid in seen:
-                continue
-            if handler.uuid in cls._handler_positions:
-                continue
-            for trigger in handler.trigger_conditions:
-                if trigger(event):
+        for index, position in enumerate(positions):
+            cell_handlers = by_position.get(position, ())
+            if index == 0:
+                cell_handlers = [*cell_handlers, *cls._global_handlers_for_event(event, positioned=True)]
+            for handler in cell_handlers:
+                if handler.uuid not in seen:
                     handlers.append(handler)
                     seen.add(handler.uuid)
-                    break
-
         return handlers
 
     @classmethod
-    def _get_handlers_for_non_spatial_event(cls, event: Event) -> List['BaseHandler']:
-        """Return trigger-indexed handlers for a non-spatial event."""
-        simple_trigger = Trigger(event_type=event.event_type, event_phase=event.phase)
-        simple_handlers = cls._event_handlers_by_simple_trigger.get(simple_trigger, [])
+    def _global_handlers_for_event(cls, event: Event, *, positioned: bool) -> List['BaseHandler']:
+        """Return the simple-trigger handlers, then the trigger-matched ones in queue order.
+
+        A positioned event reaches position-indexed handlers through its cells
+        only, so their trigger registrations are skipped here.
+        """
+        simple_handlers = cls._event_handlers_by_simple_trigger.get((event.event_type, event.phase), ())
 
         handler_set: Set[UUID] = {h.uuid for h in simple_handlers}
         matching_handlers: List['BaseHandler'] = list(simple_handlers)
 
-        for handler in cls._event_trigger_candidates(event):
+        for handler in cls._event_trigger_candidates(event, include_simple=not positioned):
             if handler.uuid in handler_set:
+                continue
+            if positioned and handler.uuid in cls._handler_positions:
                 continue
             for trigger in handler.trigger_conditions:
                 if trigger(event):
@@ -2321,7 +2519,7 @@ class EventQueue:
         return matching_handlers
 
     @classmethod
-    def _event_trigger_candidates(cls, event: Event, *, include_simple: bool = True) -> List['EventHandler']:
+    def _event_trigger_candidates(cls, event: Event, *, include_simple: bool) -> List['EventHandler']:
         """Read only trigger buckets compatible with this event's native fields."""
         candidates: Dict[UUID, EventHandler] = {}
         for source in dict.fromkeys((None, event.source_entity_uuid)):
@@ -2331,9 +2529,8 @@ class EventQueue:
                 # contains distant positional registrations that it must skip.
                 if not include_simple and source is None and target is None:
                     continue
-                trigger = Trigger(event_type=event.event_type, event_phase=event.phase,
-                    event_source_entity_uuid=source, event_target_entity_uuid=target)
-                for handler in cls._event_handlers_by_trigger.get(trigger, ()):
+                key = (event.event_type, event.phase, source, target)
+                for handler in cls._event_handlers_by_trigger.get(key, ()):
                     candidates[handler.uuid] = handler
         return sorted(candidates.values(), key=lambda handler: cls._event_handler_order[handler.uuid])
 
@@ -2351,13 +2548,20 @@ class EventQueue:
         )
         for trigger in event_handler.trigger_conditions:
             if trigger.is_simple():
-                cls._event_handlers_by_simple_trigger[trigger.get_simple_trigger()].append(event_handler)
-            cls._event_handlers_by_trigger[trigger].append(event_handler)
+                cls._event_handlers_by_simple_trigger[(trigger.event_type, trigger.event_phase)].append(event_handler)
+            cls._event_handlers_by_trigger[trigger.index_key()].append(event_handler)
         cls._event_handlers[event_handler.uuid] = event_handler
         if event_handler.uuid not in cls._event_handler_order:
             cls._event_handler_order[event_handler.uuid] = cls._next_event_handler_order
             cls._next_event_handler_order += 1
         cls._event_handlers_by_source_entity_uuid[event_handler.source_entity_uuid].append(event_handler)
+
+    @classmethod
+    def preview_application_admitted(cls, origin: EffectOrigin, source_uuid: UUID, target_uuid: UUID) -> bool:
+        """Query the source's declared pure recipient filters without dispatch."""
+        return all(handler.application_preview_filter(origin,source_uuid,target_uuid)
+            for handler in cls.get_handlers_by_source_entity(source_uuid)
+            if handler.enabled and handler.contributions_active() and handler.application_preview_filter is not None)
 
     @classmethod
     def event_handler_order(cls) -> Tuple[UUID, ...]:
@@ -2393,11 +2597,12 @@ class EventQueue:
         """Remove a handler from all indices."""
         for trigger in event_handler.trigger_conditions:
             if trigger.is_simple():
-                simple_trigger = trigger.get_simple_trigger()
-                if event_handler in cls._event_handlers_by_simple_trigger.get(simple_trigger, []):
-                    cls._event_handlers_by_simple_trigger[simple_trigger].remove(event_handler)
-            if event_handler in cls._event_handlers_by_trigger.get(trigger, []):
-                cls._event_handlers_by_trigger[trigger].remove(event_handler)
+                simple_key = (trigger.event_type, trigger.event_phase)
+                if event_handler in cls._event_handlers_by_simple_trigger.get(simple_key, []):
+                    cls._event_handlers_by_simple_trigger[simple_key].remove(event_handler)
+            key = trigger.index_key()
+            if event_handler in cls._event_handlers_by_trigger.get(key, []):
+                cls._event_handlers_by_trigger[key].remove(event_handler)
 
         cls._event_handlers.pop(event_handler.uuid, None)
         cls._event_handler_order.pop(event_handler.uuid, None)
@@ -2495,8 +2700,8 @@ class EventQueue:
                 cls._event_handler_order[handler.uuid] = cls._next_event_handler_order
                 cls._next_event_handler_order += 1
             for trigger in handler.trigger_conditions:
-                if handler not in cls._event_handlers_by_trigger[trigger]:
-                    cls._event_handlers_by_trigger[trigger].append(handler)
+                if handler not in cls._event_handlers_by_trigger[trigger.index_key()]:
+                    cls._event_handlers_by_trigger[trigger.index_key()].append(handler)
             cls._event_handlers_by_source_entity_uuid[handler.source_entity_uuid].append(handler)
 
     @classmethod
@@ -2660,6 +2865,8 @@ class EventQueue:
         cls._events_by_source.clear()
         cls._events_by_target.clear()
         cls._events_by_lineage.clear()
+        cls._lineage_children.clear()
+        cls._dispatched_presentations.clear()
         cls._event_handlers.clear()
         cls._event_handler_order.clear()
         cls._next_event_handler_order = 0
@@ -2681,6 +2888,7 @@ class EventQueue:
         cls._event_batch_depth.set(0)
         cls._pending_event_batch.set(None)
         cls._preflight_depth.set(0)
+        cls._open_group.set(None)
         cls._pre_completion_callbacks.clear()
         for system in tuple(cls._pre_completion_systems.values()):
             system.reset()
@@ -2778,24 +2986,20 @@ class D20Event(Event):
     """Legacy event payload for a resolved d20 check."""
 
     name: str = Field(default="D20", description="Human-readable d20 event label.")
-    dc: Optional[Union[int, ModifiableValue]] = Field(
+    dc: Optional[int] = Field(
         default=None,
-        description="Difficulty class for the roll, either fixed or modifiable.",
+        description="Difficulty class for the roll.",
     )
-    bonus: Optional[Union[int, ModifiableValue]] = Field(
+    bonus: Optional[Union[int, ValueReading]] = Field(
         default=0,
-        description="Roll bonus, either fixed or represented by a modifiable value.",
+        description="Roll bonus: the evaluated bonus, or its total once detached for a seat.",
     )
     dice: Optional[Dice] = Field(default=None, description="Dice object used to create the roll.")
     dice_roll: Optional[DiceRoll] = Field(default=None, description="Resolved dice roll.")
     result: Optional[bool] = Field(default=None, description="Whether the roll met or exceeded its DC.")
 
     def get_dc(self) -> Optional[int]:
-        """Return the current numeric difficulty class."""
-        if self.dc is None:
-            return None
-        if isinstance(self.dc, ModifiableValue):
-            return self.dc.normalized_score
+        """Return the numeric difficulty class."""
         return self.dc
 
 class SavingThrowEvent(D20Event):
@@ -2861,27 +3065,9 @@ class SavingThrowEvent(D20Event):
             roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
-        bonus_breakdown: List[ModifierBreakdown] = []
-        if self.bonus and isinstance(self.bonus, ModifiableValue):
-            for mod in self.bonus.get_breakdown():
-                bonus_breakdown.append(ModifierBreakdown(
-                    name=mod.get('name', 'Unknown'),
-                    value=mod.get('value', 0),
-                    source=mod.get('source', 'self')
-                ))
-
-        advantage_breakdown: List[ModifierBreakdown] = []
-        if self.bonus and isinstance(self.bonus, ModifiableValue):
-            for mod in self.bonus.get_full_advantage_breakdown():
-                adv_val = mod.get('value', 'inactive')
-                if adv_val == 'advantage':
-                    advantage_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
-                    ))
-                elif adv_val == 'disadvantage':
-                    advantage_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
-                    ))
+        bonus_breakdown = value_log_rows(self.bonus.breakdown) if isinstance(self.bonus, ValueReading) else []
+        advantage_breakdown = (advantage_log_rows(self.bonus.advantage_breakdown)
+                               if isinstance(self.bonus, ValueReading) else [])
 
         success = self.result if self.result is not None else (roll.total >= dc if dc > 0 else None)
 
@@ -2979,27 +3165,9 @@ class SkillCheckEvent(D20Event):
             roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
-        bonus_breakdown: List[ModifierBreakdown] = []
-        if self.bonus and isinstance(self.bonus, ModifiableValue):
-            for mod in self.bonus.get_breakdown():
-                bonus_breakdown.append(ModifierBreakdown(
-                    name=mod.get('name', 'Unknown'),
-                    value=mod.get('value', 0),
-                    source=mod.get('source', 'self')
-                ))
-
-        advantage_breakdown: List[ModifierBreakdown] = []
-        if self.bonus and isinstance(self.bonus, ModifiableValue):
-            for mod in self.bonus.get_full_advantage_breakdown():
-                adv_val = mod.get('value', 'inactive')
-                if adv_val == 'advantage':
-                    advantage_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
-                    ))
-                elif adv_val == 'disadvantage':
-                    advantage_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
-                    ))
+        bonus_breakdown = value_log_rows(self.bonus.breakdown) if isinstance(self.bonus, ValueReading) else []
+        advantage_breakdown = (advantage_log_rows(self.bonus.advantage_breakdown)
+                               if isinstance(self.bonus, ValueReading) else [])
 
         success = self.result if self.result is not None else (roll.total >= dc if dc is not None and dc > 0 else None)
 
@@ -3111,7 +3279,7 @@ class SensesUpdateHint(BaseModel):
         description="Neighbor cells affected by directional blocking metadata.",
         json_schema_extra=_preserve_nullable_unique_array_schema,
     )
-    directional_channels_changed: Optional[Set[str]] = Field(
+    directional_channels_changed: Optional[Set[WorldEdgeChannel]] = Field(
         default=None,
         description="Directional channels affected: movement, optical, or propagation.",
         json_schema_extra=_preserve_nullable_unique_array_schema,
@@ -3141,8 +3309,8 @@ class SensesUpdateHint(BaseModel):
     @field_serializer("directional_channels_changed", when_used="json")
     def serialize_directional_channels(
         self,
-        value: Optional[Set[str]],
-    ) -> Optional[List[str]]:
+        value: Optional[Set[WorldEdgeChannel]],
+    ) -> Optional[List[WorldEdgeChannel]]:
         """Emit unordered directional channels in canonical wire order."""
         return None if value is None else sorted(value)
 
@@ -3173,21 +3341,15 @@ class SensoryUpdateEvent(Event):
         default=False,
         description="Whether this update changed the observer's grid position.",
     )
-    effective_light_levels_changed: Dict[str, int] = Field(
-        default_factory=dict,
-        description=(
-            "Changed backend-resolved subjective light after-values, keyed as 'x,y'."
-        ),
+    effective_light_levels_changed: CellValues = Field(
+        default=EMPTY_VALUES,
+        description="Changed backend-resolved subjective light after-values (LightLevel per cell).",
     )
-    ambient_light_levels_changed: Dict[str, int] = Field(default_factory=dict,
-        description="Recorded current native tile baseline illumination for visible cells.")
-    objective_light_levels_changed: Dict[str, int] = Field(default_factory=dict,
-        description="Recorded current objective levels for visible cells, before sense-mode conversion.")
     light_sources_changed: Dict[UUID, PerceivedLightSource] = Field(default_factory=dict)
     light_sources_removed: Dict[UUID, int] = Field(default_factory=dict)
-    hazardous_cells_changed: Dict[str, bool] = Field(
-        default_factory=dict,
-        description="Native resolved hazard after-values for visible cells, keyed as 'x,y'.",
+    hazardous_cells_changed: CellValues = Field(
+        default=EMPTY_VALUES,
+        description="Native resolved hazard after-values for visible cells (1 hazardous, 0 not).",
     )
     spatial_effects_changed: Dict[UUID, PerceivedSpatialEffect] = Field(
         default_factory=dict,
@@ -3205,16 +3367,16 @@ class SensoryUpdateEvent(Event):
         default=SensoryUpdateReason.UNKNOWN,
         description="Reason category used by clients to interpret the delta.",
     )
-    visible_cells_added: List[Tuple[int, int]] = Field(
-        default_factory=list,
+    visible_cells_added: CellMask = Field(
+        default=EMPTY_CELLS,
         description="Cells newly visible to the observer.",
     )
-    visible_cells_removed: List[Tuple[int, int]] = Field(
-        default_factory=list,
+    visible_cells_removed: CellMask = Field(
+        default=EMPTY_CELLS,
         description="Cells no longer visible to the observer.",
     )
-    seen_cells_added: List[Tuple[int, int]] = Field(
-        default_factory=list,
+    seen_cells_added: CellMask = Field(
+        default=EMPTY_CELLS,
         description="Cells newly added to the observer's explored area.",
     )
     entity_contacts_changed: Dict[UUID, PerceivedContact] = Field(
@@ -3283,17 +3445,10 @@ class SensoryUpdateEvent(Event):
         """Reject runtime owners and callables from sensory after-values."""
         pending: List[Any] = [
             self.observer_position,
-            self.effective_light_levels_changed,
-            self.objective_light_levels_changed,
-            self.ambient_light_levels_changed,
             self.light_sources_changed,
             self.light_sources_removed,
-            self.hazardous_cells_changed,
             self.spatial_effects_changed,
             self.spatial_effects_removed,
-            self.visible_cells_added,
-            self.visible_cells_removed,
-            self.seen_cells_added,
             self.entity_contacts_changed,
             self.entity_contacts_removed,
             self.object_contacts_changed,
@@ -3305,7 +3460,7 @@ class SensoryUpdateEvent(Event):
         ]
         while pending:
             value = pending.pop()
-            if isinstance(value, (BaseObject, Event)) or callable(value):
+            if isinstance(value, (BaseObject, Event, ModifiableValue)) or callable(value):
                 raise ValueError(
                     "sensory replay payload contains a runtime value",
                 )
@@ -3319,12 +3474,8 @@ class SensoryUpdateEvent(Event):
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
         """Return every grid cell referenced by this sensory delta."""
-        positions: Set[Tuple[int, int]] = set(self.visible_cells_added)
-        for key in self.hazardous_cells_changed:
-            x, y = key.split(",", maxsplit=1)
-            positions.add((int(x), int(y)))
-        positions.update(self.visible_cells_removed)
-        positions.update(self.seen_cells_added)
+        positions: Set[Tuple[int, int]] = set(mask_positions(mask_union(self.visible_cells_added,
+            self.hazardous_cells_changed.cells, self.visible_cells_removed, self.seen_cells_added)))
         positions.update(
             contact.position for contact in self.entity_contacts_changed.values()
         )
@@ -3569,6 +3720,9 @@ class SpatialChangeEvent(Event):
     tile_state: Optional[WorldTileState] = Field(
         default=None, description="Complete Tile after-value at an actual commit.",
     )
+    tile_states: Tuple[WorldTileState, ...] = Field(
+        default=(), description="Complete after-values of every Tile in one committed mechanics change.",
+    )
     tile_present: Optional[bool] = Field(
         default=None, description="Whether the addressed Tile exists after this commit.",
     )
@@ -3619,7 +3773,7 @@ class SpatialChangeEvent(Event):
 
     directional_position: Optional[Tuple[int, int]] = Field(default=None, description="Tile whose directional state changed")
     directional_directions: Optional[List[str]] = Field(default=None, description="Tile-relative directions changed")
-    directional_channels: Optional[List[str]] = Field(default=None, description="Directional channels changed")
+    directional_channels: Optional[List[WorldEdgeChannel]] = Field(default=None, description="Directional channels changed")
     transition_from: Optional[Tuple[int, int]] = Field(default=None, description="Transition source for directional movement/collision")
     transition_to: Optional[Tuple[int, int]] = Field(default=None, description="Transition destination for directional movement/collision")
 
@@ -3646,7 +3800,7 @@ class SpatialChangeEvent(Event):
                        parent_event: Optional[UUID] = None,
                        directional_position: Optional[Tuple[int, int]] = None,
                        directional_directions: Optional[List[str]] = None,
-                       directional_channels: Optional[List[str]] = None,
+                       directional_channels: Optional[List[WorldEdgeChannel]] = None,
                        previous_occupancy_layer: Optional[OccupancyLayer] = None,
                        occupancy_layer: Optional[OccupancyLayer] = None) -> 'SpatialChangeEvent':
         """Create an event for an entity entering a cell.
@@ -3668,15 +3822,15 @@ class SpatialChangeEvent(Event):
         directional_pos = directional_position or position
         directional_neighbors = _directional_neighbors(directional_pos, directional_directions)
         hint = SensesUpdateHint(
-            requires_fov="optical" in directional_channels_set,
+            requires_fov=WorldEdgeChannel.OPTICAL in directional_channels_set,
             requires_paths=True,
             entity_entered=(entity_uuid, position),
             entity_left=(entity_uuid, old_position) if old_position is not None else None,
             directional_positions={directional_pos} if directional_channels_set else None,
             directional_neighbors=directional_neighbors or None,
             directional_channels_changed=directional_channels_set or None,
-            requires_light_recompute="optical" in directional_channels_set,
-            requires_propagation_recompute="propagation" in directional_channels_set,
+            requires_light_recompute=WorldEdgeChannel.OPTICAL in directional_channels_set,
+            requires_propagation_recompute=WorldEdgeChannel.PROPAGATION in directional_channels_set,
         )
         return cls(
             source_entity_uuid=source_entity_uuid or entity_uuid,
@@ -3703,7 +3857,7 @@ class SpatialChangeEvent(Event):
                     parent_event: Optional[UUID] = None,
                     directional_position: Optional[Tuple[int, int]] = None,
                     directional_directions: Optional[List[str]] = None,
-                    directional_channels: Optional[List[str]] = None,
+                    directional_channels: Optional[List[WorldEdgeChannel]] = None,
                        previous_occupancy_layer: Optional[OccupancyLayer] = None,
                        occupancy_layer: Optional[OccupancyLayer] = None,
                        terminal_release: TerminalOwnerRelease | None = None) -> 'SpatialChangeEvent':
@@ -3725,14 +3879,14 @@ class SpatialChangeEvent(Event):
         directional_pos = directional_position or position
         directional_neighbors = _directional_neighbors(directional_pos, directional_directions)
         hint = SensesUpdateHint(
-            requires_fov="optical" in directional_channels_set,
+            requires_fov=WorldEdgeChannel.OPTICAL in directional_channels_set,
             requires_paths=True,
             entity_left=(entity_uuid, position),
             directional_positions={directional_pos} if directional_channels_set else None,
             directional_neighbors=directional_neighbors or None,
             directional_channels_changed=directional_channels_set or None,
-            requires_light_recompute="optical" in directional_channels_set,
-            requires_propagation_recompute="propagation" in directional_channels_set,
+            requires_light_recompute=WorldEdgeChannel.OPTICAL in directional_channels_set,
+            requires_propagation_recompute=WorldEdgeChannel.PROPAGATION in directional_channels_set,
         )
         return cls(
             source_entity_uuid=source_entity_uuid or entity_uuid,
@@ -3754,6 +3908,32 @@ class SpatialChangeEvent(Event):
         )
 
     @classmethod
+    def tiles_changed(cls, rows: Tuple[WorldTileState, ...], *,
+                      source_entity_uuid: UUID,
+                      parent_event: Optional[UUID] = None,
+                      inert: bool = False) -> 'SpatialChangeEvent':
+        """One committed change covering every changed Tile (plan §5.5).
+
+        The rows are complete after-values; observers and world folds read them
+        as one fact instead of one fact per cell. ``inert`` after-values (residue
+        amounts) change no traversal, like a single inert tile refresh.
+        """
+        if not rows:
+            raise ValueError("A tile mechanics change needs at least one Tile")
+        return cls(
+            source_entity_uuid=source_entity_uuid,
+            event_type=EventType.SPATIAL_TILE_CHANGED,
+            change_type=SpatialChangeType.TILES_CHANGED,
+            position=rows[0].position,
+            tile_states=rows,
+            tile_present=True,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+            parent_event=parent_event,
+            senses_hint=SensesUpdateHint() if inert else SensesUpdateHint(requires_paths=True),
+        )
+
+    @classmethod
     def tile_changed(cls, position: Tuple[int, int], *,
                      tile_walking_cost: Optional[int] = None,
                      tile_flying_cost: Optional[int] = None,
@@ -3767,7 +3947,7 @@ class SpatialChangeEvent(Event):
                      parent_event: Optional[UUID] = None,
                      directional_position: Optional[Tuple[int, int]] = None,
                      directional_directions: Optional[List[str]] = None,
-                     directional_channels: Optional[List[str]] = None) -> 'SpatialChangeEvent':
+                     directional_channels: Optional[List[WorldEdgeChannel]] = None) -> 'SpatialChangeEvent':
         """Create an event for a tile property change.
 
         Event starts at DECLARATION phase to allow full lifecycle.
@@ -3780,7 +3960,7 @@ class SpatialChangeEvent(Event):
             senses_hint = SensesUpdateHint(
                 requires_fov=(
                     tile_blocks_optics is not None
-                    or "optical" in directional_channels_set
+                    or WorldEdgeChannel.OPTICAL in directional_channels_set
                 ),
                 requires_paths=(
                     any(
@@ -3792,18 +3972,18 @@ class SpatialChangeEvent(Event):
                             tile_burrowing_cost,
                         )
                     )
-                    or "movement" in directional_channels_set
+                    or WorldEdgeChannel.MOVEMENT in directional_channels_set
                 ),
                 directional_positions={directional_pos} if directional_channels_set else None,
                 directional_neighbors=directional_neighbors or None,
                 directional_channels_changed=directional_channels_set or None,
                 requires_light_recompute=(
                     tile_blocks_optics is not None
-                    or "optical" in directional_channels_set
+                    or WorldEdgeChannel.OPTICAL in directional_channels_set
                 ),
                 requires_propagation_recompute=(
                     tile_blocks_propagation is not None
-                    or "propagation" in directional_channels_set
+                    or WorldEdgeChannel.PROPAGATION in directional_channels_set
                 ),
             )
         return cls(
@@ -3841,23 +4021,23 @@ class SpatialChangeEvent(Event):
                       object_map_char: Optional[str] = None,
                       directional_position: Optional[Tuple[int, int]] = None,
                       directional_directions: Optional[List[str]] = None,
-                      directional_channels: Optional[List[str]] = None) -> 'SpatialChangeEvent':
+                      directional_channels: Optional[List[WorldEdgeChannel]] = None) -> 'SpatialChangeEvent':
         """Create an event for an object being placed on the grid."""
         directional_channels_set = set(directional_channels or [])
         directional_pos = directional_position or position
         directional_neighbors = _directional_neighbors(directional_pos, directional_directions)
         hint = SensesUpdateHint(
-            requires_fov=blocks_optics or "optical" in directional_channels_set,
-            requires_paths=blocks_walking or "movement" in directional_channels_set,
+            requires_fov=blocks_optics or WorldEdgeChannel.OPTICAL in directional_channels_set,
+            requires_paths=blocks_walking or WorldEdgeChannel.MOVEMENT in directional_channels_set,
             object_placed=(object_uuid, position),
             directional_positions={directional_pos} if directional_channels_set else None,
             directional_neighbors=directional_neighbors or None,
             directional_channels_changed=directional_channels_set or None,
             requires_light_recompute=(
-                blocks_optics or "optical" in directional_channels_set
+                blocks_optics or WorldEdgeChannel.OPTICAL in directional_channels_set
             ),
             requires_propagation_recompute=(
-                blocks_propagation or "propagation" in directional_channels_set
+                blocks_propagation or WorldEdgeChannel.PROPAGATION in directional_channels_set
             ),
         )
         return cls(
@@ -3894,23 +4074,23 @@ class SpatialChangeEvent(Event):
                        blocks_walking: bool = False,
                        directional_position: Optional[Tuple[int, int]] = None,
                        directional_directions: Optional[List[str]] = None,
-                       directional_channels: Optional[List[str]] = None) -> 'SpatialChangeEvent':
+                       directional_channels: Optional[List[WorldEdgeChannel]] = None) -> 'SpatialChangeEvent':
         """Create an event for an object being removed from the grid."""
         directional_channels_set = set(directional_channels or [])
         directional_pos = directional_position or position
         directional_neighbors = _directional_neighbors(directional_pos, directional_directions)
         hint = SensesUpdateHint(
-            requires_fov=blocks_optics or "optical" in directional_channels_set,
-            requires_paths=blocks_walking or "movement" in directional_channels_set,
+            requires_fov=blocks_optics or WorldEdgeChannel.OPTICAL in directional_channels_set,
+            requires_paths=blocks_walking or WorldEdgeChannel.MOVEMENT in directional_channels_set,
             object_removed=(object_uuid, position),
             directional_positions={directional_pos} if directional_channels_set else None,
             directional_neighbors=directional_neighbors or None,
             directional_channels_changed=directional_channels_set or None,
             requires_light_recompute=(
-                blocks_optics or "optical" in directional_channels_set
+                blocks_optics or WorldEdgeChannel.OPTICAL in directional_channels_set
             ),
             requires_propagation_recompute=(
-                blocks_propagation or "propagation" in directional_channels_set
+                blocks_propagation or WorldEdgeChannel.PROPAGATION in directional_channels_set
             ),
         )
         return cls(
@@ -4006,7 +4186,7 @@ class SpatialChangeEvent(Event):
                        object_is_open: Optional[bool] = None,
                        directional_position: Optional[Tuple[int, int]] = None,
                        directional_directions: Optional[List[str]] = None,
-                       directional_channels: Optional[List[str]] = None) -> 'SpatialChangeEvent':
+                       directional_channels: Optional[List[WorldEdgeChannel]] = None) -> 'SpatialChangeEvent':
         """Create an event for an object's blocking state changing (door open/close).
 
         Fires when an object's movement, optical, or propagation fact changes
@@ -4017,18 +4197,18 @@ class SpatialChangeEvent(Event):
         directional_neighbors = _directional_neighbors(directional_pos, directional_directions)
         hint = SensesUpdateHint(
             requires_fov=(
-                blocks_optics_changed or "optical" in directional_channels_set
+                blocks_optics_changed or WorldEdgeChannel.OPTICAL in directional_channels_set
             ),
-            requires_paths=blocks_walking_changed or "movement" in directional_channels_set,
+            requires_paths=blocks_walking_changed or WorldEdgeChannel.MOVEMENT in directional_channels_set,
             directional_positions={directional_pos} if directional_channels_set else None,
             directional_neighbors=directional_neighbors or None,
             directional_channels_changed=directional_channels_set or None,
             requires_light_recompute=(
-                blocks_optics_changed or "optical" in directional_channels_set
+                blocks_optics_changed or WorldEdgeChannel.OPTICAL in directional_channels_set
             ),
             requires_propagation_recompute=(
                 blocks_propagation_changed
-                or "propagation" in directional_channels_set
+                or WorldEdgeChannel.PROPAGATION in directional_channels_set
             ),
         )
         return cls(
@@ -4063,7 +4243,7 @@ class SpatialChangeEvent(Event):
                            transition_to: Optional[Tuple[int, int]] = None,
                            directional_position: Optional[Tuple[int, int]] = None,
                            directional_directions: Optional[List[str]] = None,
-                           directional_channels: Optional[List[str]] = None) -> 'SpatialChangeEvent':
+                           directional_channels: Optional[List[WorldEdgeChannel]] = None) -> 'SpatialChangeEvent':
         """Create an event for an entity bumping into an imperceivable blocker.
 
         Fired when objective walkability blocks but subjective would allow.
@@ -4110,6 +4290,7 @@ class SpatialChangeEvent(Event):
             positions.add(self.transition_from)
         if self.transition_to:
             positions.add(self.transition_to)
+        positions.update(row.position for row in self.tile_states)
         if self.senses_hint:
             if self.senses_hint.directional_positions:
                 positions.update(self.senses_hint.directional_positions)
@@ -4291,11 +4472,10 @@ class PortalTransferEvent(Event):
         return {self.start_position, self.end_position}
 
     def completion_position_observer_evidence(
-        self, completion_locations: Dict[str, Set[str]],
-    ) -> Dict[str, Set[str]]:
+        self, completion_locations: Mapping[str, FrozenSet[str]],
+    ) -> Dict[str, FrozenSet[str]]:
         evidence = super().completion_position_observer_evidence(completion_locations)
-        evidence[position_evidence_key(self.start_position)] = set(
-            self.located_entity_observer_uuids.get(str(self.target_entity_uuid), set()))
+        evidence[position_evidence_key(self.start_position)] = self.located_entity_observer_uuids.get(str(self.target_entity_uuid), frozenset())
         # A paid arrival reaction may already have moved the creature again.
         # The crossing's direct entry child records who saw the actual exit.
         for child in self.get_children_events():
@@ -4303,8 +4483,7 @@ class PortalTransferEvent(Event):
                     and child.change_type is SpatialChangeType.ENTITY_ENTERED
                     and child.entity_uuid == self.target_entity_uuid
                     and child.position == self.end_position):
-                evidence[position_evidence_key(self.end_position)] = set(
-                    child.located_entity_observer_uuids.get(str(self.target_entity_uuid), set()))
+                evidence[position_evidence_key(self.end_position)] = child.located_entity_observer_uuids.get(str(self.target_entity_uuid), frozenset())
         return evidence
 
 
@@ -4402,8 +4581,8 @@ class ForcedMovementEvent(Event):
 
     def completion_position_observer_evidence(
         self,
-        completion_locations: Dict[str, Set[str]],
-    ) -> Dict[str, Set[str]]:
+        completion_locations: Mapping[str, FrozenSet[str]],
+    ) -> Dict[str, FrozenSet[str]]:
         """Freeze independent pre-displacement and post-displacement grants."""
         if (
             self.target_entity_uuid is None
@@ -4416,21 +4595,16 @@ class ForcedMovementEvent(Event):
         evidence = super().completion_position_observer_evidence(
             completion_locations
         )
-        evidence[position_evidence_key(self.start_position)] = set(
-            self.located_entity_observer_uuids.get(entity_key, set())
-        )
-        evidence[position_evidence_key(self.end_position)] = set(
-            completion_locations.get(entity_key, set())
-        )
-        for child_uuid in self.lineage_children_events:
+        evidence[position_evidence_key(self.start_position)] = self.located_entity_observer_uuids.get(entity_key, frozenset())
+        evidence[position_evidence_key(self.end_position)] = completion_locations.get(entity_key, frozenset())
+        for child_uuid in EventQueue.child_links(self)[1]:
             child = EventQueue.get_event_by_uuid(child_uuid)
             if (isinstance(child, SpatialChangeEvent)
                     and child.change_type is SpatialChangeType.ENTITY_ENTERED
                     and child.entity_uuid == self.target_entity_uuid
                     and child.position == self.end_position
                     and child.phase is EventPhase.DECLARATION):
-                evidence[position_evidence_key(self.end_position)] = set(
-                    child.located_entity_observer_uuids.get(entity_key, set()))
+                evidence[position_evidence_key(self.end_position)] = child.located_entity_observer_uuids.get(entity_key, frozenset())
                 break
         return evidence
 
@@ -4484,20 +4658,16 @@ class StepMovementEvent(Event):
 
     def completion_position_observer_evidence(
         self,
-        completion_locations: Dict[str, Set[str]],
-    ) -> Dict[str, Set[str]]:
+        completion_locations: Mapping[str, FrozenSet[str]],
+    ) -> Dict[str, FrozenSet[str]]:
         """Freeze independent pre-step and post-step coordinate grants."""
         entity_key = str(self.source_entity_uuid)
         evidence = super().completion_position_observer_evidence(
             completion_locations
         )
-        evidence[position_evidence_key(self.from_position)] = set(
-            self.located_entity_observer_uuids.get(entity_key, set())
-        )
-        evidence[position_evidence_key(self.to_position)] = set(
-            completion_locations.get(entity_key, set())
-        )
-        for child_uuid in self.lineage_children_events:
+        evidence[position_evidence_key(self.from_position)] = self.located_entity_observer_uuids.get(entity_key, frozenset())
+        evidence[position_evidence_key(self.to_position)] = completion_locations.get(entity_key, frozenset())
+        for child_uuid in EventQueue.child_links(self)[1]:
             child = EventQueue.get_event_by_uuid(child_uuid)
             if (isinstance(child, SpatialChangeEvent)
                     and child.change_type is SpatialChangeType.ENTITY_ENTERED
@@ -4505,8 +4675,7 @@ class StepMovementEvent(Event):
                     and child.position == self.to_position
                     and child.phase is EventPhase.DECLARATION):
                 # Entry handlers may relocate again before this step completes.
-                evidence[position_evidence_key(self.to_position)] = set(
-                    child.located_entity_observer_uuids.get(entity_key, set()))
+                evidence[position_evidence_key(self.to_position)] = child.located_entity_observer_uuids.get(entity_key, frozenset())
                 break
         return evidence
 
@@ -4576,6 +4745,8 @@ class Range(BaseModel):
 
 class Damage(BaseObject):
     """Damage dice specification plus damage type."""
+    attack_magical: bool | None = None
+    effect_origin: EffectOrigin | None = None
 
     name: str = Field(default="Damage", description="Human-readable damage label.")
     damage_dice: Literal[4, 6, 8, 10, 12, 20] = Field(
@@ -4584,7 +4755,7 @@ class Damage(BaseObject):
     dice_numbers: int = Field(
         description="Number of damage dice to roll."
     )
-    damage_bonus: Optional[ModifiableValue] = Field(
+    damage_bonus: Optional[ComposedValue] = Field(
         default=None,
         description="Modifiable flat bonus added to damage rolls."
     )
@@ -4603,7 +4774,22 @@ class Damage(BaseObject):
             Dice configured for a damage roll.
         """
         assert self.damage_bonus is not None, "Damage requires damage_bonus to be set"
-        return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome, crit_extra_dice=crit_extra_dice)
+        group = EventQueue.open_group()
+        if group is not None and group.shares_damage_rolls and not group.settling:
+            key = (self.source_entity_uuid, self.name, self.damage_type, self.dice_numbers,
+                self.damage_dice, attack_outcome, crit_extra_dice)
+            shared = group.shared_dice.get(key)
+            if shared is None:
+                shared = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.read_bonus(),
+                    roll_type=RollType.DAMAGE, attack_outcome=attack_outcome, crit_extra_dice=crit_extra_dice)
+                group.shared_dice[key] = shared
+            return shared
+        return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.read_bonus(), roll_type=RollType.DAMAGE, attack_outcome=attack_outcome, crit_extra_dice=crit_extra_dice)
+
+    def read_bonus(self) -> ValueReading:
+        """The flat bonus read in this packet's situation: its source, target and attack context."""
+        assert self.damage_bonus is not None, "Damage requires damage_bonus to be set"
+        return read_value(self.damage_bonus, ValueRead(self.source_entity_uuid, self.target_entity_uuid, self.context))
 
 
 class Healing(BaseObject):
@@ -4615,7 +4801,7 @@ class Healing(BaseObject):
     dice_numbers: int = Field(
         description="Number of dice to roll for healing (e.g., 2 for 2d8)"
     )
-    healing_bonus: Optional[ModifiableValue] = Field(
+    healing_bonus: Optional[ComposedValue] = Field(
         default=None,
         description="Bonus to healing rolls (typically spellcasting ability modifier)"
     )
@@ -4626,7 +4812,8 @@ class Healing(BaseObject):
         return Dice(
             count=self.dice_numbers,
             value=self.healing_dice,
-            bonus=self.healing_bonus,
+            bonus=read_value(self.healing_bonus,
+                             ValueRead(self.source_entity_uuid, self.target_entity_uuid, self.context)),
             roll_type=RollType.HEAL
         )
 
@@ -4803,7 +4990,7 @@ class D20RollResultEvent(DiceRollResultEvent):
         description="Replacement d20 roll after handlers modify the result.",
     )
     dc: Optional[int] = Field(default=None, description="Difficulty class or armor class, if known.")
-    bonus: Optional[ModifiableValue] = Field(default=None, description="Modifiers used for the d20 roll.")
+    bonus: Optional[ValueReading] = Field(default=None, description="Evaluated bonus used for the d20 roll.")
     result: Optional[bool] = Field(default=None, description="Success flag set after the outcome is evaluated.")
 
     @model_validator(mode="after")
@@ -4936,7 +5123,9 @@ class DamageRollResultEvent(DiceRollResultEvent):
         description="Event category for damage-roll result interception.",
     )
     roll_type: RollType = Field(default=RollType.DAMAGE, description="Roll category for damage results.")
-    weapon_slot: WeaponSlot = Field(description="Weapon slot used for the attack.")
+    weapon_slot: WeaponSlot | None = Field(default=None,description="Weapon slot; absent for spell attacks.")
+    attack_kind: Literal["weapon","spell","unarmed","natural"] = "weapon"
+    source_item_uuid: UUID | None = None
     attack_outcome: AttackOutcome = Field(description="Attack outcome associated with this damage roll.")
     damage_packets: List[DamageRollPacket] = Field(
         min_length=1,
@@ -5034,6 +5223,36 @@ class DamageRollResultEvent(DiceRollResultEvent):
         )
 
 
+class SpellDamageRollResultEvent(DiceRollResultEvent):
+    """Raw native spell packet before save reduction and damage affinities."""
+
+    name: str = "Spell Damage Roll Result"
+    event_type: EventType = EventType.SPELL_DAMAGE_ROLL_RESULT
+    roll_type: RollType = RollType.DAMAGE
+    damage: Damage
+    effect_origin: EffectOrigin
+    original_roll: DiceRoll
+    final_roll: DiceRoll
+    save_success: bool | None = None
+    success_damage_fraction: float = Field(default=1, ge=0, le=1)
+
+    @property
+    def applied_amount(self) -> int:
+        if self.canceled:
+            return 0
+        fraction = self.success_damage_fraction if self.save_success else 1
+        return max(0, int(self.final_roll.total * fraction))
+
+    def replace_roll(self, new_roll: DiceRoll, handler_name: str, reason: str) -> Self:
+        if new_roll.roll_type is not RollType.DAMAGE:
+            raise ValueError("Spell damage requires a damage-category roll")
+        modification = RollModification(operation=RollModificationOperation.REPLACE,
+            handler_name=handler_name, previous_total=self.final_roll.total,
+            final_total=new_roll.total, reason=reason)
+        return self.with_updates(final_roll=new_roll,
+            roll_modifications=[*self.roll_modifications, modification])
+
+
 class HealRollResultEvent(DiceRollResultEvent):
     """Healing-roll result event fired before healing is applied.
 
@@ -5048,6 +5267,7 @@ class HealRollResultEvent(DiceRollResultEvent):
     )
     roll_type: RollType = Field(default=RollType.HEAL, description="Roll category for healing results.")
     spell_name: str = Field(default="", description="Name of the healing spell or effect.")
+    effect_origin: EffectOrigin | None = None
     original_roll: DiceRoll = Field(description="Original immutable healing roll.")
     final_roll: DiceRoll = Field(description="Healing roll to apply after handler modifications.")
 
@@ -5126,11 +5346,13 @@ class TakeDamageEvent(Event):
         description="Event category for damage application.",
     )
     total_damage: int = Field(description="Total damage before any modifications")
+    ignores_resistance_immunity: bool = False
     relentless_rage: RelentlessRageIntervention | None = None
     intercepted_by_condition_uuid: UUID | None = None
     spatial_source: SpatialDamageSource | None = None
     source_condition_uuid: UUID | None = None
     zero_hp_disposition: RemainsDisposition = RemainsDisposition.INTACT
+    component_amounts: tuple[int, ...] | None = None
     damage_rolls: List[DiceRoll] = Field(default_factory=list, description="Individual damage rolls")
     damages: List['Damage'] = Field(default_factory=list, description="Damage specifications (types)")
     effect_id: Optional[str] = Field(
@@ -5311,6 +5533,110 @@ class TemporaryHitPointsChangedEvent(Event):
     grant: TemporaryHitPointsGrant | None = None
 
 
+class EffectApplicationEvent(Event):
+    """Recipient admission before an authored effect resolves saves or riders."""
+
+    event_type: EventType = EventType.EFFECT_APPLICATION
+    name: str = "Effect Application"
+    spatial_effect_uuid: UUID | None = None
+    source_position: tuple[int, int] | None = None
+    target_position: tuple[int, int] | None = None
+    effect_origin: EffectOrigin
+
+
+class ActionCostsCommittedEvent(Event):
+    """Accepted action cost boundary before cancelable execution dispatch."""
+
+    event_type: EventType = EventType.ACTION_COSTS_COMMITTED
+    name: str = "Action Costs Committed"
+    action_lineage_uuid: UUID
+    effect_origin: EffectOrigin | None = None
+    named_resource_costs: Tuple[Tuple[str, int], ...] = ()
+
+
+class ConditionMembershipCommittedEvent(Event):
+    """Actual native condition membership after authoritative indexes changed."""
+    name: str = "Condition Membership Committed"
+    event_type: EventType = EventType.CONDITION_MEMBERSHIP_COMMITTED
+    condition_uuid: UUID
+    present: bool
+
+
+class RestResourcesRecoveredEvent(Event):
+    """Actual named rest-resource restoration without completing a rest."""
+    name: str = "Rest Resources Recovered"
+    event_type: EventType = EventType.REST_RESOURCES_RECOVERED
+    resource_names: tuple[str,...]
+
+
+class PermanentFeatureUsedEvent(Event):
+    """Explicit irreversible feature usage value, safe for capture/rebuild."""
+    name: str = "Permanent Feature Used"
+    event_type: EventType = EventType.PERMANENT_FEATURE_USED
+    permanent_feature_uses: tuple[str,...]
+
+
+class RestCompletedEvent(Event):
+    """A completed native rest, emitted only when recovery actually succeeded."""
+
+    event_type: EventType = EventType.REST_COMPLETED
+    name: str = "Rest Completed"
+    rest_type: Literal["short_rest", "long_rest"]
+
+
+class SpellMasteryStudiedEvent(Event):
+    """Completed bounded eight-hour study with explicit rebuildable choices."""
+    name: str = "Spell Mastery Studied"
+    event_type: EventType = EventType.SPELL_MASTERY_STUDIED
+    hours: int = Field(default=8,ge=8,le=8)
+    applied_class_levels: Tuple[AppliedClassLevel,...]
+
+
+class SpellbookChangedEvent(Event):
+    """Committed character-owned knowledge; independent of a spell cast."""
+
+    event_type: EventType = EventType.SPELLBOOK_CHANGED
+    name: str = "Spellbook Changed"
+    learned_spell_id: str
+    scribed_spell_ids: Tuple[str, ...]
+
+
+class SpellPreparationChangedEvent(Event):
+    """Committed replacement of one exact source's selected preparation."""
+
+    event_type: EventType = EventType.SPELL_PREPARATION_CHANGED
+    name: str = "Spell Preparation Changed"
+    casting_source_id: str
+    prepared_spell_selections: Tuple[PreparedSpellSelection, ...]
+
+
+class ActionApplicationCommittedEvent(Event):
+    """An accepted application fact, without copied cast/attack presentation."""
+
+    event_type: EventType = EventType.ACTION_APPLICATION_COMMITTED
+    action_id: str | None = None
+    spell_id: str | None = None
+    interception_provider_uuid: UUID | None = None
+    effect_origin: EffectOrigin | None = None
+
+    def get_effect_origin(self) -> EffectOrigin | None:
+        return self.effect_origin
+
+    def generate_combat_log(self) -> None:
+        return None
+
+
+class MaximumHitPointReductionEvent(Event):
+    """Admit one new maximum-HP loss before any reduction modifier changes."""
+
+    event_type: EventType = EventType.MAXIMUM_HIT_POINT_REDUCTION
+    amount: int = Field(gt=0)
+    source_condition_uuid: UUID | None = None
+
+    def generate_combat_log(self) -> None:
+        return None
+
+
 class HealEvent(Event):
     """Healing-application event for HP restoration and blocking."""
 
@@ -5322,6 +5648,7 @@ class HealEvent(Event):
     source_description: str = Field(default="", description="Human-readable description of the healing source.")
     was_blocked: bool = Field(default=False, description="Whether healing was blocked by an effect.")
     spell_level: int = Field(default=0, description="Spell level used, or 0 for non-spell healing.")
+    effect_origin: EffectOrigin | None = None
 
     resulting_hp: Optional[int] = Field(
         default=None,
@@ -5381,6 +5708,15 @@ class HealEvent(Event):
             ),
             success=True
         )
+
+
+class HealingAppliedEvent(Event):
+    """Non-cancelable healing result emitted after normal HP was committed."""
+
+    event_type: EventType = EventType.HEALING_APPLIED
+    name: str = "Healing Applied"
+    actual_healing: int
+    effect_origin: EffectOrigin | None = None
 
 
 class EncounterEvent(Event):
@@ -5651,3 +5987,9 @@ class InstantDeathEvent(Event):
     killer_uuid: Optional[UUID] = Field(default=None, description="Entity or effect source causing the instant-death effect.")
     killer_name: str = Field(default="", description="Display name of the instant-death source, if known.")
     source_description: str = Field(default="", description="Rules-facing source or effect description.")
+
+
+class StandOfferEvent(Event):
+    """A healed recipient may spend its configured native reaction to stand."""
+    name: str = "Stand after Power Word Heal"
+    event_type: EventType = EventType.BASE_ACTION

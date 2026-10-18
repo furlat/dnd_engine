@@ -22,10 +22,6 @@ def held_condition(target, source, kind):
     assert not target.add_condition(haste).canceled
     if kind == 'haste':
         return haste, haste
-    # Suppression retains the live owner; terminal removal still tears it down once.
-    haste.set_suppression(uuid4(), True)
-    assert haste.applied and not haste.contributions_active()
-    return haste, haste
 
 
 def depart(member, caster, method):
@@ -40,7 +36,7 @@ def depart(member, caster, method):
 
 
 @pytest.mark.parametrize('method', ['dismiss', 'expire'])
-@pytest.mark.parametrize('kind', ['haste', 'suppression'])
+@pytest.mark.parametrize('kind', ['haste'])
 def test_terminal_summon_removal_skips_only_ending_actor_condition_consequences(battle, method, kind):
     game, encounter, system, caster, _enemy = battle
     member = cast_one(battle)
@@ -60,7 +56,7 @@ def test_terminal_summon_removal_skips_only_ending_actor_condition_consequences(
 
 
 @pytest.mark.parametrize('method', ['dismiss', 'expire'])
-@pytest.mark.parametrize('kind', ['haste', 'suppression'])
+@pytest.mark.parametrize('kind', ['haste'])
 def test_terminal_summon_removal_keeps_normal_consequence_on_surviving_recipient(battle, method, kind):
     game, _encounter, system, caster, recipient = battle
     member = cast_one(battle)

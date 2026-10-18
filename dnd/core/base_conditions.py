@@ -15,8 +15,9 @@ from pydantic import (
 from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Literal, Set
 
 from dnd.core.modifiers import ContextAwareCondition
+from dnd.core.creature_types import CreatureType
 from dnd.core.base_object import BaseObject
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, remove_modifier
 from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue, SpatialChangeEvent, WorldTileState
 from dnd.core.combat_log import ConditionRemovedLogData, EmptyLogData
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
@@ -26,7 +27,7 @@ from dnd.core.content.runtime import (
     bind_runtime_behavior,
     runtime_behavior_provider,
 )
-from dnd.core.effect_types import EffectOrigin, AntimagicException
+from dnd.core.effect_types import EffectOrigin
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
     ConditionCategory,
@@ -316,7 +317,9 @@ class BaseCondition(BaseObject):
 
     sustain_loss_policy: SustainLossPolicy = SustainLossPolicy.ORDINARY
 
-    presence_return_handler_uuid: UUID | None = Field(default=None, exclude=True)
+
+    def record_committed_publication(self, event: Event) -> None:
+        """An owner's already-stored state publication; no admission or mutation."""
 
     def snapshot_summon_origin(self) -> SummonOrigin | None:
         return None
@@ -478,12 +481,8 @@ class BaseCondition(BaseObject):
             return False
         return True
 
-    def get_optical_obscurement_at(
-        self,
-        position: Tuple[int, int],
-    ) -> Optional[OpticalObscurement]:
-        """Return no optical contribution for an ordinary condition."""
-        del position
+    def optical_obscurement_value(self) -> Optional[OpticalObscurement]:
+        """An ordinary condition contributes no optical obscurement."""
         return None
 
     def blocks_physical_optics_at(self, position: Tuple[int, int]) -> bool:
@@ -546,18 +545,24 @@ class BaseCondition(BaseObject):
         description="Optional saving throw requested before entity-level duration removal."
     )
     applied: bool = Field(default=False, description="Whether this condition has applied its own state.")
-    suppression_provider_uuids: Set[UUID] = Field(default_factory=set,
-        description="Independent Antimagic providers gating this retained condition.")
     grants_invisibility: bool = False
+    suppresses_invisibility: bool = False
+    blocks_opportunity_attacks: bool = False
+    source_creature_type: CreatureType | None = None
+    immunity_names: tuple[str, ...] = ()
+    blocked_while_wet: bool = False
+    blocked_action_channels: frozenset[str] = frozenset()
+    denies_dexterity_ac: bool = False
+    blocks_spellcasting: bool = False
+    blocks_outward_actions: bool = False
+    blocks_external_contact: bool = False
+    blocks_magic_item_activation: bool = False
+    prevents_surprise: bool = False
     blocks_healing: bool = False
     ignores_difficult_terrain: bool = False
     ignores_magical_speed_reduction: bool = False
     ignores_underwater_penalties: bool = False
-    antimagic_exception: AntimagicException | None = None
 
-    def antimagic_exempt(self) -> bool:
-        return self.antimagic_exception is not None or (
-            self.effect_origin is not None and self.effect_origin.antimagic_exception is not None)
 
 
     def contributions_active(self) -> bool:
@@ -565,38 +570,15 @@ class BaseCondition(BaseObject):
         surviving = any(parent is not None and parent.contributions_active()
             for identity in parents if (parent := BaseObject.get(identity)) is not None)
         if self.parent_condition is None:
-            return surviving or (not self.suppression_provider_uuids and super().contributions_active())
-        return not self.suppression_provider_uuids and surviving
+            return surviving or super().contributions_active()
+        return surviving
 
     def allows_contribution_at(self, position: tuple[int, int] | None) -> bool:
         return self.contributions_active() and (position is None or not any(
             position in suppression.positions for suppression in self.spatial_suppressions))
 
-    def suppression_providers(self) -> Set[UUID]:
-        if self.contributions_active():
-            return set()
-        providers = set(self.suppression_provider_uuids)
-        if self.parent_condition is not None and not self.contributions_active():
-            for identity in self.additional_parent_conditions | {self.parent_condition}:
-                parent = BaseObject.get(identity)
-                if isinstance(parent, BaseCondition):
-                    providers.update(parent.suppression_providers())
-        return providers
 
-    def set_suppression(self, provider_uuid: UUID, suppressed: bool) -> bool:
-        """Change one provider token without touching duration, links or runtime IDs."""
-        before = set(self.suppression_provider_uuids)
-        if suppressed:
-            self.suppression_provider_uuids.add(provider_uuid)
-        else:
-            self.suppression_provider_uuids.discard(provider_uuid)
-        changed = before != self.suppression_provider_uuids
-        if changed:
-            self.on_suppression_changed()
-        return changed
 
-    def on_suppression_changed(self) -> None:
-        """Source-owned compound benefits refresh their existing effective contribution."""
 
     def bind_owned_contributions(self) -> None:
         """Reuse the existing ownership arrays to give lower consumers an exact gate."""
@@ -695,12 +677,11 @@ class BaseCondition(BaseObject):
                 payload[field_name] = sorted(values)
         return payload
 
-    def get_action_target_effect_profile(self, action: Any, actor: Any) -> Optional[Any]:
+    def get_action_target_effect_profile(self, action: Any) -> Optional[Any]:
         """Return target-effect metadata this condition adds to an action.
 
         Args:
-            action: Action template being discovered.
-            actor: Entity discovering that action.
+            action: Action template being discovered; its source is this condition's bearer.
 
         Returns:
             A dependency-neutral target-effect profile, or `None` when this
@@ -708,12 +689,11 @@ class BaseCondition(BaseObject):
         """
         return None
 
-    def get_action_damage_roll_profiles(self, action: Any, actor: Any) -> Tuple[Any, ...]:
+    def get_action_damage_roll_profiles(self, action: Any) -> Tuple[Any, ...]:
         """Return extra damage profiles this condition adds to an action.
 
         Args:
-            action: Action template being discovered.
-            actor: Entity discovering that action.
+            action: Action template being discovered; its source is this condition's bearer.
 
         Returns:
             Dependency-neutral damage-profile metadata. The action layer
@@ -803,7 +783,6 @@ class BaseCondition(BaseObject):
             removal_triggers=tuple(sorted(self.removal_triggers, key=lambda trigger: trigger.value)),
             agency_denial=self.agency_denial if self.contributions_active() else ConditionAgencyDenial.NONE,
             outcome_protections=self.outcome_protections if self.contributions_active() else (),
-            suppression_provider_uuids=tuple(sorted(self.suppression_providers(), key=str)),
             applied_source_event_cursor=self.applied_source_event_cursor,
         )
 
@@ -1119,6 +1098,10 @@ class BaseCondition(BaseObject):
         """Release provisional native removal phases after a graph veto."""
         del reason
 
+    def on_world_closed(self, parent_event: Event | None = None) -> None:
+        """Optional exact-owner cleanup before an administrative world detach."""
+        return None
+
     def prepare_removal_state(self, event: Event) -> Event:
         """Admit native cleanup before either voluntary or mandatory commitment."""
         return event
@@ -1157,7 +1140,7 @@ class BaseCondition(BaseObject):
             if value is None:
                 raise ValueError(f"Trying to remove value with UUID {value_uuid} not found")
             for modifier_uuid in modifiers_uuids:
-                value.remove_modifier(modifier_uuid)
+                remove_modifier(value, modifier_uuid)
         return True
 
     def add_linked_condition(self, target_block_uuid: UUID, condition_uuid: UUID) -> None:
@@ -1302,7 +1285,6 @@ class SpellProtection(BaseModel):
     uuid: UUID = Field(description="Protection UUID used for unregistering.")
     positions: Set[Tuple[int, int]] = Field(description="Grid positions protected by this spell effect.")
     max_blocked_level: int = Field(description="Highest spell level blocked by this protection.")
-    suppresses_magic: bool = False
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -1348,7 +1330,7 @@ class SpellProtectionRegistry:
             True if the target position is protected from this spell.
         """
         for p in cls._protections:
-            if position in p.positions and (p.suppresses_magic or source_position not in p.positions) and spell_level <= p.max_blocked_level:
+            if position in p.positions and source_position not in p.positions and spell_level <= p.max_blocked_level:
                 return True
         return False
 
@@ -1356,17 +1338,12 @@ class SpellProtectionRegistry:
     def get_suppressions(cls, source_position: Tuple[int, int], spell_level: int,
                          positions: Set[Tuple[int, int]]) -> Tuple[SpellSuppression, ...]:
         """Retain the same protection decision and its actual footprint overlap."""
-        return tuple(SpellSuppression(provider_uuid=protection.uuid, antimagic=protection.suppresses_magic,
+        return tuple(SpellSuppression(provider_uuid=protection.uuid,
                      positions=tuple(sorted(overlap)))
             for protection in cls._protections
-            if (protection.suppresses_magic or source_position not in protection.positions) and spell_level <= protection.max_blocked_level
+            if source_position not in protection.positions and spell_level <= protection.max_blocked_level
             if (overlap := positions & protection.positions))
 
-    @classmethod
-    def get_antimagic_suppressions(cls, positions: Set[Tuple[int, int]]) -> Tuple[SpellSuppression, ...]:
-        return tuple(SpellSuppression(provider_uuid=provider.uuid, antimagic=True,
-            positions=tuple(sorted(overlap))) for provider in cls._protections
-            if provider.suppresses_magic and (overlap := positions & provider.positions))
 
     @classmethod
     def get_excluded_positions(cls, source_position: Tuple[int, int], spell_level: int) -> Set[Tuple[int, int]]:
@@ -1381,7 +1358,7 @@ class SpellProtectionRegistry:
         """
         excluded: Set[Tuple[int, int]] = set()
         for p in cls._protections:
-            if (p.suppresses_magic or source_position not in p.positions) and spell_level <= p.max_blocked_level:
+            if source_position not in p.positions and spell_level <= p.max_blocked_level:
                 excluded |= p.positions
         return excluded
 

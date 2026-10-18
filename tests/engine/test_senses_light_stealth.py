@@ -5,9 +5,10 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import Field
 
+from dnd.core.aoe import AoEShape, Sphere
 from dnd.actions import Move
 from dnd.blocks.base_item import BaseItem
-from dnd.blocks.sensory import spatial_senses_system
+from dnd.blocks.sensory import spatial_senses_system, capture_senses_snapshot
 from dnd.conditions import Hidden, Invisible, InvisibilityEffect
 from dnd.controller import PassController
 from dnd.core.base_actions import ActionEvent
@@ -27,8 +28,10 @@ from dnd.core.events import (
     SpatialChangeEvent,
 )
 from dnd.core.gridmap import get_map
+from dnd.core.navigation import has_route, remember_blocked_cell, route, side_bit
+from dnd.core.view import layer_positions, layer_value
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.game import Game
@@ -50,6 +53,8 @@ from dnd.types.spatial_effects import (
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from dnd.types.senses import OpticalObscurement, PerceivedContact
 from tests.engine.support import reset_combat_state
+from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, cell_in, no_cells, value_at
+from dnd.core.cells import mask_positions
 
 
 _MAGICAL_DARKNESS_CELL_CONTENT_REF = ContentRef(
@@ -71,8 +76,7 @@ class MagicalDarknessCellZone(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
     )
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=0)
+    area: AoEShape = Sphere(radius_feet=0)
     sets_light_level: LightLevel = Field(default=LightLevel.DARKNESS)
     light_is_cap: bool = Field(default=True)
     optical_obscurement: OpticalObscurement = Field(
@@ -125,13 +129,11 @@ class PerceptionModifierCondition(BaseCondition):
             return [], [], [], [], None
 
         perception = target.skill_set.get_skill("perception")
-        modifier_uuid = perception.skill_bonus.self_static.add_value_modifier(
-            NumericalModifier.create(
+        modifier_uuid = add_modifier(perception.skill_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid,
                 name="Perception Payload Modifier",
                 value=self.modifier_amount,
-            )
-        )
+            ))
         effect_event = declaration_event.phase_to(EventPhase.EFFECT)
         return [(perception.skill_bonus.uuid, modifier_uuid)], [], [], [], effect_event
 
@@ -168,7 +170,7 @@ def reset_senses_state(
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Encounter.clear_registry()
     grid = get_map()
     grid.create_rectangle(
@@ -200,13 +202,12 @@ def test_eb_12_001_geometric_fov_is_filtered_by_effective_light() -> None:
 
     observer.update_entity_senses(max_distance=5)
 
-    subscriptions = get_map().get_entity_subscriptions(observer.uuid)
-    assert (3, 0) in subscriptions
-    assert (3, 0) not in observer.senses.visible
-    assert observer.senses.visible == {}
-    assert observer.senses.effective_light_levels == {}
+    assert observer.uuid in spatial_senses_system.observers_granted({(3, 0)})
+    assert not cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
+    assert capture_senses_snapshot(observer.senses).visible == EMPTY_CELLS
+    assert capture_senses_snapshot(observer.senses).effective_light_levels == EMPTY_VALUES
     assert target.uuid not in observer.senses.entities
-    assert (3, 0) not in observer.senses.seen
+    assert not cell_in(capture_senses_snapshot(observer.senses).seen, (3, 0))
 
 
 def test_eb_12_002_sense_modes_subjectively_upgrade_light() -> None:
@@ -222,28 +223,28 @@ def test_eb_12_002_sense_modes_subjectively_upgrade_light() -> None:
     ]
 
     observer.update_entity_senses(max_distance=18)
-    assert (15, 0) not in observer.senses.effective_light_levels
-    assert observer.senses.effective_light_levels[(10, 0)] == LightLevel.DIM_LIGHT
-    assert observer.senses.effective_light_levels[(5, 0)] == LightLevel.BRIGHT_LIGHT
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (15, 0)) is None
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (10, 0)) == LightLevel.DIM_LIGHT
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (5, 0)) == LightLevel.BRIGHT_LIGHT
 
     zone = MagicalDarknessCellZone(
         source_entity_uuid=observer.uuid,
         position=(2, 0),
     )
     assert zone.activate(parent_event=_spatial_cause(observer.uuid)) is not None
-    assert (2, 0) not in observer.senses.effective_light_levels
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (2, 0)) is None
 
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.DEVILS_SIGHT, range_feet=120)
     ]
     observer.update_entity_senses(max_distance=18)
-    assert observer.senses.effective_light_levels[(2, 0)] == LightLevel.BRIGHT_LIGHT
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (2, 0)) == LightLevel.BRIGHT_LIGHT
 
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=60)
     ]
     observer.update_entity_senses(max_distance=18)
-    assert observer.senses.effective_light_levels[(2, 0)] == LightLevel.BRIGHT_LIGHT
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (2, 0)) == LightLevel.BRIGHT_LIGHT
 
 
 def test_eb_12_003_light_sources_use_shared_optical_topology() -> None:
@@ -320,7 +321,7 @@ def test_eb_12_003a_optical_door_recomputes_existing_light_on_commit() -> None:
         for index, event in opened_events
         if event.event_type == EventType.SPATIAL_LIGHT_CHANGED
     )
-    assert topology_event.directional_channels == ["movement", "optical", "propagation"]
+    assert topology_event.directional_channels == list(WorldEdgeChannel)
     assert light_event.parent_event is not None
     light_parent = EventQueue.get_event_by_uuid(light_event.parent_event)
     assert light_parent is not None
@@ -463,13 +464,13 @@ def test_eb_12_004_light_change_reveals_subscribed_dark_cells_reactively() -> No
     assert target.uuid not in observer.senses.entities
     get_map().add_light_source((3, 0), bright_radius_feet=5, dim_radius_feet=0)
 
-    assert (3, 0) in observer.senses.visible
-    assert (3, 0) in observer.senses.seen
+    assert cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
+    assert cell_in(capture_senses_snapshot(observer.senses).seen, (3, 0))
     assert target.uuid in observer.senses.entities
     updates = completed_sensory_updates(observer.uuid)
     light_updates = [event for event in updates if event.update_reason == SensoryUpdateReason.LIGHT]
     assert light_updates
-    assert any((3, 0) in event.visible_cells_added for event in light_updates)
+    assert any(cell_in(event.visible_cells_added, (3, 0)) for event in light_updates)
     assert any(target.uuid in event.entity_contacts_changed for event in light_updates)
 
 
@@ -536,8 +537,8 @@ def test_eb_12_007_subjective_paths_do_not_leak_imperceivable_blockers() -> None
     Entity.update_all_entities_senses(max_distance=5)
 
     assert invisible.uuid not in observer.senses.entities
-    assert (2, 0) in observer.senses.paths
-    assert (4, 0) in observer.senses.paths
+    assert has_route(observer.senses.paths, (2, 0))
+    assert has_route(observer.senses.paths, (4, 0))
 
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=60)
@@ -545,8 +546,8 @@ def test_eb_12_007_subjective_paths_do_not_leak_imperceivable_blockers() -> None
     Entity.update_all_entities_senses(max_distance=5)
 
     assert invisible.uuid in observer.senses.entities
-    assert (2, 0) not in observer.senses.paths
-    assert (4, 0) not in observer.senses.paths
+    assert not has_route(observer.senses.paths, (2, 0))
+    assert not has_route(observer.senses.paths, (4, 0))
 
 
 def test_eb_12_008_self_movement_updates_visibility_and_marks_paths_dirty() -> None:
@@ -640,7 +641,7 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
     Entity.update_all_entities_senses(max_distance=5)
 
     assert target.uuid in observer.senses.entities
-    assert (3, 0) in observer.senses.visible
+    assert cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
 
     zone = MagicalDarknessCellZone(
         source_entity_uuid=observer.uuid,
@@ -653,10 +654,10 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
     assert darkness_tile is not None
     assert darkness_tile.resolved_light_level == LightLevel.DARKNESS
     assert target.uuid not in observer.senses.entities
-    assert (3, 0) not in observer.senses.visible
+    assert not cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
     add_updates = [
         event for event in completed_sensory_updates(observer.uuid)
-        if (3, 0) in event.visible_cells_removed
+        if cell_in(event.visible_cells_removed, (3, 0))
         and target.uuid in event.entity_contacts_removed
     ]
     assert add_updates
@@ -667,8 +668,8 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
     restored_tile = get_map().get_tile(2, 0)
     assert restored_tile is not None
     assert restored_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert (2, 0) in observer.senses.visible
-    assert (3, 0) in observer.senses.visible
+    assert cell_in(capture_senses_snapshot(observer.senses).visible, (2, 0))
+    assert cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
     assert target.uuid in observer.senses.entities
     removal_updates = [
         event
@@ -678,7 +679,7 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
         and target.uuid in event.entity_contacts_changed
     ]
     assert removal_updates
-    assert (3, 0) in removal_updates[-1].visible_cells_added
+    assert cell_in(removal_updates[-1].visible_cells_added, (3, 0))
 
 
 def test_eb_12_012_passive_perception_changes_emit_replacement_payloads() -> None:
@@ -772,7 +773,7 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
     )
     Entity.update_all_entities_senses(max_distance=5)
 
-    assert (1, 0) in mover.senses.paths
+    assert has_route(mover.senses.paths, (1, 0))
     assert grid.can_transition((0, 0), (1, 0), mover.uuid, subjective=True)
     assert not grid.can_transition((0, 0), (1, 0), mover.uuid)
 
@@ -780,11 +781,11 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
 
     assert result is not None
     assert mover.position == (0, 0)
-    assert mover.senses.collision_blocked == set()
-    assert ((0, 0), "east") in mover.senses.directional_collision_blocked
+    assert layer_positions(mover.senses.collision_blocked) == []
+    assert layer_value(mover.senses.directional_collision_blocked, (0, 0)) == side_bit(CardinalDirection.EAST)
 
     mover.update_entity_senses(max_distance=5)
-    remembered_path = mover.senses.paths[(1, 0)]
+    remembered_path = route(mover.senses.paths, (1, 0))
     assert remembered_path != [(0, 0), (1, 0)]
     assert grid.can_transition(
         (1, 1),
@@ -794,7 +795,7 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
         directional_collision_blocked=mover.senses.directional_collision_blocked,
     )
 
-    mover.senses.collision_blocked.add((2, 0))
+    mover.senses.collision_blocked = remember_blocked_cell(mover.senses.collision_blocked, (2, 0))
     encounter = Encounter(name="Collision Cleanup", source_entity_uuid=uuid4())
     encounter.add_combatant(mover, PassController(source_entity_uuid=mover.uuid))
     encounter.add_combatant(other, PassController(source_entity_uuid=other.uuid))
@@ -802,9 +803,9 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
     encounter.start_encounter()
     encounter.start_turn()
 
-    assert mover.senses.collision_blocked == set()
-    assert mover.senses.directional_collision_blocked == set()
-    assert mover.senses.paths[(1, 0)] == [(0, 0), (1, 0)]
+    assert layer_positions(mover.senses.collision_blocked) == []
+    assert layer_positions(mover.senses.directional_collision_blocked) == []
+    assert route(mover.senses.paths, (1, 0)) == [(0, 0), (1, 0)]
 
 
 def test_eb_12_014_plain_invisible_and_spell_invisibility_have_different_reveal_contracts() -> None:
@@ -870,7 +871,7 @@ def test_eb_12_015_hidden_cell_blocker_reveals_on_movement_collision() -> None:
     Entity.update_all_entities_senses(max_distance=5)
 
     assert hidden_blocker.uuid not in mover.senses.entities
-    assert (1, 0) in mover.senses.paths
+    assert has_route(mover.senses.paths, (1, 0))
     assert get_map().can_transition((0, 0), (1, 0), mover.uuid, subjective=True)
     assert not get_map().can_transition((0, 0), (1, 0), mover.uuid)
 
@@ -878,7 +879,7 @@ def test_eb_12_015_hidden_cell_blocker_reveals_on_movement_collision() -> None:
 
     assert result is not None and result.canceled
     assert mover.position == (0, 0)
-    assert mover.senses.collision_blocked == {(1, 0)}
+    assert layer_positions(mover.senses.collision_blocked) == [(1, 0)]
     assert "Hidden" not in hidden_blocker.active_conditions
     assert hidden_blocker.stealth_dc is None
     assert hidden_blocker.uuid in mover.senses.entities
@@ -1178,24 +1179,30 @@ def test_eb_12_021_movement_perception_matches_explicit_cold_recompute() -> None
     assert marker.uuid in mover.senses.objects
     assert mover.senses._paths_dirty is True
     movement_snapshot = {
-        "visible": dict(mover.senses.visible),
-        "seen": set(mover.senses.seen),
+        "visible": set(mask_positions(capture_senses_snapshot(mover.senses).visible)),
+        "seen": set(mask_positions(capture_senses_snapshot(mover.senses).seen)),
         "entities": dict(mover.senses.entities),
         "objects": dict(mover.senses.objects),
-        "subscriptions": set(grid.get_entity_subscriptions(mover.uuid)),
+        "granted": _granted_cells(mover),
     }
 
     mover.update_entity_senses(max_distance=5)
     cold_snapshot = {
-        "visible": dict(mover.senses.visible),
-        "seen": set(mover.senses.seen),
+        "visible": set(mask_positions(capture_senses_snapshot(mover.senses).visible)),
+        "seen": set(mask_positions(capture_senses_snapshot(mover.senses).seen)),
         "entities": dict(mover.senses.entities),
         "objects": dict(mover.senses.objects),
-        "subscriptions": set(grid.get_entity_subscriptions(mover.uuid)),
+        "granted": _granted_cells(mover),
     }
 
     assert movement_snapshot == cold_snapshot
     assert mover.senses._paths_dirty is False
+
+
+def _granted_cells(observer: Entity) -> set[tuple[int, int]]:
+    """The cells whose facts the observer is granted (its wall field, felt cells and volume routes)."""
+    return {position for position in get_map().get_all_tiles()
+            if observer.uuid in spatial_senses_system.observers_granted({position})}
 
 
 def test_eb_12_022_paired_movement_emits_one_subjective_transition() -> None:
@@ -1253,7 +1260,7 @@ def test_eb_12_023_sensory_dispatch_indexes_local_spatial_candidates() -> None:
         old_position=(1, 0),
     )
 
-    candidates = spatial_senses_system.candidate_observer_uuids(entered)
+    candidates = spatial_senses_system.selected_observers(entered)
 
     assert local_observer.uuid in candidates
     assert mover.uuid in candidates
@@ -1273,7 +1280,7 @@ def test_eb_12_024_sensory_dispatch_targets_own_perception_conditions() -> None:
         use_register=False,
     )
 
-    candidates = spatial_senses_system.candidate_observer_uuids(condition_event)
+    candidates = spatial_senses_system.selected_observers(condition_event)
 
     assert candidates == {target.uuid}
     assert unrelated.uuid not in candidates
@@ -1339,7 +1346,7 @@ def test_eb_12_026_batched_light_positions_reveal_hidden_entities() -> None:
         ),
     )
 
-    grid._fire_spatial_event(event)
+    grid.publish_spatial_event(event)
 
     assert "Hidden" not in hidden.active_conditions
     assert hidden.stealth_dc is None
@@ -1438,7 +1445,7 @@ def test_eb_12_028a_near_side_wall_is_visible_without_far_tile_content() -> None
         position=(1, 0),
         visual=True,
     )
-    assert (1, 0) not in observer.senses.visible
+    assert not cell_in(capture_senses_snapshot(observer.senses).visible, (1, 0))
     assert far_entity.uuid not in observer.senses.entities
 
 
@@ -1471,8 +1478,8 @@ def test_eb_12_028b_nonvisual_senses_create_contacts_not_visual_cells(
         visual=False,
         special_senses=(sense_type,),
     )
-    assert (3, 0) not in observer.senses.visible
-    assert (3, 0) not in observer.senses.effective_light_levels
+    assert not cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
+    assert value_at(capture_senses_snapshot(observer.senses).effective_light_levels, (3, 0)) is None
 
     target.add_condition(Invisible(
         source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
@@ -1485,8 +1492,8 @@ def test_eb_12_028b_nonvisual_senses_create_contacts_not_visual_cells(
             if position[0] <= 4 else None
         )
         assert observer.senses.entities.get(target.uuid) == expected
-        assert observer.senses.visible == {}
-        assert observer.senses.effective_light_levels == {}
+        assert capture_senses_snapshot(observer.senses).visible == EMPTY_CELLS
+        assert capture_senses_snapshot(observer.senses).effective_light_levels == EMPTY_VALUES
         updates = [
             event for _, event in EventQueue.iter_events_since(cursor)
             if event.event_type is EventType.SENSORY_UPDATE
@@ -1499,8 +1506,8 @@ def test_eb_12_028b_nonvisual_senses_create_contacts_not_visual_cells(
         assert updates[0].entity_contacts_removed == (
             {target.uuid} if expected is None else set()
         )
-        assert updates[0].visible_cells_added == []
-        assert updates[0].effective_light_levels_changed == {}
+        assert no_cells(updates[0].visible_cells_added)
+        assert updates[0].effective_light_levels_changed == EMPTY_VALUES
         observer.update_entity_senses(max_distance=5)
         assert observer.senses.entities.get(target.uuid) == expected
 
@@ -1537,7 +1544,7 @@ def test_eb_12_028c_visual_senses_obey_conditional_obscurement(
     darkness = DarknessZone(
         source_entity_uuid=observer.uuid,
         position=(3, 0),
-        zone_radius_feet=0,
+        area=Sphere(radius_feet=0, propagation="connected"),
     )
     darkness.activate(parent_event=None)
     assert (target.uuid in observer.senses.entities) is crosses_magical_darkness
@@ -1550,7 +1557,7 @@ def test_eb_12_028c_visual_senses_obey_conditional_obscurement(
     fog = FogCloudZone(
         source_entity_uuid=observer.uuid,
         position=(3, 0),
-        zone_radius_feet=0,
+        area=Sphere(radius_feet=0, propagation="connected"),
     )
     fog.activate(parent_event=None)
     assert target.uuid not in observer.senses.entities
@@ -1580,7 +1587,7 @@ def test_eb_12_029_invisible_collision_stops_repaths_and_preserves_invisibility(
     Entity.update_all_entities_senses(max_distance=10)
 
     assert invisible.uuid not in mover.senses.entities
-    assert mover.senses.paths[(4, 1)] == [
+    assert route(mover.senses.paths, (4, 1)) == [
         (0, 1),
         (1, 1),
         (2, 1),
@@ -1598,7 +1605,7 @@ def test_eb_12_029_invisible_collision_stops_repaths_and_preserves_invisibility(
     assert not result.canceled
     assert result.status_message == "Partial movement for Move, stopped at (1, 1)"
     assert mover.position == (1, 1)
-    assert mover.senses.collision_blocked == {(2, 1)}
+    assert layer_positions(mover.senses.collision_blocked) == [(2, 1)]
     assert invisible.is_invisible is True
     assert "Invisible" in invisible.active_conditions
     collision_completions = [
@@ -1613,7 +1620,8 @@ def test_eb_12_029_invisible_collision_stops_repaths_and_preserves_invisibility(
 
     mover.update_entity_senses(max_distance=10)
 
-    corrected_path = mover.senses.paths[(4, 1)]
+    corrected_path = route(mover.senses.paths, (4, 1))
+    assert corrected_path is not None
     assert corrected_path[0] == mover.position
     assert corrected_path[-1] == (4, 1)
     assert (2, 1) not in corrected_path
@@ -1823,8 +1831,8 @@ def test_eb_12_031_perception_thresholds_refilter_contacts_and_hazards() -> None
 
     assert easy_hidden.uuid in observer.senses.entities
     assert hard_hidden.uuid not in observer.senses.entities
-    assert easy_hidden.position not in observer.senses.paths
-    assert hard_hidden.position in observer.senses.paths
+    assert not has_route(observer.senses.paths, easy_hidden.position)
+    assert has_route(observer.senses.paths, hard_hidden.position)
     assert grid.is_position_hazardous_for(4, 0, observer.uuid)
     assert not grid.is_position_hazardous_for(4, 2, observer.uuid)
 
@@ -1917,7 +1925,7 @@ def test_eb_12_032_hidden_transition_invalidates_subjective_occupancy_paths() ->
     Entity.update_all_entities_senses(max_distance=5)
 
     assert target.uuid in observer.senses.entities
-    assert target.position not in observer.senses.paths
+    assert not has_route(observer.senses.paths, target.position)
 
     target.add_condition(
         Hidden(
@@ -1929,13 +1937,13 @@ def test_eb_12_032_hidden_transition_invalidates_subjective_occupancy_paths() ->
     observer.update_entity_senses(max_distance=5)
 
     assert target.uuid not in observer.senses.entities
-    assert target.position in observer.senses.paths
+    assert has_route(observer.senses.paths, target.position)
 
     target.remove_condition("Hidden")
     observer.update_entity_senses(max_distance=5)
 
     assert target.uuid in observer.senses.entities
-    assert target.position not in observer.senses.paths
+    assert not has_route(observer.senses.paths, target.position)
 
 
 if __name__ == "__main__":

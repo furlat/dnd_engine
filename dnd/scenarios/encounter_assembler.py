@@ -39,6 +39,7 @@ from dnd.core.content.materialization import (
     CreaturePossessionMode,
 )
 from dnd.core.content.registration import get_content_declaration
+from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
 from dnd.encounter import Encounter
@@ -55,6 +56,7 @@ from dnd.items.spell_items import (
     build_wand_of_magic_missiles,
 )
 from dnd.reactions import add_opportunity_attack_handler
+from dnd.types.event_facts import GroupEntryKind
 from dnd.scenarios.encounter_compatibility import (
     check_built_encounter_compatibility,
     check_encounter_compatibility,
@@ -71,6 +73,7 @@ from dnd.spells.abjuration import (
     register_counterspell_reaction,
     register_shield_reaction,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 class IncompatibleEncounterError(ValueError):
@@ -298,15 +301,13 @@ def _apply_immediate_setup_effect(
         _apply_behavior_grant(entity, effect)
         return
     if isinstance(effect, RosterDamageAffinity):
-        entity.health.damage_reduction.self_static.add_resistance_modifier(
-            ResistanceModifier(
+        add_modifier(entity.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
                 value=_RESISTANCE_STATUS_BY_SETUP[effect.status.value],
                 damage_type=effect.damage_type,
                 name=effect.label,
-            ),
-        )
+            ))
         return
     if isinstance(effect, (RosterStartingDamage, RosterStartingCondition)):
         return
@@ -503,11 +504,13 @@ def assemble_encounter_recipe(
     except BaseException:
         _discard_provisional_entities(tuple(by_address.values()))
         raise
-    for (roster_slot_id, member_id), entity in by_address.items():
-        game.deploy_entity(
-            entity,
-            positions[roster_slot_id][member_id],
-        )
+    # Every member arrives at once: observers settle once, after the last deploy.
+    with EventQueue.group(GroupEntryKind.DEPLOYMENT):
+        for (roster_slot_id, member_id), entity in by_address.items():
+            game.deploy_entity(
+                entity,
+                positions[roster_slot_id][member_id],
+            )
     for target, effect in deferred:
         _apply_deferred_setup_effect(
             target,

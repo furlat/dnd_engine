@@ -10,6 +10,7 @@ from contextlib import ExitStack, contextmanager
 import cProfile
 import gc
 import json
+from dnd.core.cells import mask_count
 from pathlib import Path
 import pstats
 from time import perf_counter, perf_counter_ns, process_time_ns
@@ -127,11 +128,11 @@ def main():
 
     def snapshot_count(snapshot):
         if snapshot is not None:
-            for label, value in (('seen', snapshot.seen), ('visible', snapshot.visible),
-                    ('entities', snapshot.entities), ('objects', snapshot.objects),
-                    ('light', snapshot.effective_light_levels), ('hazards', snapshot.hazardous_cells),
-                    ('effects', snapshot.spatial_effects)):
-                increment('snapshot.input_entries.'+label, len(value))
+            for label, value in (('seen', mask_count(snapshot.seen)), ('visible', mask_count(snapshot.visible)),
+                    ('entities', len(snapshot.entities)), ('objects', len(snapshot.objects)),
+                    ('light', mask_count(snapshot.effective_light_levels.cells)),
+                    ('hazards', mask_count(snapshot.hazardous_cells.cells)), ('effects', len(snapshot.spatial_effects))):
+                increment('snapshot.input_entries.'+label, value)
 
     def target_count(target):
         increment('target_copy.tiles', len(target.tiles))
@@ -168,7 +169,7 @@ def main():
             if args.coarse_timing else 'Decoded request through completed dispatch, response/public-record encoding and writes; includes cProfile and fine wrappers. ')
         data['scope'] += 'Ends before next input read. Still instrumented; never a clean speed sample.'
         if not args.coarse_timing:
-            data['directional_fov_note'] = 'Temporary timers and scalar counters add diagnostic overhead. sweep_remainder_ms = sweep_total_ms - interval_masks_ms - transition_total_ms - blocking_total_ms - terminal_output_ms. This is a derived loop/instrumentation remainder, not measured exclusive CPU time. Enumeration, target sorting and final output are separate disjoint phases. There is no retained ray graph or geometry warmup cache.'
+            data['directional_fov_note'] = 'Temporary timers and scalar counters add diagnostic overhead. One array solve per call; settled_predicates counts the edge predicates it settled first. There is no retained ray graph or geometry warmup cache.'
         data['exclusive_note'] = ('exclusive_wrapped_ns removes explicit child wrapper spans only; it is not function self time.'
             if args.coarse_timing else 'exclusive_wrapped_ns removes explicit child wrapper spans only; cProfile supplies function self time. Existing action hooks overlap these spans and each other.')
         data['coverage'] = coverage
@@ -254,28 +255,16 @@ def main():
             increment('handler.invocations')
             return result
 
-    original_spatial = EventQueue._get_handlers_for_spatial_event
-    def spatial(cls, event, position):
-        if current is None:
-            return original_spatial(event, position)
-        increment('discovery.spatial_lookups')
-        increment('discovery.position_index_entries', len(
-            cls._spatial_handlers_by_position[(event.event_type, event.phase)].get(position, ())))
-        with span('events.spatial_lookup'):
-            result = original_spatial(event, position)
-        increment('discovery.spatial_admitted_before_cross_position_dedup', len(result))
-        return result
-
-    original_nonspatial = EventQueue._get_handlers_for_non_spatial_event
-    def nonspatial(cls, event):
-        increment('discovery.nonspatial_lookups')
-        with span('events.nonspatial_lookup'):
-            result = original_nonspatial(event)
-        increment('discovery.nonspatial_admitted', len(result))
+    original_global = EventQueue._global_handlers_for_event
+    def global_handlers(cls, event, *, positioned):
+        increment('discovery.global_lookups')
+        with span('events.global_lookup'):
+            result = original_global(event, positioned=positioned)
+        increment('discovery.global_admitted', len(result))
         return result
 
     original_candidates = EventQueue._event_trigger_candidates
-    def candidates(cls, event, *, include_simple=True):
+    def candidates(cls, event, *, include_simple):
         result = original_candidates(event, include_simple=include_simple)
         increment('discovery.indexed_candidates_visited', len(result))
         return result
@@ -313,21 +302,21 @@ def main():
     def world_count(world, remembered, event_uuid, positions, object_positions, identities, index):
         increment('world_update.world_objects_available', len(world.objects))
         increment('world_update.remembered_objects_available', len(remembered.objects))
-        increment('world_update.visible_tiles_available', len(world.senses.visible) if world.senses else 0)
+        increment('world_update.visible_tiles_available', mask_count(world.senses.visible) if world.senses else 0)
         increment('world_update.input_positions', len(positions))
         increment('world_update.input_object_positions', len(object_positions))
         increment('world_update.input_object_ids', len(identities))
 
-    def audience_count(composition, audience, observer_uuid, event, cursor, *, prepared=None):
-        increment('audience.current.visible_added', len(event.visible_cells_added))
-        increment('audience.current.visible_removed', len(event.visible_cells_removed))
-        increment('audience.current.seen_added', len(event.seen_cells_added))
+    def audience_count(composition, audience, observer_uuid, event, cursor):
+        increment('audience.current.visible_added', mask_count(event.visible_cells_added))
+        increment('audience.current.visible_removed', mask_count(event.visible_cells_removed))
+        increment('audience.current.seen_added', mask_count(event.seen_cells_added))
         increment('audience.current.entity_changed', len(event.entity_contacts_changed))
         increment('audience.current.object_changed', len(event.object_contacts_changed))
         increment('audience.current.effect_changed', len(event.spatial_effects_changed))
         increment('audience.current.visible_effect_candidates',
             len(composition.visible_effects.get(event.observer_uuid, ())))
-        increment('audience.current.retained_seen_available', len(composition.view.seen) if composition.view else 0)
+        increment('audience.current.retained_seen_available', mask_count(composition.view.seen) if composition.view else 0)
 
     modules = (
         (worker, 'execute_player_action', 'action.execute', worker.execute_player_action, None),
@@ -338,9 +327,6 @@ def main():
         (capture, '_copy_snapshot', 'capture.copy_snapshot', capture._copy_snapshot, snapshot_count),
         (reduction, 'copy_target', 'reduction.copy_target', reduction.copy_target, target_count),
         (reduction, 'reduce_nodes', 'reduction.nodes', reduction.reduce_nodes, None),
-        (application, 'reduce_operation', 'application.reduce_operation', application.reduce_operation, None),
-        (application, 'prepare_current_operation', 'application.prepare_current', application.prepare_current_operation, None),
-        (application, 'apply_current_operation', 'application.apply_current', application.apply_current_operation, None),
         (application, 'capture_lineages', 'capture.lineages', application.capture_lineages, None),
         (application, 'project_lineage', 'projection.lineage', application.project_lineage, None),
         (application, 'admitted_content', 'application.content', application.admitted_content, None),
@@ -407,8 +393,7 @@ def main():
             patches.enter_context(patch.object(EventQueue, '_invoke_handler', classmethod(invoke)))
             patches.enter_context(patch.object(EventQueue, '_get_handlers_for_event', classmethod(lookup)))
             patches.enter_context(patch.object(EventQueue, '_event_trigger_candidates', classmethod(candidates)))
-            patches.enter_context(patch.object(EventQueue, '_get_handlers_for_spatial_event', classmethod(spatial)))
-            patches.enter_context(patch.object(EventQueue, '_get_handlers_for_non_spatial_event', classmethod(nonspatial)))
+            patches.enter_context(patch.object(EventQueue, '_global_handlers_for_event', classmethod(global_handlers)))
             patches.enter_context(patch.object(Trigger, '__call__', trigger))
             for owner, original in ((BaseHandler, BaseHandler.__call__),
                     (EventHandler, EventHandler.__call__), (SpatialHandler, SpatialHandler.__call__)):

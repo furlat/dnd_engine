@@ -10,8 +10,17 @@ from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
-from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.modifiers import ContextualNumericalModifier, NumericalModifier
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    read_value,
+    Channel,
+    Kind,
+    add_modifier,
+    modifier_of,
+    parts,
+)
 
 
 class LeafBlock(BaseBlock):
@@ -19,12 +28,18 @@ class LeafBlock(BaseBlock):
 
     leaf_value: ModifiableValue = Field(description="A value owned by the leaf block.")
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        return (self.leaf_value,)
+
 
 class ParentBlock(BaseBlock):
     """Small parent block with one direct value and one nested block."""
 
     direct_value: ModifiableValue = Field(description="A value owned directly by the parent.")
     child: LeafBlock = Field(description="Nested child block.")
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        return (self.direct_value,)
 
 
 class MarkerCondition(BaseCondition):
@@ -62,7 +77,7 @@ class ValueBonusCondition(BaseCondition):
             name="Engine Book Bonus",
             value=self.bonus,
         )
-        modifier_uuid = value.self_static.add_value_modifier(modifier)
+        modifier_uuid = add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, modifier)
         event = event.phase_to(EventPhase.EFFECT)
         return [(value.uuid, modifier_uuid)], [], [], [], event
 
@@ -85,15 +100,15 @@ def reset_block_state() -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
 
 
 def make_value(source_uuid: UUID, name: str, base_value: int = 0) -> ModifiableValue:
     """Create a named value for synthetic block examples."""
-    return ModifiableValue.create(
+    return ModifiableValue(
         source_entity_uuid=source_uuid,
-        value_name=name,
-        base_value=base_value,
+        name=name,
+        base=base_value,
     )
 
 
@@ -135,56 +150,27 @@ def test_eb_05_001_blocks_discover_direct_and_deep_values() -> None:
     assert block.blocks_dict_name_uuid == {"Child Block": block.child.uuid}
 
 
-def test_eb_05_002_target_propagation_reaches_values_and_child_blocks() -> None:
-    """EB-05-002: block target propagation recurses through owned objects."""
+def test_eb_05_002_block_values_hold_no_read_state_and_a_read_carries_it() -> None:
+    """EB-05-002: a block's values carry no target or context; the read passes both to contextual rows."""
     reset_block_state()
     source_uuid = uuid4()
     target_uuid = uuid4()
     block = make_parent_block(source_uuid)
+    seen = []
 
-    block.set_target_entity(target_uuid, "Target")
+    def observe(source, target, context):
+        seen.append((source, target, context))
+        return None
 
-    assert block.target_entity_uuid == target_uuid
-    assert block.direct_value.target_entity_uuid == target_uuid
-    assert block.direct_value.self_static.target_entity_uuid == target_uuid
-    assert block.direct_value.to_target_contextual.target_entity_uuid == target_uuid
-    assert block.child.target_entity_uuid == target_uuid
-    assert block.child.leaf_value.target_entity_uuid == target_uuid
-
-    block.clear_target_entity()
-
-    assert block.target_entity_uuid is None
-    assert block.direct_value.target_entity_uuid is None
-    assert block.direct_value.from_target_static is None
-    assert block.child.target_entity_uuid is None
-    assert block.child.leaf_value.target_entity_uuid is None
-
-
-def test_eb_05_003_context_propagation_reaches_contextual_channels() -> None:
-    """EB-05-003: block context propagation reaches contextual value channels."""
-    reset_block_state()
-    source_uuid = uuid4()
-    block = make_parent_block(source_uuid)
+    add_modifier(block.child.leaf_value, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(source_entity_uuid=source_uuid, callable=observe))
     context = {"range": "melee", "cover": "none"}
 
-    block.set_context(context)
+    read_value(parts(block.child.leaf_value), ValueRead(source_uuid, target_uuid, context))
+    assert seen and all(row == (source_uuid, target_uuid, context) for row in seen)
 
-    assert block.context is context
-    assert block.direct_value.context is context
-    assert block.direct_value.self_contextual.context is context
-    assert block.direct_value.to_target_contextual.context is context
-    assert block.direct_value.self_static.context is None
-    assert block.child.context is context
-    assert block.child.leaf_value.context is context
-
-    block.clear_context()
-
-    assert block.context is None
-    assert block.direct_value.context is None
-    assert block.direct_value.self_contextual.context is None
-    assert block.direct_value.to_target_contextual.context is None
-    assert block.child.context is None
-    assert block.child.leaf_value.context is None
+    seen.clear()
+    assert block.child.leaf_value.normalized_score == 3
+    assert seen and all(row == (source_uuid, None, None) for row in seen)
 
 
 def test_eb_05_013_constructor_source_propagates_after_field_discovery() -> None:
@@ -211,18 +197,12 @@ def test_eb_05_013_constructor_source_propagates_after_field_discovery() -> None
         child=foreign_child,
     )
 
-    assert block.values == {foreign_direct_value.uuid: foreign_direct_value}
+    assert block.value_fields() == (foreign_direct_value,)
     assert block.blocks == {foreign_child.uuid: foreign_child}
     assert block.source_entity_uuid == parent_source_uuid
     assert block.direct_value.source_entity_uuid == parent_source_uuid
     assert block.child.source_entity_uuid == parent_source_uuid
     assert block.child.leaf_value.source_entity_uuid == parent_source_uuid
-    assert block.direct_value.target_entity_uuid == target_uuid
-    assert block.child.target_entity_uuid == target_uuid
-    assert block.child.leaf_value.target_entity_uuid == target_uuid
-    assert block.direct_value.context == {"phase": "construction"}
-    assert block.child.context == {"phase": "construction"}
-    assert block.child.leaf_value.context == {"phase": "construction"}
 
 
 def test_eb_05_004_conditions_are_gated_by_allow_events_conditions() -> None:
@@ -280,7 +260,7 @@ def test_eb_05_005_condition_cleanup_removes_owned_modifiers() -> None:
     assert list(condition.modifers_uuids) == [block.direct_value.uuid]
     assert len(condition.modifers_uuids[block.direct_value.uuid]) == 1
     modifier_uuid = condition.modifers_uuids[block.direct_value.uuid][0]
-    assert modifier_uuid in block.direct_value.self_static.value_modifiers
+    assert modifier_of(block.direct_value, Channel.SELF_STATIC, Kind.VALUE, modifier_uuid) is not None
 
     block.remove_condition("ValueBonusCondition")
 
@@ -441,7 +421,6 @@ def test_eb_05_012_condition_immunity_storage_is_gated_and_named() -> None:
 
     def bravery_check(
         block: BaseBlock,
-        target: Optional[BaseBlock],
         context: Optional[dict],
     ) -> bool:
         return context is not None and context.get("source") == "dragon"
@@ -462,7 +441,7 @@ def test_eb_05_012_condition_immunity_storage_is_gated_and_named() -> None:
         ("Bravery", bravery_check)
     ]
     assert active_block.contextual_immunity_names == {"Frightened": ["Bravery"]}
-    assert bravery_check(active_block, None, {"source": "dragon"}) is True
+    assert bravery_check(active_block, {"source": "dragon"}) is True
 
     try:
         active_block.add_condition_immunity("Charmed", immunity_check=bravery_check)
@@ -541,8 +520,8 @@ def test_eb_05_009_same_name_condition_replaces_old_condition() -> None:
     assert block.active_conditions == {"ValueBonusCondition": second_condition}
     assert block.active_conditions_by_uuid == {second_condition.uuid: second_condition}
     assert block.active_conditions_by_source[source_uuid] == ["ValueBonusCondition"]
-    assert first_modifier_uuid not in block.direct_value.self_static.value_modifiers
-    assert second_modifier_uuid in block.direct_value.self_static.value_modifiers
+    assert modifier_of(block.direct_value, Channel.SELF_STATIC, Kind.VALUE, first_modifier_uuid) is None
+    assert modifier_of(block.direct_value, Channel.SELF_STATIC, Kind.VALUE, second_modifier_uuid) is not None
     assert block.direct_value.normalized_score == base_score + 9
 
 
@@ -582,8 +561,8 @@ def test_eb_05_014_duplicate_name_replacement_updates_source_indexes() -> None:
     assert block.active_conditions_by_uuid == {second_condition.uuid: second_condition}
     assert block.active_conditions_by_source[first_source_uuid] == []
     assert block.active_conditions_by_source[second_source_uuid] == ["ValueBonusCondition"]
-    assert first_modifier_uuid not in block.direct_value.self_static.value_modifiers
-    assert second_modifier_uuid in block.direct_value.self_static.value_modifiers
+    assert modifier_of(block.direct_value, Channel.SELF_STATIC, Kind.VALUE, first_modifier_uuid) is None
+    assert modifier_of(block.direct_value, Channel.SELF_STATIC, Kind.VALUE, second_modifier_uuid) is not None
     assert block.direct_value.normalized_score == base_score + 6
 
 
@@ -609,13 +588,12 @@ def test_eb_05_010_no_effect_condition_returns_cancel_without_indexing() -> None
     assert condition.applied is False
     assert block.active_conditions == {}
     assert block.active_conditions_by_uuid == {}
-    assert block.active_conditions_by_source[source_uuid] == []
+    assert block.active_conditions_by_source.get(source_uuid, []) == []
 
 
 if __name__ == "__main__":
     test_eb_05_001_blocks_discover_direct_and_deep_values()
-    test_eb_05_002_target_propagation_reaches_values_and_child_blocks()
-    test_eb_05_003_context_propagation_reaches_contextual_channels()
+    test_eb_05_002_block_values_hold_no_read_state_and_a_read_carries_it()
     test_eb_05_013_constructor_source_propagates_after_field_discovery()
     test_eb_05_004_conditions_are_gated_by_allow_events_conditions()
     test_eb_05_005_condition_cleanup_removes_owned_modifiers()

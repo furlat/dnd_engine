@@ -27,7 +27,7 @@ from dnd.core.values import (
     AdvantageStatus,
     AutoHitStatus,
     CriticalStatus,
-    ModifiableValue,
+    ValueReading,
 )
 
 
@@ -38,16 +38,23 @@ def _default_randint(low: int, high: int) -> int:
 _randint: Callable[[int, int], int] = _default_randint
 
 
+def roll_die_face(sides: int) -> int:
+    """Generate one bounded rule face through the ordinary dice override."""
+    if sides < 1:
+        raise ValueError("Die sides must be positive")
+    return _randint(1, sides)
+
+
 @contextmanager
 def fixed_dice_faces(*faces: int) -> Iterator[None]:
-    """Use predetermined die faces while resolving dice expressions.
+    """Use predetermined faces for dice expressions and supplementary rule rolls.
 
     Args:
         faces: Die faces to return in order. Each face must fit the die being
             rolled when it is consumed.
 
     Raises:
-        RuntimeError: If the dice expression asks for more faces than were
+        RuntimeError: If the rolls ask for more faces than were
             provided.
         ValueError: If a provided face is outside the requested die range.
     """
@@ -104,7 +111,7 @@ class DiceRoll(BaseModel):
     )
     effective_dice_count: Optional[int] = Field(
         default=None,
-        ge=1,
+        ge=0,
         description=(
             "Number of selected dice contributing to the natural result. A d20 "
             "with advantage still contributes one selected die."
@@ -112,7 +119,7 @@ class DiceRoll(BaseModel):
     )
     random_faces_rolled: Optional[int] = Field(
         default=None,
-        ge=1,
+        ge=0,
         description="Number of random die faces generated, including advantage alternatives.",
     )
     roll_type: RollType = Field(
@@ -187,16 +194,16 @@ class Dice(BaseModel):
     )
     count: int = Field(
         ...,
-        description="Number of dice in the base expression.",
-        ge=1,
+        description="Number of dice in the base expression; zero represents authored fixed damage.",
+        ge=0,
     )
     value: Literal[4, 6, 8, 10, 12, 20] = Field(
         ...,
         description="Number of sides on each die.",
     )
-    bonus: ModifiableValue = Field(
+    bonus: ValueReading = Field(
         ...,
-        description="Modifiable value that supplies score, advantage, critical, and auto-hit state.",
+        description="Evaluated bonus that supplies score, advantage, critical, and auto-hit state.",
     )
     roll_type: RollType = Field(
         default=RollType.ATTACK,
@@ -283,7 +290,7 @@ class Dice(BaseModel):
         Returns:
             Selected value and both raw rolls.
         """
-        rolls = [_randint(1, self.value) for _ in range(2)]
+        rolls = [roll_die_face(self.value) for _ in range(2)]
         return max(rolls), rolls
 
     def _roll_with_disadvantage(self) -> Tuple[int, List[int]]:
@@ -292,7 +299,7 @@ class Dice(BaseModel):
         Returns:
             Selected value and both raw rolls.
         """
-        rolls = [_randint(1, self.value) for _ in range(2)]
+        rolls = [roll_die_face(self.value) for _ in range(2)]
         return min(rolls), rolls
 
     def _roll(self, crit: bool = False) -> List[Tuple[int, List[int]]]:
@@ -312,7 +319,7 @@ class Dice(BaseModel):
         elif advantage_status == AdvantageStatus.DISADVANTAGE:
             return [self._roll_with_disadvantage() for _ in range(count)]
         else:
-            return [(_randint(1, self.value), []) for _ in range(count)]
+            return [(roll_die_face(self.value), []) for _ in range(count)]
 
     @computed_field
     @cached_property

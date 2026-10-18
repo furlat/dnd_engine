@@ -13,7 +13,7 @@ from dnd.core.condition_types import (
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.entity import Entity, EntityConfig
 from dnd.core.gridmap import get_map
-from dnd.spells.abjuration import AntimagicFieldZone, BanishedCondition
+from dnd.spells.abjuration import BanishedCondition
 from dnd.spells.transmutation import HasteEffect
 from tests.engine.test_combat_actions import reset_core_action_state, strong_entity
 from dnd.types.summoning import SummonDepartureCause, TerminalOwnerRelease
@@ -352,37 +352,6 @@ def test_exception_after_banishment_admission_cancels_return_and_keeps_old_graph
     assert occupant.position == (3, 3) and not banished.prepared_removal_occupancies()
 
 
-def test_antimagic_field_replacement_commits_before_suppressed_condition_restoration():
-    reset_core_action_state()
-    caster = strong_entity('Caster', (1, 1), 'heroes')
-    target = strong_entity('Recipient', (2, 1), 'heroes')
-    haste = HasteEffect(source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
-                        tags={ConditionTag.MAGICAL})
-    target.add_condition(haste)
-    cause = Event(event_type=EventType.CAST_SPELL, source_entity_uuid=caster.uuid)
-    field = AntimagicFieldZone(source_entity_uuid=caster.uuid, anchor_uuid=caster.uuid,
-                              position=caster.position, faction=caster.faction)
-    field.activate(parent_event=cause)
-    assert haste.applied and not haste.contributions_active() and not target.action_economy.get_restricted_action_grants()
-    previous = Concentrating(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
-                             spell_name='Antimagic Field')
-    caster.add_condition(previous)
-    previous.add_linked_condition(field.uuid, field.uuid)
-    incoming = Concentrating(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
-                             spell_name='Replacement')
-    prepared = caster.prepare_condition_application(incoming)
-    assert isinstance(prepared, PreparedConditionApplication)
-    with BaseBlock.condition_removal_scope():
-        cursor = EventQueue.event_cursor()
-        caster.commit_condition_application(prepared)
-        assert EventQueue.event_cursor() == cursor
-        assert caster.active_conditions['Concentrating'] is incoming
-        assert not field.applied and haste.applied and not haste.contributions_active()
-        assert target.active_conditions["Haste"] is haste
-        caster.publish_condition_application(prepared)
-        assert haste.applied and target.active_conditions['Haste'] is haste
-    assert not haste.suppression_provider_uuids
-    assert len(target.action_economy.get_restricted_action_grants()) == 1
 
 
 @pytest.mark.parametrize('condition_type', [Invisible, InvisibilityEffect, GreaterInvisibilityEffect, HasteEffect])

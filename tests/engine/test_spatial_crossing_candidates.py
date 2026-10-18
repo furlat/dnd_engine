@@ -16,7 +16,7 @@ from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spells.wall_constructions import WallOfForce, WallOfStone
 from dnd.spells.wall_fields import WindWallZone
 from dnd.types.spatial_effects import SpatialEffectLayer, SpatialEffectOccupancyPolicy
-from dnd.types.world import CardinalDirection, MovementMode, WorldEdgeChannel
+from dnd.types.world import CardinalDirection, MovementMode, SpatialChannel, WorldEdgeChannel
 from tests.engine.support import create_test_entity
 from tests.engine.test_remaining_walls import cast
 from tests.manual.spell_regression_support import create_spell_regression_actor
@@ -53,8 +53,8 @@ def test_native_solid_wall_blocks_long_segments_in_both_directions(spell, optica
     cast(spell, caster, start=(-2, 0), end=(2, 0))
     grid = get_map()
     for start, end in (((-1, -9), (-1, 9)), ((-1, 9), (-1, -9))):
-        for channel, allowed in (("movement", False), ("propagation", False),
-                                 ("optical", optical_allowed)):
+        for channel, allowed in ((WorldEdgeChannel.MOVEMENT, False), (WorldEdgeChannel.PROPAGATION, False),
+                                 (WorldEdgeChannel.OPTICAL, optical_allowed)):
             assert grid.spatial_crossing_allows(start, end, channel, caster.uuid) is allowed
             assert grid.spatial_crossing_allows((7, start[1]), (7, end[1]), channel, caster.uuid)
     # Select transition-aware FOV, as a mixed construction/boundary scene does.
@@ -62,8 +62,8 @@ def test_native_solid_wall_blocks_long_segments_in_both_directions(spell, optica
         blocked_channels=(WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION))
     distant.place_on_grid((-10, -10), boundary_direction=CardinalDirection.NORTH)
     for origin in ((-3, -3), (0, -2), (3, 3)):
-        for channel, query in (("optical", grid.compute_fov),
-                               ("propagation", grid.compute_propagation_fov)):
+        for channel, query in ((WorldEdgeChannel.OPTICAL, grid.compute_fov),
+                               (WorldEdgeChannel.PROPAGATION, grid.compute_propagation_fov)):
             expected = {position for position in grid.get_all_tiles()
                 if sum((a-b)**2 for a, b in zip(position, origin)) <= 36
                 and grid.raycast_clear(origin, position, channel)}
@@ -71,7 +71,7 @@ def test_native_solid_wall_blocks_long_segments_in_both_directions(spell, optica
     zone, = grid.get_spatial_conditions()
     section = next(identity for identity, geometry in zone.sections.items()
         if geometry.path.start == (-2., 0.))
-    for channel in ("movement", "optical", "propagation"):
+    for channel in WorldEdgeChannel:
         assert grid.spatial_crossing_allows((-1, -9), (-1, 9), channel, caster.uuid,
             terminal_provider_uuid=section)
 
@@ -86,27 +86,21 @@ def test_wind_wall_exact_corner_contact_and_near_miss(start, end, allowed):
     # (-0.5, -0.5); the third parallel path passes beyond that endpoint.
     _, mover = wind((-.5, -.5), (3., -.5))
     grid = get_map()
-    assert grid.spatial_crossing_allows(start, end, "movement", mover.uuid,
+    assert grid.spatial_crossing_allows(start, end, WorldEdgeChannel.MOVEMENT, mover.uuid,
         MovementMode.FLYING) is allowed
-    assert grid.spatial_crossing_allows(start, end, "optical", mover.uuid)
-    assert grid.spatial_crossing_allows(start, end, "propagation", mover.uuid)
+    assert grid.spatial_crossing_allows(start, end, WorldEdgeChannel.OPTICAL, mover.uuid)
+    assert grid.spatial_crossing_allows(start, end, WorldEdgeChannel.PROPAGATION, mover.uuid)
 
 
-def test_wind_suppression_and_footprint_replacement_preserve_current_crossings():
+def test_wind_footprint_replacement_preserves_current_crossings():
     zone, mover = wind((-3., 0.), (3., 0.))
     grid = get_map()
 
     def allowed(x):
-        return grid.spatial_crossing_allows((x, -8), (x, 8), "movement",
+        return grid.spatial_crossing_allows((x, -8), (x, 8), WorldEdgeChannel.MOVEMENT,
             mover.uuid, MovementMode.FLYING)
 
     assert not allowed(-2) and not allowed(2)
-    provider = uuid4()
-    assert zone.set_suppression(provider, True)
-    assert allowed(-2) and allowed(2)
-    assert zone.set_suppression(provider, False)
-    assert not allowed(-2) and not allowed(2)
-
     footprint = set(zone.affected_positions)
     assert zone.change_footprint({position for position in footprint if position[0] < 0},
         parent_event=cause(mover.uuid))
@@ -120,9 +114,12 @@ def test_wind_suppression_and_footprint_replacement_preserve_current_crossings()
 class RemoteCrossingRule(SpatialCondition):
     """An undeclared custom rule whose support does not delimit its authority."""
 
+    def spatial_channels(self):
+        return super().spatial_channels() | {SpatialChannel.PROPAGATION}
+
     def blocks_crossing_between(self, start, end, channel, requester_uuid, mode,
                                terminal_provider_uuid=None):
-        return (self.allows_contribution_at(None) and channel == "propagation"
+        return (self.allows_contribution_at(None) and channel is WorldEdgeChannel.PROPAGATION
             and min(start[0], end[0]) < .5 < max(start[0], end[0]))
 
 
@@ -136,10 +133,10 @@ def test_undeclared_custom_rule_still_blocks_outside_registered_footprint():
     assert result is not None and not result.canceled
     assert zone.affected_positions == {(8, 8)}
     grid = get_map()
-    assert not grid.spatial_crossing_allows((-8, 0), (8, 0), "propagation")
-    assert not grid.spatial_crossing_allows((8, 0), (-8, 0), "propagation")
-    assert grid.spatial_crossing_allows((-8, 0), (-1, 0), "propagation")
-    assert grid.spatial_crossing_allows((-8, 0), (8, 0), "optical")
+    assert not grid.spatial_crossing_allows((-8, 0), (8, 0), WorldEdgeChannel.PROPAGATION)
+    assert not grid.spatial_crossing_allows((8, 0), (-8, 0), WorldEdgeChannel.PROPAGATION)
+    assert grid.spatial_crossing_allows((-8, 0), (-1, 0), WorldEdgeChannel.PROPAGATION)
+    assert grid.spatial_crossing_allows((-8, 0), (8, 0), WorldEdgeChannel.OPTICAL)
 
     # Keep the native directional branch active outside the queried radius.
     wall = DirectionalWall(source_entity_uuid=source, item_id="test.crossing.remote_wall",
@@ -148,8 +145,8 @@ def test_undeclared_custom_rule_still_blocks_outside_registered_footprint():
     origin, radius = (-2, 0), 5
 
     def check_native_rays():
-        for channel, query in (("optical", grid.compute_fov),
-                               ("propagation", grid.compute_propagation_fov)):
+        for channel, query in ((WorldEdgeChannel.OPTICAL, grid.compute_fov),
+                               (WorldEdgeChannel.PROPAGATION, grid.compute_propagation_fov)):
             expected = {position for position in grid.get_all_tiles()
                 if (position[0] - origin[0]) ** 2 + (position[1] - origin[1]) ** 2 <= radius ** 2
                 and grid.raycast_clear(origin, position, channel)}
@@ -159,6 +156,6 @@ def test_undeclared_custom_rule_still_blocks_outside_registered_footprint():
     assert (2, 0) not in grid.compute_propagation_fov(origin, radius)
     assert (2, 0) in grid.compute_fov(origin, radius)
     zone.deactivate()
-    assert grid.spatial_crossing_allows((-8, 0), (8, 0), "propagation")
+    assert grid.spatial_crossing_allows((-8, 0), (8, 0), WorldEdgeChannel.PROPAGATION)
     check_native_rays()
     assert (2, 0) in grid.compute_propagation_fov(origin, radius)

@@ -52,3 +52,24 @@ def test_native_spell_catalog_has_no_extension_dependency() -> None:
         or module.startswith("dnd.extensions.")
         for module in imported_modules
     )
+
+
+def test_high_level_summon_recipes_can_load_before_content_installation() -> None:
+    """Concrete recipe dependencies cannot require an earlier installer import."""
+    script = """
+from dnd.monsters.high_level_spell_summons import HIGH_LEVEL_SPELL_SUMMON_DECLARATIONS
+from dnd.content_system.bootstrap import bootstrap_content_system
+recipes = HIGH_LEVEL_SPELL_SUMMON_DECLARATIONS
+assert len(recipes) == 12
+loaded = bootstrap_content_system(pack_roots=())
+for recipe in recipes:
+    assert loaded.registry.resolve_factory(recipe.ref).ref == recipe.ref
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr

@@ -4,7 +4,7 @@ from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
-from pydantic import ValidationError
+from pydantic import TypeAdapter
 
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import DamageType
@@ -24,17 +24,32 @@ from dnd.core.modifiers import (
 from dnd.core.values import (
     AdvantageStatus,
     AutoHitStatus,
-    BaseValue,
-    CriticalStatus,
     ModifiableValue,
-    StaticValue,
+    CriticalStatus,
+    ValueRead,
+    outgoing_of,
+    read_value,
+    value_damage_types,
+    value_resistance,
+    value_score,
+    Channel,
+    Kind,
+    add_modifier,
+    remove_modifier,
+    composed,
+    modifiers_of,
+    parts,
+    remove_all_modifiers,
+    value_breakdown,
+    with_rows,
+    Row,
 )
 
 
 def reset_value_state() -> None:
     """Clear registries touched by these primitive value examples."""
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
 
 
 def number_mod(source_uuid: UUID, value: int, name: str = "number") -> NumericalModifier:
@@ -51,31 +66,25 @@ def test_eb_02_001_static_numerical_modifiers_and_constraints() -> None:
     """EB-02-001: static numerical modifiers sum, then constraints clamp."""
     reset_value_state()
     source_uuid = uuid4()
-    value = ModifiableValue.create(
+    value = ModifiableValue(
         source_entity_uuid=source_uuid,
-        value_name="Armor Bonus",
-        base_value=10,
+        name="Armor Bonus",
+        base=10,
     )
 
-    bonus_uuid = value.self_static.add_value_modifier(
-        number_mod(source_uuid, 5, "Shield")
-    )
+    bonus_uuid = add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, number_mod(source_uuid, 5, "Shield"))
     assert value.score == 15
     assert value.normalized_score == 15
 
-    max_uuid = value.self_static.add_max_constraint(
-        number_mod(source_uuid, 12, "Maximum")
-    )
+    max_uuid = add_modifier(value, Channel.SELF_STATIC, Kind.MAX, number_mod(source_uuid, 12, "Maximum"))
     assert value.score == 12
 
-    value.self_static.remove_modifier(max_uuid)
-    min_uuid = value.self_static.add_min_constraint(
-        number_mod(source_uuid, 18, "Minimum")
-    )
+    remove_modifier(value, max_uuid, Channel.SELF_STATIC)
+    min_uuid = add_modifier(value, Channel.SELF_STATIC, Kind.MIN, number_mod(source_uuid, 18, "Minimum"))
     assert value.score == 18
 
-    value.self_static.remove_modifier(min_uuid)
-    value.self_static.remove_modifier(bonus_uuid)
+    remove_modifier(value, min_uuid, Channel.SELF_STATIC)
+    remove_modifier(value, bonus_uuid, Channel.SELF_STATIC)
     assert value.score == 10
 
 
@@ -83,88 +92,72 @@ def test_eb_02_002_advantage_critical_and_auto_hit_precedence() -> None:
     """EB-02-002: enum-like modifiers aggregate by explicit precedence."""
     reset_value_state()
     source_uuid = uuid4()
-    value = ModifiableValue.create(source_entity_uuid=source_uuid)
+    value = ModifiableValue(source_entity_uuid=source_uuid)
 
-    value.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=source_uuid,
             name="Helpful",
             value=AdvantageStatus.ADVANTAGE,
-        )
-    )
+        ))
     assert value.advantage == AdvantageStatus.ADVANTAGE
 
-    value.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=source_uuid,
             name="Hindering",
             value=AdvantageStatus.DISADVANTAGE,
-        )
-    )
+        ))
     assert value.advantage == AdvantageStatus.NONE
 
-    value.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=source_uuid,
             name="More Hindering",
             value=AdvantageStatus.DISADVANTAGE,
-        )
-    )
+        ))
     assert value.advantage == AdvantageStatus.DISADVANTAGE
 
-    stacked = ModifiableValue.create(source_entity_uuid=source_uuid)
+    stacked = ModifiableValue(source_entity_uuid=source_uuid)
     for name, status in [
         ("First Advantage", AdvantageStatus.ADVANTAGE),
         ("Second Advantage", AdvantageStatus.ADVANTAGE),
         ("One Disadvantage", AdvantageStatus.DISADVANTAGE),
     ]:
-        stacked.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        add_modifier(stacked, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 source_entity_uuid=source_uuid,
                 target_entity_uuid=source_uuid,
                 name=name,
                 value=status,
-            )
-        )
+            ))
     assert stacked.advantage == AdvantageStatus.ADVANTAGE
 
-    value.self_static.add_critical_modifier(
-        CriticalModifier(
+    add_modifier(value, Channel.SELF_STATIC, Kind.CRITICAL, CriticalModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=source_uuid,
             name="Auto Crit",
             value=CriticalStatus.AUTOCRIT,
-        )
-    )
-    value.self_static.add_critical_modifier(
-        CriticalModifier(
+        ))
+    add_modifier(value, Channel.SELF_STATIC, Kind.CRITICAL, CriticalModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=source_uuid,
             name="No Crit",
             value=CriticalStatus.NOCRIT,
-        )
-    )
+        ))
     assert value.critical == CriticalStatus.NOCRIT
 
-    value.self_static.add_auto_hit_modifier(
-        AutoHitModifier(
+    add_modifier(value, Channel.SELF_STATIC, Kind.AUTO_HIT, AutoHitModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=source_uuid,
             name="Auto Hit",
             value=AutoHitStatus.AUTOHIT,
-        )
-    )
-    value.self_static.add_auto_hit_modifier(
-        AutoHitModifier(
+        ))
+    add_modifier(value, Channel.SELF_STATIC, Kind.AUTO_HIT, AutoHitModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=source_uuid,
             name="Auto Miss",
             value=AutoHitStatus.AUTOMISS,
-        )
-    )
+        ))
     assert value.auto_hit == AutoHitStatus.AUTOMISS
 
 
@@ -172,7 +165,7 @@ def test_eb_02_003_contextual_modifiers_are_evaluated_from_context() -> None:
     """EB-02-003: contextual modifiers contribute only when callable returns."""
     reset_value_state()
     source_uuid = uuid4()
-    value = ModifiableValue.create(source_entity_uuid=source_uuid, base_value=1)
+    value = ModifiableValue(source_entity_uuid=source_uuid, base=1)
 
     def near_bonus(
         source_entity_uuid: UUID,
@@ -188,59 +181,45 @@ def test_eb_02_003_contextual_modifiers_are_evaluated_from_context() -> None:
             )
         return None
 
-    value.self_contextual.add_value_modifier(
-        ContextualNumericalModifier(
+    add_modifier(value, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=source_uuid,
             name="Near Target Bonus",
             callable=near_bonus,
-        )
-    )
+        ))
 
-    value.set_context({"near_target": True})
-    assert value.score == 5
-
-    value.set_context({"near_target": False})
+    assert read_value(parts(value), ValueRead(source_uuid, context={"near_target": True})).score == 5
+    assert read_value(parts(value), ValueRead(source_uuid, context={"near_target": False})).score == 1
     assert value.score == 1
 
 
-def test_eb_02_004_to_target_channels_require_explicit_propagation() -> None:
-    """EB-02-004: outgoing target effects are imported via set_from_target."""
+def test_eb_02_004_to_target_channels_apply_only_in_an_opposed_read() -> None:
+    """EB-02-004: outgoing target effects apply when the read carries the opponent's outgoing channels."""
     reset_value_state()
     attacker_uuid = uuid4()
     defender_uuid = uuid4()
-    attacker_attack = ModifiableValue.create(
+    attacker_attack = ModifiableValue(
         source_entity_uuid=attacker_uuid,
-        target_entity_uuid=defender_uuid,
-        value_name="Attack Bonus",
+        name="Attack Bonus",
     )
-    defender_ac = ModifiableValue.create(
+    defender_ac = ModifiableValue(
         source_entity_uuid=defender_uuid,
-        target_entity_uuid=attacker_uuid,
-        value_name="Armor Class",
+        name="Armor Class",
     )
 
-    defender_ac.to_target_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(defender_ac, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=defender_uuid,
             target_entity_uuid=attacker_uuid,
             name="Hard To Hit",
             value=AdvantageStatus.DISADVANTAGE,
-        )
-    )
+        ))
 
-    assert defender_ac.outgoing_advantage == AdvantageStatus.DISADVANTAGE
-    assert attacker_attack.advantage == AdvantageStatus.NONE
+    assert read_value(parts(attacker_attack), ValueRead(attacker_uuid, defender_uuid)).advantage == AdvantageStatus.NONE
 
-    attacker_attack.set_from_target(defender_ac)
-    assert attacker_attack.from_target_static is not None
-    assert attacker_attack.from_target_static.source_entity_uuid == defender_uuid
-    assert attacker_attack.from_target_static.target_entity_uuid == attacker_uuid
-    assert attacker_attack.advantage == AdvantageStatus.DISADVANTAGE
-
-    attacker_attack.reset_from_target()
-    assert attacker_attack.from_target_static is None
-    assert attacker_attack.from_target_contextual is None
+    opposed = read_value(parts(attacker_attack), ValueRead(attacker_uuid, defender_uuid,
+                                                    opponent=outgoing_of(parts(defender_ac), None)))
+    assert opposed.advantage == AdvantageStatus.DISADVANTAGE
+    assert [row.source for row in opposed.advantage_breakdown] == ["from_target"]
     assert attacker_attack.advantage == AdvantageStatus.NONE
 
 
@@ -248,68 +227,58 @@ def test_eb_02_005_resistance_vulnerability_and_immunity_aggregate() -> None:
     """EB-02-005: resistance statuses aggregate by damage type."""
     reset_value_state()
     source_uuid = uuid4()
-    value = ModifiableValue.create(source_entity_uuid=source_uuid)
+    value = ModifiableValue(source_entity_uuid=source_uuid)
 
-    value.self_static.add_resistance_modifier(
-        ResistanceModifier(
+    add_modifier(value, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=source_uuid,
             name="Fire Ward",
             value=ResistanceStatus.RESISTANCE,
             damage_type=DamageType.FIRE,
-        )
-    )
+        ))
     assert value.resistance[DamageType.FIRE] == ResistanceStatus.RESISTANCE
 
-    value.self_static.add_resistance_modifier(
-        ResistanceModifier(
+    add_modifier(value, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=source_uuid,
             name="Greater Fire Ward",
             value=ResistanceStatus.RESISTANCE,
             damage_type=DamageType.FIRE,
-        )
-    )
+        ))
     assert value.resistance[DamageType.FIRE] == ResistanceStatus.IMMUNITY
 
-    value.self_static.add_resistance_modifier(
-        ResistanceModifier(
+    add_modifier(value, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=source_uuid,
             name="Cold Curse",
             value=ResistanceStatus.VULNERABILITY,
             damage_type=DamageType.COLD,
-        )
-    )
+        ))
     assert value.resistance[DamageType.COLD] == ResistanceStatus.VULNERABILITY
     assert value.resistance[DamageType.LIGHTNING] == ResistanceStatus.NONE
 
 
-def test_eb_02_006_contextual_target_channels_copy_into_from_target() -> None:
-    """EB-02-006: contextual outgoing channels contribute only after import."""
+def test_eb_02_006_contextual_outgoing_channels_read_in_the_opponent_context() -> None:
+    """EB-02-006: contextual outgoing channels contribute in an opposed read, in the opponent's context."""
     reset_value_state()
     attacker_uuid = uuid4()
     defender_uuid = uuid4()
-    attacker_attack = ModifiableValue.create(
+    attacker_attack = ModifiableValue(
         source_entity_uuid=attacker_uuid,
-        target_entity_uuid=defender_uuid,
-        value_name="Attack Bonus",
-        base_value=10,
+        name="Attack Bonus",
+        base=10,
     )
-    defender_ac = ModifiableValue.create(
+    defender_ac = ModifiableValue(
         source_entity_uuid=defender_uuid,
-        target_entity_uuid=attacker_uuid,
-        value_name="Armor Class",
+        name="Armor Class",
     )
 
-    attacker_attack.self_static.add_value_modifier(
-        NumericalModifier(
+    add_modifier(attacker_attack, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             source_entity_uuid=attacker_uuid,
             target_entity_uuid=attacker_uuid,
             name="Weapon Bonus",
             value=1,
-        )
-    )
+        ))
 
     def focus_bonus(
         source_entity_uuid: UUID,
@@ -325,24 +294,18 @@ def test_eb_02_006_contextual_target_channels_copy_into_from_target() -> None:
             )
         return None
 
-    attacker_attack.self_contextual.add_value_modifier(
-        ContextualNumericalModifier(
+    add_modifier(attacker_attack, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
             source_entity_uuid=attacker_uuid,
             target_entity_uuid=attacker_uuid,
             name="Focus Bonus",
             callable=focus_bonus,
-        )
-    )
-    attacker_attack.set_context({"focused": True})
-
-    defender_ac.to_target_static.add_value_modifier(
-        NumericalModifier(
+        ))
+    add_modifier(defender_ac, Channel.TO_TARGET_STATIC, Kind.VALUE, NumericalModifier(
             source_entity_uuid=defender_uuid,
             target_entity_uuid=attacker_uuid,
             name="Cover Penalty",
             value=-5,
-        )
-    )
+        ))
 
     def dim_light_penalty(
         source_entity_uuid: UUID,
@@ -358,37 +321,31 @@ def test_eb_02_006_contextual_target_channels_copy_into_from_target() -> None:
             )
         return None
 
-    defender_ac.to_target_contextual.add_value_modifier(
-        ContextualNumericalModifier(
+    add_modifier(defender_ac, Channel.TO_TARGET_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
             source_entity_uuid=defender_uuid,
             target_entity_uuid=attacker_uuid,
             name="Dim Light Penalty",
             callable=dim_light_penalty,
-        )
-    )
-    defender_ac.set_context({"dim_light": True})
+        ))
+    own = ValueRead(attacker_uuid, defender_uuid, {"focused": True})
+    assert read_value(parts(attacker_attack), own).score == 13
 
-    assert attacker_attack.score == 13
-
-    attacker_attack.set_from_target(defender_ac)
-    assert attacker_attack.from_target_static is not None
-    assert attacker_attack.from_target_contextual is not None
-    assert attacker_attack.score == 6
-
-    attacker_attack.reset_from_target()
-    assert attacker_attack.score == 13
+    opposed = ValueRead(attacker_uuid, defender_uuid, {"focused": True},
+                        outgoing_of(parts(defender_ac), context={"dim_light": True}))
+    assert read_value(parts(attacker_attack), opposed).score == 6
+    unlit = ValueRead(attacker_uuid, defender_uuid, {"focused": True}, outgoing_of(parts(defender_ac), None))
+    assert read_value(parts(attacker_attack), unlit).score == 8
+    assert read_value(parts(attacker_attack), own).score == 13
 
 
-def test_eb_02_007_contextual_exceptions_cache_none_but_strict_execution_raises() -> None:
+def test_eb_02_007_contextual_exceptions_read_as_absent_but_strict_execution_raises() -> None:
     """EB-02-007: normal contextual aggregation is forgiving; strict calls are not."""
     reset_value_state()
     source_uuid = uuid4()
     target_uuid = uuid4()
-    lineage_uuid = uuid4()
-    value = ModifiableValue.create(
+    value = ModifiableValue(
         source_entity_uuid=source_uuid,
-        target_entity_uuid=target_uuid,
-        base_value=3,
+        base=3,
     )
 
     calls = 0
@@ -408,16 +365,15 @@ def test_eb_02_007_contextual_exceptions_cache_none_but_strict_execution_raises(
         name="Broken Bonus",
         callable=broken_bonus,
     )
-    value.self_contextual.add_value_modifier(broken_modifier)
-    value.set_event_lineage(lineage_uuid)
+    add_modifier(value, Channel.SELF_CONTEXTUAL, Kind.VALUE, broken_modifier)
+    read = ValueRead(source_uuid, target_uuid)
 
-    assert value.score == 3
-    cache_key = f"{source_uuid}|{target_uuid}|{lineage_uuid}"
-    assert broken_modifier.cached_results[cache_key] is None
+    assert value_score(parts(value), read, normalized=False) == 3
     assert calls == 1
 
-    assert value.score == 3
-    assert broken_modifier.cached_results[cache_key] is None
+    reading = read_value(parts(value), read)
+    assert reading.score == 3
+    assert [row.name for row in reading.breakdown] == ["Prof"]
     assert calls == 2
 
     try:
@@ -467,16 +423,16 @@ def test_eb_02_008_multiple_constraints_are_permissive() -> None:
     reset_value_state()
     source_uuid = uuid4()
 
-    low_static = ModifiableValue.create(source_entity_uuid=source_uuid, base_value=6)
-    low_static.self_static.add_min_constraint(number_mod(source_uuid, 8, "Minimum 8"))
-    low_static.self_static.add_min_constraint(number_mod(source_uuid, 12, "Minimum 12"))
-    assert low_static.min == 8
+    low_static = ModifiableValue(source_entity_uuid=source_uuid, base=6)
+    add_modifier(low_static, Channel.SELF_STATIC, Kind.MIN, number_mod(source_uuid, 8, "Minimum 8"))
+    add_modifier(low_static, Channel.SELF_STATIC, Kind.MIN, number_mod(source_uuid, 12, "Minimum 12"))
+    assert read_value(parts(low_static), ValueRead(source_uuid)).channels[0].minimum == 8
     assert low_static.score == 8
 
-    high_static = ModifiableValue.create(source_entity_uuid=source_uuid, base_value=20)
-    high_static.self_static.add_max_constraint(number_mod(source_uuid, 14, "Maximum 14"))
-    high_static.self_static.add_max_constraint(number_mod(source_uuid, 9, "Maximum 9"))
-    assert high_static.max == 14
+    high_static = ModifiableValue(source_entity_uuid=source_uuid, base=20)
+    add_modifier(high_static, Channel.SELF_STATIC, Kind.MAX, number_mod(source_uuid, 14, "Maximum 14"))
+    add_modifier(high_static, Channel.SELF_STATIC, Kind.MAX, number_mod(source_uuid, 9, "Maximum 9"))
+    assert read_value(parts(high_static), ValueRead(source_uuid)).channels[0].maximum == 14
     assert high_static.score == 14
 
     def contextual_bound(bound: int, name: str):
@@ -496,41 +452,38 @@ def test_eb_02_008_multiple_constraints_are_permissive() -> None:
 
         return callback
 
-    low_contextual = ModifiableValue.create(source_entity_uuid=source_uuid, base_value=6)
+    low_contextual = ModifiableValue(source_entity_uuid=source_uuid, base=6)
     for bound in [8, 12]:
-        low_contextual.self_contextual.add_min_constraint(
-            ContextualNumericalModifier(
+        add_modifier(low_contextual, Channel.SELF_CONTEXTUAL, Kind.MIN, ContextualNumericalModifier(
                 source_entity_uuid=source_uuid,
                 target_entity_uuid=source_uuid,
                 name=f"Minimum {bound}",
                 callable=contextual_bound(bound, f"Minimum {bound}"),
-            )
-        )
-    low_contextual.set_context({"constraints_active": True})
-    assert low_contextual.min == 8
-    assert low_contextual.self_contextual.score == 8
-    assert low_contextual.score == 14
+            ))
+    active = ValueRead(source_uuid, context={"constraints_active": True})
+    contextual = read_value(parts(low_contextual), active).channels[1]
+    assert (contextual.minimum, contextual.maximum) == (8, None)
+    assert read_value(parts(low_contextual), ValueRead(source_uuid)).channels[1].minimum is None
+    assert value_score(parts(low_contextual), active, normalized=False) == 14
 
-    high_contextual = ModifiableValue.create(source_entity_uuid=source_uuid, base_value=20)
+    high_contextual = ModifiableValue(source_entity_uuid=source_uuid, base=20)
     for bound in [14, 9]:
-        high_contextual.self_contextual.add_max_constraint(
-            ContextualNumericalModifier(
+        add_modifier(high_contextual, Channel.SELF_CONTEXTUAL, Kind.MAX, ContextualNumericalModifier(
                 source_entity_uuid=source_uuid,
                 target_entity_uuid=source_uuid,
                 name=f"Maximum {bound}",
                 callable=contextual_bound(bound, f"Maximum {bound}"),
-            )
-        )
-    high_contextual.set_context({"constraints_active": True})
-    assert high_contextual.max == 14
-    assert high_contextual.score == 14
+            ))
+    contextual = read_value(parts(high_contextual), active).channels[1]
+    assert (contextual.minimum, contextual.maximum) == (None, 14)
+    assert value_score(parts(high_contextual), active, normalized=False) == 14
 
 
 def test_eb_02_009_contextual_resistance_aggregates_and_executes_strictly() -> None:
     """EB-02-009: contextual resistance works in aggregation and strict execution."""
     reset_value_state()
     source_uuid = uuid4()
-    value = ModifiableValue.create(source_entity_uuid=source_uuid)
+    value = ModifiableValue(source_entity_uuid=source_uuid)
 
     def fire_ward(
         source_entity_uuid: UUID,
@@ -553,13 +506,10 @@ def test_eb_02_009_contextual_resistance_aggregates_and_executes_strictly() -> N
         name="Contextual Fire Ward",
         callable=fire_ward,
     )
-    value.self_contextual.add_resistance_modifier(modifier)
+    add_modifier(value, Channel.SELF_CONTEXTUAL, Kind.RESISTANCE, modifier)
 
-    value.set_context({"fire_warded": False})
-    assert value.resistance[DamageType.FIRE] == ResistanceStatus.NONE
-
-    value.set_context({"fire_warded": True})
-    assert value.resistance[DamageType.FIRE] == ResistanceStatus.RESISTANCE
+    assert value_resistance(parts(value), ValueRead(source_uuid, context={"fire_warded": False}))[DamageType.FIRE] == ResistanceStatus.NONE
+    assert value_resistance(parts(value), ValueRead(source_uuid, context={"fire_warded": True}))[DamageType.FIRE] == ResistanceStatus.RESISTANCE
 
     modifier.setup_callable_arguments(source_uuid, source_uuid, {"fire_warded": True})
     strict_result = modifier.execute_callable()
@@ -605,19 +555,17 @@ def test_eb_02_009_contextual_resistance_aggregates_and_executes_strictly() -> N
         raise AssertionError("strict resistance execution should reject wrong return types")
 
 
-def test_eb_02_010_imported_target_channels_share_live_modifier_buckets() -> None:
-    """EB-02-010: set_from_target() creates a channel copy with shared buckets."""
+def test_eb_02_010_opponent_outgoing_rows_are_read_live() -> None:
+    """EB-02-010: an opposed read reads the opponent's live outgoing rows."""
     reset_value_state()
     attacker_uuid = uuid4()
     defender_uuid = uuid4()
-    attacker_attack = ModifiableValue.create(
+    attacker_attack = ModifiableValue(
         source_entity_uuid=attacker_uuid,
-        target_entity_uuid=defender_uuid,
-        base_value=10,
+        base=10,
     )
-    defender_ac = ModifiableValue.create(
+    defender_ac = ModifiableValue(
         source_entity_uuid=defender_uuid,
-        target_entity_uuid=attacker_uuid,
     )
 
     cover_penalty = NumericalModifier(
@@ -626,28 +574,21 @@ def test_eb_02_010_imported_target_channels_share_live_modifier_buckets() -> Non
         name="Cover Penalty",
         value=-2,
     )
-    defender_ac.to_target_static.add_value_modifier(cover_penalty)
+    add_modifier(defender_ac, Channel.TO_TARGET_STATIC, Kind.VALUE, cover_penalty)
 
-    attacker_attack.set_from_target(defender_ac)
-    assert attacker_attack.from_target_static is not None
-    assert attacker_attack.from_target_static is not defender_ac.to_target_static
-    assert attacker_attack.from_target_static.value_modifiers is defender_ac.to_target_static.value_modifiers
-    assert attacker_attack.score == 8
+    opposed = ValueRead(attacker_uuid, defender_uuid, opponent=outgoing_of(parts(defender_ac), None))
+    assert value_score(parts(attacker_attack), opposed, normalized=False) == 8
 
     cover_penalty.value = -5
-    assert attacker_attack.score == 5
+    assert value_score(parts(attacker_attack), opposed, normalized=False) == 5
 
-    defender_ac.to_target_static.add_value_modifier(
-        NumericalModifier(
+    add_modifier(defender_ac, Channel.TO_TARGET_STATIC, Kind.VALUE, NumericalModifier(
             source_entity_uuid=defender_uuid,
             target_entity_uuid=attacker_uuid,
             name="Fresh Penalty",
             value=-1,
-        )
-    )
-    assert attacker_attack.score == 4
-
-    attacker_attack.reset_from_target()
+        ))
+    assert value_score(parts(attacker_attack), opposed, normalized=False) == 4
     assert attacker_attack.score == 10
 
 
@@ -655,7 +596,7 @@ def test_eb_02_011_inactive_contextual_damage_types_are_empty() -> None:
     """EB-02-011: inactive contextual damage-type callables contribute no type."""
     reset_value_state()
     source_uuid = uuid4()
-    value = ModifiableValue.create(source_entity_uuid=source_uuid)
+    value = ModifiableValue(source_entity_uuid=source_uuid)
 
     def conditional_fire(
         source_entity_uuid: UUID,
@@ -677,103 +618,89 @@ def test_eb_02_011_inactive_contextual_damage_types_are_empty() -> None:
         name="Conditional Fire Type",
         callable=conditional_fire,
     )
-    value.self_contextual.add_damage_type_modifier(modifier)
+    add_modifier(value, Channel.SELF_CONTEXTUAL, Kind.DAMAGE_TYPE, modifier)
 
-    value.set_context({"fire": False})
-    assert value.self_contextual.damage_types == []
-    assert value.damage_types == []
+    assert value_damage_types(parts(value), ValueRead(source_uuid, context={"fire": False})) == []
     assert value.damage_type is None
 
-    value.set_context({"fire": True})
-    assert value.self_contextual.damage_types == [DamageType.FIRE]
-    assert value.damage_types == [DamageType.FIRE]
-    assert value.damage_type == DamageType.FIRE
+    assert value_damage_types(parts(value), ValueRead(source_uuid, context={"fire": True})) == [DamageType.FIRE]
 
 
 if __name__ == "__main__":
     test_eb_02_001_static_numerical_modifiers_and_constraints()
     test_eb_02_002_advantage_critical_and_auto_hit_precedence()
     test_eb_02_003_contextual_modifiers_are_evaluated_from_context()
-    test_eb_02_004_to_target_channels_require_explicit_propagation()
+    test_eb_02_004_to_target_channels_apply_only_in_an_opposed_read()
     test_eb_02_005_resistance_vulnerability_and_immunity_aggregate()
-    test_eb_02_006_contextual_target_channels_copy_into_from_target()
-    test_eb_02_007_contextual_exceptions_cache_none_but_strict_execution_raises()
+    test_eb_02_006_contextual_outgoing_channels_read_in_the_opponent_context()
+    test_eb_02_007_contextual_exceptions_read_as_absent_but_strict_execution_raises()
     test_eb_02_008_multiple_constraints_are_permissive()
     test_eb_02_009_contextual_resistance_aggregates_and_executes_strictly()
-    test_eb_02_010_imported_target_channels_share_live_modifier_buckets()
+    test_eb_02_010_opponent_outgoing_rows_are_read_live()
     test_eb_02_011_inactive_contextual_damage_types_are_empty()
     print("PASS: engine book modifiable value tests")
 
 
-@pytest.mark.parametrize("bucket", ["value_modifiers", "min_constraints", "max_constraints"])
-def test_outgoing_numerical_buckets_reject_their_own_source(bucket: str) -> None:
+@pytest.mark.parametrize("kind", [Kind.VALUE, Kind.MIN, Kind.MAX, Kind.FACTOR])
+def test_outgoing_numerical_rows_reject_their_own_source(kind: Kind) -> None:
     reset_value_state()
     owner_uuid, target_uuid = uuid4(), uuid4()
-    own_modifier = number_mod(owner_uuid, 1)
-    incoming = StaticValue(
-        source_entity_uuid=owner_uuid,
-        **{bucket: {own_modifier.uuid: own_modifier}},
-    )
-    assert incoming.source_entity_uuid == owner_uuid
-    with pytest.raises(ValidationError, match="Outgoing modifier target"):
-        StaticValue(
-            source_entity_uuid=owner_uuid,
-            is_outgoing_modifier=True,
-            **{bucket: {own_modifier.uuid: own_modifier}},
-        )
-    other_modifier = NumericalModifier(
-        source_entity_uuid=owner_uuid, target_entity_uuid=target_uuid,
-        name="Other target", value=1,
-    )
-    outgoing = StaticValue(
-        source_entity_uuid=owner_uuid,
-        is_outgoing_modifier=True,
-        **{bucket: {other_modifier.uuid: other_modifier}},
-    )
-    assert outgoing.source_entity_uuid == owner_uuid
+    own = (ArithmeticFactor(source_entity_uuid=owner_uuid, target_entity_uuid=owner_uuid, numerator=2)
+           if kind is Kind.FACTOR else number_mod(owner_uuid, 1))
+    incoming = ModifiableValue(source_entity_uuid=owner_uuid)
+    add_modifier(incoming, Channel.SELF_STATIC, kind, own)
+    assert composed(parts(incoming))
+    outgoing = ModifiableValue(source_entity_uuid=owner_uuid)
+    add_modifier(outgoing, Channel.TO_TARGET_STATIC, kind, own)
+    with pytest.raises(ValueError, match="Outgoing modifier target"):
+        composed(parts(outgoing))
+    other = (ArithmeticFactor(source_entity_uuid=owner_uuid, target_entity_uuid=target_uuid, numerator=2)
+             if kind is Kind.FACTOR else NumericalModifier(source_entity_uuid=owner_uuid, target_entity_uuid=target_uuid,
+                                                           name="Other target", value=1))
+    targeted = ModifiableValue(source_entity_uuid=owner_uuid)
+    add_modifier(targeted, Channel.TO_TARGET_STATIC, kind, other)
+    assert composed(parts(targeted))
 
 
 def test_exact_factors_apply_after_all_channels_before_bounds_and_survive_composition():
     owner, target = uuid4(), uuid4()
-    speed = ModifiableValue.create(source_entity_uuid=owner, base_value=31)
-    speed.set_target_entity(target)
-    bonus = ModifiableValue.create(source_entity_uuid=owner, base_value=4)
-    speed.self_contextual.add_value_modifier(ContextualNumericalModifier(
+    speed = ModifiableValue(source_entity_uuid=owner, base=31)
+    bonus = ModifiableValue(source_entity_uuid=owner, base=4)
+    add_modifier(speed, Channel.SELF_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
         source_entity_uuid=owner, callable=lambda *_: number_mod(owner, 5)))
-    external = ModifiableValue.create(source_entity_uuid=target, target_entity_uuid=owner)
-    external.to_target_static.add_value_modifier(NumericalModifier(
+    external = ModifiableValue(source_entity_uuid=target)
+    add_modifier(external, Channel.TO_TARGET_STATIC, Kind.VALUE, NumericalModifier(
         source_entity_uuid=target, target_entity_uuid=owner, value=10))
-    speed.set_from_target(external)
     haste = ArithmeticFactor(source_entity_uuid=owner, numerator=2)
     slow = ArithmeticFactor(source_entity_uuid=owner, numerator=1, denominator=2)
-    speed.self_static.add_factor(haste)
-    external.to_target_static.add_factor(slow)
-    combined = speed.combine_values([bonus])
-    assert combined.normalized_score == 50
-    combined.remove_modifier(slow.uuid)
-    assert combined.normalized_score == 100
+    add_modifier(speed, Channel.SELF_STATIC, Kind.FACTOR, haste)
+    add_modifier(external, Channel.TO_TARGET_STATIC, Kind.FACTOR, slow)
+    combined = composed(parts(speed, bonus))
+    read = ValueRead(owner, target, opponent=outgoing_of(parts(external), None))
+    assert value_score(combined, read, normalized=True) == 50
+    remove_modifier(external, slow.uuid)
+    assert value_score(combined, read, normalized=True) == 100
     cap = number_mod(owner, 0)
-    combined.self_static.add_max_constraint(cap)
-    assert combined.normalized_score == 0
-    combined.remove_modifier(cap.uuid)
-    assert haste.uuid in combined.get_all_modifier_uuids()
-    assert any(row.get('operation') == 'multiply' for row in combined.get_breakdown())
-    combined.remove_modifier(haste.uuid)
-    assert combined.normalized_score == 50
-    assert not combined.self_static.factor_modifiers
+    assert value_score(with_rows(combined, (Row(Channel.SELF_STATIC, Kind.MAX, cap),)), read, normalized=True) == 0
+    assert haste in modifiers_of(speed, Channel.SELF_STATIC, Kind.FACTOR)
+    assert any(row.operation == 'multiply' for row in value_breakdown(combined))
+    remove_modifier(speed, haste.uuid)
+    assert value_score(composed(parts(speed, bonus)), read, normalized=True) == 50
+    assert not modifiers_of(speed, Channel.SELF_STATIC, Kind.FACTOR)
 
 
 def test_fractional_factors_round_only_after_combining_and_serialize_exactly():
     owner = uuid4()
-    value = ModifiableValue.create(source_entity_uuid=owner, base_value=31)
+    value = ModifiableValue(source_entity_uuid=owner, base=31)
     half = ArithmeticFactor(source_entity_uuid=owner, numerator=1, denominator=2)
     double = ArithmeticFactor(source_entity_uuid=owner, numerator=2)
-    value.self_static.add_factor(half)
+    add_modifier(value, Channel.SELF_STATIC, Kind.FACTOR, half)
     assert value.normalized_score == 15
-    value.self_static.add_factor(double)
+    add_modifier(value, Channel.SELF_STATIC, Kind.FACTOR, double)
     assert value.normalized_score == 31
-    snapshot = value.model_dump(mode='json')
-    assert snapshot['self_static']['factor_modifiers'][str(half.uuid)]['denominator'] == 2
-    assert value.normalized_score_excluding_static_modifiers({double.uuid}) == 15
-    value.remove_all_modifiers()
+    snapshot = TypeAdapter(ModifiableValue).dump_python(value, mode='json')
+    factors = [row[2] for row in snapshot['modifiers'] if row[1] == 'factor']
+    assert factors[0]['uuid'] == str(half.uuid) and factors[0]['denominator'] == 2
+    assert value_score(parts(value), ValueRead(owner), normalized=True, excluded=frozenset({double.uuid})) == 15
+    remove_all_modifiers(value)
     assert value.normalized_score == 0

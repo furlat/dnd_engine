@@ -39,9 +39,10 @@ from dnd.items.environment_interactables import (
 )
 from dnd.items.spell_items import SpellGrantingItem
 from dnd.items.torches import StandingTorch, WallTorch
-from dnd.residues import BLOOD_RESIDUE, DREAD_RESIDUE, POISON_RESIDUE, ResidueProfile, deposit_residue
+from dnd.residues import BLOOD_RESIDUE, DREAD_RESIDUE, POISON_RESIDUE, ResidueProfile, deposit_residues
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spatial.environmental_conditions import OilSurface, WetSurface
+from dnd.spatial.ignition import resolve_interaction
 from dnd.core.ground import ground_footprint
 from dnd.spells.conjuration import GreaseZone
 from dnd.spells.evocation import Fireball
@@ -84,6 +85,7 @@ _LIQUID_SURFACES: dict[
 
 class LiquidBarrel(BaseItem):
     """One physical container composes its authored material on destruction."""
+    creates = tuple(_LIQUID_SURFACES.values())
 
     spill_profile: LiquidSpillProfile = LIQUID_BARREL_PROFILES["environment.blocker.oil_barrel"]
 
@@ -103,11 +105,9 @@ class LiquidBarrel(BaseItem):
         )
         material = self.spill_profile.material
         if isinstance(material, ResidueProfile):
-            for position in sorted(positions):
-                tile = get_map().get_tile(*position)
-                if tile is not None:
-                    deposit_residue(tile, material, parent_event=parent_event,
-                        amount=self.spill_profile.amount, deposit_source=deposit_source)
+            deposit_residues(material, {position: () for position in sorted(positions)},
+                source_entity_uuid=self.uuid, parent_event=parent_event,
+                amount=self.spill_profile.amount, deposit_source=deposit_source)
             return
 
         surface = _LIQUID_SURFACES[material](
@@ -150,12 +150,7 @@ class LiquidBarrel(BaseItem):
             parent_event=parent_event.uuid,
             phase=EventPhase.DECLARATION,
         )
-        interaction = interaction.phase_to(EventPhase.EXECUTION)
-        if interaction.canceled:
-            return
-        interaction = interaction.phase_to(EventPhase.EFFECT)
-        if not interaction.canceled:
-            interaction.phase_to(EventPhase.COMPLETION)
+        resolve_interaction(interaction)
 
 
 # Preserve the old public constructor name without a second behavior class.

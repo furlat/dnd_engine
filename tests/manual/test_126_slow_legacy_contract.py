@@ -47,6 +47,7 @@ from tests.engine.support import (
     reset_combat_state,
     set_hp,
 )
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier, modifiers_of
 
 
 def _reset_state() -> None:
@@ -153,16 +154,16 @@ def _add_wisdom_save_modifier(entity: Entity, value: int) -> UUID:
         name="Deterministic Slow save",
         value=value,
     )
-    entity.saving_throws.get_saving_throw(
+    add_modifier(entity.saving_throws.get_saving_throw(
         "wisdom"
-    ).bonus.self_static.add_value_modifier(modifier)
+    ).bonus, Channel.SELF_STATIC, Kind.VALUE, modifier)
     return modifier.uuid
 
 
 def _remove_wisdom_save_modifier(entity: Entity, modifier_uuid: UUID) -> None:
-    entity.saving_throws.get_saving_throw(
+    remove_modifier(entity.saving_throws.get_saving_throw(
         "wisdom"
-    ).bonus.self_static.remove_value_modifier(modifier_uuid)
+    ).bonus, modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
 
 
 def _cast_slow(
@@ -481,32 +482,30 @@ def test_slow_lockout_constraint_is_idempotent_and_fully_owned() -> None:
     ).apply()
     assert surge_event is not None
     assert not surge_event.canceled
-    assert not fighter.action_economy.bonus_actions.self_static.max_constraints
+    assert not modifiers_of(fighter.action_economy.bonus_actions, Channel.SELF_STATIC, Kind.MAX)
 
     _apply_attack(fighter, target)
-    first_lock_uuids = set(
-        fighter.action_economy.bonus_actions.self_static.max_constraints
-    )
+    first_lock_uuids = {modifier.uuid for modifier in modifiers_of(
+        fighter.action_economy.bonus_actions, Channel.SELF_STATIC, Kind.MAX)}
     assert len(first_lock_uuids) == 1
 
     _apply_attack(fighter, target)
     assert (
-        set(fighter.action_economy.bonus_actions.self_static.max_constraints)
+        {modifier.uuid for modifier in modifiers_of(fighter.action_economy.bonus_actions, Channel.SELF_STATIC, Kind.MAX)}
         == first_lock_uuids
     )
 
     fighter.on_turn_end()
     fighter.on_turn_start()
     assert "Slowed" in fighter.active_conditions
-    assert not fighter.action_economy.bonus_actions.self_static.max_constraints
+    assert not modifiers_of(fighter.action_economy.bonus_actions, Channel.SELF_STATIC, Kind.MAX)
 
     _apply_attack(fighter, target)
-    second_turn_lock_uuids = set(
-        fighter.action_economy.bonus_actions.self_static.max_constraints
-    )
+    second_turn_lock_uuids = {modifier.uuid for modifier in modifiers_of(
+        fighter.action_economy.bonus_actions, Channel.SELF_STATIC, Kind.MAX)}
     assert len(second_turn_lock_uuids) == 1
     assert second_turn_lock_uuids.isdisjoint(first_lock_uuids)
 
     fighter.remove_condition("Slowed")
-    assert not fighter.action_economy.bonus_actions.self_static.max_constraints
+    assert not modifiers_of(fighter.action_economy.bonus_actions, Channel.SELF_STATIC, Kind.MAX)
     _remove_wisdom_save_modifier(fighter, fighter_failure)

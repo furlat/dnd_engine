@@ -29,7 +29,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.monsters.traits import GhoulClawsParalysisFeature
 from dnd.reactions import add_opportunity_attack_handler
-from dnd.residues import DREAD_RESIDUE, deposit_residue
+from dnd.residues import DREAD_RESIDUE, deposit_residue, remove_tile_residue
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import MistyStep
 from dnd.spells.transmutation import Telekinesis
@@ -208,7 +208,7 @@ def test_donor_departure_visibility_and_actual_source_removal(game: Game) -> Non
     traveler.remove_condition_by_uuid(blindness.uuid)
     assert traveler.skill_set.athletics.skill_bonus.advantage is AdvantageStatus.DISADVANTAGE
     tile = get_map().get_tile(1, 1)
-    assert tile is not None and tile.remove_condition(DREAD_RESIDUE.name)
+    assert tile is not None and remove_tile_residue(tile, DREAD_RESIDUE.residue_id)
     assert "Frightened" not in traveler.active_conditions
     assert traveler.equipment.attack_bonus.advantage is AdvantageStatus.NONE
 

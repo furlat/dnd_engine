@@ -1,5 +1,6 @@
 """Engine semantic tests for spellcasting core."""
 
+from dataclasses import replace
 from typing import Optional, cast
 from uuid import uuid4
 
@@ -22,6 +23,7 @@ from dnd.conditions import Concentrating, Dashing
 from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_BY_CLASS,
 )
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
@@ -30,7 +32,7 @@ from dnd.core.events import Damage, DeathEvent, EventPhase, EventQueue, Range, R
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, ValueRead, value_score
 from dnd.entity import Entity, EntityConfig
 from tests.spell_test_exports import (
     ALL_SPELLS,
@@ -57,7 +59,7 @@ def reset_spell_state(width: int = 8, height: int = 4) -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, width, height)
 
 
@@ -223,7 +225,7 @@ class BookMultiTargetConcentrationSpell(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
         if caster is None:
             return execution_event.cancel(status_message="Caster not found")
         if target is None:
@@ -301,13 +303,13 @@ def test_eb_14_002_spellcasting_block_is_modifier_only() -> None:
     assert not hasattr(block, "spell_slot_1")
     assert not hasattr(block, "known_spells")
 
-    extra_damage = block.get_extra_spell_damage()
+    extra_damage = block.get_extra_spell_damage(None)
 
     assert len(extra_damage) == 1
     assert extra_damage[0].damage_dice == 6
     assert extra_damage[0].dice_numbers == 1
     assert extra_damage[0].damage_bonus is not None
-    assert extra_damage[0].damage_bonus.normalized_score == 2
+    assert value_score(extra_damage[0].damage_bonus, ValueRead(extra_damage[0].source_entity_uuid), normalized=True) == 2
     assert extra_damage[0].damage_type == DamageType.RADIANT
 
 
@@ -326,40 +328,32 @@ def test_eb_14_003_entity_spell_numbers_compose_from_multiple_blocks() -> None:
         ),
         proficiency_bonus=3,
     )
-    caster.equipment.attack_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(caster.equipment.attack_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=caster.uuid,
             name="Blessed Implement",
             value=1,
-        )
-    )
-    caster.equipment.damage_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+        ))
+    add_modifier(caster.equipment.damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=caster.uuid,
             name="General Damage",
             value=2,
-        )
-    )
-    caster.equipment.crit_threshold.self_static.add_value_modifier(
-        NumericalModifier.create(
+        ))
+    add_modifier(caster.equipment.crit_threshold, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=caster.uuid,
             name="General Critical",
             value=1,
-        )
-    )
-    caster.equipment.crit_extra_dice.self_static.add_value_modifier(
-        NumericalModifier.create(
+        ))
+    add_modifier(caster.equipment.crit_extra_dice, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=caster.uuid,
             name="General Crit Dice",
             value=1,
-        )
-    )
+        ))
 
     assert caster.spell_attack_bonus().normalized_score == 10
     assert caster.spell_save_dc() == 16
     assert caster.get_spell_crit_threshold() == 18
     assert caster.get_spell_crit_extra_dice() == 3
-    assert caster.get_spell_damage_bonus().normalized_score == 6
+    assert value_score(caster.get_spell_damage_bonus(), ValueRead(caster.uuid), normalized=True) == 6
 
 
 def test_eb_14_004_spell_actions_create_spell_events_and_slot_costs() -> None:
@@ -414,31 +408,31 @@ def test_eb_14_005_cantrip_dice_scale_at_srd_thresholds() -> None:
     assert cantrip._get_cantrip_dice_count(20) == 4
 
 
-def test_eb_14_006_generate_variants_uses_available_slots() -> None:
-    """EB-14-006: explicit variant generation creates ephemeral cast choices."""
+def test_eb_14_006_discovery_forms_use_available_slots() -> None:
+    """EB-14-006: discovery lists a cantrip as registered and a slot spell once at its castable levels."""
     reset_spell_state()
     caster = create_spellcaster(spell_slots={1: 2, 3: 1})
     cantrip_template = FireBolt(source_entity_uuid=caster.uuid, template=True)
     missile_template = MagicMissile(source_entity_uuid=caster.uuid, template=True)
+    scan = caster.action_scan(subjective=True)
 
-    cantrip_variants = cantrip_template.generate_variants(caster)
-    missile_variants = missile_template.generate_variants(caster)
+    cantrip_forms = cantrip_template.discovery_forms(scan)
+    missile_forms = missile_template.discovery_forms(scan)
 
-    assert len(cantrip_variants) == 1
-    assert cantrip_variants[0].cast_at_level == 0
-    assert cantrip_variants[0].template is False
-    assert cantrip_variants[0].use_register is False
-    assert [cost.cost_type for cost in cantrip_variants[0].costs] == ["actions"]
+    assert cantrip_forms == [cantrip_template]
+    assert [cost.cost_type for cost in cantrip_forms[0].costs] == ["actions"]
 
-    assert [variant.cast_at_level for variant in missile_variants] == [1, 3]
-    assert all(variant.template is False for variant in missile_variants)
-    assert all(variant.is_variant for variant in missile_variants)
-    assert [cost.cost_type for cost in missile_variants[1].costs] == [
+    # One cast choice per spell with its castable levels (plan D17), listed at the lowest.
+    missile, = missile_forms
+    assert missile.cast_at_level == 1 and missile.castable_levels == (1, 3)
+    assert missile.template is False and missile.is_variant
+    upcast = missile.with_selection(replace(missile.current_selection(), cast_at_level=3))
+    assert [cost.cost_type for cost in upcast.costs] == [
         "actions",
         "spell_slot_3",
     ]
-    assert missile_variants[1].get_upcast_bonus() == 2
-    assert missile_variants[1].get_multi_target_count() == 5
+    assert upcast.get_upcast_bonus() == 2
+    assert upcast.get_multi_target_count() == 5
 
 
 def test_eb_14_007_registered_spells_surface_executable_slot_variants() -> None:
@@ -458,19 +452,17 @@ def test_eb_14_007_registered_spells_surface_executable_slot_variants() -> None:
         info for info in available.entity_actions if info.template_name == "Fire Bolt"
     ]
 
-    assert [info.template_name for info in missile_actions] == [
-        "Magic Missile__slot_1",
-        "Magic Missile__slot_3",
-    ]
-    assert [info.display_name for info in missile_actions] == [
-        "Magic Missile (Level 1)",
-        "Magic Missile (Level 3)",
-    ]
-    assert [info.cast_at_level for info in missile_actions] == [1, 3]
-    assert [info.num_projectiles for info in missile_actions] == [3, 5]
-    assert all(info.can_afford for info in missile_actions)
-    assert all(info.is_spell_variant for info in missile_actions)
-    assert all(target.uuid in [target_info.target_uuid for target_info in info.valid_targets] for info in missile_actions)
+    # Spells are listed once with the levels they can be cast at (plan D17).
+    missile, = missile_actions
+    assert missile.template_name == "Magic Missile__slot_1"
+    assert missile.display_name == "Magic Missile (Level 1)"
+    assert missile.cast_at_level == 1 and missile.cast_levels == (1, 3)
+    assert missile.num_projectiles == 3
+    assert missile.can_afford and missile.is_spell_variant
+    assert target.uuid in [target_info.target_uuid for target_info in missile.valid_targets]
+    assert missile.execution_template is not None
+    form = missile.execution_template
+    assert form.with_selection(replace(form.current_selection(), cast_at_level=3)).get_multi_target_count() == 5
     assert len(fire_bolt_actions) == 1
 
     caster.action_economy.consume("spell_slot_1", 1)
@@ -481,10 +473,10 @@ def test_eb_14_007_registered_spells_surface_executable_slot_variants() -> None:
         info for info in exhausted.entity_actions if info.base_template_name == "Magic Missile"
     ]
 
-    assert [info.template_name for info in remaining_missile_actions] == [
-        "Magic Missile__slot_1", "Magic Missile__slot_3"]
-    assert not remaining_missile_actions[0].can_afford and not remaining_missile_actions[0].valid_targets
-    assert remaining_missile_actions[1].can_afford and remaining_missile_actions[1].valid_targets
+    # The one row moves to the lowest level with a slot left (plan D17).
+    remaining, = remaining_missile_actions
+    assert remaining.template_name == "Magic Missile__slot_3" and remaining.cast_levels == (3,)
+    assert remaining.can_afford and remaining.valid_targets
     assert any(info.template_name == "Fire Bolt" for info in exhausted.all_actions)
     assert caster.has_spell_slot(3)
 
@@ -508,9 +500,8 @@ def test_eb_14_019_generated_upcast_variant_executes_with_higher_slot() -> None:
     Entity.update_all_entities_senses()
 
     template = MagicMissile(source_entity_uuid=caster.uuid, template=True)
-    variants = template.generate_variants(caster)
-    level_three = next(variant for variant in variants if variant.cast_at_level == 3)
-    level_three.target_entity_uuid = target.uuid
+    level_three = template.with_selection(ActionSelection(template_uuid=template.uuid, cast_at_level=3,
+                                                          target_uuids=(target.uuid,)))
 
     hp_before = target.get_hp()
     result = level_three.apply()
@@ -664,7 +655,7 @@ def test_eb_14_012_spell_action_overrides_change_template_costs_not_slot_variant
 
     template = caster.get_action_template("Magic Missile")
     assert isinstance(template, SpellAction)
-    assert template.generate_variants(caster) == []
+    assert template.discovery_forms(caster.action_scan(subjective=True)) == []
     assert not any(info.template_name == "Magic Missile" for info in get_available_actions(caster).all_actions)
 
     modified = apply_action_overrides(
@@ -687,7 +678,8 @@ def test_eb_14_012_spell_action_overrides_change_template_costs_not_slot_variant
     assert overridden[0].cost_type == "bonus_actions"
     assert overridden[0].can_afford
     assert target.uuid in [target_info.target_uuid for target_info in overridden[0].valid_targets]
-    assert template.generate_variants(caster) == []
+    # Cast without a slot, the spell is listed as registered: no slot row.
+    assert template.discovery_forms(caster.action_scan(subjective=True)) == [template]
 
     clear_action_overrides(caster, modified)
 
@@ -760,14 +752,12 @@ def test_eb_14_014_drop_concentration_can_target_one_multi_slot_spell() -> None:
     """EB-14-014: DropConcentration can remove one multi-slot concentration spell."""
     reset_spell_state()
     caster = create_spellcaster()
-    caster.max_concentration_slots.self_static.add_value_modifier(
-        NumericalModifier(
+    add_modifier(caster.max_concentration_slots, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             name="Book Multi Concentration",
             value=1,
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
-        )
-    )
+        ))
 
     first = BookNamedConcentrationSpell(
         source_entity_uuid=caster.uuid,
@@ -984,7 +974,7 @@ if __name__ == "__main__":
         test_eb_14_003_entity_spell_numbers_compose_from_multiple_blocks,
         test_eb_14_004_spell_actions_create_spell_events_and_slot_costs,
         test_eb_14_005_cantrip_dice_scale_at_srd_thresholds,
-        test_eb_14_006_generate_variants_uses_available_slots,
+        test_eb_14_006_discovery_forms_use_available_slots,
         test_eb_14_007_registered_spells_surface_executable_slot_variants,
         test_eb_14_019_generated_upcast_variant_executes_with_higher_slot,
         test_eb_14_008_magic_missile_convolution_aggregates_child_casts,

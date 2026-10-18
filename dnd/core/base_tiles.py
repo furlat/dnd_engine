@@ -1,18 +1,19 @@
 """Tile primitives for terrain, lighting, elevation, and object bands."""
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, FrozenSet, Optional, Set, Tuple
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr, StrictInt, model_validator
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.events import WorldTileState
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, retire_value
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.types.materials import Material, TileSurface
-from dnd.types.world import CardinalDirection
+from dnd.types.residues import TileResidueState
+from dnd.types.world import CardinalDirection, OccupancyLayer
 from dnd.types.spatial_effects import SpatialEffectLayer
 
 def validate_elevation_surface_tuple(
@@ -44,22 +45,14 @@ class TileObjectBand:
     occupant_uuid: Optional[UUID] = None
 
 
-def _empty_boundary_object_bands() -> Dict[
-    CardinalDirection,
-    Dict[int, TileObjectBand],
-]:
-    """Create all four private boundary-band buckets for one Tile."""
-    return {direction: {} for direction in CardinalDirection}
-
-
 @dataclass(slots=True)
 class TileLight:
-    """Current objective light inputs and their resolved value."""
+    """Current objective light inputs; GridMap's light grid holds the resolved value."""
 
     illuminations: Dict[UUID, LightLevel] = field(default_factory=dict)
     caps: Dict[UUID, LightLevel] = field(default_factory=dict)
-    default: Optional[LightLevel] = None
-    resolved: LightLevel = LightLevel.BRIGHT_LIGHT
+    # Sources lowering the lit level one step; any number count once.
+    dimmers: Set[UUID] = field(default_factory=set)
 
 
 class Tile(BaseBlock):
@@ -123,17 +116,29 @@ class Tile(BaseBlock):
         default=LightLevel.BRIGHT_LIGHT,
         description="Base objective light level before illumination or obscurement modifiers.",
     )
-    _light: TileLight = PrivateAttr(default_factory=TileLight)
+    # Set by `model_post_init`: a private default factory would cost pydantic a
+    # signature inspection per Tile.
+    _light: TileLight = PrivateAttr()
     _center_object_bands: Dict[int, TileObjectBand] = PrivateAttr(default={})
+    # Residue after-values per material, written by that material's map field (plan §5.9).
+    _residues: Dict[str, TileResidueState] = PrivateAttr(default={})
+    _residue_names: Dict[str, str] = PrivateAttr(default={})
+    _hazardous_residues: Set[str] = PrivateAttr(default=set())
+    # Sides with no bands are absent.
     _boundary_object_bands: Dict[
         CardinalDirection,
         Dict[int, TileObjectBand],
-    ] = PrivateAttr(default_factory=_empty_boundary_object_bands)
+    ] = PrivateAttr(default={})
     _entity_uuids: set[UUID] = PrivateAttr(default=set())
     _spatial_condition_uuids: Dict[
         SpatialEffectLayer,
         set[UUID],
     ] = PrivateAttr(default={})
+
+    def model_post_init(self, __context: Any) -> None:
+        """Give the Tile its own objective light state."""
+        self._light = TileLight()
+        super().model_post_init(__context)
 
     @model_validator(mode="after")
     def validate_elevation_surface(self) -> "Tile":
@@ -171,9 +176,10 @@ class Tile(BaseBlock):
 
     def snapshot_boundary_object_uuids(self) -> Dict[CardinalDirection, Tuple[UUID, ...]]:
         """Capture every owner side once for a batch of spatial queries."""
-        return {direction: tuple(sorted({identity for band in bands.values()
+        sides = self._boundary_object_bands
+        return {direction: tuple(sorted({identity for band in sides.get(direction, {}).values()
                                         for identity in band.object_uuids}, key=str))
-                for direction, bands in self._boundary_object_bands.items()}
+                for direction in CardinalDirection}
 
     def get_boundary_object_uuids(
         self,
@@ -317,21 +323,17 @@ class Tile(BaseBlock):
         cost = self._movement_cost(mode)
         if isinstance(cost, ModifiableValue):
             return cost
-        value = ModifiableValue.create(
+        value = ModifiableValue(
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
-            target_entity_uuid=self.target_entity_uuid,
-            target_entity_name=self.target_entity_name,
-            base_value=cost,
-            value_name=f"{mode.value.capitalize()} Cost",
+            base=cost,
+            name=f"{mode.value.capitalize()} Cost",
         )
         if cost <= 0 and mode is not MovementMode.FLYING:
             name = {MovementMode.WALKING: "Impassable", MovementMode.SWIMMING: "No Water",
                     MovementMode.BURROWING: "No Earth"}[mode]
-            value.self_static.add_max_constraint(NumericalModifier.create(
+            add_modifier(value, Channel.SELF_STATIC, Kind.MAX, NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid, name=name, value=0))
-        if self.context is not None:
-            value.set_context(self.context)
         match mode:
             case MovementMode.WALKING:
                 self.walking_cost = value
@@ -341,8 +343,11 @@ class Tile(BaseBlock):
                 self.swimming_cost = value
             case MovementMode.BURROWING:
                 self.burrowing_cost = value
-        self.values[value.uuid] = value
         return value
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """A tile's values are its materialized movement costs."""
+        return self.movement_cost_values()
 
     def movement_cost_values(self) -> tuple[ModifiableValue, ...]:
         """Return only already-materialized graphs for ownership and cleanup."""
@@ -363,12 +368,35 @@ class Tile(BaseBlock):
             elevation_steps=self.height, surface_kind=self.elevation_surface_kind,
             slope_axis=self.slope_axis, default_light=self.default_light,
             resolved_light=self.resolved_light_level,
-            condition_names=tuple(self.active_conditions),
-            residues=tuple(
-                residue for condition in self.active_conditions.values()
-                if (residue := condition.snapshot_tile_residue()) is not None
-            ),
+            condition_names=(*self.active_conditions, *(self._residue_names[key] for key in sorted(self._residues))),
+            residues=self.residue_states(),
         )
+
+    def residue_states(self) -> Tuple[TileResidueState, ...]:
+        """This tile's residue after-values, one per material."""
+        return tuple(self._residues[key] for key in sorted(self._residues))
+
+    def residue_state(self, residue_id: str) -> Optional[TileResidueState]:
+        return self._residues.get(residue_id)
+
+    def record_residue(self, state: TileResidueState, *, name: str, hazardous: bool) -> None:
+        """Store one material's after-value; only its map field writes it."""
+        self._residues[state.residue_id] = state
+        self._residue_names[state.residue_id] = name
+        if hazardous:
+            self._hazardous_residues.add(state.residue_id)
+
+    def forget_residue(self, residue_id: str) -> Optional[TileResidueState]:
+        """Drop one material's after-value; only its map field removes it."""
+        self._residue_names.pop(residue_id, None)
+        self._hazardous_residues.discard(residue_id)
+        return self._residues.pop(residue_id, None)
+
+    def is_hazardous_for(self, entity_uuid: Optional[UUID] = None, *,
+                         occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND) -> bool:
+        """Hazard conditions, plus a hazardous material lying on the ground here."""
+        return (super().is_hazardous_for(entity_uuid, occupancy_layer=occupancy_layer)
+                or (occupancy_layer is OccupancyLayer.GROUND and bool(self._hazardous_residues)))
 
     def snapshot_world_tile(self) -> WorldTileState:
         """Supply the resulting Tile facts to its existing condition publisher."""
@@ -388,41 +416,41 @@ class Tile(BaseBlock):
         return self.blocks_propagation_field
 
     def _add_illumination(self, source_uuid: UUID, level: LightLevel) -> bool:
-        """Install one GridMap-owned objective illumination contribution."""
-        old = self.resolved_light_level
+        """Install one GridMap-owned objective illumination contribution; an identical one changes nothing."""
         light = self._light
+        if light.illuminations.get(source_uuid) is level:
+            return False
+        old = self.resolved_light_level
         light.illuminations[source_uuid] = level
-        light.resolved = _resolve_light_contributions(light, self.default_light)
-        light.default = self.default_light
-        return light.resolved != old
+        return self.resolved_light_level != old
 
     def _add_illumination_cap(self, source_uuid: UUID, level: LightLevel) -> bool:
         """Install one GridMap-owned source cap on objective illumination."""
         old = self.resolved_light_level
         light = self._light
         light.caps[source_uuid] = level
-        light.resolved = _resolve_light_contributions(light, self.default_light)
-        light.default = self.default_light
-        return light.resolved != old
+        return self.resolved_light_level != old
+
+    def _add_illumination_dimmer(self, source_uuid: UUID) -> bool:
+        """Install one GridMap-owned one-step reduction of objective illumination."""
+        old = self.resolved_light_level
+        light = self._light
+        light.dimmers.add(source_uuid)
+        return self.resolved_light_level != old
 
     def _remove_light_modifier(self, source_uuid: UUID) -> bool:
-        """Remove one GridMap-owned illumination contribution or cap."""
+        """Remove one GridMap-owned illumination contribution, cap or dimmer."""
         old = self.resolved_light_level
         light = self._light
         light.illuminations.pop(source_uuid, None)
         light.caps.pop(source_uuid, None)
-        light.resolved = _resolve_light_contributions(light, self.default_light)
-        light.default = self.default_light
-        return light.resolved != old
+        light.dimmers.discard(source_uuid)
+        return self.resolved_light_level != old
 
     @property
     def resolved_light_level(self) -> LightLevel:
         """Objective light level (no observer). Lights brighten, darkness overrides."""
-        light = self._light
-        if light.default is not self.default_light:
-            light.resolved = _resolve_light_contributions(light, self.default_light)
-            light.default = self.default_light
-        return light.resolved
+        return _resolve_light_contributions(self._light, self.default_light)
 
     def directions_toward(self, other_position: Tuple[int, int]) -> Tuple[str, ...]:
         """Return tile-relative cardinal directions touched by a transition."""
@@ -614,6 +642,8 @@ def _resolve_light_contributions(light: TileLight, default_light: LightLevel) ->
     for level in light.illuminations.values():
         if level.value > brightest.value:
             brightest = level
+    if light.dimmers and brightest.value > LightLevel.DARKNESS.value:
+        brightest = LightLevel(brightest.value - 1)
     if not light.caps:
         return brightest
     darkest = min(light.caps.values(), key=lambda level: level.value)
@@ -628,85 +658,36 @@ def tile_light_contributions(
     return dict(light.illuminations), dict(light.caps)
 
 
+def tile_light_dimmers(tile: Tile) -> FrozenSet[UUID]:
+    """Return the sources lowering this tile's light one level."""
+    return frozenset(tile._light.dimmers)
+
+
 def validate_tile_owned_movement_graph(tile: Tile) -> None:
-    """Authenticate every locally owned movement root, channel, and modifier."""
+    """Authenticate every locally owned movement value and modifier row."""
     if tile.source_entity_uuid != tile.uuid or BaseBlock.get(tile.uuid) is not tile:
         raise ValueError("Tile registry ownership is not current")
     values = tile.movement_cost_values()
     if len({value.uuid for value in values}) != len(values):
         raise ValueError("Tile movement value identities are not distinct")
-    channels = tuple(
-        channel
-        for value in values
-        for channel in (
-            value.self_static,
-            value.to_target_static,
-            value.self_contextual,
-            value.to_target_contextual,
-        )
-    )
-    if len({channel.uuid for channel in channels}) != len(channels):
-        raise ValueError("Tile movement channel identities are not distinct")
-
-    seen_modifier_uuids = set()
+    modifiers = []
     for value in values:
-        if value.source_entity_uuid != tile.uuid or BaseValue.get(value.uuid) is not value:
+        if value.source_entity_uuid != tile.uuid or ModifiableValue.get(value.uuid) is not value:
             raise ValueError("Tile movement value ownership is not current")
-        for channel in (
-            value.self_static,
-            value.to_target_static,
-            value.self_contextual,
-            value.to_target_contextual,
-        ):
-            if channel.source_entity_uuid != tile.uuid or BaseValue.get(channel.uuid) is not channel:
-                raise ValueError("Tile movement channel ownership is not current")
-            modifier_entries = (
-                tuple(channel.value_modifiers.items())
-                + tuple(channel.min_constraints.items())
-                + tuple(channel.max_constraints.items())
-                + tuple(channel.advantage_modifiers.items())
-                + tuple(channel.critical_modifiers.items())
-                + tuple(channel.auto_hit_modifiers.items())
-                + tuple(channel.size_modifiers.items())
-                + tuple(channel.damage_type_modifiers.items())
-                + tuple(channel.resistance_modifiers.items())
-            )
-            if any(
-                modifier_uuid != modifier.uuid
-                for modifier_uuid, modifier in modifier_entries
-            ):
-                raise ValueError("Tile movement modifier key does not match identity")
-            modifiers = tuple(modifier for _, modifier in modifier_entries)
-            modifier_uuids = {modifier.uuid for modifier in modifiers}
-            if (
-                len(modifier_uuids) != len(modifiers)
-                or seen_modifier_uuids & modifier_uuids
-            ):
-                raise ValueError("Tile movement modifier identities are not distinct")
-            seen_modifier_uuids.update(modifier_uuids)
-            if any(
-                modifier.source_entity_uuid != tile.uuid
-                or BaseObject.get(modifier.uuid) is not modifier
-                for modifier in modifiers
-            ):
-                raise ValueError("Tile movement modifier ownership is not current")
+        modifiers.extend(row.modifier for row in value.modifiers)
+    if len({modifier.uuid for modifier in modifiers}) != len(modifiers):
+        raise ValueError("Tile movement modifier identities are not distinct")
+    if any(
+        modifier.source_entity_uuid != tile.uuid
+        or BaseObject.get(modifier.uuid) is not modifier
+        for modifier in modifiers
+    ):
+        raise ValueError("Tile movement modifier ownership is not current")
 
 
 def release_tile_owned_movement_graph(tile: Tile) -> None:
-    """Release one detached Tile's authenticated finite value graph."""
+    """Release one detached Tile's authenticated movement values."""
     validate_tile_owned_movement_graph(tile)
     for value in tile.movement_cost_values():
-        value.reset_from_target()
-        for channel in (
-            value.self_static,
-            value.to_target_static,
-            value.self_contextual,
-            value.to_target_contextual,
-        ):
-            modifier_uuids = tuple(channel.get_all_modifier_uuids())
-            channel.remove_all_modifiers()
-            for modifier_uuid in modifier_uuids:
-                BaseObject.unregister(modifier_uuid)
-            BaseValue.unregister(channel.uuid)
-        BaseValue.unregister(value.uuid)
+        retire_value(value)
     BaseBlock.unregister(tile.uuid)

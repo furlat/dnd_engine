@@ -11,7 +11,7 @@ from dnd.entity import Entity
 from dnd.player.application import capture_application_operation, initialize_audiences
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import PlayerUpdate
-from dnd.player.reduction import reduce_operation
+from dnd.player.reduction import reduce_initialization, reduce_operation
 from dnd.player.session import Operation, close_session, create_session, snapshot_player_hud
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.enchantment import Bless
@@ -31,8 +31,9 @@ def test_immunity_log_belongs_to_its_canceled_condition_event_and_replays(nested
         target, source = (session.game.entities[identity] for identity in session.player_uuids)
         target.add_condition_immunity("Bless" if nested else "Poisoned")
         catalog = ui_content_manifest()
-        audiences, _ = initialize_audiences(session, catalog)
-        before = audiences["party"].latest
+        audiences, initializations = initialize_audiences(session, catalog)
+        before = reduce_initialization(initializations["party"],
+            content_additions=audiences["party"].projection.remembered.content)
         start = EventQueue.event_cursor()
         native_log_start = len(session.encounter.combat_log)
         if nested:
@@ -57,23 +58,23 @@ def test_immunity_log_belongs_to_its_canceled_condition_event_and_replays(nested
                 for seat, audience in session.seats.items()))
         update = capture_application_operation(audiences, operation, catalog)["party"]
         assert update.combat_log_appends == ()
+        occurrence = audiences["party"].projection.public_cursors[EventQueue.get_event_index(canceled.uuid)]
         node = next(node for lineage in update.lineages for node in lineage.events
-            if node.uuid == canceled.uuid)
+            if node.occurrence == occurrence)
         assert node.canceled and node.combat_log is not None
         assert node.combat_log.compact == canceled.combat_log.compact
         assert node.combat_log.target_uuid == str(target.uuid)
         if nested:
             assert node.parent_lineage is not None
-            assert any(parent.lineage_uuid == node.parent_lineage
-                and node.lineage_uuid in parent.children_lineages
+            assert any(parent.lineage == node.parent_lineage
+                and node.lineage in parent.children_lineages
                 for lineage in update.lineages for parent in lineage.events)
-        expected = audiences["party"].latest
         detached = PlayerUpdate.model_validate_json(update.model_dump_json())
         close_session(session)
         reset_engine_runtime()
-        assert reduce_operation(before, detached) == expected
+        replayed = reduce_operation(before, detached)
         assert not any(condition.name == ("Bless" if nested else "Poisoned")
-            for condition in expected.actors[target.uuid].conditions)
+            for condition in replayed.actors[target.uuid].conditions)
     finally:
         close_session(session)
         reset_engine_runtime()
@@ -96,9 +97,10 @@ def test_unidentified_immunity_requires_native_occurrence_perception(perceived):
             for identity in audience.observers)
         source.add_condition_immunity("Poisoned")
         catalog = ui_content_manifest()
-        audiences, _ = initialize_audiences(session, catalog)
+        audiences, initializations = initialize_audiences(session, catalog)
         seat = next(iter(audiences))
-        before = audiences[seat].latest
+        before = reduce_initialization(initializations[seat],
+            content_additions=audiences[seat].projection.remembered.content)
         start = EventQueue.event_cursor()
         canceled = source.add_condition(Poisoned(source_entity_uuid=source.uuid, target_entity_uuid=source.uuid))
         assert canceled.canceled and canceled.combat_log is not None
@@ -107,6 +109,7 @@ def test_unidentified_immunity_requires_native_occurrence_perception(perceived):
             hud_by_seat=tuple((identity, snapshot_player_hud(session, audience=view))
                 for identity, view in session.seats.items()))
         update = capture_application_operation(audiences, operation, catalog)[seat]
+        replayed = reduce_operation(before, PlayerUpdate.model_validate_json(update.model_dump_json()))
         logs = tuple(node.combat_log for group in update.lineages for node in group.events
             if node.combat_log is not None)
         assert update.combat_log_appends == ()
@@ -116,8 +119,7 @@ def test_unidentified_immunity_requires_native_occurrence_perception(perceived):
             assert source.name not in logs[0].compact
         else:
             assert update.lineages == ()
-            assert audiences[seat].latest == before
-        assert reduce_operation(before, PlayerUpdate.model_validate_json(update.model_dump_json())) == audiences[seat].latest
+            assert replayed == before
     finally:
         close_session(session)
         reset_engine_runtime()

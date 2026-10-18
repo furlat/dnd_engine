@@ -5,7 +5,7 @@ import pytest
 from dnd.actions_functional import get_available_actions, preview_available_selection, register_spell
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.entity import Entity
-from dnd.player.choice_projection import capture_choices, project_selection_preview
+from dnd.player.choice_projection import project_choices, project_selection_preview
 from dnd.player.choices import PlayerChoices, PlayerSelectionPreview
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import ChainLightning, MagicMissile
@@ -32,9 +32,8 @@ def discover(scene, spell, behavior):
     register_spell(caster, spell)
     Entity.update_all_entities_senses(max_distance=300)
     native = get_available_actions(caster, include_aoe_preview=False)
-    retained, projected = capture_choices(native, caster.position)
-    compact = PlayerChoices.model_validate_json(projected.model_dump_json())
-    native_row = next(row for row in retained.all_actions if row.behavior_id == behavior)
+    compact = PlayerChoices.model_validate_json(project_choices(native, caster.position).model_dump_json())
+    native_row = next(row for row in native.all_actions if row.behavior_id == behavior)
     compact_row = next(row for row in (*compact.entity_actions, *compact.position_actions)
         if row.template_name == native_row.template_name)
     assert [native_value(compact, binding) for binding in compact.target_sets[compact_row.target_set]] == [
@@ -48,8 +47,8 @@ def test_chain_primary_scoped_branch_keeps_distant_recipient_and_object_identity
     primary = compact.target_sets[row.target_set]
     assert beyond.uuid not in {compact.subjects[binding.subject].uuid for binding in primary}
     far_binding = next(binding for binding in primary if compact.subjects[binding.subject].uuid == far.uuid)
-    branches = compact.target_sets[far_binding.secondary_set]
-    assert beyond.uuid in {compact.subjects[binding.subject].uuid for binding in branches}
+    # Secondaries are picked on demand (plan §14.4): the selected primary's preview offers
+    # the distant recipient the caster perceives, though it is no primary itself.
     object_binding = next(binding for binding in primary if compact.subjects[binding.subject].uuid == item.uuid)
     assert compact.subjects[object_binding.subject].kind == 'object'
     caster = scene[0]
@@ -58,6 +57,7 @@ def test_chain_primary_scoped_branch_keeps_distant_recipient_and_object_identity
     preview = PlayerSelectionPreview.model_validate_json(project_selection_preview(expected).model_dump_json())
     assert [native_value(preview, target) for target in preview.target_sets[preview.next_target_set]] == [
         target.model_dump() for target in expected.next_targets]
+    assert beyond.uuid in {target.target_uuid for target in expected.next_targets}
 
 
 def test_repeated_missiles_preserve_fill_primary_and_ordered_preview(scene):

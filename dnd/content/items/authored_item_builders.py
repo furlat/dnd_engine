@@ -24,7 +24,7 @@ from dnd.core.events import (
     Range,
     RangeType,
 )
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.content.items.authored_item_definitions import (
     ACOLYTE_GEAR_DEFINITIONS,
     CHEST_DEFINITIONS,
@@ -69,6 +69,8 @@ from dnd.content.items.trap_hardware_builders import TRAP_HARDWARE_PROFILES, bui
 from dnd.content.items.ground_hardware_builders import GROUND_HARDWARE_PROFILES, build_ground_hardware
 from dnd.content.items.world_prop_builders import WORLD_PROP_PROFILES, build_world_prop
 from dnd.extensions.field_focus import build_field_kit
+from dnd.items.created_items import build_goodberry
+from dnd.items.divine_rewards import build_devotees_mace
 from dnd.items.consumables import (
     build_basic_poison_weapon_coat,
     build_concentration_fire_weapon_coat,
@@ -166,15 +168,15 @@ def _build_weapon(
             normal=definition.normal_range_feet,
             long=definition.long_range_feet,
         ),
-        attack_bonus=ModifiableValue.create(
+        attack_bonus=ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=definition.attack_bonus,
-            value_name="Attack Bonus",
+            base=definition.attack_bonus,
+            name="Attack Bonus",
         ),
-        damage_bonus=ModifiableValue.create(
+        damage_bonus=ModifiableValue(
             source_entity_uuid=source_entity_uuid,
-            base_value=definition.damage_bonus,
-            value_name="Damage Bonus",
+            base=definition.damage_bonus,
+            name="Damage Bonus",
         ),
         extra_damage_dices=[packet.die for packet in packets],
         extra_damage_dices_numbers=[packet.count for packet in packets],
@@ -182,21 +184,19 @@ def _build_weapon(
         extra_damage_type=[packet.damage_type for packet in packets],
     )
     if definition.attack_disadvantage:
-        weapon.attack_bonus.self_static.add_advantage_modifier(
-            AdvantageModifier(
+        add_modifier(weapon.attack_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
                 source_entity_uuid=source_entity_uuid,
                 name="Rusty Blade",
                 value=AdvantageStatus.DISADVANTAGE,
-            ),
-        )
+            ))
     return weapon
 
 
 def _armor_value(source_entity_uuid: UUID, name: str, value: int) -> ModifiableValue:
-    return ModifiableValue.create(
+    return ModifiableValue(
         source_entity_uuid=source_entity_uuid,
-        base_value=value,
-        value_name=name,
+        base=value,
+        name=name,
     )
 
 
@@ -349,6 +349,12 @@ def _single_item_builder(
     return build
 
 
+def _build_goodberry(source_entity_uuid: UUID,quantity: int=1) -> BaseItem:
+    if quantity!=1:
+        raise ValueError("Individual goodberries retain exact UUIDs")
+    return build_goodberry(source_entity_uuid)
+
+
 def _build_healing_potion(
     source_entity_uuid: UUID,
     quantity: int = 1,
@@ -492,6 +498,8 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
         for item_id, definition in STATIC_BLOCKER_DEFINITIONS.items()
     },
     "consumable.healing_potion": _build_healing_potion,
+    "weapon.devotees_mace": _single_item_builder("weapon.devotees_mace",build_devotees_mace),
+    "consumable.goodberry": _build_goodberry,
     "consumable.potion_haste": _single_item_builder(
         "consumable.potion_haste", build_haste_potion,
     ),

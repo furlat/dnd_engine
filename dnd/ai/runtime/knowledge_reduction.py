@@ -1,7 +1,8 @@
 """Assignment knowledge reduced from recorded source facts, without world queries."""
 
 from dataclasses import dataclass, field, replace
-from collections.abc import Iterable
+from collections.abc import Iterable, Set as AbstractSet
+from typing import TypeVar
 from uuid import UUID
 
 from dnd.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact, condition_fact
@@ -20,7 +21,12 @@ from dnd.core.events import (
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import ResistanceStatus
 from dnd.types.actor_facts import ActorState, ConditionFact
-from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
+import numpy as np
+
+from dnd.core.cells import mask_array, mask_difference, mask_intersection, mask_positions, mask_union
+from dnd.core.sensory_fold import apply_current_senses, prepare_sensory_delta
+from dnd.types.cells import CellMask, cell_in, no_cells
+from dnd.types.senses import SensesSnapshot
 from dnd.world_facts import WorldFacts, apply_world_fact, world_event_positions
 
 
@@ -72,6 +78,71 @@ def project_actor(actor: ActorState, observers: list[str], *, controlled: bool,
     )
 
 
+Key = TypeVar("Key")
+# Observer row lists in the order of `_snapshot_moves`.
+OBSERVER_VIEWS = ("visible_cells", "seen_cells", "visible_entity_uuids", "visible_object_uuids")
+
+
+def _move_observer(index: dict[Key, set[str]], observer: str, left: AbstractSet[Key], came: AbstractSet[Key]) -> None:
+    """Keep one inverted index of an observer's snapshot in step: drop the keys it left, add those it gained."""
+    for key in left - came:
+        if (observers := index.get(key)) is not None:
+            observers.discard(observer)
+            if not observers:
+                del index[key]
+    for key in came - left:
+        index.setdefault(key, set()).add(observer)
+
+
+def _observer_view(senses: SensesSnapshot, view: str) -> list:
+    """One sorted view list of an observer row (`OBSERVER_VIEWS`)."""
+    match view:
+        case "visible_cells":
+            return mask_positions(senses.visible)
+        case "seen_cells":
+            return mask_positions(senses.seen)
+        case "visible_entity_uuids":
+            return sorted(str(identity) for identity in senses.entities)
+        case "visible_object_uuids":
+            return sorted(str(identity) for identity in senses.objects)
+    raise ValueError(f"Unknown observer view {view}")
+
+
+def _cell_observers(senses: dict[UUID, SensesSnapshot], positions: Iterable[tuple[int, int]], *,
+                    seen: bool) -> dict[tuple[int, int], list[str]]:
+    """Per position, the observers (sorted uuid strings) whose visible (or seen) cells hold it."""
+    cells = list(positions)
+    result: dict[tuple[int, int], list[str]] = {position: [] for position in cells}
+    if not cells:
+        return result
+    xs, ys = np.array(cells, dtype=np.int64).T
+    box = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
+    for observer in sorted(senses, key=str):
+        snapshot = senses[observer]
+        hits = mask_array(snapshot.seen if seen else snapshot.visible, box)[xs - box[0], ys - box[1]]
+        for index in np.flatnonzero(hits).tolist():
+            result[cells[index]].append(str(observer))
+    return result
+
+
+def _snapshot_moves(before: SensesSnapshot, event: SensoryUpdateEvent
+                    ) -> tuple[tuple[CellMask, CellMask], CellMask, tuple[set, set], tuple[set, set]]:
+    """The visible cells left and gained, the seen cells gained, and the entity and object
+    keys left and gained, read before the delta applies."""
+    added = event.visible_cells_added
+    entities, objects = before.entities, before.objects
+    changed_entities, changed_objects = event.entity_contacts_changed, event.object_contacts_changed
+    return (
+        (mask_difference(mask_intersection(event.visible_cells_removed, before.visible), added),
+         mask_difference(added, before.visible)),
+        mask_difference(event.seen_cells_added, before.seen),
+        ({identity for identity in event.entity_contacts_removed if identity in entities and identity not in changed_entities},
+         {identity for identity in changed_entities if identity not in entities}),
+        ({identity for identity in event.object_contacts_removed if identity in objects and identity not in changed_objects},
+         {identity for identity in changed_objects if identity not in objects}),
+    )
+
+
 @dataclass(slots=True)
 class AIKnowledge:
     """One assignment's current recorded facts and observer-attributed memory."""
@@ -87,9 +158,23 @@ class AIKnowledge:
     known_tiles: dict[str, ObservationTileFact] = field(default_factory=dict)
     pending_conditions: dict[UUID, dict[UUID, ConditionFact]] = field(default_factory=dict)
     open_events: dict[UUID, Event] = field(default_factory=dict)
+    # Inverted contact views of `senses` (observer uuid strings), updated where a snapshot changes;
+    # cells are read from the snapshots' packed sets (`_cell_observers`).
+    entity_index: dict[UUID, set[str]] = field(default_factory=dict)
+    object_index: dict[UUID, set[str]] = field(default_factory=dict)
+    dirty_observers: set[UUID] = field(default_factory=set)
+    # The sorted view lists of a dirty observer whose keys changed since its row was projected.
+    observer_changes: dict[UUID, set[str]] = field(default_factory=dict)
+    # Visible tiles touched since their last projection; projected once, when they stop
+    # being visible or when consumption ends (a visible tile's row is a pure projection).
+    dirty_tiles: set[tuple[int, int]] = field(default_factory=set)
 
     def consume(self, rows: Iterable[tuple[int, Event, ConditionFact | None]]) -> None:
-        """Apply an exact recorded prefix; context/decision authority stays outside."""
+        """Apply an exact recorded prefix; context/decision authority stays outside.
+
+        Observer rows are pure projections of the current snapshot, read only
+        after consumption: each touched observer is projected once, at the end.
+        """
         for index, event, condition in rows:
             if index != self.source_cursor:
                 raise ValueError("AI source facts must be contiguous and ordered")
@@ -99,6 +184,12 @@ class AIKnowledge:
                 self._apply(event, condition if condition is not None else condition_fact(event, source_index=index))
             if event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL):
                 self.open_events.pop(event.lineage_uuid, None)
+        for identity in self.dirty_observers:
+            self._refresh_observer(identity)
+        self.dirty_observers.clear()
+        for position, observers in _cell_observers(self.senses, self.dirty_tiles, seen=False).items():
+            self._project_visible_tile(position, observers)
+        self.dirty_tiles.clear()
 
     def _apply(self, event: Event, condition: ConditionFact | None) -> None:
         if isinstance(event, EntityCreatedEvent):
@@ -109,7 +200,7 @@ class AIKnowledge:
             self.actors[event.entity_uuid] = replace(actor, conditions=tuple(conditions.values()))
             self._refresh_entity(event.entity_uuid)
             if event.entity_uuid in self.senses:
-                self._refresh_observer(event.entity_uuid)
+                self.dirty_observers.add(event.entity_uuid)
 
         owner = actor_fact_owner(event)
         if owner is not None:
@@ -130,6 +221,22 @@ class AIKnowledge:
             self._refresh_world(positions, objects)
 
         if isinstance(event, SensoryUpdateEvent) and event.observer_uuid in self.controlled_entity_uuids:
+            observer = str(event.observer_uuid)
+            before = self.senses.get(event.observer_uuid)
+            prepared = prepare_sensory_delta(event.observer_uuid, before, event)
+            # The delta names everything it moves; the owned snapshot advances in place.
+            moves = _snapshot_moves(before, event) if before is not None and not event.initial else None
+            if before is not None and self.dirty_tiles:
+                # A tile nobody else sees stops being visible here: its remembered row is its
+                # projection at its last visible touch, which is now (before ancestor facts).
+                left_visible = (moves[0][0] if moves is not None
+                                else mask_difference(before.visible, event.visible_cells_added))
+                leaving = [position for position in self.dirty_tiles if cell_in(left_visible, position)]
+                for position, observers in _cell_observers(self.senses, leaving, seen=False).items():
+                    if set(observers) <= {observer}:
+                        self._project_visible_tile(position, observers)
+                        self.dirty_tiles.discard(position)
+            after = apply_current_senses(before if moves is not None else None, event, prepared)
             # Spatial owners have committed these after-values before publishing
             # their sensory child, even though the parent terminal version is later.
             parent = event.parent_lineage
@@ -141,20 +248,29 @@ class AIKnowledge:
                         positions.update(affected)
                         objects.update(changed_objects)
                 parent = ancestor.parent_lineage
-            before = self.senses.get(event.observer_uuid)
-            self.senses[event.observer_uuid] = reduce_senses_snapshot(event.observer_uuid, before, event)
-            after = self.senses[event.observer_uuid]
-            self._refresh_observer(event.observer_uuid)
+            self.senses[event.observer_uuid] = after
+            changes = self.observer_changes.setdefault(event.observer_uuid, set())
+            if moves is None:
+                self._reindex(observer, before, after)
+                changes.update(OBSERVER_VIEWS)
+            else:
+                (left_cells, came_cells), seen_cells, entity_moves, object_moves = moves
+                if not (no_cells(left_cells) and no_cells(came_cells)):
+                    changes.add("visible_cells")
+                if not no_cells(seen_cells):
+                    changes.add("seen_cells")
+                for index, view, (left, came) in ((self.entity_index, "visible_entity_uuids", entity_moves),
+                                                  (self.object_index, "visible_object_uuids", object_moves)):
+                    _move_observer(index, observer, left, came)
+                    if left or came:
+                        changes.add(view)
+            self.dirty_observers.add(event.observer_uuid)
             actors = set(event.entity_contacts_changed) | set(event.entity_contacts_removed)
             actors.add(event.observer_uuid)
             objects.update(event.object_contacts_changed)
             objects.update(event.object_contacts_removed)
-            positions.update(event.visible_cells_added)
-            positions.update(event.visible_cells_removed)
-            positions.update(event.seen_cells_added)
-            for key in event.hazardous_cells_changed:
-                x, y = key.split(",", maxsplit=1)
-                positions.add((int(x), int(y)))
+            positions.update(mask_positions(mask_union(event.visible_cells_added, event.visible_cells_removed,
+                event.seen_cells_added, event.hazardous_cells_changed.cells)))
             # A different known boundary provider changes subjective movement
             # sides even if the visible field did not change.
             for identity in objects:
@@ -165,17 +281,21 @@ class AIKnowledge:
             if event.initial:
                 actors.update(after.entities)
                 objects.update(after.objects)
-                positions.update(after.seen)
+                positions.update(mask_positions(after.seen))
             for identity in actors:
                 self._refresh_entity(identity)
             self._refresh_world(positions, objects)
+
+    def _reindex(self, observer: str, before: SensesSnapshot | None, after: SensesSnapshot) -> None:
+        _move_observer(self.entity_index, observer, before.entities.keys() if before else set(), after.entities.keys())
+        _move_observer(self.object_index, observer, before.objects.keys() if before else set(), after.objects.keys())
 
     def _refresh_entity(self, identity: UUID) -> None:
         actor = self.actors.get(identity)
         if actor is None:
             return
-        observer_ids = sorted(str(observer) for observer, senses in self.senses.items()
-                              if observer == identity or identity in senses.entities)
+        observer_ids = sorted(self.entity_index.get(identity, set()) | (
+            {str(identity)} if identity in self.senses else set()))
         controlled = identity in self.controlled_entity_uuids
         if observer_ids or controlled:
             if (own := self.senses.get(identity)) is not None:
@@ -188,22 +308,28 @@ class AIKnowledge:
             self.known_entities[str(identity)] = remember_entity(previous)
 
     def _refresh_observer(self, identity: UUID) -> None:
+        """Project the observer row; a view list is re-sorted only when its keys changed."""
         actor = self.actors.get(identity)
         if actor is None:
             return
         senses = self.senses[identity]
-        self.observers[str(identity)] = ObservationObserverState(
-            observer_uuid=str(identity), entity_name=actor.name, position=senses.position,
-            passive_perception=senses.passive_perception,
-            sense_modes=[{"sense_type": mode.sense_type.value, "range_feet": mode.range_feet} for mode in senses.sense_modes],
-            visible_cells=sorted(senses.visible), seen_cells=sorted(senses.seen),
-            visible_entity_uuids=sorted(str(key) for key in senses.entities),
-            visible_object_uuids=sorted(str(key) for key in senses.objects),
-        )
+        key = str(identity)
+        previous = self.observers.get(key)
+        changes = self.observer_changes.pop(identity, set())
+        values = {"entity_name": actor.name, "position": senses.position,
+            "passive_perception": senses.passive_perception,
+            "sense_modes": [{"sense_type": mode.sense_type.value, "range_feet": mode.range_feet}
+                            for mode in senses.sense_modes]}
+        if previous is None:
+            self.observers[key] = ObservationObserverState(observer_uuid=key,
+                **values, **{view: _observer_view(senses, view) for view in OBSERVER_VIEWS})
+        else:
+            values.update((view, _observer_view(senses, view)) for view in changes)
+            self.observers[key] = previous.model_copy(update=values)
 
     def _refresh_world(self, positions: set[tuple[int, int]], objects: set[UUID]) -> None:
         for identity in objects:
-            observers = sorted(str(observer) for observer, senses in self.senses.items() if identity in senses.objects)
+            observers = sorted(self.object_index.get(identity, ()))
             if observers:
                 contact = self.senses[UUID(observers[0])].objects[identity]
                 fact = project_object(self.world, identity, contact.position, observers)
@@ -213,19 +339,24 @@ class AIKnowledge:
                 self.known_objects[str(identity)] = prior.model_copy(update={
                     "knowledge_state": KnowledgeState.REMEMBERED, "observer_uuids": [],
                 })
-        for position in positions:
-            visible = sorted(str(observer) for observer, senses in self.senses.items() if position in senses.visible)
-            seen = sorted(str(observer) for observer, senses in self.senses.items() if position in senses.seen)
+        visible = _cell_observers(self.senses, positions, seen=False)
+        unseen = [position for position in positions if not visible[position]]
+        seen_by = _cell_observers(self.senses, unseen, seen=True)
+        self.dirty_tiles.update(position for position in positions if visible[position])
+        for position in unseen:
+            seen = seen_by[position]
             key = f"{position[0]},{position[1]}"
-            if visible:
-                self.known_tiles[key] = project_tile(self.world, position, visible, self.senses)
-            elif (prior := self.known_tiles.get(key)) is not None:
+            if (prior := self.known_tiles.get(key)) is not None:
                 self.known_tiles[key] = prior.model_copy(update={"knowledge_state": KnowledgeState.SEEN, "observer_uuids": seen})
             elif seen:
                 self.known_tiles[key] = ObservationTileFact(
                     key=key, position=position, knowledge_state=KnowledgeState.SEEN,
                     observer_uuids=seen, adjacent_domain=adjacent_domain(self.world, position),
                 )
+
+    def _project_visible_tile(self, position: tuple[int, int], observers: list[str]) -> None:
+        if observers:
+            self.known_tiles[f"{position[0]},{position[1]}"] = project_tile(self.world, position, observers, self.senses)
 
     def _event_objects(self, event: Event) -> set[UUID]:
         match event:

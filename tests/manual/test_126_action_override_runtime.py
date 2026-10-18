@@ -79,6 +79,7 @@ from tests.engine.support import (
     remove_spell_attack_modifier,
     reset_combat_state,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def reset_override_state(width: int = 12, height: int = 6) -> None:
@@ -214,14 +215,12 @@ def force_save_result(
 ) -> None:
     """Make a non-natural-1/non-natural-20 save deterministic."""
     saving_throw = entity.saving_throws.get_saving_throw(ability_name)
-    saving_throw.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(saving_throw.bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             name=f"Override test {ability_name} save",
             value=100 if succeeds else -100,
-        )
-    )
+        ))
 
 
 def sorcery_point_cost(amount: int = 2) -> Cost:
@@ -496,10 +495,10 @@ def test_extra_resource_cost_gates_discovery_execution_and_is_consumed() -> None
     )
 
     assert not template.check_costs()
-    assert len(template.generate_variants(caster)) == 1
+    assert len(template.discovery_forms(caster.action_scan(subjective=True))) == 1
     assert [
         cost.name
-        for cost in template.generate_variants(caster)[0].effective_costs
+        for cost in template.discovery_forms(caster.action_scan(subjective=True))[0].effective_costs
         if cost.resource_name == "sorcery_points"
     ] == ["Sorcery Points"]
     unaffordable = find_action(caster, "Fire Bolt")
@@ -559,7 +558,7 @@ def test_generated_upcast_variant_checks_and_consumes_extra_resource_once() -> N
         recharge_type=RechargeType.LONG_REST,
     )
 
-    unaffordable_variant = template.generate_variants(caster)[0]
+    unaffordable_variant = template.discovery_forms(caster.action_scan(subjective=True))[0]
     assert not unaffordable_variant.check_costs()
     assert len(
         [

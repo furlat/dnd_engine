@@ -37,51 +37,46 @@ def require(condition: bool, message: str) -> None:
 
 def check_hud(value: dict | None, controlled: set[str]) -> None:
     if value is not None:
-        require({row['actor_uuid'] for row in value['sheets']} <= controlled,
-            'HUD includes a character sheet outside seat control')
+        require({row['actor_uuid'] for row in value['sheets']} <= controlled
+            and set(value['sheet_order'] or ()) <= controlled, 'HUD includes a character sheet outside seat control')
 
 
 def record_log(entry: dict, digest: Any, counts: Counter) -> None:
     counts['log:' + entry['entry_type']] += 1
     text = {key: entry[key] for key in ('entry_type', 'source_name', 'target_name', 'compact', 'verbose', 'detailed', 'success')}
     digest.update(json.dumps(text, sort_keys=True, separators=(',', ':')).encode())
-    for child in entry['sub_entries']:
-        record_log(child, digest, counts)
 
 
-def check_group(group: dict, controlled: set[str], events: dict[str, int], lineages: set[str], counts: Counter, logs: Any) -> None:
+def check_group(group: dict, controlled: set[str], events: set[int], lineages: set[int], counts: Counter, logs: Any) -> None:
     nodes = group.get('events', group.get('nodes', []))
-    rows = group['version_rows']
+    # Schema 15: the version columns, and a node's default-valued fields left out.
+    occurrences = group['version_rows']['occurrences']
     start = group.get('start_cursor', 0)
-    require([row['source_index'] for row in rows] == list(range(start, group['end_cursor'])), 'Occurrence coordinates are not dense')
-    for row in rows:
-        identity, position = row['event_uuid'], row['source_index']
-        require(identity not in events or events[identity] == position, 'Occurrence identity changed public coordinate')
-        events[identity] = position
-        lineages.add(row['lineage_uuid'])
+    require(occurrences == list(range(start, group['end_cursor'])), 'Occurrence coordinates are not dense')
+    for occurrence, lineage in zip(occurrences, group['version_rows']['lineages'], strict=True):
+        require(occurrence not in events, 'Occurrence admitted twice')
+        events.add(occurrence)
+        lineages.add(lineage)
+    resolutions = group.get('resolutions', [])
     for node in nodes:
-        if node['combat_log'] is not None:
+        if node.get('combat_log') is not None:
             record_log(node['combat_log'], logs, counts)
-        require(node['uuid'] in events, 'Node has no disclosed occurrence')
+        require(node['occurrence'] in events, 'Node has no disclosed occurrence')
         for key in ('parent_event',):
-            require(node[key] is None or node[key] in events, f'Undisclosed {key}')
-        require(node['parent_lineage'] is None or node['parent_lineage'] in lineages, 'Undisclosed parent lineage')
-        require(set(node['children_lineages']) <= lineages, 'Undisclosed child lineage')
-        reference = node['resolution_ref']
-        if reference is not None:
-            require(reference['lineage_uuid'] in lineages, 'Undisclosed resolution owner')
-            counts['application_references' if reference['kind'] == 'application' else 'event_references'] += 1
-        fact = node['fact']
+            require(node.get(key) is None or node[key] in events, f'Undisclosed {key}')
+        require(node.get('parent_lineage') is None or node['parent_lineage'] in lineages, 'Undisclosed parent lineage')
+        require(set(node.get('children_lineages', ())) <= lineages, 'Undisclosed child lineage')
+        if node.get('resolution') is not None:
+            reference = resolutions[node['resolution']]
+            counts['application_references' if reference.get('application_id') is not None else 'event_references'] += 1
+        fact = node.get('fact')
         if fact is None:
             continue
         counts['fact:' + fact['kind']] += 1
-        if fact['kind'] == 'sensory':
-            for change in fact['observed_changes']:
-                require(events.get(change['source_event_uuid']) == change['source_index'], 'Sensory occurrence reference is not closed')
-        if fact['kind'] == 'spatial' and fact['commit_event_uuid'] is not None:
-            require(fact['commit_event_uuid'] in events, 'Spatial commit occurrence is not disclosed')
-        if fact['kind'] == 'equipment' and fact['controlled_items'] is not None:
-            require(fact['source_entity_uuid'] in controlled, 'Foreign equipment exposes private inventory')
+        if fact['kind'] == 'spatial' and fact['commit_occurrence'] is not None:
+            require(fact['commit_occurrence'] in events, 'Spatial commit occurrence is not disclosed')
+        if fact['kind'] == 'equipment':
+            check_body(fact['source_entity_uuid'], fact['changes'], fact['items'], controlled)
         if fact['kind'] == 'damage' and fact['stage'] == 'applied':
             counts['applied_damage'] += 1
         if fact['kind'] == 'turn' and fact['event_type'] == 'encounter_end':
@@ -91,21 +86,27 @@ def check_group(group: dict, controlled: set[str], events: dict[str, int], linea
             if fact['application']['index'] > 0:
                 counts['nonfirst_spell_applications'] += 1
     for observation in group['observations']:
-        require(observation['event_uuid'] in events, 'Observation references an undisclosed occurrence')
-        actor = observation['actor']
-        if actor['controlled_items'] is not None:
-            require(actor['uuid'] in controlled, 'Foreign observation exposes private inventory')
+        require(observation['occurrence'] in events, 'Observation references an undisclosed occurrence')
+        check_body(observation['actor_uuid'], observation['changes'], observation['items'], controlled)
     for update in group['world_updates']:
-        require(update['event_uuid'] in events, 'World update references an undisclosed occurrence')
-    check_hud(group.get('hud_snapshot'), controlled)
+        require(update['occurrence'] in events, 'World update references an undisclosed occurrence')
+    check_hud(group.get('hud'), controlled)
+
+
+def check_body(actor_uuid: str, changes: dict, items: list, controlled: set[str]) -> None:
+    """A foreign body discloses no inventory, and only the look of its equipped items."""
+    if actor_uuid in controlled:
+        return
+    require(changes.get('controlled_items') is None, 'Foreign body patch exposes private inventory')
+    require(all(row['profile'] is None and row['state'] is None for row in items), 'Foreign item patch exposes private fields')
 
 
 def replay_stream(directory: Path) -> dict[str, Any]:
     paths = records(directory)
     require(bool(paths), 'No numbered public records')
     metadata = json.loads((directory / 'result.json').read_bytes())
-    events: dict[str, int] = {}
-    lineages: set[str] = set()
+    events: set[int] = set()
+    lineages: set[int] = set()
     counts: Counter = Counter()
     state: PlayerState | None = None
     scope: dict = {}

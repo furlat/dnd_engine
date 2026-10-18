@@ -4,7 +4,7 @@ Reusable functions for setting up combat scenarios, forcing attack outcomes,
 and managing encounters for integration tests.
 """
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 
 from dnd.entity import Entity
@@ -21,6 +21,8 @@ from dnd.core.modifiers import (
     AutoHitStatus,
 )
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier
+from dnd.core.navigation import Routes, route_costs, route_items
 
 
 def create_test_entity(
@@ -93,7 +95,7 @@ def force_attack_hit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid
     )
-    mod_uuid = entity.equipment.melee_attack_bonus.self_static.add_auto_hit_modifier(modifier)
+    mod_uuid = add_modifier(entity.equipment.melee_attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, modifier)
     return mod_uuid
 
 
@@ -113,7 +115,7 @@ def force_attack_miss(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid
     )
-    mod_uuid = entity.equipment.melee_attack_bonus.self_static.add_auto_hit_modifier(modifier)
+    mod_uuid = add_modifier(entity.equipment.melee_attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, modifier)
     return mod_uuid
 
 
@@ -133,7 +135,7 @@ def force_attack_crit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid
     )
-    mod_uuid = entity.equipment.melee_attack_bonus.self_static.add_critical_modifier(modifier)
+    mod_uuid = add_modifier(entity.equipment.melee_attack_bonus, Channel.SELF_STATIC, Kind.CRITICAL, modifier)
     return mod_uuid
 
 
@@ -153,7 +155,7 @@ def force_spell_attack_hit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid
     )
-    mod_uuid = entity.spellcasting.spell_attack_bonus.self_static.add_auto_hit_modifier(modifier)
+    mod_uuid = add_modifier(entity.spellcasting.spell_attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, modifier)
     return mod_uuid
 
 
@@ -174,7 +176,7 @@ def force_spell_attack_crit(entity: Entity) -> UUID:
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid
     )
-    mod_uuid = entity.spellcasting.spell_attack_bonus.self_static.add_critical_modifier(modifier)
+    mod_uuid = add_modifier(entity.spellcasting.spell_attack_bonus, Channel.SELF_STATIC, Kind.CRITICAL, modifier)
     return mod_uuid
 
 
@@ -186,7 +188,7 @@ def remove_spell_attack_modifier(entity: Entity, modifier_uuid: UUID):
         entity: The entity with the modifier
         modifier_uuid: UUID returned from force_spell_attack_* function
     """
-    entity.spellcasting.spell_attack_bonus.self_static.remove_modifier(modifier_uuid)
+    remove_modifier(entity.spellcasting.spell_attack_bonus, modifier_uuid, Channel.SELF_STATIC)
 
 
 def remove_attack_modifier(entity: Entity, modifier_uuid: UUID):
@@ -197,7 +199,7 @@ def remove_attack_modifier(entity: Entity, modifier_uuid: UUID):
         entity: The entity with the modifier
         modifier_uuid: UUID returned from force_attack_* function
     """
-    entity.equipment.melee_attack_bonus.self_static.remove_modifier(modifier_uuid)
+    remove_modifier(entity.equipment.melee_attack_bonus, modifier_uuid, Channel.SELF_STATIC)
 
 
 def run_turn_until_end(encounter: Encounter, entity: Entity):
@@ -264,7 +266,7 @@ def get_hp(entity: Entity) -> int:
 def get_max_hp(entity: Entity) -> int:
     """Get the maximum HP of an entity."""
 
-    con_mod = entity.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+    con_mod = entity.ability_scores.get_ability("constitution").modifier_reading().normalized_score
     base_max = entity.health.get_max_hit_dices_points(constitution_modifier=con_mod)
     bonus = entity.health.max_hit_points_bonus.normalized_score
     return base_max + bonus
@@ -282,13 +284,11 @@ def set_hp(entity: Entity, hp: int):
     max_hp = get_max_hp(entity)
     if hp > max_hp:
 
-        entity.health.max_hit_points_bonus.self_static.add_value_modifier(
-            NumericalModifier.create(
+        add_modifier(entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                 source_entity_uuid=entity.uuid,
                 name="Test HP Boost",
                 value=hp - max_hp
-            )
-        )
+            ))
 
     current = entity.get_hp()
     if hp < current:
@@ -383,3 +383,20 @@ __all__ = [
     "get_save_natural_roll",
     "print_combat_state",
 ]
+
+
+def admitted_in_discovery(action) -> bool:
+    """The one discovery admission (plan §14.3b): the action's own selection on its actor's perceived scan."""
+    actor = Entity.get(action.source_entity_uuid)
+    return actor is not None and action.discovery_error(
+        actor.action_scan(subjective=True), action.current_selection()) is None
+
+
+def route_paths(routes: Routes) -> Dict[Tuple[int, int], List[Tuple[int, int]]]:
+    """Each destination's chosen path, in route order (the dict form assertions compare)."""
+    return dict(route_items(routes))
+
+
+def search_tables(routes: Routes) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
+    """A search's reached cells as (cost in movement units, path) by cell, in the order it found them."""
+    return ({position: feet // 5 for position, feet in route_costs(routes)}, route_paths(routes))

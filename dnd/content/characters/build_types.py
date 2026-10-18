@@ -57,6 +57,8 @@ class CharacterBuild:
     species_variant: SpeciesVariant | None = None
     origin_choices: tuple[OriginChoiceSelection, ...] = ()
     prepared_spells: tuple[PreparedSpellSelection, ...] = ()
+    scribed_spell_ids: tuple[str, ...] = ()
+    permanent_feature_uses: tuple[str, ...] = ()
     feature_toggles: tuple[FeatureToggleSelection, ...] = ()
     character_body_id: str = CHARACTER_BODY_ID
     description: str = "Direct player character"

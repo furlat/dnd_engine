@@ -11,6 +11,7 @@ from dnd.types.character_progression import (
     CharacterSubclass,
 )
 from dnd.core.progression import FULL_CASTER_SPELL_SLOTS
+from dnd.types.class_spells import CLERIC_SPELL_RANKS, PALADIN_SPELL_RANKS, WIZARD_SPELL_RANKS
 
 
 FIGHTER_FIGHTING_STYLES = (
@@ -222,6 +223,15 @@ SORCERER_ANCESTRY_DAMAGE_TYPES: Mapping[str, str] = MappingProxyType({
     "class_feature.sorcerer.draconic_ancestry.white": "cold",
 })
 SORCERER_SPELL_RANKS: Mapping[str, int] = MappingProxyType({
+    "spell.charm_monster": 4,
+    "spell.vitriolic_sphere": 4,
+    "spell.delayed_blast_fireball": 7,
+    "spell.ray_of_sickness": 1,
+    "spell.sorcerous_burst": 0,
+    "spell.dancing_lights": 0,
+    "spell.phantasmal_force": 2,
+    "spell.chromatic_orb": 1,
+    "spell.dragons_breath": 2,
     "spell.acid_splash": 0,
     "spell.chill_touch": 0,
     "spell.fire_bolt": 0,
@@ -803,7 +813,10 @@ def next_class_level(class_id: CharacterClass, applied_levels: tuple[AppliedClas
     count = sum(row.class_id is class_id for row in applied_levels) + 1
     subclass = (CharacterSubclass.DRACONIC_BLOODLINE if class_id is CharacterClass.SORCERER
                 else CharacterSubclass.CHAMPION if class_id is CharacterClass.FIGHTER and count >= 3
-                else CharacterSubclass.BERSERKER if class_id is CharacterClass.BARBARIAN and count >= 3 else None)
+                else CharacterSubclass.BERSERKER if class_id is CharacterClass.BARBARIAN and count >= 3
+                else CharacterSubclass.LIFE_DOMAIN if class_id is CharacterClass.CLERIC
+                else CharacterSubclass.OATH_OF_DEVOTION if class_id is CharacterClass.PALADIN
+                else CharacterSubclass.SCHOOL_OF_EVOCATION if class_id is CharacterClass.WIZARD and count>=2 else None)
     return AppliedClassLevel(step_id=f"{class_id.value}.level_{count}",
         character_level=len(applied_levels)+1, class_id=class_id,
         resulting_class_level=count, subclass_id=subclass)
@@ -824,6 +837,10 @@ def class_level_choices(level: AppliedClassLevel, *, first_class: bool) -> tuple
         case CharacterClass.SORCERER:
             starting, skills = SORCERER_STARTING_EQUIPMENT, SORCERER_CLASS_SKILLS
             rows = (*SORCERER_DEFINITION.levels[rank].choices, *SORCERER_DEFINITION.draconic_levels[rank].choices)
+        case CharacterClass.CLERIC | CharacterClass.PALADIN | CharacterClass.WIZARD:
+            definition = prepared_class_definition(level.class_id)
+            starting, skills = definition.starting_equipment, definition.class_skills
+            rows = (*definition.levels[rank].choices,*definition.subclass_levels[rank].choices)
     if first_class:
         prefix = level.class_id.value
         rows = (ClassChoiceDefinition(f"{prefix}.first_class.starting_equipment", (1,), starting),
@@ -899,14 +916,14 @@ def resolve_fighter_level(
     style = choices[style_choice_id][0] if style_choice_id is not None else None
     if style is not None:
         prior_styles = {
-            value
-            for row in fighter_levels
+            value.rsplit(".", 1)[1]
+            for row in applied_levels
             for choice in row.choices
             if choice.choice_id.endswith("fighting_style")
             for value in choice.values
         }
-        if style in prior_styles:
-            raise ValueError("a Fighter cannot select the same fighting style twice")
+        if style.rsplit(".", 1)[1] in prior_styles:
+            raise ValueError("Equivalent fighting style already owned")
 
     ability_increases: tuple[tuple[AbilityName, int], ...] = ()
     feat_id: str | None = None
@@ -1258,7 +1275,7 @@ __all__ = [
     "BARBARIAN_DEFINITION",
     "BARBARIAN_RETIRED_DECLARATION_IDS",
     "BARBARIAN_STARTING_EQUIPMENT",
-    "BarbarianDefinition",
+    "BarbarianDefinition", "PreparedClassDefinition", "ResolvedPreparedClassLevel", "CLERIC_DEFINITION", "PALADIN_DEFINITION", "WIZARD_DEFINITION", "resolve_cleric_level", "resolve_paladin_level", "resolve_wizard_level", "prepared_class_definition",
     "CHARACTER_RETIRED_DECLARATION_IDS",
     "ClassChoiceDefinition",
     "ClassLevelDefinition",
@@ -1289,3 +1306,488 @@ __all__ = [
     "resolve_fighter_level",
     "resolve_sorcerer_level",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedClassDefinition:
+    """Cold class data shared by three explicitly authored prepared casters."""
+
+    class_id: CharacterClass
+    subclass_id: CharacterSubclass
+    subclass_level: int
+    hit_die: int
+    first_class_proficiencies: tuple[str, ...]
+    multiclass_proficiencies: tuple[str, ...]
+    saving_throws: tuple[AbilityName, ...]
+    class_skills: tuple[SkillName, ...]
+    starting_equipment: tuple[str, ...]
+    spellcasting_ability: AbilityName
+    spellcasting_level: int
+    spell_ranks: Mapping[str, int]
+    levels: tuple[ClassLevelDefinition, ...]
+    subclass_levels: tuple[ClassLevelDefinition, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedPreparedClassLevel:
+    """Validated native contributions for a Cleric, Paladin or Wizard row."""
+
+    level: AppliedClassLevel
+    first_class_entry: bool
+    proficiencies: tuple[str, ...]
+    saving_throws: tuple[AbilityName, ...]
+    skills: tuple[SkillName, ...]
+    starting_equipment_id: str | None
+    cantrip_ids: tuple[str, ...]
+    spell_ids: tuple[str, ...]
+    fighting_style_id: str | None
+    ability_increases: tuple[tuple[AbilityName, int], ...]
+    feat_id: str | None
+    feature_ids: tuple[str, ...]
+    maximum_spell_rank: int
+    mastery_spell_ids: tuple[str, ...] = ()
+    signature_spell_ids: tuple[str, ...] = ()
+
+
+PALADIN_FIGHTING_STYLES = (
+    "class_feature.paladin.fighting_style.defense",
+    "class_feature.paladin.fighting_style.dueling",
+    "class_feature.paladin.fighting_style.great_weapon_fighting",
+    "class_feature.paladin.fighting_style.protection",
+)
+_PREPARED_ASI_LEVELS = (4, 8, 12, 16, 19)
+
+
+def _prepared_choices(
+    class_id: CharacterClass, level: int, ranks: Mapping[str, int]
+) -> tuple[ClassChoiceDefinition, ...]:
+    prefix = f"{class_id.value}.level_{level}"
+    rows = []
+    subclass = {
+        CharacterClass.CLERIC: (1, CharacterSubclass.LIFE_DOMAIN),
+        CharacterClass.PALADIN: (1, CharacterSubclass.OATH_OF_DEVOTION),
+        CharacterClass.WIZARD: (2, CharacterSubclass.SCHOOL_OF_EVOCATION),
+    }[class_id]
+    if level == subclass[0]:
+        rows.append(
+            ClassChoiceDefinition(prefix + ".subclass", (1,), (subclass[1].value,))
+        )
+    if class_id is not CharacterClass.PALADIN and level in (1, 4, 10):
+        rows.append(
+            ClassChoiceDefinition(
+                prefix + ".cantrips",
+                (3 if level == 1 else 1,),
+                tuple(k for k, v in ranks.items() if v == 0),
+            )
+        )
+    if class_id is CharacterClass.WIZARD:
+        rows.append(
+            ClassChoiceDefinition(
+                prefix + ".spellbook",
+                (6 if level == 1 else 2,),
+                tuple(k for k, v in ranks.items() if 1 <= v <= (level + 1) // 2),
+            )
+        )
+        if level == 18:
+            for rank in (1, 2):
+                rows.append(
+                    ClassChoiceDefinition(
+                        prefix + f".mastery_{rank}",
+                        (1,),
+                        tuple(k for k, v in ranks.items() if v == rank),
+                    )
+                )
+        if level == 20:
+            rows.append(
+                ClassChoiceDefinition(
+                    prefix + ".signature",
+                    (2,),
+                    tuple(k for k, v in ranks.items() if v == 3),
+                )
+            )
+    if class_id is CharacterClass.PALADIN and level == 2:
+        rows.append(
+            ClassChoiceDefinition(
+                prefix + ".fighting_style", (1,), PALADIN_FIGHTING_STYLES
+            )
+        )
+    if level in _PREPARED_ASI_LEVELS:
+        rows.append(
+            ClassChoiceDefinition(prefix + ".asi_or_feat", (1, 2), FIGHTER_ASI_VALUES)
+        )
+    return tuple(rows)
+
+
+def _authored_class_levels(
+    class_id: CharacterClass,
+    ranks: Mapping[str, int],
+    features: Mapping[int, tuple[str, ...]],
+) -> tuple[ClassLevelDefinition, ...]:
+    return tuple(
+        ClassLevelDefinition(
+            n, features.get(n, ()), _prepared_choices(class_id, n, ranks)
+        )
+        for n in range(1, 21)
+    )
+
+
+def _subclass_rows(
+    features: Mapping[int, tuple[str, ...]],
+) -> tuple[ClassLevelDefinition, ...]:
+    return tuple(ClassLevelDefinition(n, features.get(n, ())) for n in range(1, 21))
+
+
+CLERIC_DEFINITION = PreparedClassDefinition(
+    class_id=CharacterClass.CLERIC,
+    subclass_id=CharacterSubclass.LIFE_DOMAIN,
+    subclass_level=1,
+    hit_die=8,
+    first_class_proficiencies=(
+        "weapon.simple",
+        "armor.light",
+        "armor.medium",
+        "shield.shield",
+    ),
+    multiclass_proficiencies=("armor.light", "armor.medium", "shield.shield"),
+    saving_throws=("wisdom", "charisma"),
+    class_skills=("history", "insight", "medicine", "persuasion", "religion"),
+    starting_equipment=("starting_equipment.cleric.mace_shield",),
+    spellcasting_ability="wisdom",
+    spellcasting_level=1,
+    spell_ranks=CLERIC_SPELL_RANKS,
+    levels=_authored_class_levels(
+        CharacterClass.CLERIC,
+        CLERIC_SPELL_RANKS,
+        {
+            1: ("class_feature.cleric.spellcasting",),
+            2: (
+                "class_feature.cleric.channel_divinity",
+                "class_feature.cleric.turn_undead",
+            ),
+            5: ("class_feature.cleric.destroy_undead",),
+            6: ("class_feature.cleric.channel_divinity",),
+            10: ("class_feature.cleric.divine_intervention",),
+            18: ("class_feature.cleric.channel_divinity",),
+        },
+    ),
+    subclass_levels=_subclass_rows(
+        {
+            1: (
+                "class_feature.cleric.life_domain",
+                "class_feature.cleric.heavy_armor",
+                "class_feature.cleric.disciple_of_life",
+            ),
+            3: ("class_feature.cleric.domain_spells",),
+            5: ("class_feature.cleric.domain_spells",),
+            7: ("class_feature.cleric.domain_spells",),
+            9: ("class_feature.cleric.domain_spells",),
+            2: ("class_feature.cleric.preserve_life",),
+            6: ("class_feature.cleric.blessed_healer",),
+            8: ("class_feature.cleric.divine_strike",),
+            14: ("class_feature.cleric.divine_strike",),
+            17: ("class_feature.cleric.supreme_healing",),
+        }
+    ),
+)
+PALADIN_DEFINITION = PreparedClassDefinition(
+    class_id=CharacterClass.PALADIN,
+    subclass_id=CharacterSubclass.OATH_OF_DEVOTION,
+    subclass_level=1,
+    hit_die=10,
+    first_class_proficiencies=FIGHTER_FIRST_CLASS_PROFICIENCIES,
+    multiclass_proficiencies=FIGHTER_MULTICLASS_PROFICIENCIES,
+    saving_throws=("wisdom", "charisma"),
+    class_skills=(
+        "athletics",
+        "insight",
+        "intimidation",
+        "medicine",
+        "persuasion",
+        "religion",
+    ),
+    starting_equipment=("starting_equipment.paladin.sword_shield",),
+    spellcasting_ability="charisma",
+    spellcasting_level=2,
+    spell_ranks=PALADIN_SPELL_RANKS,
+    levels=_authored_class_levels(
+        CharacterClass.PALADIN,
+        PALADIN_SPELL_RANKS,
+        {
+            1: (
+                "class_feature.paladin.divine_sense",
+                "class_feature.paladin.lay_on_hands",
+            ),
+            2: (
+                "class_feature.paladin.spellcasting",
+                "class_feature.paladin.divine_smite",
+            ),
+            3: ("class_feature.paladin.divine_health",),
+            4: ("class_feature.paladin.lay_on_hands",),
+            5: ("class_feature.extra_attack",),
+            6: ("class_feature.paladin.aura_of_protection",),
+            10: (
+                "class_feature.paladin.aura_of_courage",
+                "class_feature.paladin.lay_on_hands",
+            ),
+            11: ("class_feature.paladin.improved_divine_smite",),
+            14: ("class_feature.paladin.cleansing_touch",),
+            18: (
+                "class_feature.paladin.aura_of_protection",
+                "class_feature.paladin.aura_of_courage",
+                "class_feature.paladin.aura_of_devotion",
+            ),
+        },
+    ),
+    subclass_levels=_subclass_rows(
+        {
+            1: (
+                "class_feature.paladin.oath_of_devotion",
+                "class_feature.paladin.channel_oath",
+            ),
+            3: (
+                "class_feature.paladin.sacred_weapon",
+                "class_feature.paladin.turn_unholy",
+                "class_feature.paladin.oath_spells",
+            ),
+            5: ("class_feature.paladin.oath_spells",),
+            7: ("class_feature.paladin.aura_of_devotion",),
+            9: ("class_feature.paladin.oath_spells",),
+            13: ("class_feature.paladin.oath_spells",),
+            15: ("class_feature.paladin.purity_of_spirit",),
+            17: ("class_feature.paladin.oath_spells",),
+            20: ("class_feature.paladin.holy_nimbus",),
+        }
+    ),
+)
+WIZARD_DEFINITION = PreparedClassDefinition(
+    class_id=CharacterClass.WIZARD,
+    subclass_id=CharacterSubclass.SCHOOL_OF_EVOCATION,
+    subclass_level=2,
+    hit_die=6,
+    first_class_proficiencies=(
+        "weapon.dagger",
+        "weapon.quarterstaff",
+        "weapon.light_crossbow",
+    ),
+    multiclass_proficiencies=(),
+    saving_throws=("intelligence", "wisdom"),
+    class_skills=(
+        "arcana",
+        "history",
+        "insight",
+        "investigation",
+        "medicine",
+        "religion",
+    ),
+    starting_equipment=("starting_equipment.wizard.quarterstaff",),
+    spellcasting_ability="intelligence",
+    spellcasting_level=1,
+    spell_ranks=WIZARD_SPELL_RANKS,
+    levels=_authored_class_levels(
+        CharacterClass.WIZARD,
+        WIZARD_SPELL_RANKS,
+        {
+            1: (
+                "class_feature.wizard.spellcasting",
+                "class_feature.wizard.arcane_recovery",
+                "class_feature.wizard.spellbook",
+            ),
+            18: ("class_feature.wizard.spell_mastery",),
+            20: ("class_feature.wizard.signature_spells",),
+        },
+    ),
+    subclass_levels=_subclass_rows(
+        {
+            2: (
+                "class_feature.wizard.evocation_savant",
+                "class_feature.wizard.sculpt_spells",
+            ),
+            6: ("class_feature.wizard.potent_cantrip",),
+            10: ("class_feature.wizard.empowered_evocation",),
+            14: ("class_feature.wizard.overchannel",),
+        }
+    ),
+)
+
+
+def prepared_class_definition(class_id: CharacterClass) -> PreparedClassDefinition:
+    match class_id:
+        case CharacterClass.CLERIC:
+            return CLERIC_DEFINITION
+        case CharacterClass.PALADIN:
+            return PALADIN_DEFINITION
+        case CharacterClass.WIZARD:
+            return WIZARD_DEFINITION
+        case _:
+            raise ValueError("Class does not use this prepared-caster definition")
+
+
+def resolve_prepared_class_level(
+    level: AppliedClassLevel,
+    applied_levels: tuple[AppliedClassLevel, ...],
+    *,
+    initial_first_class: bool | None = None,
+    scribed_spell_ids: tuple[str, ...] = (),
+) -> ResolvedPreparedClassLevel:
+    definition = prepared_class_definition(level.class_id)
+    prior = tuple(row for row in applied_levels if row.class_id is level.class_id)
+    n = len(prior) + 1
+    if (
+        level.character_level != len(applied_levels) + 1
+        or level.resulting_class_level != n
+        or level.step_id != f"{level.class_id.value}.level_{n}"
+    ):
+        raise ValueError("Class levels must follow the exact authored order")
+    required_subclass = (
+        definition.subclass_id if n >= definition.subclass_level else None
+    )
+    if level.subclass_id is not required_subclass:
+        raise ValueError("Subclass must match the authored class and selection level")
+    first = (
+        (n == 1 and level.character_level == 1)
+        if initial_first_class is None
+        else initial_first_class
+    )
+    if first and not (n == 1 and level.character_level == 1):
+        raise ValueError("First-class entry requires character level one")
+    requirements = class_level_choices(level, first_class=first)
+    choices = _choice_values(level)
+    if tuple(choices) != tuple(row.choice_id for row in requirements):
+        raise ValueError("Class choices must match the exact authored order")
+    for row in requirements:
+        values = choices[row.choice_id]
+        if len(values) not in row.selections or any(
+            v not in row.allowed_values for v in values
+        ):
+            raise ValueError("Class choice contains illegal selections")
+    prefix = f"{level.class_id.value}.level_{n}"
+    cantrips = choices.get(prefix + ".cantrips", ())
+    spells = choices.get(prefix + ".spellbook", ())
+    prior_spells = {
+        v
+        for row in prior
+        for choice in row.choices
+        if choice.choice_id.endswith((".cantrips", ".spellbook"))
+        for v in choice.values
+    }
+    if prior_spells.intersection((*cantrips, *spells)):
+        raise ValueError(
+            "Class cannot learn the same spell twice through level choices"
+        )
+    increases, feat = ((), None)
+    if n in _PREPARED_ASI_LEVELS:
+        increases, feat = _parse_asi(choices[prefix + ".asi_or_feat"])
+        if feat and any(
+            feat in choice.values for row in applied_levels for choice in row.choices
+        ):
+            raise ValueError("Feat already owned")
+    style = choices.get(prefix + ".fighting_style", ())
+    if style:
+        equivalent = (
+            "class_feature.fighter.fighting_style." + style[0].rsplit(".", 1)[1]
+        )
+        if any(
+            equivalent in choice.values or style[0] in choice.values
+            for row in applied_levels
+            for choice in row.choices
+        ):
+            raise ValueError("Equivalent fighting style already owned")
+    book = prior_spells | set(spells) | set(scribed_spell_ids)
+    mastery = (
+        *choices.get(prefix + ".mastery_1", ()),
+        *choices.get(prefix + ".mastery_2", ()),
+    )
+    signature = choices.get(prefix + ".signature", ())
+    if not set((*mastery, *signature)) <= book:
+        raise ValueError("Mastery/signature choices must be in the Wizard book")
+    features = (
+        *definition.levels[n - 1].feature_ids,
+        *definition.subclass_levels[n - 1].feature_ids,
+        *((style[0],) if style else ()),
+        *((feat,) if feat else ()),
+    )
+    slots = (
+        FULL_CASTER_SPELL_SLOTS[
+            (n + 1) // 2 if level.class_id is CharacterClass.PALADIN else n
+        ]
+        if n >= definition.spellcasting_level
+        else {}
+    )
+    return ResolvedPreparedClassLevel(
+        level=level,
+        first_class_entry=first,
+        proficiencies=(
+            definition.first_class_proficiencies
+            if first
+            else definition.multiclass_proficiencies
+            if n == 1
+            else ()
+        )
+        + (
+            ("armor.heavy",)
+            if level.class_id is CharacterClass.CLERIC and n == 1
+            else ()
+        ),
+        saving_throws=definition.saving_throws if first else (),
+        skills=cast(
+            tuple[SkillName, ...],
+            choices.get(level.class_id.value + ".proficiencies.skills", ()),
+        ),
+        starting_equipment_id=choices[
+            level.class_id.value + ".first_class.starting_equipment"
+        ][0]
+        if first
+        else None,
+        cantrip_ids=cantrips,
+        spell_ids=spells,
+        fighting_style_id=style[0] if style else None,
+        ability_increases=increases,
+        feat_id=feat,
+        feature_ids=features,
+        maximum_spell_rank=max(slots, default=0),
+        mastery_spell_ids=mastery,
+        signature_spell_ids=signature,
+    )
+
+
+def resolve_cleric_level(
+    level: AppliedClassLevel,
+    applied_levels: tuple[AppliedClassLevel, ...],
+    *,
+    initial_first_class: bool | None = None,
+):
+    if level.class_id is not CharacterClass.CLERIC:
+        raise ValueError("Expected Cleric level")
+    return resolve_prepared_class_level(
+        level, applied_levels, initial_first_class=initial_first_class
+    )
+
+
+def resolve_paladin_level(
+    level: AppliedClassLevel,
+    applied_levels: tuple[AppliedClassLevel, ...],
+    *,
+    initial_first_class: bool | None = None,
+):
+    if level.class_id is not CharacterClass.PALADIN:
+        raise ValueError("Expected Paladin level")
+    return resolve_prepared_class_level(
+        level, applied_levels, initial_first_class=initial_first_class
+    )
+
+
+def resolve_wizard_level(
+    level: AppliedClassLevel,
+    applied_levels: tuple[AppliedClassLevel, ...],
+    *,
+    initial_first_class: bool | None = None,
+    scribed_spell_ids: tuple[str, ...] = (),
+):
+    if level.class_id is not CharacterClass.WIZARD:
+        raise ValueError("Expected Wizard level")
+    return resolve_prepared_class_level(
+        level,
+        applied_levels,
+        initial_first_class=initial_first_class,
+        scribed_spell_ids=scribed_spell_ids,
+    )

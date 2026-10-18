@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import ChainMap
 from collections.abc import Collection
-from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Mapping
@@ -13,13 +12,14 @@ from uuid import UUID
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, TraverseConnectorEvent, ShoveEvent, SpellEvent
 from dnd.blocks.base_item import ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
-from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
+from dnd.core.sensory_fold import copy_senses_snapshot, reduce_senses_snapshot
 from dnd.core.base_actions import ActionEvent, BaseCost
 from dnd.core.combat_log import CombatLogEntry
 from dnd.spells.abjuration import CounterspellReactionEvent
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent, ConditionStateChangedEvent
 from dnd.core.events import (
+    SpellMasteryStudiedEvent, ConditionMembershipCommittedEvent, RestResourcesRecoveredEvent, PermanentFeatureUsedEvent, ActionApplicationCommittedEvent, MaximumHitPointReductionEvent, EffectApplicationEvent, ActionCostsCommittedEvent, RestCompletedEvent, SpellbookChangedEvent, SpellPreparationChangedEvent, HealingAppliedEvent, SpellDamageRollResultEvent,
     AreaReachEvent,
     DamageAppliedEvent,
     DamageRollResultEvent,
@@ -35,7 +35,7 @@ from dnd.core.events import (
     EventType,
     ExposedFlameEvent,
     ForcedMovementEvent,
-    PortalTransferEvent, MechanismActivationEvent,
+    PortalTransferEvent, MechanismActivationEvent, StandOfferEvent,
     HealEvent,
     HealRollResultEvent,
     InstantDeathEvent,
@@ -62,6 +62,7 @@ from dnd.world_facts import copy_world_facts, apply_world_fact as apply_recorded
 from dnd.player.audience import PlayerAudience, resolve_audience
 
 from dnd.player.event_record import RecordedEvent
+from dnd.player.facts import PlayerLogEntry
 from dnd.player.actor_facts import ActorState, ConditionFact, PresentationTarget
 from dnd.actor_projection import condition_fact as committed_condition_fact
 from dnd.actor_projection import remove_previous_item_holdings
@@ -103,14 +104,6 @@ class ObjectiveRow:
 
 
 @dataclass(frozen=True, slots=True)
-class SubjectiveTextRow:
-    """Already-projected subjective text retained during capture."""
-
-    source_index: int
-    text: str
-
-
-@dataclass(frozen=True, slots=True)
 class IntervalEnvelope:
     """One complete immutable cursor interval crossing the async seam."""
 
@@ -123,12 +116,13 @@ class IntervalEnvelope:
     door_uuid: UUID | None
     standing_torch_uuid: UUID | None
     objective_rows: tuple[ObjectiveRow, ...]
-    subjective_rows: tuple[SubjectiveTextRow, ...]
     admitted: tuple[tuple[int, RecordedEvent], ...]
     dispositions: tuple[tuple[int, Disposition], ...]
     conditions: tuple[ConditionFact, ...] = ()
     admissions: tuple[ActorAdmission, ...] = ()
     audience: PlayerAudience | None = None
+    # The audience's combat-log entry of each admitted event that has one.
+    logs: dict[UUID, PlayerLogEntry] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,16 +135,45 @@ class ActorAdmission:
     observer_uuid: UUID | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class AdmissionEvidence:
+    """One version's seat-independent admission inputs, read at that version.
+
+    `observer` is the tracked observer of a completed sensory delta (else
+    None), `observed` its changed contacts plus itself and `acquired` the
+    contacts it did not hold before. `candidates` are the participants and
+    the fact owner. For each of these identities: its actor, the tracked
+    observers holding it as a contact, and its own last sensory position.
+    """
+
+    observer: UUID | None
+    observed: frozenset[UUID]
+    acquired: frozenset[UUID]
+    candidates: frozenset[UUID]
+    actors: Mapping[UUID, ActorState]
+    holders: Mapping[UUID, Mapping[UUID, PerceivedContact]]
+    positions: Mapping[UUID, tuple[int, int]]
+
+
 @dataclass(slots=True)
 class CaptureCheckpoint:
-    """Current recorded actor/contact fold, never an alternate event history."""
+    """The recorded actor/contact fold of the EventQueue, advanced once per version for every audience.
+
+    Contacts and positions are kept for every tracked observer (the union of
+    the audiences sharing it). `root_of` and `trees` place the lineages of
+    each still-open root; `pending` keeps the evidence of that root's folded
+    versions until it completes, so a root's capture never folds history again.
+    """
 
     generation: UUID
-    audience: PlayerAudience
+    observers: frozenset[UUID]
     cursor: int = 0
     actors: dict[UUID, ActorState] = field(default_factory=dict)
     contacts: dict[UUID, dict[UUID, PerceivedContact]] = field(default_factory=dict)
     positions: dict[UUID, tuple[int, int]] = field(default_factory=dict)
+    root_of: dict[UUID, UUID] = field(default_factory=dict)
+    trees: dict[UUID, list[UUID]] = field(default_factory=dict)
+    pending: dict[UUID, dict[UUID, AdmissionEvidence]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +197,8 @@ class CompletedLineage:
     audience: PlayerAudience | None = None
     # Exact already-recorded versions that caused an observation before completion.
     observed_sources: tuple[RecordedEvent, ...] = ()
+    # The audience's combat-log entry of each retained event that has one.
+    logs: dict[UUID, PlayerLogEntry] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -290,9 +315,13 @@ def capture_interval(
     door_uuid: UUID | None = None,
     standing_torch_uuid: UUID | None = None,
     audience: PlayerAudience | None = None,
-    checkpoint: CaptureCheckpoint | None = None,
+    context: CaptureContext | None = None,
 ) -> IntervalEnvelope:
-    """Synchronously copy one exact already-committed EventQueue interval."""
+    """Synchronously copy one exact already-committed EventQueue interval.
+
+    `context` carries the shared fold's evidence for the interval; without it
+    this audience folds the history from its start.
+    """
     audience = resolve_audience(observer_uuid, audience)
     generation = EventQueue.generation_id()
     cursor = EventQueue.event_cursor()
@@ -311,14 +340,16 @@ def capture_interval(
     admitted: list[tuple[int, Event]] = []
     admitted_original: list[tuple[int, Event]] = []
     dispositions: list[tuple[int, Disposition]] = []
-    subjective: list[SubjectiveTextRow] = []
+    logs: dict[UUID, PlayerLogEntry] = {}
     for index, event in indexed:
         is_admitted = any(_admitted(event, observer_uuid=identity, battlefield_id=battlefield_id)
                           for identity in audience.observers)
         if is_admitted:
-            copied = _retained_event(event, audience)
-            admitted.append((index, copied))
+            admitted.append((index, _retained_event(event, audience)))
             admitted_original.append((index, event))
+            entry = seat_log_entry(event.combat_log, audience)
+            if entry is not None:
+                logs[event.uuid] = entry
             disposition = (
                 Disposition.STATE_ONLY
                 if isinstance(event, (EntityCreatedEvent, SensoryUpdateEvent, TurnEvent, RoundEvent, EncounterEvent))
@@ -328,13 +359,6 @@ def capture_interval(
         else:
             disposition = Disposition.UNSUPPORTED
         dispositions.append((index, disposition))
-        projected = project_combat_log(
-            event.combat_log,
-            controlled_entity_uuids=frozenset(map(str, audience.controlled)),
-            observer_entity_uuids=frozenset(map(str, audience.observers)),
-        )
-        if projected is not None:
-            subjective.append(SubjectiveTextRow(index, projected.compact))
 
     return IntervalEnvelope(
         name=name,
@@ -347,34 +371,13 @@ def capture_interval(
         door_uuid=door_uuid,
         standing_torch_uuid=standing_torch_uuid,
         objective_rows=tuple(_objective_row(index, event) for index, event in indexed),
-        subjective_rows=tuple(subjective),
         admitted=tuple(admitted),
         dispositions=tuple(dispositions),
         conditions=tuple(fact for _, event in admitted_original if (fact := _condition_fact(event)) is not None),
-        admissions=(_capture_actor_admissions(
-            tuple(admitted_original), audience, frozenset(), generation, checkpoint,
+        admissions=(_derive_admissions(tuple(admitted_original), audience, (context or capture_context(
+            CaptureCheckpoint(generation, frozenset(audience.observers)), end_cursor=end_cursor)).evidence, frozenset(),
         ) if admitted_original else ()),
-    )
-
-
-def _copy_snapshot(snapshot: SensesSnapshot | None) -> SensesSnapshot | None:
-    if snapshot is None:
-        return None
-    return SensesSnapshot(
-        position=snapshot.position,
-        visible=set(snapshot.visible),
-        seen=set(snapshot.seen),
-        entities=dict(snapshot.entities),
-        objects=dict(snapshot.objects),
-        effective_light_levels=dict(snapshot.effective_light_levels),
-        hazardous_cells=dict(snapshot.hazardous_cells),
-        spatial_effects=dict(snapshot.spatial_effects),
-        light_sources=dict(snapshot.light_sources), light_source_removals=dict(snapshot.light_source_removals),
-        paths_dirty=snapshot.paths_dirty,
-        passive_perception=snapshot.passive_perception,
-        sense_modes_hash=snapshot.sense_modes_hash,
-        sense_modes=tuple(mode.model_copy(deep=True) for mode in snapshot.sense_modes),
-        visual_access=snapshot.visual_access,
+        logs=logs,
     )
 
 
@@ -512,7 +515,7 @@ def copy_target(target: PresentationTarget) -> PresentationTarget:
         target,
         recorded_world=copy_world_facts(target.recorded_world),
         actors=dict(target.actors),
-        senses=_copy_snapshot(target.senses),
+        senses=copy_senses_snapshot(target.senses) if target.senses is not None else None,
     )
 
 
@@ -581,7 +584,9 @@ def _event_header(event: Event) -> Event:
     Condition details live in ConditionFact. Unsupported payloads retain this
     same causal/diagnostic header and an explicit unsupported disposition.
     Passive validation also preserves absent turn metadata during live capture.
+    The header holds the version's frozen grant values themselves.
     """
+    children, lineage_children = EventQueue.child_links(event)
     header = Event.model_validate(dict(
         name=event.name, uuid=event.uuid, source_entity_uuid=event.source_entity_uuid,
         source_entity_name=event.source_entity_name,
@@ -594,91 +599,69 @@ def _event_header(event: Event) -> Event:
         status_message=event.status_message, outcome_code=event.outcome_code,
         outcome_source_entity_uuid=event.outcome_source_entity_uuid,
         is_first=event.is_first, is_last=event.is_last,
-        lineage_children_events=list(event.lineage_children_events),
-        children_events=list(event.children_events), parent_lineage=event.parent_lineage,
-        children_lineages=list(event.children_lineages),
-        identified_entity_observer_uuids={
-            identity: set(observers) for identity, observers in event.identified_entity_observer_uuids.items()
-        },
-        located_entity_observer_uuids={
-            identity: set(observers) for identity, observers in event.located_entity_observer_uuids.items()
-        },
-        located_position_observer_uuids={
-            position: set(observers) for position, observers in event.located_position_observer_uuids.items()
-        },
+        lineage_children_events=lineage_children,
+        children_events=children, parent_lineage=event.parent_lineage,
+        children_lineages=event.children_lineages,
     ), context=PASSIVE_EVENT_REPLAY)
+    header.identified_entity_observer_uuids = event.identified_entity_observer_uuids
+    header.located_entity_observer_uuids = event.located_entity_observer_uuids
+    header.located_position_observer_uuids = event.located_position_observer_uuids
     header._effective_handler_presentations = event.effective_handler_presentations
     return header
 
 
-def _detach_retained_event(event: Event) -> Event:
-    """Detach mutable containers without rebuilding their immutable contents.
-
-    The remaining payload still uses the native deep-copy contract, including
-    mutable sense modes, spatial effects, costs, logs and subclass fields.
-    """
-    memo = {
-        id(event.lineage_children_events): list(event.lineage_children_events),
-        id(event.children_events): list(event.children_events),
-        id(event.children_lineages): list(event.children_lineages),
-    }
-    # Native identity/provenance metadata is immutable. Keep the generic deep
-    # traversal for payloads and extensions without reconstructing these leaves.
-    for value in (event.uuid, event.source_entity_uuid, event.target_entity_uuid,
-                  event.lineage_uuid, event.parent_event, event.parent_lineage,
-                  event.turn_execution_id, event.outcome_source_entity_uuid,
-                  event.timestamp, event.effective_handler_presentations,
-                  event._recorded_omissions):
-        if value is not None:
-            memo[id(value)] = value
-    for grants in (event.identified_entity_observer_uuids,
-                   event.located_entity_observer_uuids, event.located_position_observer_uuids):
-        memo[id(grants)] = {key: memo.setdefault(id(value), set(value))
-                           for key, value in grants.items()}
+def _controller_redaction(event: Event, audience: PlayerAudience) -> bool | None:
+    """Whether this seat controls the source, for the families that redact non-controllers; None otherwise."""
     match event:
-        case SensoryUpdateEvent():
-            # The native contact schema contains only immutable values. An
-            # extension may add mutable fields and keeps ordinary detachment.
-            for contacts in (event.entity_contacts_changed, event.object_contacts_changed):
-                for contact in contacts.values():
-                    if type(contact) is PerceivedContact:
-                        memo[id(contact)] = contact
-            memo.update({
-                id(event.visible_cells_added): list(event.visible_cells_added),
-                id(event.visible_cells_removed): list(event.visible_cells_removed),
-                id(event.seen_cells_added): list(event.seen_cells_added),
-                id(event.entity_contacts_removed): set(event.entity_contacts_removed),
-                id(event.object_contacts_removed): set(event.object_contacts_removed),
-                id(event.spatial_effects_removed): set(event.spatial_effects_removed),
-                id(event.effective_light_levels_changed): dict(event.effective_light_levels_changed),
-                id(event.objective_light_levels_changed): dict(event.objective_light_levels_changed),
-                id(event.ambient_light_levels_changed): dict(event.ambient_light_levels_changed),
-                id(event.light_sources_changed): {identity: source.model_copy(update={
-                    'affected_tiles': dict(source.affected_tiles)})
-                    for identity, source in event.light_sources_changed.items()},
-                id(event.light_sources_removed): dict(event.light_sources_removed),
-                id(event.hazardous_cells_changed): dict(event.hazardous_cells_changed),
-            })
-        case SpatialChangeEvent():
-            if event.light_level_map is not None:
-                memo[id(event.light_level_map)] = dict(event.light_level_map)
-    return deepcopy(event, memo)
+        case SpellbookChangedEvent() | SpellMasteryStudiedEvent() | PermanentFeatureUsedEvent() | SpellPreparationChangedEvent():
+            return audience.controls(event.source_entity_uuid)
+    return None
 
 
-def _retained_event(event: Event, audience: PlayerAudience,
-                    known_entity_names: Mapping[str, str] | None = None,
-                    known_connector_uuids: frozenset[str] = frozenset(),
-                    known_content_ids: frozenset[str] = frozenset(),
-                    retained_entries: dict[int, CombatLogEntry | None] | None = None,
-                    *, omit_sensory_payload: bool = False) -> Event:
-    """Copy the selected event families without constructing registered models."""
-    projected_log = project_combat_log(
-        event.combat_log, known_entity_names=known_entity_names, retained_entries=retained_entries,
+def seat_log_entry(log: CombatLogEntry | None, audience: PlayerAudience, *,
+                   known_entity_names: Mapping[str, str] | None = None,
+                   known_connector_uuids: frozenset[str] = frozenset(),
+                   known_content_ids: frozenset[str] = frozenset(),
+                   retained_entries: dict[int, CombatLogEntry | None] | None = None) -> PlayerLogEntry | None:
+    """The one projection of a native log for a seat: rendered, without nested copies or grants.
+
+    Nested child entries inform the rendering; the seat receives each child's
+    own entry with its node, so its target indices refer to those (see
+    `PlayerLogEntry`).
+    """
+    projected = project_combat_log(log, known_entity_names=known_entity_names, retained_entries=retained_entries,
         known_connector_uuids=known_connector_uuids, known_content_ids=known_content_ids,
-        controlled_entity_uuids=frozenset(map(str, audience.controlled)),
-        observer_entity_uuids=frozenset(map(str, audience.observers)),
-    )
-    common = {"use_register": False, "context": None, "combat_log": projected_log}
+        controlled_entity_uuids=audience.controlled_ids, observer_entity_uuids=audience.observer_ids)
+    if projected is None:
+        return None
+    return PlayerLogEntry(entry_type=projected.entry_type, source_name=projected.source_name,
+        source_uuid=projected.source_uuid, target_name=projected.target_name, target_uuid=projected.target_uuid,
+        compact=projected.compact, verbose=projected.verbose, detailed=projected.detailed, data=projected.data,
+        success=projected.success)
+
+
+def _retained_event(event: Event, audience: PlayerAudience, *, omit_sensory_payload: bool = False,
+                    bodies: dict[tuple[UUID, bool, bool | None], Event] | None = None) -> Event:
+    """The seat's retained event: the shared detached body (its combat log is the seat's `logs` entry)."""
+    controls = _controller_redaction(event, audience)
+    key = (event.uuid, omit_sensory_payload, controls)
+    body = bodies.get(key) if bodies is not None else None
+    if body is None:
+        body = _retained_body(event, controls, omit_sensory_payload=omit_sensory_payload)
+        if bodies is not None:
+            bodies[key] = body
+    return body
+
+
+def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload: bool) -> Event:
+    """The selected event families' seat body, without constructing registered models (no combat log).
+
+    Stored versions are frozen values (P7b): the body shares the version's payload by reference and
+    carries its child links as of this capture.
+    """
+    children, lineage_children = EventQueue.child_links(event)
+    common = {"use_register": False, "context": None, "combat_log": None,
+              "children_events": children, "lineage_children_events": lineage_children}
     match event:
         case SensoryUpdateEvent() if omit_sensory_payload:
             copied = _event_header(event).model_copy(update=common)
@@ -701,6 +684,21 @@ def _retained_event(event: Event, audience: PlayerAudience,
             copied = event.model_copy(update={**common, "context": {}, "damage_packets": packets})
         case D20RollResultEvent():
             copied = event.model_copy(update={**common, "context": {}, "bonus": None})
+        case SpellDamageRollResultEvent():
+            copied = event.model_copy(update={**common,"context":{},"damage":event.damage.model_copy(
+                update={"use_register":False,"context":None,"damage_bonus":None})})
+        case SpellbookChangedEvent():
+            copied = event.model_copy(update=common if controls else {
+                **common,"scribed_spell_ids":(),"learned_spell_id":""})
+        case SpellMasteryStudiedEvent():
+            copied = event.model_copy(update=common if controls else {
+                **common,"applied_class_levels":()})
+        case PermanentFeatureUsedEvent():
+            copied = event.model_copy(update=common if controls else {
+                **common,"permanent_feature_uses":()})
+        case SpellPreparationChangedEvent():
+            copied = event.model_copy(update=common if controls else {
+                **common,"prepared_spell_selections":(),"casting_source_id":""})
         case HealRollResultEvent():
             copied = event.model_copy(update={**common, "context": {}})
         case D20Event():
@@ -708,11 +706,13 @@ def _retained_event(event: Event, audience: PlayerAudience,
                 **common, "dice": None, "dc": event.get_dc(),
                 "bonus": event.dice_roll.bonus if event.dice_roll is not None else None,
             })
+        case SpellMasteryStudiedEvent() | ConditionMembershipCommittedEvent() | RestResourcesRecoveredEvent() | PermanentFeatureUsedEvent() | ActionApplicationCommittedEvent() | MaximumHitPointReductionEvent() | EffectApplicationEvent() | ActionCostsCommittedEvent() | RestCompletedEvent() | HealingAppliedEvent():
+            copied = event.model_copy(update=common)
         case CounterspellReactionEvent():
             copied = event.model_copy(update=common)
         case ShoveEvent():
             copied = event.model_copy(update={**common, "shover_athletics": None})
-        case AreaReachEvent() | MovementEvent() | JumpEvent() | TraverseConnectorEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent():
+        case AreaReachEvent() | MovementEvent() | JumpEvent() | TraverseConnectorEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent() | StandOfferEvent():
             copied = event.model_copy(update=common)
         case EntityCreatedEvent() | EntityFactionChangedEvent() | SensoryUpdateEvent() | LifeStateChangeEvent() | DeathEvent() | HealEvent() | TemporaryHitPointsChangedEvent() | ConditionStateChangedEvent():
             copied = event.model_copy(update=common)
@@ -729,12 +729,12 @@ def _retained_event(event: Event, audience: PlayerAudience,
         case _:
             copied = _event_header(event).model_copy(update=common)
     # DiceRoll contains concrete values; model_copy avoids its registering
-    # constructor. Live value/Damage graphs were removed before this deep copy.
+    # constructor. Live value/Damage graphs were removed above.
     if isinstance(copied, ActionEvent):
         copied = copied.model_copy(update={"costs": [
             BaseCost.model_validate_json(cost.model_dump_json()) for cost in copied.costs
         ]})
-    return _detach_retained_event(copied)
+    return copied
 
 
 def _actor_participants(event: Event) -> tuple[UUID, ...]:
@@ -755,7 +755,7 @@ def _actor_participants(event: Event) -> tuple[UUID, ...]:
             | SpatialChangeType.ENTITY_LEFT | SpatialChangeType.MOVEMENT_COLLISION
         )):
             return (event.entity_uuid,) if event.entity_uuid is not None else ()
-        case ConditionApplicationEvent() | ConditionRemovalEvent() | ConditionStateChangedEvent() | TakeDamageEvent() | DamageAppliedEvent() | HealEvent() | PortalTransferEvent():
+        case ConditionApplicationEvent() | ConditionRemovalEvent() | ConditionStateChangedEvent() | TakeDamageEvent() | DamageAppliedEvent() | HealEvent() | PortalTransferEvent() | StandOfferEvent():
             return (event.target_entity_uuid,) if event.target_entity_uuid is not None else ()
         case ActionEvent() | StepMovementEvent() | ForcedMovementEvent() | D20Event() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent():
             return tuple(identity for identity in (event.source_entity_uuid, event.target_entity_uuid)
@@ -781,31 +781,15 @@ def _condition_fact(event: Event) -> ConditionFact | None:
     )
 
 
-def _capture_actor_admissions(
-    indexed: tuple[tuple[int, Event], ...],
-    audience: PlayerAudience, known_actor_uuids: Collection[UUID],
-    generation: UUID, checkpoint: CaptureCheckpoint | None = None,
-    newly_known_actor_uuids: Collection[UUID] = (),
-) -> tuple[ActorAdmission, ...]:
-    """Fold original evidence through each admission, resuming only forward reads."""
-    if checkpoint is None:
-        checkpoint = CaptureCheckpoint(generation, audience)
-    elif (checkpoint.generation != generation or checkpoint.audience != audience
-            or checkpoint.cursor > indexed[0][0]):
-        checkpoint.generation = generation
-        checkpoint.audience = audience
-        checkpoint.cursor = 0
-        checkpoint.actors.clear()
-        checkpoint.contacts.clear()
-        checkpoint.positions.clear()
+def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, AdmissionEvidence]:
+    """Fold versions up to `end` once for every audience; their evidence and that of roots completing here."""
+    if checkpoint.generation != EventQueue.generation_id():
+        raise ValueError("capture checkpoint belongs to another EventQueue generation")
     actors, contacts, positions = checkpoint.actors, checkpoint.contacts, checkpoint.positions
-    for identity in audience.observers:
-        contacts.setdefault(identity, {})
-    selected = {event.uuid for _, event in indexed}
-    admitted: set[UUID] = set()
-    result: list[ActorAdmission] = []
+    observers, root_of, trees, pending = checkpoint.observers, checkpoint.root_of, checkpoint.trees, checkpoint.pending
+    evidence: dict[UUID, AdmissionEvidence] = {}
     for index, event in EventQueue.iter_events_since(checkpoint.cursor):
-        if index > indexed[-1][0]:
+        if index >= end:
             break
         completed = event.phase is EventPhase.COMPLETION and not event.canceled
         if completed and isinstance(event, EntityCreatedEvent):
@@ -815,46 +799,39 @@ def _capture_actor_admissions(
                 and event.change_type in (SpatialChangeType.ENTITY_LEFT, SpatialChangeType.ENTITY_ENTERED)
                 and event.entity_uuid is not None and event.entity_uuid in actors):
             actors[event.entity_uuid] = apply_actor_fact(actors[event.entity_uuid], event)
-        sensory = completed and isinstance(event, SensoryUpdateEvent) and audience.observes(event.observer_uuid)
-        acquired: set[UUID] = set()
-        observed: set[UUID] = set()
-        if sensory:
-            assert isinstance(event, SensoryUpdateEvent)
-            member = contacts[event.observer_uuid]
-            acquired = set(event.entity_contacts_changed) - member.keys()
-            positions[event.observer_uuid] = event.observer_position
+        observer: UUID | None = None
+        observed: frozenset[UUID] = frozenset()
+        acquired: frozenset[UUID] = frozenset()
+        if completed and isinstance(event, SensoryUpdateEvent) and event.observer_uuid in observers:
+            observer = event.observer_uuid
+            member = contacts.setdefault(observer, {})
+            acquired = frozenset(event.entity_contacts_changed.keys() - member.keys())
+            positions[observer] = event.observer_position
             for identity in event.entity_contacts_removed:
                 member.pop(identity, None)
             member.update(event.entity_contacts_changed)
-            observed.update(event.entity_contacts_changed)
-            observed.add(event.observer_uuid)
-        if event.uuid in selected and not event.canceled:
-            candidates = set(_actor_participants(event)) | observed
+            observed = frozenset((*event.entity_contacts_changed, observer))
+        lineage = event.lineage_uuid
+        root = root_of.get(lineage)
+        if root is None:
+            root = lineage if event.parent_lineage is None else root_of.get(event.parent_lineage)
+            if root is not None:
+                root_of[lineage] = root
+                trees.setdefault(root, []).append(lineage)
+        if not event.canceled:
+            candidates = set(_actor_participants(event))
             owner = actor_fact_owner(event)
             if owner is not None:
                 candidates.add(owner)
-            for identity in sorted({identity for identity in candidates
-                    if identity not in known_actor_uuids and identity not in newly_known_actor_uuids
-                    and identity not in admitted} | acquired, key=str):
-                if identity not in actors:
-                    continue
-                witnesses = [member for member in audience.observers
-                    if member == identity or identity in contacts[member] and (
-                        sensory and isinstance(event, SensoryUpdateEvent) and member == event.observer_uuid
-                        and identity in observed
-                        or str(member) in event.identified_entity_observer_uuids.get(str(identity), set())
-                        and str(member) in event.located_entity_observer_uuids.get(str(identity), set()))]
-                if not witnesses:
-                    continue
-                witness = min(witnesses, key=lambda member: (
-                    member != identity, not (member == identity or contacts[member][identity].visual),
-                    member.int))
-                contact = contacts[witness].get(identity) if witness != identity else None
-                position = (positions.get(identity) if witness == identity
-                            else contact.position if contact is not None and contact.visual else None)
-                result.append(ActorAdmission(event.uuid,
-                    replace(actors[identity], last_visual_position=position), contact, witness))
-                admitted.add(identity)
+            identities = candidates | observed | acquired
+            row = AdmissionEvidence(observer, observed, acquired, frozenset(candidates),
+                {identity: actors[identity] for identity in identities if identity in actors},
+                {identity: {member: held[identity] for member, held in contacts.items() if identity in held}
+                 for identity in identities},
+                {identity: positions[identity] for identity in identities if identity in positions})
+            evidence[event.uuid] = row
+            if root is not None:
+                pending.setdefault(root, {})[event.uuid] = row
         if completed:
             if isinstance(event, ItemLocationStateEvent):
                 remove_previous_item_holdings(actors, event)
@@ -869,7 +846,53 @@ def _capture_actor_admissions(
                     member.pop(event.entity_uuid, None)
                 if event.entity_uuid in contacts:
                     contacts[event.entity_uuid].clear()
+        if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL):
+            # The root completes: its whole tree is captured now, never again.
+            for member in trees.pop(lineage, ()):
+                root_of.pop(member, None)
+            evidence.update(pending.pop(lineage, {}))
         checkpoint.cursor = index + 1
+    return evidence
+
+
+def _derive_admissions(
+    indexed: tuple[tuple[int, Event], ...], audience: PlayerAudience,
+    evidence: Mapping[UUID, AdmissionEvidence], known_actor_uuids: Collection[UUID],
+    newly_known_actor_uuids: Collection[UUID] = (),
+) -> tuple[ActorAdmission, ...]:
+    """One audience's admissions over these versions, read from their recorded evidence."""
+    admitted: set[UUID] = set()
+    result: list[ActorAdmission] = []
+    for index, event in indexed:
+        if event.canceled:
+            continue
+        row = evidence.get(event.uuid)
+        if row is None:
+            raise ValueError(f"Version {index} precedes the capture checkpoint and was not retained")
+        sensory = row.observer is not None and audience.observes(row.observer)
+        observed = row.observed if sensory else frozenset()
+        acquired = row.acquired if sensory else frozenset()
+        for identity in sorted({identity for identity in row.candidates | observed
+                if identity not in known_actor_uuids and identity not in newly_known_actor_uuids
+                and identity not in admitted} | acquired, key=str):
+            actor = row.actors.get(identity)
+            if actor is None:
+                continue
+            holders = row.holders[identity]
+            witnesses = [member for member in audience.observers
+                if member == identity or member in holders and (
+                    sensory and member == row.observer and identity in observed
+                    or str(member) in event.identified_entity_observer_uuids.get(str(identity), set())
+                    and str(member) in event.located_entity_observer_uuids.get(str(identity), set()))]
+            if not witnesses:
+                continue
+            witness = min(witnesses, key=lambda member: (
+                member != identity, not (member == identity or holders[member].visual), member.int))
+            contact = holders.get(witness) if witness != identity else None
+            position = (row.positions.get(identity) if witness == identity
+                        else contact.position if contact is not None and contact.visual else None)
+            result.append(ActorAdmission(event.uuid, replace(actor, last_visual_position=position), contact, witness))
+            admitted.add(identity)
     return tuple(result)
 
 
@@ -890,14 +913,42 @@ def capture_lineage(
 
 @dataclass(frozen=True, slots=True)
 class CaptureContext:
-    """A native generation/cursor boundary over the EventQueue's existing indexes."""
+    """One operation's seat-independent capture over the EventQueue's existing indexes.
+
+    `graphs` holds each root's lineage graph, `evidence` each version's
+    admission evidence from the shared fold and `bodies` each retained event's
+    detached body: every seat shares them and adds only its own admissions and
+    combat log.
+    """
 
     generation: UUID
     end_cursor: int
+    graphs: dict[UUID, "LineageGraph"] = field(default_factory=dict)
+    evidence: dict[UUID, AdmissionEvidence] = field(default_factory=dict)
+    bodies: dict[tuple[UUID, bool, bool | None], Event] = field(default_factory=dict)
 
 
-def capture_context() -> CaptureContext:
-    return CaptureContext(EventQueue.generation_id(), EventQueue.event_cursor())
+@dataclass(frozen=True, slots=True)
+class LineageGraph:
+    """One root's terminal node per lineage and every version in source order, shared by every seat."""
+
+    nodes: dict[UUID, Event]
+    indexed: tuple[tuple[int, Event], ...]
+    conditions: tuple[ConditionFact, ...]
+    objective_rows: tuple[ObjectiveRow, ...]
+
+
+def capture_context(checkpoint: CaptureCheckpoint, roots: tuple[Event, ...] = (), *,
+                    end_cursor: int | None = None) -> CaptureContext:
+    """Each root's graph, then one advance of the shared fold past their last version (or to `end_cursor`)."""
+    context = CaptureContext(EventQueue.generation_id(), EventQueue.event_cursor())
+    for root in roots:
+        if root.uuid not in context.graphs:
+            context.graphs[root.uuid] = _lineage_graph(root, context)
+    end = end_cursor if end_cursor is not None else max(
+        (graph.indexed[-1][0] + 1 for graph in context.graphs.values()), default=checkpoint.cursor)
+    context.evidence.update(advance_capture(checkpoint, end))
+    return context
 
 
 def _lineage_versions(context: CaptureContext, identity: UUID) -> tuple[tuple[int, Event], ...]:
@@ -910,12 +961,15 @@ def capture_lineages(
     known_actor_uuids: Collection[UUID] = frozenset(), audience: PlayerAudience | None = None,
     context: CaptureContext | None = None, known_entity_names: Mapping[str, str] | None = None,
     known_connector_uuids: frozenset[str] = frozenset(), known_content_ids: frozenset[str] = frozenset(),
-    checkpoint: CaptureCheckpoint | None = None,
     omit_foreign_sensory_payloads: bool = False,
 ) -> tuple[CompletedLineage, ...]:
-    """Project each audience from the same original operation evidence."""
+    """Project each audience from the same original operation evidence.
+
+    Without a shared `context` this audience folds the history from its start.
+    """
     audience = resolve_audience(observer_uuid, audience)
-    context = context or capture_context()
+    if context is None:
+        context = capture_context(CaptureCheckpoint(EventQueue.generation_id(), frozenset(audience.observers)), roots)
     known: set[UUID] = set()
     names = ChainMap({}, known_entity_names or {})
     retained: list[CompletedLineage] = []
@@ -924,24 +978,15 @@ def capture_lineages(
             known_actor_uuids=known_actor_uuids, newly_known_actor_uuids=known,
             context=context, known_entity_names=names,
             known_connector_uuids=known_connector_uuids, known_content_ids=known_content_ids,
-            checkpoint=checkpoint, omit_foreign_sensory_payloads=omit_foreign_sensory_payloads)
+            omit_foreign_sensory_payloads=omit_foreign_sensory_payloads)
         retained.append(lineage)
         known.update(admission.actor.uuid for admission in lineage.admissions)
         names.update((str(admission.actor.uuid), admission.actor.name) for admission in lineage.admissions)
     return tuple(retained)
 
 
-def _capture_lineage(
-    root: Event, *, observer_uuid: UUID, audience: PlayerAudience, known_actor_uuids: Collection[UUID],
-    context: CaptureContext, known_entity_names: Mapping[str, str],
-    known_connector_uuids: frozenset[str], known_content_ids: frozenset[str],
-    checkpoint: CaptureCheckpoint | None,
-    newly_known_actor_uuids: Collection[UUID] = (),
-    omit_foreign_sensory_payloads: bool = False,
-) -> CompletedLineage:
-    generation = context.generation
-    if generation != EventQueue.generation_id():
-        raise RuntimeError("EventQueue generation changed during lineage capture")
+def _lineage_graph(root: Event, context: CaptureContext) -> LineageGraph:
+    """One root's seat-independent capture: terminal nodes, every version in source order."""
     versions: dict[UUID, tuple[tuple[int, Event], ...]] = {}
     pending = [root]
     nodes: dict[UUID, Event] = {}
@@ -958,7 +1003,8 @@ def _capture_lineage(
             # existing references on the retained header as well as traversing
             # them, so cold consumers receive the same complete causal graph.
             children = []
-            for identity in dict.fromkeys(event.lineage_children_events + event.children_events):
+            children_events, lineage_children = EventQueue.child_links(event)
+            for identity in dict.fromkeys(lineage_children + children_events):
                 child = EventQueue.get_event_by_uuid(identity)
                 if child is None:
                     raise ValueError("canceled lineage is missing a required child")
@@ -982,8 +1028,26 @@ def _capture_lineage(
                            key=lambda row: row[0]))
     if not indexed or root.uuid not in {event.uuid for _, event in indexed}:
         raise ValueError("lineage root is absent from the current EventQueue")
-    admissions = _capture_actor_admissions(indexed, audience, known_actor_uuids, generation, checkpoint,
-        newly_known_actor_uuids)
+    conditions = tuple(fact for _, event in indexed
+                       if event.uuid == nodes[event.lineage_uuid].uuid
+                       and (fact := _condition_fact(event)) is not None)
+    return LineageGraph(nodes, indexed, conditions,
+                        tuple(_objective_row(index, event) for index, event in indexed))
+
+
+def _capture_lineage(
+    root: Event, *, observer_uuid: UUID, audience: PlayerAudience, known_actor_uuids: Collection[UUID],
+    context: CaptureContext, known_entity_names: Mapping[str, str],
+    known_connector_uuids: frozenset[str], known_content_ids: frozenset[str],
+    newly_known_actor_uuids: Collection[UUID] = (),
+    omit_foreign_sensory_payloads: bool = False,
+) -> CompletedLineage:
+    generation = context.generation
+    if generation != EventQueue.generation_id():
+        raise RuntimeError("EventQueue generation changed during lineage capture")
+    graph = context.graphs[root.uuid]
+    nodes, indexed, conditions = graph.nodes, graph.indexed, graph.conditions
+    admissions = _derive_admissions(indexed, audience, context.evidence, known_actor_uuids, newly_known_actor_uuids)
     names = ChainMap({}, known_entity_names)
     retained_logs: dict[int, CombatLogEntry | None] = {}
     admissions_at: dict[UUID, list[ActorAdmission]] = {}
@@ -1002,17 +1066,21 @@ def _capture_lineage(
         and event.uuid not in observed_source_ids
     }
     retained_values = []
+    logs: dict[UUID, PlayerLogEntry] = {}
     for _, event in indexed:
         for admission in admissions_at.get(event.uuid, ()):
             names[str(admission.actor.uuid)] = admission.actor.name
         if event.uuid == nodes[event.lineage_uuid].uuid:
-            retained_values.append(_retained_event(nodes[event.lineage_uuid], audience, names, known_connector_uuids, known_content_ids,
-                retained_logs, omit_sensory_payload=event.uuid in omitted_sensory))
+            node = nodes[event.lineage_uuid]
+            retained_values.append(_retained_event(node, audience,
+                omit_sensory_payload=event.uuid in omitted_sensory, bodies=context.bodies))
+            entry = seat_log_entry(node.combat_log, audience,
+                known_entity_names=names, known_connector_uuids=known_connector_uuids,
+                known_content_ids=known_content_ids, retained_entries=retained_logs)
+            if entry is not None:
+                logs[node.uuid] = entry
     retained = tuple(retained_values)
     retained_root = next(event for event in retained if event.uuid == root.uuid)
-    conditions = tuple(fact for _, event in indexed
-                       if event.uuid == nodes[event.lineage_uuid].uuid
-                       and (fact := _condition_fact(event)) is not None)
     condition_ids = {fact.event_uuid for fact in conditions}
     dispositions = tuple(
         (event.uuid, Disposition.NOT_DISCLOSED if event.uuid in omitted_sensory else Disposition.UNSUPPORTED)
@@ -1028,15 +1096,16 @@ def _capture_lineage(
         audience=audience,
         root=retained_root,
         events=retained,
-        objective_rows=tuple(_objective_row(index, event) for index, event in indexed),
+        objective_rows=graph.objective_rows,
         start_cursor=indexed[0][0],
         end_cursor=indexed[-1][0] + 1,
         conditions=conditions,
         dispositions=dispositions,
         admissions=admissions,
-        observed_sources=tuple(_retained_event(event, audience)
+        observed_sources=tuple(_retained_event(event, audience, bodies=context.bodies)
             for _, event in indexed
             if event.uuid in observed_source_ids and event.uuid not in retained_ids),
+        logs=logs,
     )
 
 
@@ -1059,7 +1128,8 @@ def lineage_branch(lineage: CompletedLineage, root: Event) -> CompletedLineage:
                    start_cursor=rows[0].source_index, end_cursor=rows[-1].source_index + 1,
                    conditions=tuple(row for row in lineage.conditions if row.event_uuid in identities),
                    dispositions=tuple(row for row in lineage.dispositions if row[0] in identities),
-                   admissions=tuple(row for row in lineage.admissions if row.event_uuid in version_ids))
+                   admissions=tuple(row for row in lineage.admissions if row.event_uuid in version_ids),
+                   logs={identity: entry for identity, entry in lineage.logs.items() if identity in identities})
 
 
 def _admit_actor(target: PresentationTarget, admission: ActorAdmission) -> None:
@@ -1134,7 +1204,10 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 # Audience capture retains only the causal header for an
                 # unrelated observer whose sensory payload has no consumer.
                 pass
-            case ActionEvent() | TakeDamageEvent() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent() | D20Event():
+            case SpellMasteryStudiedEvent() | ConditionMembershipCommittedEvent() | RestResourcesRecoveredEvent() | PermanentFeatureUsedEvent() | ActionApplicationCommittedEvent() | MaximumHitPointReductionEvent() | EffectApplicationEvent() | ActionCostsCommittedEvent() | RestCompletedEvent() | HealingAppliedEvent():
+                # Admission/causal facts have no extra after-values or choreography.
+                pass
+            case ActionEvent() | TakeDamageEvent() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent() | SpellDamageRollResultEvent() | SpellbookChangedEvent() | SpellPreparationChangedEvent() | D20Event():
                 # These facts explain causality. Only the committed applied
                 # packet changes HP, so aggregate totals cannot apply it twice.
                 pass
@@ -1146,7 +1219,7 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 pass
             case TurnEvent() | RoundEvent() | EncounterEvent():
                 _reduce_turn_fact(result, event)
-            case AreaReachEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent() | SpatialEffectChangeEvent() | SpatialEffectInteractionEvent():
+            case AreaReachEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent() | StandOfferEvent() | SpatialEffectChangeEvent() | SpatialEffectInteractionEvent():
                 # Senses supplies committed positions and observed fixture state.
                 # Spatial lifecycle events retain causality, not another state writer.
                 pass
@@ -1167,12 +1240,12 @@ __all__ = [
     "ObjectiveRow",
     "PresentationTarget",
     "ReducedInterval",
-    "SubjectiveTextRow",
     "capture_interval",
     "capture_lineage",
     "copy_target",
     "reduce_interval",
     "reduce_lineage",
+    "seat_log_entry",
     "seed_actors",
     "stage_actors",
     "stage_lineage",

@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 from dnd.types.world import MovementMode
 from dnd.actions import SpellAction
 from dnd.actions_functional import (
-    execute_action,
+    execute_available_action,
     execute_by_index,
     execute_use_action,
     get_available_actions,
@@ -68,6 +68,7 @@ from tests.engine.support import (
     reset_combat_state,
     set_hp,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 THIS_FILE = "tests/manual/test_131_inventory_use_actions_legacy_contract.py"
@@ -283,9 +284,7 @@ def force_save(
         name=f"Inventory regression {ability_name} save",
         value=100 if succeeds else -100,
     )
-    target.saving_throws.get_saving_throw(ability_name).bonus.self_static.add_value_modifier(
-        modifier
-    )
+    add_modifier(target.saving_throws.get_saving_throw(ability_name).bonus, Channel.SELF_STATIC, Kind.VALUE, modifier)
 
 
 def put_in_inventory(entity: Entity, item: BaseItem) -> None:
@@ -522,11 +521,7 @@ def test_permanent_weapon_coat_discovery_damage_and_cleanup() -> None:
     )
     hp_before = get_hp(target)
     with fixed_dice_faces(10, 4, 3):
-        attack_result = execute_action(
-            caster,
-            attack.template_name,
-            target_row,
-        )
+        attack_result = execute_available_action(caster, attack, target_row)
     remove_attack_modifier(caster, modifier_uuid)
 
     assert attack_result is not None and not attack_result.canceled

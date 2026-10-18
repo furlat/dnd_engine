@@ -25,6 +25,7 @@ from uuid import uuid4
 
 from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder
 from dnd.core.events import EventQueue
+from dnd.core.navigation import route_count
 from dnd.player.commands import ActionSelection
 from dnd.player.session import close_session
 from devtools.player_server_acceptance.fixtures import configuration
@@ -234,7 +235,7 @@ def paths(args) -> dict[str, Any]:
             finally:
                 reset_action_timing_recorder(token)
             rows.append({'total_ms': (perf_counter() - started) * 1000, 'phases_ms': phases,
-                'admitted_paths': len(actor.senses.paths), 'safe_paths': len(actor.senses.safe_paths)})
+                'admitted_paths': route_count(actor.senses.paths), 'safe_paths': route_count(actor.senses.safe_paths)})
         profiler = cProfile.Profile()
         profiler.runcall(actor.materialize_navigation, path_max_distance=11)
         profiler.dump_stats(str(args.output / 'navigation-warm.pstats'))
@@ -267,8 +268,8 @@ def retention(args) -> dict[str, Any]:
                     'history': EventQueue.event_cursor(), 'rss_high_water_bytes': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
                     'rss_current_bytes': resident_bytes(),
                     'actor_count': len(runtime.session.game.entities),
-                    'audience_actor_counts': {seat: len(view.latest.actors) for seat, view in runtime.audiences.items()},
-                    'audience_occurrences': {seat: view.latest.reducer_cursor for seat, view in runtime.audiences.items()},
+                    'audience_actor_counts': {seat: len(view.projection.remembered.actors) for seat, view in runtime.audiences.items()},
+                    'audience_occurrences': {seat: view.projection.next_occurrence for seat, view in runtime.audiences.items()},
                     'rows': measured}
                 samples.append(sample)
                 log.write(json.dumps(sample) + '\n'); log.flush()

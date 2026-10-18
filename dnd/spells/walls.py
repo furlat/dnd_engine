@@ -1,13 +1,14 @@
 """Native wall spells composed from existing spatial, damage and action owners."""
 
-from typing import Literal
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
+from typing import Literal, Optional, Tuple
 from math import hypot
 
 from pydantic import Field
 
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
-from dnd.core.base_actions import BaseAction, Cost, TargetType
-from dnd.core.action_types import ActionVariantFacet, PositionSelection, PositionPathSelection, SinglePositionSelection
+from dnd.core.base_actions import Cost, TargetType
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionSelection, PositionPathSelection, SinglePositionSelection, selection_facet
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
@@ -17,15 +18,17 @@ from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import Damage, Event, EventHandler, EventPhase, EventType, Range, RangeType, SpatialChangeEvent, Trigger
 from dnd.core.gridmap import get_map
+from dnd.core.view import cell_visible
 from dnd.core.presentation_geometry import WallPresentationGeometry, WallRing, WallSegment
 from dnd.core.wall_geometry import wall_shell_cells, wall_side_cells
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.ignition import ignite_surface_contacts
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
-from dnd.types.world import MovementMode, OccupancyLayer
+from dnd.types.world import MovementMode, OccupancyLayer, SpatialChannel
 
 
 HotSide = Literal["left", "right", "inside", "outside"]
@@ -101,6 +104,9 @@ class WallOfFireZone(AreaCondition):
                     and not self.affects_occupancy_layer(event.previous_occupancy_layer))
         return True
 
+    def spatial_channels(self) -> frozenset[SpatialChannel]:
+        return super().spatial_channels() | {SpatialChannel.OPTICAL}
+
     def blocks_physical_optics_at(self, position: tuple[int, int]) -> bool:
         return position in self.flame_positions and position in self.affected_positions
 
@@ -131,7 +137,7 @@ class WallOfFireZone(AreaCondition):
             damage_dice=8, dice_numbers=self.damage_dice_count,
             damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.FIRE,
         )
-        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
         contact = entity.position if entity.position in self.flame_positions else min(
             (position for position in self.flame_positions if self._heat_reaches(position, entity.position)),
             key=lambda position: (hypot(position[0] - entity.position[0], position[1] - entity.position[1]), position),
@@ -172,13 +178,14 @@ class WallOfFireZone(AreaCondition):
             return None
         return EventHandler(
             name="Wall of Fire turn-end exposure", source_entity_uuid=self.source_entity_uuid,
-            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT)],
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EXECUTION)],
             event_processor=process,
         )
 
 
 class WallOfFire(SpellAction):
     """Create an opaque, permeable straight or ring wall with one heated side."""
+    creates = (*SpellAction.creates, WallOfFireZone)
 
     name: str = "Wall of Fire"
     description: str = "Create an opaque wall of flame. A straight wall radiates to the left of its ordered endpoints; reverse the endpoints to reverse the hot side. A ring burns inside or outside."
@@ -198,13 +205,17 @@ class WallOfFire(SpellAction):
     )])
 
     def wall_geometry(self) -> WallPresentationGeometry | None:
-        if self.end_position is None:
+        return self._wall_geometry(self.current_selection())
+
+    def _wall_geometry(self, selection: ActionSelection) -> WallPresentationGeometry | None:
+        if not selection.positions:
             return None
+        end_position = selection.positions[0]
         if self.wall_form == "ring":
-            path = WallRing(center=self.end_position, radius_feet=self.wall_radius_feet)
-            anchor = self.end_position
+            path = WallRing(center=end_position, radius_feet=self.wall_radius_feet)
+            anchor = end_position
         else:
-            selected = self.get_selected_position_path()
+            selected = self._selected_position_path(selection)
             if selected is None or len(selected) != 2 or selected[0] == selected[1]:
                 return None
             path = WallSegment(start=selected[0], end=selected[1])
@@ -225,23 +236,34 @@ class WallOfFire(SpellAction):
             return event.with_updates(area_geometry=self.wall_geometry())
         return event
 
-    def selection_preview_error(self) -> str | None:
-        return self.position_selection_error() or self.position_placement_error(subjective=True)
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """A straight wall, or a ring heated on its inside or outside."""
+        form = lambda value: ActionVariantFacet(key="form", value=value, label=value.title())
+        return ((form("segment"),), *((form("ring"), ActionVariantFacet(key="side", value=side, label=f"Heat {side}"))
+                                       for side in ("inside", "outside")))
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        wall_form = selection_facet(selection, "form")
+        return {**super()._selection_overrides(selection), "wall_form": wall_form,
+                "hot_side": "left" if wall_form == "segment" else selection_facet(selection, "side")}
 
     def get_selection_geometry(self):
         return self.wall_geometry()
 
-    def position_placement_error(self, *, subjective: bool = False) -> str | None:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        return self._placement_error(selection, subjective=scan.subjective)
+
+    def _placement_error(self, selection: ActionSelection, *, subjective: bool) -> str | None:
         caster = Entity.get(self.source_entity_uuid)
-        geometry = self.wall_geometry()
+        geometry = self._wall_geometry(selection)
         if caster is None or geometry is None:
             return "Wall needs a caster and complete placement"
-        if self.end_position is None:
-            return "Select a wall position"
-        range_error = self.target_position_error(self.end_position)
+        end_position = selection.positions[0]
+        range_error = self.target_position_error(end_position)
         if range_error is not None:
             return range_error
-        if not caster.senses.visible.get(self.end_position, False):
+        if not cell_visible(caster.senses.cells, end_position):
             return "Wall origin is not visible"
         allowed_sides = {"left", "right"} if self.wall_form == "segment" else {"inside", "outside"}
         if self.hot_side not in allowed_sides:
@@ -255,7 +277,7 @@ class WallOfFire(SpellAction):
             if grid.is_blocking_propagation(*position, observer_uuid=self.source_entity_uuid if subjective else None):
                 return "Solid geometry obstructs the wall"
         if isinstance(geometry.path, WallSegment):
-            selected = self.get_selected_position_path()
+            selected = self._selected_position_path(selection)
             if selected is None:
                 return "Select wall endpoints"
             if not grid.can_reach_between(selected[0], selected[1],
@@ -269,9 +291,6 @@ class WallOfFire(SpellAction):
                             PhysicalAccess.PROJECTILE, self.source_entity_uuid, subjective=subjective):
                         return "A solid boundary crosses the wall"
         return None
-
-    def _validate(self, declaration_event: SpellEvent) -> SpellEvent | None:
-        return declaration_event.phase_to(EventPhase.EXECUTION)
 
     def _apply(self, execution_event: SpellEvent) -> SpellEvent | None:
         caster = Entity.get(self.source_entity_uuid)
@@ -292,22 +311,6 @@ class WallOfFire(SpellAction):
             concentration = self.ensure_concentration(effect)
             concentration.add_linked_condition(zone.uuid, zone.uuid)
         return effect
-
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        form = ActionVariantFacet(key="form", value=self.wall_form, label=self.wall_form.title())
-        return ((form,) if self.wall_form == "segment" else
-                (form, ActionVariantFacet(key="side", value=self.hot_side, label=f"Heat {self.hot_side}")))
-
-    def get_discovery_variants(self, entity) -> list[BaseAction]:
-        variants = []
-        for slot in super().get_discovery_variants(entity):
-            variants.append(slot.model_copy(update={"wall_form": "segment", "hot_side": "left"}))
-            for side in ("inside", "outside"):
-                variants.append(slot.model_copy(update={"wall_form": "ring", "hot_side": side}))
-        return variants
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__wall_{self.wall_form}_{self.hot_side}"
 
     def get_discovery_display_name(self) -> str:
         suffix = "straight" if self.wall_form == "segment" else f"ring, heat {self.hot_side}"

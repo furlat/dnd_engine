@@ -1,5 +1,11 @@
 # Packet 6 Antimagic native implementation handoff — 2026-10-04
 
+**Historical implementation, retired on 2026-10-16.** Antimagic Field and its
+dedicated machinery have been removed. Current behavior and schema-11 field
+removals are documented in the
+[spell repair handoff](SPELL_CATALOG_REPAIR_AND_ANTIMAGIC_REMOVAL_HANDOFF_2026-10-16.md).
+The original packet description below is retained as history.
+
 Status: implemented and locally verified within the approved Antimagic scope;
 **independent native review is required before visual binding**. This is an
 implementation handoff, not self-approval or whole-plan completion. The shared

@@ -11,7 +11,18 @@ from dnd.controller import Controller, HumanController, PassController, TurnCont
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventQueue
 from dnd.core.modifiers import ContextualNumericalModifier, NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    outgoing_of,
+    value_score,
+    Channel,
+    Kind,
+    add_modifier,
+    parts,
+    composed,
+    value_breakdown,
+)
 from dnd.encounter import AdvanceResult, Encounter, TurnState
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -32,66 +43,54 @@ def isolated_native_runtime():
 
 def registry_identities():
     # Registry retention is the measured regression, alongside observable math.
-    return frozenset(BaseObject._registry), frozenset(BaseValue._registry)
+    return frozenset(BaseObject._registry), frozenset(ModifiableValue._registry)
 
 
-@pytest.mark.parametrize("target_on_base", [True, False])
 @pytest.mark.parametrize("focused_context, expected", [(False, 5), (True, 6)])
-def test_temporary_values_preserve_context_bounds_and_owned_uuid_lookup(
-        target_on_base, focused_context, expected):
+def test_temporary_values_preserve_context_bounds_and_owned_uuid_lookup(focused_context, expected):
     owner, target = uuid4(), uuid4()
-    base = ModifiableValue.create(source_entity_uuid=owner, target_entity_uuid=target, base_value=16,
+    base = ModifiableValue(source_entity_uuid=owner, base=16,
         score_normalizer=ability_score_normalizer)
-    bonus = ModifiableValue.create(source_entity_uuid=owner, target_entity_uuid=target, base_value=1)
+    bonus = ModifiableValue(source_entity_uuid=owner, base=1)
     ceiling = NumericalModifier(source_entity_uuid=owner, value=6)
-    bonus.self_static.add_max_constraint(ceiling)
-    incoming = ModifiableValue.create(source_entity_uuid=target, target_entity_uuid=owner)
-    incoming.to_target_static.add_value_modifier(
-        NumericalModifier(source_entity_uuid=target, value=1))
+    add_modifier(bonus, Channel.SELF_STATIC, Kind.MAX, ceiling)
+    incoming = ModifiableValue(source_entity_uuid=target)
+    add_modifier(incoming, Channel.TO_TARGET_STATIC, Kind.VALUE, NumericalModifier(source_entity_uuid=target, value=1))
     focused = NumericalModifier(source_entity_uuid=target, value=2)
 
     def focus_bonus(source_entity_uuid: UUID, target_entity_uuid: UUID | None,
                     context: dict | None) -> NumericalModifier | None:
         return focused if context and context.get("focused") else None
 
-    incoming.to_target_contextual.add_value_modifier(ContextualNumericalModifier(
+    add_modifier(incoming, Channel.TO_TARGET_CONTEXTUAL, Kind.VALUE, ContextualNumericalModifier(
         source_entity_uuid=target, callable=focus_bonus))
-    incoming.set_context({"focused": focused_context})
-    (base if target_on_base else bonus).set_from_target(incoming)
-    registered = base.combine_values([bonus])
-    assert ModifiableValue.get(registered.uuid) is registered
+    read = ValueRead(owner, target, opponent=outgoing_of(parts(incoming), context={"focused": focused_context}))
+    first = composed(parts(base, bonus))
     before = registry_identities()
     for _ in range(20):
-        temporary = base.combine_values([bonus], use_register=False)
-        standalone = ModifiableValue.create(source_entity_uuid=owner,
-            base_value=16, score_normalizer=ability_score_normalizer, use_register=False)
+        temporary = composed(parts(base, bonus))
+        standalone = ModifiableValue(source_entity_uuid=owner,
+            base=16, score_normalizer=ability_score_normalizer, use_register=False)
         assert standalone.normalized_score == 3
         assert ModifiableValue.get(standalone.uuid) is None
-        assert ModifiableValue.get(temporary.uuid) is None
-        assert temporary.normalized_score == registered.normalized_score == expected
-        assert temporary.get_breakdown() == registered.get_breakdown()
+        assert value_score(temporary, read, normalized=True) == value_score(first, read, normalized=True) == expected
+        assert value_breakdown(temporary) == value_breakdown(first)
     assert registry_identities() == before
     assert ModifiableValue.get(base.uuid) is base
     assert ModifiableValue.get(bonus.uuid) is bonus
     assert NumericalModifier.get(ceiling.uuid) is ceiling
     assert NumericalModifier.get(focused.uuid) is focused
-    base_modifier = base.get_base_modifier()
-    assert base_modifier is not None
-    assert NumericalModifier.get(base_modifier.uuid) is base_modifier
 
 
 def test_temporary_ability_read_keeps_combined_constraints():
     ability = Ability.create(source_entity_uuid=uuid4(), name="constitution",
         config=AbilityConfig(ability_score=16, modifier_bonus=2))
-    ability.modifier_bonus.self_static.add_max_constraint(
-        NumericalModifier(source_entity_uuid=ability.source_entity_uuid, value=4))
-    registered = ability.get_combined_values()
-    assert ModifiableValue.get(registered.uuid) is registered
-    assert registered.normalized_score == 4
+    add_modifier(ability.modifier_bonus, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(source_entity_uuid=ability.source_entity_uuid, value=4))
+    assert ability.modifier_reading().normalized_score == 4
     # Adding separately normalized channel scores would incorrectly return 5.
     before = registry_identities()
     for _ in range(30):
-        assert ability.get_combined_values(use_register=False).normalized_score == 4
+        assert ability.modifier_reading().normalized_score == 4
     assert registry_identities() == before
     assert ModifiableValue.get(ability.ability_score.uuid) is ability.ability_score
     assert ModifiableValue.get(ability.modifier_bonus.uuid) is ability.modifier_bonus
@@ -116,7 +115,7 @@ def test_repeated_hud_and_stat_reads_leave_registries_and_native_events_unchange
             assert snapshot_player_hud(session) == hud
             assert tuple(actor.snapshot_entity_stats() for actor in actors) == stats
             assert tuple(actor.get_passive_perception() for actor in actors) == passive
-            assert tuple(actor.ac_bonus(use_register=False).normalized_score
+            assert tuple(actor.ac_bonus().normalized_score
                 for actor in actors) == expected_ac
         assert registry_identities() == before
         assert EventQueue.event_cursor() == cursor

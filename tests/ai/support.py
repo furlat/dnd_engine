@@ -16,6 +16,7 @@ from dnd.ai.instrumentation import (
 )
 from dnd.ai.policies.basic import BASIC_POLICY_ID
 from dnd.ai.runtime.controller import NativeAIController
+from dnd.ai.runtime.knowledge_system import AIKnowledgeSystem, bind_ai_knowledge
 from dnd.encounter import EncounterState
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
@@ -33,6 +34,7 @@ class NativeAITestGame:
     assembled: AssembledEncounter
     controllers: tuple[NativeAIController, ...]
     instrumentation_sinks: tuple[BoundedAIInstrumentationSink, ...]
+    ai_knowledge: AIKnowledgeSystem
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +60,7 @@ def build_native_ai_test_game(
     )
     controllers: list[NativeAIController] = []
     sinks: list[BoundedAIInstrumentationSink] = []
+    knowledge = bind_ai_knowledge()
     for roster_slot in assembled.recipe.roster_slots:
         entities = assembled.entities_by_roster_slot[
             roster_slot.roster_slot_id
@@ -72,6 +75,7 @@ def build_native_ai_test_game(
             game_id=assembled.recipe.encounter_id,
             assignment_id=f"test:{roster_slot.roster_slot_id}",
             controlled_entity_uuids=controlled,
+            knowledge=knowledge,
             policy_id=BASIC_POLICY_ID,
             instrumentation=AIInstrumentation(sink=sink),
             maximum_decisions_per_turn=maximum_decisions_per_turn,
@@ -85,6 +89,7 @@ def build_native_ai_test_game(
         assembled=assembled,
         controllers=tuple(controllers),
         instrumentation_sinks=tuple(sinks),
+        ai_knowledge=knowledge,
     )
 
 

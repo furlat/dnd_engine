@@ -204,16 +204,83 @@ class SorcererGrantReceipt:
             raise ValueError("replaced spell action index cannot be negative")
 
 
+@dataclass(frozen=True, slots=True)
+class CasterChassisReceipt:
+    """Exact structural handles; no generic contribution instructions."""
+    hit_die_uuids: tuple[UUID, ...] = ()
+    creature_proficiency_source_ids: tuple[UUID, ...] = ()
+    skill_proficiency_sources: tuple[tuple[SkillName, UUID], ...] = ()
+    saving_throw_proficiency_sources: tuple[tuple[SavingThrowName, UUID], ...] = ()
+    ability_score_modifier_ids: tuple[tuple[AbilityName, UUID], ...] = ()
+    feature_sources: tuple[tuple[str, UUID], ...] = ()
+    handler_uuids: tuple[UUID, ...] = ()
+    resource_contributions: tuple[tuple[str, UUID], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ClericGrantReceipt:
+    """Owned structural and native feature contributions of one Cleric level."""
+    step_id: str
+    source_id: UUID
+    chassis: CasterChassisReceipt
+    action_uuids: tuple[UUID, ...] = ()
+    handler_uuids: tuple[UUID, ...] = ()
+    condition_uuids: tuple[UUID, ...] = ()
+    resource_contributions: tuple[tuple[str, UUID], ...] = ()
+    attack_multiplicity_grant_ids: tuple[UUID, ...] = ()
+
+    def __post_init__(self) -> None:
+        _require_step_id(self.step_id)
+
+
+@dataclass(frozen=True, slots=True)
+class PaladinGrantReceipt:
+    """Owned structural and native feature contributions of one Paladin level."""
+    step_id: str
+    source_id: UUID
+    chassis: CasterChassisReceipt
+    action_uuids: tuple[UUID, ...] = ()
+    handler_uuids: tuple[UUID, ...] = ()
+    condition_uuids: tuple[UUID, ...] = ()
+    resource_contributions: tuple[tuple[str, UUID], ...] = ()
+    attack_multiplicity_grant_ids: tuple[UUID, ...] = ()
+
+    smite_entitlement_uuid: UUID | None = None
+
+    def __post_init__(self) -> None:
+        _require_step_id(self.step_id)
+
+
+@dataclass(frozen=True, slots=True)
+class WizardGrantReceipt:
+    """Owned structural and native feature contributions of one Wizard level."""
+    step_id: str
+    source_id: UUID
+    chassis: CasterChassisReceipt
+    action_uuids: tuple[UUID, ...] = ()
+    handler_uuids: tuple[UUID, ...] = ()
+    condition_uuids: tuple[UUID, ...] = ()
+    resource_contributions: tuple[tuple[str, UUID], ...] = ()
+    attack_multiplicity_grant_ids: tuple[UUID, ...] = ()
+    free_cast_grant_ids: tuple[UUID, ...] = ()
+
+    def __post_init__(self) -> None:
+        _require_step_id(self.step_id)
+
+
 CharacterGrantReceipt = (
     OriginGrantReceipt
     | FighterGrantReceipt
     | BarbarianGrantReceipt
     | SorcererGrantReceipt
+    | ClericGrantReceipt
+    | PaladinGrantReceipt
+    | WizardGrantReceipt
 )
 
 
 __all__ = [
-    "BarbarianGrantReceipt",
+    "BarbarianGrantReceipt", "CasterChassisReceipt", "ClericGrantReceipt", "PaladinGrantReceipt", "WizardGrantReceipt",
     "CharacterGrantReceipt",
     "FighterGrantReceipt",
     "OriginGrantReceipt",

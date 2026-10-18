@@ -1,5 +1,6 @@
 """Passive native facts for a body release and persistent tile residue."""
 
+from dataclasses import dataclass, field
 from uuid import UUID
 from typing import Literal
 
@@ -68,6 +69,20 @@ class TileResidueState(BaseModel):
     amount: int = Field(default=1, ge=1)
     max_amount: int = Field(default=1, ge=1)
     contributions: tuple[ResidueContribution, ...] = ()
+
+
+@dataclass(slots=True)
+class ResidueFieldState:
+    """The map's one residue condition for one material (plan §5.9, D15).
+
+    Per-cell after-values live on the tiles; the field records which cells hold
+    the material and the one entry handler covering its hazardous cells.
+    """
+
+    uuid: UUID
+    residue_id: str
+    cells: set[tuple[int, int]] = field(default_factory=set)
+    entry_handler_uuid: UUID | None = None
 
 
 class ObjectResidueState(BaseModel):

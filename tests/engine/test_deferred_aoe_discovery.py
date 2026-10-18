@@ -5,13 +5,13 @@ rich/deferred options, subjective previews and native execution without preview.
 """
 
 import pytest
-from uuid import uuid4
 
 from dnd.actions import SpellEvent
 from dnd.actions_functional import (
     execute_available_action, get_available_actions, preview_available_selection,
     register_spell, setup_standard_actions,
 )
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.aoe import (
     Cone, Cube, Cylinder, Line, Sphere, snapshot_aoe_aiming_geometry,
 )
@@ -30,6 +30,7 @@ from dnd.spells.evocation import BurningHands, Fireball, IceStorm
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor, force_save_result, reset_spell_regression_arena,
 )
+from dnd.core.cells import mask_positions
 
 
 @pytest.fixture
@@ -108,7 +109,7 @@ def test_selected_subjective_preview_matches_rich_cells_and_recipients(scene, sp
     assert preview.affected_entity_names == tuple(expected.affected_entity_names)
     assert {enemy.uuid, ally.uuid} <= set(preview.affected_entity_uuids)
     assert hidden.uuid not in preview.affected_entity_uuids
-    assert set(preview.affected_positions) <= {p for p, visible in caster.senses.visible.items() if visible}
+    assert set(preview.affected_positions) <= {p for p, visible in ((position, True) for position in mask_positions(capture_senses_snapshot(caster.senses).visible)) if visible}
     assert preview.geometry is not None
     assert selected.affected_positions is None
     assert (selected.index, selected.position, selected.distance) == (
@@ -225,17 +226,15 @@ def test_native_object_choices_identify_the_item_as_an_object(scene):
 
 
 @pytest.mark.parametrize("shape,mode", [
-    (Sphere(source_entity_uuid=uuid4(), target=(6, 4)), "aim"),
-    (Cylinder(source_entity_uuid=uuid4(), target=(6, 4)), "aim"),
-    (Cube(source_entity_uuid=uuid4(), target=(6, 4), centered=True), "aim"),
-    (Cone(source_entity_uuid=uuid4(), target=(6, 4)), "fixed"),
-    (Line(source_entity_uuid=uuid4(), target=(6, 4)), "fixed"),
-    (Cube(source_entity_uuid=uuid4(), target=(6, 4), centered=False), "fixed"),
-    (Sphere(source_entity_uuid=uuid4(), target=(6, 4), origin_override=(3, 4), propagation="connected"), "fixed"),
+    (Sphere(), "aim"),
+    (Sphere(propagation="connected"), "aim"),
+    (Cylinder(), "aim"),
+    (Cube(centered=True), "aim"),
+    (Cone(), "fixed"),
+    (Line(), "fixed"),
+    (Cube(centered=False), "fixed"),
 ])
 def test_native_aiming_descriptor_preserves_shape_origin_and_propagation(shape, mode):
     descriptor = snapshot_aoe_aiming_geometry(shape, (2, 4))
-    assert descriptor is not None
-    assert descriptor.reference_target == shape.target and descriptor.origin_mode == mode
-    assert descriptor.propagation == shape.propagation
-    assert shape.computed_origin is None and not shape.affected_positions
+    assert descriptor.origin_mode == mode and descriptor.propagation == shape.propagation
+    assert descriptor.geometry == shape.presentation_geometry(descriptor.reference_target, (2, 4))

@@ -25,6 +25,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.transmutation import Longstrider
 from dnd.spells.transmutation import HasteEffect, SlowedEffect
 from dnd.types.world import MovementMode
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.fixture
@@ -132,10 +133,10 @@ def test_innate_flight_keeps_authored_speed_and_nonmagical_provenance(game):
 
 def test_fixed_life_drain_baseline_keeps_independent_buffs_and_reductions_accumulate(game):
     owner=actor(game,strength=20); target=actor(game,'Target',(4,3))
-    owner.equipment.attack_bonus.self_static.add_value_modifier(NumericalModifier(value=3,name='Attack buff',source_entity_uuid=owner.uuid))
-    owner.equipment.damage_bonus.self_static.add_value_modifier(NumericalModifier(value=2,name='Damage buff',source_entity_uuid=owner.uuid))
+    add_modifier(owner.equipment.attack_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(value=3,name='Attack buff',source_entity_uuid=owner.uuid))
+    add_modifier(owner.equipment.damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(value=2,name='Damage buff',source_entity_uuid=owner.uuid))
     action=WightLifeDrain(source_entity_uuid=owner.uuid,target_entity_uuid=target.uuid)
-    profile=action.get_outcome_profile(owner)
+    profile=action.get_outcome_profile()
     assert profile.attack_bonus==7 and profile.damage_rolls[0].flat_bonus==4
     before=target.get_max_hp()
     for _ in range(2):
@@ -154,7 +155,7 @@ def test_wight_multiattack_replaces_one_longsword_and_has_no_bow_replacement(gam
     equip(owner,'weapon.longsword',WeaponSlot.MELEE_MAIN)
     action=wight_melee_multiattack(owner.uuid)
     action.template=True
-    choice=next(variant for variant in action.get_discovery_variants(owner) if variant.use_attack_substitution)
+    choice=next(variant for variant in action.discovery_forms(owner.action_scan(subjective=True)) if variant.use_attack_substitution)
     with fixed_dice_faces(15,4,1,15,2): result=choice.instantiate(target_entity_uuid=target.uuid).apply()
     assert result and not result.canceled
     roots=[event for event in EventQueue.get_events_by_type(EventType.ATTACK) if event.phase is EventPhase.DECLARATION]
@@ -163,12 +164,12 @@ def test_wight_multiattack_replaces_one_longsword_and_has_no_bow_replacement(gam
     equip(owner,'weapon.longbow',WeaponSlot.RANGED_MAIN)
     ranged=MultiattackAction(source_entity_uuid=owner.uuid,attack_sequence=((WeaponSlot.RANGED_MAIN,2),),
         attack_replacement=action.attack_replacement)
-    assert not any(variant.use_attack_substitution for variant in ranged.get_discovery_variants(owner))
+    assert not any(variant.use_attack_substitution for variant in ranged.discovery_forms(owner.action_scan(subjective=True)))
 
 
 def test_odd_speed_haste_and_slow_do_not_depend_on_application_order(game):
     owner=actor(game)
-    owner.action_economy.walking_speed.self_static.add_value_modifier(NumericalModifier(name='Odd speed',value=5,source_entity_uuid=owner.uuid))
+    add_modifier(owner.action_economy.walking_speed, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(name='Odd speed',value=5,source_entity_uuid=owner.uuid))
     for types in ((HasteEffect,SlowedEffect),(SlowedEffect,HasteEffect)):
         for condition in types:
             owner.add_condition(condition(source_entity_uuid=owner.uuid,target_entity_uuid=owner.uuid, **({"apply_lethargy":False} if condition is HasteEffect else {})))

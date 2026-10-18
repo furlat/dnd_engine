@@ -21,6 +21,7 @@ from dnd.core.world_edges import ElevationSurfaceKind
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor, force_save_result, reset_spell_regression_arena,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 @pytest.fixture
@@ -255,7 +256,7 @@ def test_fall_absorbed_by_temporary_hp_still_knocks_prone_unless_no_damage(scene
     raise_support([(3, 2), (4, 2)], 10)
     target.health.add_temporary_hit_points(10, target.uuid)
     if immune:
-        target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+        add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             name='No bludgeoning damage', value=ResistanceStatus.IMMUNITY,
             damage_type=DamageType.BLUDGEONING, source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid))
@@ -267,6 +268,61 @@ def test_fall_absorbed_by_temporary_hp_still_knocks_prone_unless_no_damage(scene
     assert target.position == (5, 2) and target.get_normal_hp() == before
     assert target.health.temporary_hit_points.normalized_score == (10 if immune else 8)
     assert ('Prone' in target.active_conditions) is not immune
+
+
+@pytest.mark.parametrize("canceled", [False, True])
+def test_fall_prone_uses_resolved_damage_despite_reactive_healing(scene, canceled):
+    caster, target = scene
+    target.faction = caster.faction
+    Entity.update_entity_position(caster, (3, 2))
+    raise_support([(3, 2), (4, 2)], 10)
+    before = target.get_normal_hp()
+
+    def heal_after_damage(event, _):
+        target.receive_healing(event.applied_damage, target.uuid, parent_event=event.uuid)
+        return None
+
+    target.add_event_handler(EventHandler(source_entity_uuid=target.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.DAMAGE_APPLIED,
+            event_phase=EventPhase.EFFECT, event_target_entity_uuid=target.uuid)],
+        event_processor=heal_after_damage))
+    if canceled:
+        target.add_event_handler(EventHandler(source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE,
+                event_phase=EventPhase.EFFECT, event_target_entity_uuid=target.uuid)],
+            event_processor=lambda event, _: event.cancel(status_message="Fall damage refused")))
+    Entity.update_all_entities_senses(max_distance=125)
+    with fixed_dice_faces(*([2] * 64)):
+        result = Shove(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid).apply()
+    canceled_move = result.canceled
+    assert not canceled_move and target.position == (5, 2)
+    assert target.get_normal_hp() == before
+    assert ("Prone" in target.active_conditions) is not canceled
+
+
+def test_fall_admission_temp_hp_keeps_prone_consistent_with_completed_damage_facts(scene):
+    caster, target = scene
+    target.faction = caster.faction
+    Entity.update_entity_position(caster, (3, 2))
+    raise_support([(3, 2), (4, 2)], 10)
+
+    def grant_during_admission(event, _):
+        target.health.add_temporary_hit_points(10, target.uuid)
+        return None
+
+    target.add_event_handler(EventHandler(source_entity_uuid=target.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE,
+            event_phase=EventPhase.EFFECT, event_target_entity_uuid=target.uuid)],
+        event_processor=grant_during_admission))
+    Entity.update_all_entities_senses(max_distance=125)
+    cursor = EventQueue.event_cursor()
+    with fixed_dice_faces(*([2] * 64)):
+        result = Shove(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid).apply()
+    canceled_move = result.canceled
+    facts = damage_since(cursor)
+    prone = "Prone" in target.active_conditions
+    assert not canceled_move and target.position == (5, 2)
+    assert prone is bool(facts)
 
 
 def test_thunderwave_uses_same_ledge_landing(scene):
@@ -333,7 +389,7 @@ def test_repeat_uses_original_dc_and_damage_origin(scene):
     repeat = caster.get_action_template("Telekinesis: Move")
     assert repeat is not None
     origin = caster.active_conditions["Telekinesis"].effect_origin
-    caster.spellcasting.spell_dc_bonus.self_static.add_value_modifier(NumericalModifier.create(
+    add_modifier(caster.spellcasting.spell_dc_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
         source_entity_uuid=caster.uuid, name="Changed DC", value=5))
     assert caster.spell_save_dc() == original_dc + 5
     target.faction = "enemies"
@@ -370,7 +426,7 @@ def test_fall_defenses_prevent_ordinary_prone_when_no_damage_is_taken(scene):
     target.faction = caster.faction
     Entity.update_entity_position(caster, (3, 2))
     raise_support([(3, 2), (4, 2)], 10)
-    target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
         source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
         damage_type=DamageType.BLUDGEONING, value=ResistanceStatus.IMMUNITY, name="Test immunity"))
     Entity.update_all_entities_senses(max_distance=125)

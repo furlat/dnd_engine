@@ -1,0 +1,4 @@
+{"source_root": "/home/tommaso/.codex/worktrees/spells-rank-one-two/dnd_engine", "python": "/home/tommaso/.cache/dnd-engine/venv/bin/python", "python_version": "3.13.12", "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39", "scope": "profiled native commit only; setup and unrelated event creation excluded"}
+{"case": "finite_item_commit", "unrelated_events_after_preparation": 0, "event_tail_iterator_resumes": 0, "committed": true, "charges_after": 0}
+{"case": "finite_item_commit", "unrelated_events_after_preparation": 1000, "event_tail_iterator_resumes": 0, "committed": true, "charges_after": 0}
+{"case": "finite_item_commit", "unrelated_events_after_preparation": 10000, "event_tail_iterator_resumes": 0, "committed": true, "charges_after": 0}

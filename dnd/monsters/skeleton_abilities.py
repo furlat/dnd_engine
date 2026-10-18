@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import Field
 
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import BaseAction, ActionEvent, TargetType, Cost
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory
@@ -14,8 +15,11 @@ from dnd.core.events import (
 )
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.entity import Entity
+from dnd.spells.spell_utils import seen_recipients_error
+from dnd.types.discovery import ActorScan
 from dnd.actions import entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.conditions import Concentrating
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 class Marked(BaseCondition):
@@ -79,7 +83,7 @@ class Marked(BaseCondition):
             source_entity_uuid=target_uuid,
             target_entity_uuid=source_uuid,
         )
-        mod_uuid = target.equipment.ac_bonus.to_target_static.add_advantage_modifier(modifier)
+        mod_uuid = add_modifier(target.equipment.ac_bonus, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, modifier)
         outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
 
         target.add_condition_immunity("Invisible", immunity_name="Marked")
@@ -160,6 +164,7 @@ class MarkTargetAction(BaseAction):
         spell_range: Range used by validation.
         costs: Runtime action-economy costs.
     """
+    creates = (Concentrating, MarkCooldown, Marked)
     name: str = Field(default="Mark Target", description="Action discovery and combat-log label.")
     description: str = Field(
         default="Mark an enemy (60ft). Attackers gain advantage, target can't hide. Concentration.",
@@ -198,41 +203,12 @@ class MarkTargetAction(BaseAction):
         """
         return self.spell_range
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        """Validate Mark Target range and line of sight.
-
-        Args:
-            declaration_event: Action declaration event to advance or cancel.
-
-        Returns:
-            Execution event when the target is visible and in range, otherwise a
-            canceled event.
-        """
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """Mark Target's cooldown, line of sight and range."""
         source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source or not target:
-            return declaration_event.cancel(status_message="Source or target not found")
-
-        if "Mark Cooldown" in source.active_conditions:
-            return declaration_event.cancel(
-                status_message="Mark Target is unavailable until the cooldown ends"
-            )
-
-        contact = source.senses.entities.get(target.uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Target not in line of sight")
-
-        distance = source.senses.get_feet_distance(target.position)
-        if distance > self.spell_range.normal:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
-            )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}",
-        )
+        if source is not None and "Mark Cooldown" in source.active_conditions:
+            return "Mark Target is unavailable until the cooldown ends"
+        return seen_recipients_error(self, scan, selection.target_uuids)
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply Mark Target's concentration, linked mark, and cooldown.
@@ -245,7 +221,7 @@ class MarkTargetAction(BaseAction):
             event.
         """
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")

@@ -18,10 +18,12 @@ from dnd.spells.conjuration import PoisonSpray, Web
 from dnd.spells.evocation import (
     BurningHands, GustOfWind, GustOfWindZone, SacredFlame, ShockingGrasp, Thunderwave,
 )
-from dnd.types.senses import reduce_senses_snapshot
+
 from tests.manual.test_131_inventory_use_actions_legacy_contract import (
     create_caster, create_target, force_save, reset_item_arena,
 )
+from dnd.core.cells import mask_positions
+from dnd.core.sensory_fold import reduce_senses_snapshot
 
 
 @pytest.mark.parametrize("spell_type, identity", (
@@ -108,7 +110,7 @@ def test_oblique_gust_initial_and_persistent_footprints_share_the_selected_direc
         result = GustOfWind(source_entity_uuid=caster.uuid, end_position=(15, 9)).apply()
     assert isinstance(result, SpellEvent) and not result.canceled and result.total_targets == 1
     zone = next(zone for zone in get_map().get_spatial_conditions() if isinstance(zone, GustOfWindZone))
-    assert zone.zone_direction == (10, 4)
+    assert zone.area_aim_offset == (10, 4)
     assert target.position in zone.affected_positions
     assert set(result.resolved_area_positions or ()) == zone.affected_positions
     observation = caster.senses.spatial_effects[zone.uuid]
@@ -190,7 +192,7 @@ def test_gust_observation_origin_disclosure_and_removal_replay_without_native_wo
     if not remove_while_hidden:
         assert caster.remove_condition("Concentrating")
     retained = observer.senses.spatial_effects.get(zone.uuid)
-    assert retained is None or set(retained.positions).isdisjoint(observer.senses.visible)
+    assert retained is None or set(retained.positions).isdisjoint(mask_positions(capture_senses_snapshot(observer.senses).visible))
     checkpoint()
     # Previously observed but still hidden cells retain their last known state.
     # Seeing the complete former area establishes that every part is gone.

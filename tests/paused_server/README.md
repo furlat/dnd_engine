@@ -1,10 +1,10 @@
 # Paused server tests
 
-These checks retain the HTTP/database/deployment contracts for the paused server.
-They are not native engine tests. They were moved unchanged from
-`tests/progression/test_persistent_character_equipment_mutation.py` and
-`tests/progression/test_persistent_character_scenario_deployment.py`. The catalog
-cold-start probe was split from the active architecture test.
+This lane holds only the catalog cold-start probe, split from the active
+architecture test. It is not a native engine test. The persistent-character
+equipment-mutation and scenario-deployment files were deleted on 2026-10-17:
+their server character directory, game directory and character-build modules
+no longer exist (see `agent_docs/STALE_TEST_REPAIR_2026-10-17.md`).
 
 Run explicitly with the project environment:
 
@@ -12,9 +12,9 @@ Run explicitly with the project environment:
 python -m pytest tests/paused_server
 ```
 
-Known blockers: the progression modules import deleted server character modules;
-the server catalog imports removed `dnd.core.senses`. No skip, xfail or automatic
-collection filter hides these failures. `pytest tests` still includes this lane.
+Known blocker: the probe's subprocess imports `server.spell_catalog`, which now
+exists only under `server_obsolete/`. No skip, xfail or automatic collection
+filter hides this failure. `pytest tests` still includes this lane.
 
 Active acceptance commands:
 

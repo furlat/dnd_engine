@@ -6,6 +6,8 @@ from uuid import UUID, uuid4
 
 from pydantic import Field
 
+from dnd.blocks.sensory import capture_senses_snapshot
+from dnd.core.aoe import Sphere
 from dnd.types.world import MovementMode
 from dnd.actions import Attack, AttackEvent, SpellEvent, Swim
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
@@ -34,8 +36,8 @@ from dnd.core.modifiers import (
     ResistanceModifier,
     ResistanceStatus,
 )
-from dnd.core.values import BaseValue
-from dnd.types.senses import OpticalObscurement
+from dnd.core.values import ModifiableValue, ValueRead, read_value, Channel, Kind, add_modifier
+from dnd.types.senses import OBSCUREMENT_SETS, OpticalObscurement
 from dnd.entity import Entity, EntityConfig
 from dnd.actions_functional import execute_by_index, setup_standard_actions
 from dnd.content.items.authored_item_builders import build_authored_item
@@ -120,6 +122,13 @@ from tests.engine.support import (
     reset_combat_state,
     set_hp,
 )
+from dnd.types.cells import cell_in, value_at
+
+
+def attack_read(entity, weapon_slot, target_uuid, context):
+    """The entity's weapon attack bonus read against a target in an attack context."""
+    value, _ = entity.weapon_attack_value(ValueRead(entity.uuid, target_uuid), weapon_slot)
+    return read_value(value, ValueRead(entity.uuid, target_uuid, context))
 
 
 def reset_spell_family_state(width: int = 12, height: int = 8) -> None:
@@ -128,7 +137,7 @@ def reset_spell_family_state(width: int = 12, height: int = 8) -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, width, height)
 
 
@@ -192,27 +201,23 @@ def create_family_target(
 def penalize_save(entity: Entity, ability_name: AbilityName, value: int = -100) -> None:
     """Make a save fail deterministically unless the engine applies an auto rule."""
     save = entity.saving_throws.get_saving_throw(ability_name)
-    save.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(save.bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             name=f"Book {ability_name} save penalty",
             value=value,
-        )
-    )
+        ))
 
 
 def boost_save(entity: Entity, ability_name: AbilityName, value: int = 100) -> None:
     """Make a save succeed deterministically unless the engine applies an auto rule."""
     save = entity.saving_throws.get_saving_throw(ability_name)
-    save.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(save.bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             name=f"Book {ability_name} save boost",
             value=value,
-        )
-    )
+        ))
 
 
 def assert_completed_spell(event: Event | None) -> SpellEvent:
@@ -308,14 +313,12 @@ class BookAbilityScoreReduction(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         ability = target.ability_scores.get_ability(self.ability_name)
-        modifier_uuid = ability.ability_score.self_static.add_value_modifier(
-            NumericalModifier.create(
+        modifier_uuid = add_modifier(ability.ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid or self.target_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
                 name="Book ability score reduction",
                 value=self.penalty,
-            )
-        )
+            ))
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             status_message=f"Applied Book Ability Score Reduction to {self.ability_name}",
@@ -344,14 +347,12 @@ class BookHitPointMaximumReduction(BaseCondition):
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
-        modifier_uuid = target.health.max_hit_points_bonus.self_static.add_value_modifier(
-            NumericalModifier.create(
+        modifier_uuid = add_modifier(target.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
                 source_entity_uuid=self.source_entity_uuid or self.target_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
                 name="Book hit point maximum reduction",
                 value=self.penalty,
-            )
-        )
+            ))
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             status_message="Applied Book Hit Point Maximum Reduction",
@@ -754,7 +755,7 @@ def test_eb_15_039_greater_restoration_removes_standard_petrified_condition() ->
     assert ally.action_economy.action_permission.normalized_score == 0
     assert ally.check_condition_immunity("Poisoned")
     for damage_type in DamageType:
-        assert ally.health.get_resistance(damage_type) == ResistanceStatus.RESISTANCE
+        assert ally.health.get_resistance(damage_type) == (ResistanceStatus.IMMUNITY if damage_type is DamageType.POISON else ResistanceStatus.RESISTANCE)
 
     restoration_event = GreaterRestoration(
         source_entity_uuid=caster.uuid,
@@ -1032,11 +1033,9 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
         "range_type": RangeType.RANGE.value,
         "is_long_range": True,
     }
-    protected_ranged_attack = ally.attack_bonus(WeaponSlot.RANGED_MAIN, caster.uuid)
-    protected_ranged_attack.set_context(ranged_underwater_context)
+    protected_ranged_attack = attack_read(ally, WeaponSlot.RANGED_MAIN, caster.uuid, ranged_underwater_context)
     assert protected_ranged_attack.advantage == AdvantageStatus.NONE
     assert protected_ranged_attack.auto_hit == AutoHitStatus.NONE
-    protected_ranged_attack.clear_context()
 
     water_lane = [(8, 1), (9, 1), (10, 1)]
     grid = get_map()
@@ -1102,11 +1101,9 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     assert not ally.ignore_underwater_penalties
     assert ally.get_action_template("Freedom of Movement Escape") is None
 
-    unprotected_ranged_attack = ally.attack_bonus(WeaponSlot.RANGED_MAIN, caster.uuid)
-    unprotected_ranged_attack.set_context(ranged_underwater_context)
+    unprotected_ranged_attack = attack_read(ally, WeaponSlot.RANGED_MAIN, caster.uuid, ranged_underwater_context)
     assert unprotected_ranged_attack.advantage == AdvantageStatus.DISADVANTAGE
     assert unprotected_ranged_attack.auto_hit == AutoHitStatus.AUTOMISS
-    unprotected_ranged_attack.clear_context()
 
     ally.equipment.equip(
         build_authored_item("weapon.club", ally.uuid),
@@ -1118,16 +1115,12 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
         "range_type": RangeType.REACH.value,
         "is_long_range": False,
     }
-    unprotected_melee_attack = ally.attack_bonus(WeaponSlot.MELEE_MAIN, caster.uuid)
-    unprotected_melee_attack.set_context(melee_underwater_context)
+    unprotected_melee_attack = attack_read(ally, WeaponSlot.MELEE_MAIN, caster.uuid, melee_underwater_context)
     assert unprotected_melee_attack.advantage == AdvantageStatus.DISADVANTAGE
-    unprotected_melee_attack.clear_context()
 
     ally.swimming_speed = 30
-    swimming_melee_attack = ally.attack_bonus(WeaponSlot.MELEE_MAIN, caster.uuid)
-    swimming_melee_attack.set_context(melee_underwater_context)
+    swimming_melee_attack = attack_read(ally, WeaponSlot.MELEE_MAIN, caster.uuid, melee_underwater_context)
     assert swimming_melee_attack.advantage == AdvantageStatus.NONE
-    swimming_melee_attack.clear_context()
     ally.swimming_speed = 0
 
     unprotected_swim = Swim(source_entity_uuid=ally.uuid, end_position=water_lane[-1]).apply()
@@ -1495,7 +1488,7 @@ def test_eb_15_015_bless_and_bane_rewrite_save_d20_results() -> None:
     bless_event = assert_completed_spell(bless_event)
     assert "Bless" in ally.active_conditions
 
-    bless_bonus = ally.saving_throw_bonus(caster.uuid, "wisdom")
+    bless_bonus = ally.saving_throw_bonus(caster.uuid, "wisdom", None)
     with patch("random.randint", side_effect=[10, 3]):
         blessed_roll, blessed_event = ally.roll_d20_event(
             bless_bonus,
@@ -1520,7 +1513,7 @@ def test_eb_15_015_bless_and_bane_rewrite_save_d20_results() -> None:
     bane_event = assert_completed_spell(bane_event)
     assert "Bane" in enemy.active_conditions
 
-    bane_bonus = enemy.saving_throw_bonus(caster.uuid, "wisdom")
+    bane_bonus = enemy.saving_throw_bonus(caster.uuid, "wisdom", None)
     with patch("random.randint", side_effect=[12, 2]):
         baned_roll, baned_event = enemy.roll_d20_event(
             bane_bonus,
@@ -1685,7 +1678,7 @@ def test_eb_15_024_d20_mutation_handlers_are_roll_type_scoped() -> None:
     assert "Guidance" in caster.active_conditions
     guidance_attack_event.phase_to(EventPhase.COMPLETION)
 
-    guidance_save_bonus = caster.saving_throw_bonus(None, "wisdom")
+    guidance_save_bonus = caster.saving_throw_bonus(None, "wisdom", None)
     with patch("random.randint", side_effect=[14]):
         guidance_save_roll, guidance_save_event = caster.roll_d20_event(
             guidance_save_bonus,
@@ -2185,7 +2178,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     assert len(cloudkill_zone.event_handlers_uuids) == 2
     assert (
         OpticalObscurement.HEAVY
-        in get_map().get_optical_obscurements_at((10, 10))
+        in OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 10))]
     )
 
     hp_before_entry = get_hp(target)
@@ -2235,7 +2228,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     )
     assert spirit_zone.position == caster.position
     assert len(spirit_zone.spatial_handler_uuids) == 2
-    assert len(spirit_zone.event_handlers_uuids) == 2
+    assert len(spirit_zone.event_handlers_uuids) == 3  # turn start, anchor loss (inline), anchor movement (phase B)
 
     enemy_hp_before = get_hp(enemy)
     ally_hp_before = get_hp(ally)
@@ -2293,14 +2286,14 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     assert fog_center_tile is not None
     assert fog_edge_tile is not None
     assert fog_outside_tile is not None
-    assert fog_zone.zone_radius_feet == 40
+    assert fog_zone.area == Sphere(radius_feet=40, propagation="connected")
     assert (24, 16) in fog_zone.affected_positions
     assert fog_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert fog_edge_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((16, 16)) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((16, 16))] == {
         OpticalObscurement.HEAVY
     }
-    assert get_map().get_optical_obscurements_at((24, 16)) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((24, 16))] == {
         OpticalObscurement.HEAVY
     }
     assert fog_outside_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
@@ -2309,7 +2302,7 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     caster.remove_condition("Concentrating")
     assert fog_zone not in get_map().get_spatial_conditions()
     assert fog_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((16, 16)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((16, 16))] == set()
 
     reset_spell_family_state(width=24, height=24)
     dark_caster = create_family_caster(
@@ -2350,9 +2343,9 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     assert center_tile is not None
     assert center_tile.resolved_light_level == LightLevel.DARKNESS
     assert not center_tile.blocks_optics_at_center()
-    assert (11, 10) not in darkvision_observer.senses.visible
-    assert (11, 10) not in darkvision_observer.senses.effective_light_levels
-    assert get_map().get_optical_obscurements_at((11, 10)) == {
+    assert not cell_in(capture_senses_snapshot(darkvision_observer.senses).visible, (11, 10))
+    assert value_at(capture_senses_snapshot(darkvision_observer.senses).effective_light_levels, (11, 10)) is None
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((11, 10))] == {
         OpticalObscurement.MAGICAL_DARKNESS
     }
     assert "Concentrating" in dark_caster.active_conditions
@@ -2407,7 +2400,7 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     assert plague_zone.optical_obscurement is None
     assert plague_center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert plague_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((10, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 5))] == set()
     assert target_hp_before - get_hp(target) == 18
     assert caster.action_economy.spell_slot_7.normalized_score == 0
 
@@ -2415,7 +2408,7 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     assert plague_zone not in get_map().get_spatial_conditions()
     assert plague_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert plague_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((10, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 5))] == set()
 
     reset_spell_family_state(width=30, height=30)
     caster = create_family_caster(position=(5, 10), spell_slots={8: 1})
@@ -2447,10 +2440,10 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     assert cloud_zone.optical_obscurement == OpticalObscurement.HEAVY
     assert old_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert old_trailing_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(old_center) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(old_center)] == {
         OpticalObscurement.HEAVY
     }
-    assert get_map().get_optical_obscurements_at((6, 10)) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((6, 10))] == {
         OpticalObscurement.HEAVY
     }
     assert target_hp_before - get_hp(target) == 30
@@ -2466,13 +2459,13 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     assert new_center_tile is not None
     assert new_leading_tile is not None
     assert old_trailing_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((6, 10)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((6, 10))] == set()
     assert new_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert new_leading_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(new_center) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(new_center)] == {
         OpticalObscurement.HEAVY
     }
-    assert get_map().get_optical_obscurements_at((16, 10)) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((16, 10))] == {
         OpticalObscurement.HEAVY
     }
 
@@ -2485,15 +2478,13 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     immune_target = create_family_target(name="Poison Immune Target", position=(10, 6), hp_dice=8)
     penalize_save(retching_target, "constitution")
     penalize_save(immune_target, "constitution")
-    immune_target.health.damage_reduction.self_static.add_resistance_modifier(
-        ResistanceModifier(
+    add_modifier(immune_target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=immune_target.uuid,
             target_entity_uuid=immune_target.uuid,
             value=ResistanceStatus.IMMUNITY,
             damage_type=DamageType.POISON,
             name="Book poison immunity",
-        )
-    )
+        ))
     Entity.update_all_entities_senses(max_distance=120)
 
     with patch("dnd.core.dice.random.randint", return_value=10):
@@ -2514,7 +2505,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     assert not cloud_zone.adds_difficult_terrain
     assert cloud_zone.optical_obscurement == OpticalObscurement.HEAVY
     assert cloud_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((10, 5)) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 5))] == {
         OpticalObscurement.HEAVY
     }
     assert "Nauseated" not in retching_target.active_conditions
@@ -2535,7 +2526,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     caster.remove_condition("Concentrating")
     assert cloud_zone not in get_map().get_spatial_conditions()
     assert cloud_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((10, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 5))] == set()
 
     reset_spell_family_state(width=24, height=18)
     grid = get_map()
@@ -2572,12 +2563,12 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     )
     storm_center_tile = get_map().get_tile(10, 10)
     assert storm_center_tile is not None
-    assert storm_zone.zone_shape == "cylinder"
+    assert storm_zone.area.kind == "cylinder"
     assert concentrating_target.position in storm_zone.affected_positions
     assert "Prone" not in concentrating_target.active_conditions
     assert storm_center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert storm_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((10, 10)) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 10))] == {
         OpticalObscurement.HEAVY
     }
 
@@ -2599,7 +2590,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     assert storm_zone not in get_map().get_spatial_conditions()
     assert storm_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert storm_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((10, 10)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 10))] == set()
 
 
 def test_eb_15_041_stinking_cloud_skips_breathless_creatures() -> None:
@@ -2721,7 +2712,7 @@ def test_eb_15_044_stinking_cloud_wind_dispersal_uses_srd_rounds() -> None:
         position=wind_caster.position,
         anchor_uuid=wind_caster.uuid,
         faction=wind_caster.faction,
-        zone_direction=(1, 0),
+        area_aim_offset=(1, 0),
         spell_dc=wind_caster.spell_save_dc(),
     )
     gust_zone.activate(parent_event=cloud_event)
@@ -2894,14 +2885,12 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
     caster = create_family_caster(position=(1, 1), spell_slots={2: 1})
     target = create_family_target(name="Web Target", position=(5, 5), hp_dice=8)
     penalize_save(target, "dexterity")
-    target.skill_set.get_skill("athletics").skill_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(target.skill_set.get_skill("athletics").skill_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid,
             name="Book athletics escape boost",
             value=100,
-        )
-    )
+        ))
     Entity.update_all_entities_senses(max_distance=60)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
@@ -2921,12 +2910,12 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
     web_zone = web_zones[0]
     web_center_tile = get_map().get_tile(5, 5)
     assert web_center_tile is not None
-    assert web_zone.zone_shape == "cube"
+    assert web_zone.area.kind == "cube"
     assert web_zone.adds_difficult_terrain
     assert web_zone.optical_obscurement is None
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 2
-    assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT  # Web lowers light one level (human Q5)
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((5, 5))] == set()
     assert any(
         isinstance(condition, WebRestrained)
         for condition in target.active_conditions_by_uuid.values()
@@ -2956,7 +2945,7 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
     assert web_zone not in get_map().get_spatial_conditions()
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((5, 5))] == set()
 
 
 def test_entangle_owns_difficult_terrain_restraint_and_concentration_cleanup() -> None:
@@ -3079,8 +3068,8 @@ def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
     } == {"Web Turn Start Save", "Web Unanchored Collapse"}
     assert "Concentrating" in caster.active_conditions
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 2
-    assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT  # Web lowers light one level (human Q5)
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((5, 5))] == set()
 
     turn_start = caster.on_turn_start(round_number=2, turn_index=0)
 
@@ -3090,7 +3079,7 @@ def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
     assert web_zone.event_handlers_uuids == []
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((5, 5))] == set()
 
 
 def test_web_restraint_memberships_release_only_their_exact_source() -> None:
@@ -3176,8 +3165,8 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert (5, 5) in web_zone.affected_positions
     assert (6, 5) in web_zone.affected_positions
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 2
-    assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT  # Web lowers light one level (human Q5)
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((5, 5))] == set()
     assert web_zone in get_map().get_spatial_conditions_at((5, 5))
     assert any(
         isinstance(condition, WebRestrained)
@@ -3222,11 +3211,11 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert len(web_zone.event_handlers_uuids) == 1
     assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((5, 5))] == set()
     assert web_zone not in get_map().get_spatial_conditions_at((5, 5))
     assert adjacent_web_tile.get_movement_cost(MovementMode.WALKING) == 2
-    assert adjacent_web_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((6, 5)) == set()
+    assert adjacent_web_tile.resolved_light_level == LightLevel.DIM_LIGHT  # still webbed (human Q5)
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((6, 5))] == set()
     assert not any(
         isinstance(condition, WebRestrained)
         for condition in target.active_conditions_by_uuid.values()
@@ -3258,7 +3247,7 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert web_zone.event_handlers_uuids == []
     assert adjacent_web_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert adjacent_web_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at((6, 5)) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((6, 5))] == set()
 
 
 def test_eb_15_011_haste_modifier_bundle_and_lethargy_cleanup() -> None:

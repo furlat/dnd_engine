@@ -3,7 +3,7 @@
 from typing import Optional
 from uuid import uuid4
 
-from dnd.core.aoe import Cone, Cube, Line, Sphere
+from dnd.core.aoe import Cone, Cube, Line, Sphere, objective_footprint
 from dnd.core.events import (
     Event,
     EventHandler,
@@ -27,7 +27,6 @@ def test_aoe_shapes_preserve_extent_width_entities_and_wall_occlusion() -> None:
     """Sphere, cone, line, and both cube anchors retain their runtime geometry."""
     reset_spell_regression_arena(20, 15)
     grid = get_map()
-    source_uuid = uuid4()
     center_target = create_spell_regression_actor(
         "Sphere Center",
         (5, 5),
@@ -45,96 +44,49 @@ def test_aoe_shapes_preserve_extent_width_entities_and_wall_occlusion() -> None:
     )
     Entity.update_all_entities_senses(max_distance=100)
 
-    sphere = Sphere(
-        source_entity_uuid=source_uuid,
-        target=(5, 5),
-        radius_feet=10,
-    )
-    sphere.compute_objective(caster_pos=(0, 0))
+    sphere = objective_footprint(Sphere(radius_feet=10), (5, 5), (0, 0))
+    occupants = {identity for cell in sphere for identity in grid.get_entities_at(cell)}
 
-    assert (5, 5) in sphere.affected_positions
-    assert (3, 5) in sphere.affected_positions
-    assert (7, 5) in sphere.affected_positions
-    assert (8, 5) not in sphere.affected_positions
-    assert center_target.uuid in sphere.affected_entity_uuids
-    assert edge_target.uuid in sphere.affected_entity_uuids
-    assert outside_target.uuid not in sphere.affected_entity_uuids
+    assert (5, 5) in sphere
+    assert (3, 5) in sphere
+    assert (7, 5) in sphere
+    assert (8, 5) not in sphere
+    assert center_target.uuid in occupants
+    assert edge_target.uuid in occupants
+    assert outside_target.uuid not in occupants
 
-    cone = Cone(
-        source_entity_uuid=source_uuid,
-        target=(10, 8),
-        length_feet=15,
-        angle_degrees=90,
-    )
-    cone.compute_objective(caster_pos=(5, 8))
+    cone = objective_footprint(Cone(length_feet=15, angle_degrees=90), (10, 8), (5, 8))
 
-    assert (6, 8) in cone.affected_positions
-    assert (7, 8) in cone.affected_positions
-    assert (4, 8) not in cone.affected_positions
+    assert (6, 8) in cone
+    assert (7, 8) in cone
+    assert (4, 8) not in cone
 
-    narrow_line = Line(
-        source_entity_uuid=source_uuid,
-        target=(12, 11),
-        length_feet=30,
-        width_feet=5,
-    )
-    narrow_line.compute_objective(caster_pos=(0, 11))
-    wide_line = Line(
-        source_entity_uuid=source_uuid,
-        target=(12, 8),
-        length_feet=20,
-        width_feet=15,
-    )
-    wide_line.compute_objective(caster_pos=(0, 8))
+    narrow_line = objective_footprint(Line(length_feet=30, width_feet=5), (12, 11), (0, 11))
+    wide_line = objective_footprint(Line(length_feet=20, width_feet=15), (12, 8), (0, 8))
 
-    assert {(0, 11), (3, 11), (6, 11)} <= narrow_line.affected_positions
-    assert (3, 13) not in narrow_line.affected_positions
-    assert {(0, 7), (0, 8), (0, 9), (2, 8)} <= wide_line.affected_positions
+    assert {(0, 11), (3, 11), (6, 11)} <= narrow_line
+    assert (3, 13) not in narrow_line
+    assert {(0, 7), (0, 8), (0, 9), (2, 8)} <= wide_line
 
-    centered_cube = Cube(
-        source_entity_uuid=source_uuid,
-        target=(14, 4),
-        size_feet=15,
-        centered=True,
-    )
-    centered_cube.compute_objective(caster_pos=(0, 0))
-    directional_cube = Cube(
-        source_entity_uuid=source_uuid,
-        target=(12, 2),
-        size_feet=15,
-        centered=False,
-    )
-    directional_cube.compute_objective(caster_pos=(7, 2))
+    centered_cube = objective_footprint(Cube(size_feet=15, centered=True), (14, 4), (0, 0))
+    directional_cube = objective_footprint(Cube(size_feet=15, centered=False), (12, 2), (7, 2))
 
-    assert centered_cube.affected_positions == {
+    assert centered_cube == {
         (x, y)
         for x in range(13, 16)
         for y in range(3, 6)
     }
-    assert {(7, 1), (7, 2), (7, 3), (8, 2), (9, 2)} <= (
-        directional_cube.affected_positions
-    )
+    assert {(7, 1), (7, 2), (7, 3), (8, 2), (9, 2)} <= directional_cube
 
     grid.set_tile(5, 11, walkable=False, visible=False, name="Line Wall")
-    blocked_line = Line(
-        source_entity_uuid=source_uuid,
-        target=(15, 11),
-        length_feet=50,
-        width_feet=5,
-    )
-    blocked_line.compute_objective(caster_pos=(0, 11))
-    assert (4, 11) in blocked_line.affected_positions
-    assert (6, 11) not in blocked_line.affected_positions
+    blocked_line = objective_footprint(Line(length_feet=50, width_feet=5), (15, 11), (0, 11))
+    assert (4, 11) in blocked_line
+    assert (6, 11) not in blocked_line
 
     grid.set_tile(7, 5, walkable=False, visible=False, name="Sphere Wall")
-    blocked_sphere = Sphere(
-        source_entity_uuid=source_uuid,
-        target=(5, 5),
-        radius_feet=20,
-    )
-    blocked_sphere.compute_objective(caster_pos=(0, 0))
-    assert (6, 5) in blocked_sphere.affected_positions
-    assert (8, 5) not in blocked_sphere.affected_positions
+    blocked_sphere = objective_footprint(Sphere(radius_feet=20), (5, 5), (0, 0))
+    assert (6, 5) in blocked_sphere
+    assert (8, 5) not in blocked_sphere
 
 
 def test_spatial_registry_dispatches_multiple_indexed_and_global_handlers() -> None:

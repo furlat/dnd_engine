@@ -17,6 +17,7 @@ from dnd.ai.contracts.semantics import (
 )
 from dnd.ai.contracts.immutable import FrozenDict
 from dnd.core.action_types import PositionSelection
+from dnd.core.base_object import read_private_attribute
 
 
 ActionBucket = Literal[
@@ -33,6 +34,7 @@ class ControlModel(BaseModel):
     """Immutable base for controller-facing protocol values."""
 
     model_config = ConfigDict(frozen=True)
+    __getattr__ = read_private_attribute
 
     def model_post_init(self, __context: Any) -> None:
         """Freeze nested protocol collections after validation."""
@@ -797,9 +799,9 @@ class AffordanceSet(ControlModel):
         default_factory=dict,
         description="Deduplicated typed action contracts keyed by affordance semantics reference.",
     )
-    _all_rows: Sequence[ActionAffordance] = PrivateAttr(default_factory=tuple)
-    _row_buckets_by_id: Dict[str, ActionBucketRows] = PrivateAttr(default_factory=dict)
-    _action_sources: Tuple[ActionSourceDefinition, ...] = PrivateAttr(default_factory=tuple)
+    _all_rows: Sequence[ActionAffordance] = PrivateAttr(default=())
+    _row_buckets_by_id: Dict[str, ActionBucketRows] = PrivateAttr(default={})
+    _action_sources: Tuple[ActionSourceDefinition, ...] = PrivateAttr(default=())
 
     @model_validator(mode="before")
     @classmethod

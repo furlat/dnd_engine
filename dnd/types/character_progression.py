@@ -34,12 +34,18 @@ class CharacterClass(StrEnum):
     BARBARIAN = "class.barbarian"
     FIGHTER = "class.fighter"
     SORCERER = "class.sorcerer"
+    CLERIC = "class.cleric"
+    PALADIN = "class.paladin"
+    WIZARD = "class.wizard"
 
 
 class CharacterSubclass(StrEnum):
     BERSERKER = "subclass.barbarian.berserker"
     CHAMPION = "subclass.fighter.champion"
     DRACONIC_BLOODLINE = "subclass.sorcerer.draconic_bloodline"
+    LIFE_DOMAIN = "subclass.cleric.life_domain"
+    OATH_OF_DEVOTION = "subclass.paladin.oath_of_devotion"
+    SCHOOL_OF_EVOCATION = "subclass.wizard.school_of_evocation"
 
 
 class RitualPreparationPolicy(str, Enum):

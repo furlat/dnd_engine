@@ -4,13 +4,14 @@ from uuid import uuid4
 
 import pytest
 
+from dnd.blocks.sensory import spatial_senses_system
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_block import LightLevel
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
-from dnd.core.values import BaseValue, ContextualValue, ModifiableValue, StaticValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from tests.engine.support import create_test_entity, reset_combat_state
@@ -28,7 +29,7 @@ def reset_identity_state() -> None:
     """Clear the global state touched by these registry examples."""
     reset_combat_state()
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
 
@@ -75,14 +76,14 @@ def test_eb_01_003_value_and_block_registries_are_separate() -> None:
     reset_identity_state()
     source_uuid = uuid4()
 
-    value = BaseValue(source_entity_uuid=source_uuid)
+    value = ModifiableValue(source_entity_uuid=source_uuid)
     block = BaseBlock(source_entity_uuid=source_uuid)
 
-    assert BaseValue.get(value.uuid) is value
+    assert ModifiableValue.get(value.uuid) is value
     assert BaseObject.get(value.uuid) is None
 
     assert BaseBlock.get(block.uuid) is block
-    assert BaseValue.get(block.uuid) is None
+    assert ModifiableValue.get(block.uuid) is None
 
 
 def test_eb_01_004_entity_registers_as_block_and_entity() -> None:
@@ -521,7 +522,7 @@ def test_world_presence_and_carried_light_settle_before_spatial_completion() -> 
     assert not entity.is_deployed
     assert entity.is_spatially_suspended
     assert grid.get_entity_position(entity.uuid) is None
-    assert grid.get_entity_subscriptions(entity.uuid) == set()
+    assert entity.uuid not in spatial_senses_system.observers_granted(grid.get_all_tiles())
 
     entity.restore_spatial_presence(retained_position)
     assert entity.is_deployed
@@ -535,56 +536,19 @@ def test_world_presence_and_carried_light_settle_before_spatial_completion() -> 
     assert EventQueue.event_cursor() == cursor
 
 
-def test_eb_01_005_value_subclass_lookup_contracts() -> None:
-    """EB-01-005: value subclasses share one registry but differ on misses."""
+def test_eb_01_005_value_registry_holds_owned_records_only() -> None:
+    """EB-01-005: owned value records register by UUID; transient records and misses read as absent."""
     reset_identity_state()
     source_uuid = uuid4()
 
-    static_value = StaticValue(source_entity_uuid=source_uuid)
-    contextual_value = ContextualValue(source_entity_uuid=source_uuid)
-    modifiable_value = ModifiableValue.create(source_entity_uuid=source_uuid)
+    owned = ModifiableValue(source_entity_uuid=source_uuid)
+    transient = ModifiableValue(source_entity_uuid=source_uuid, use_register=False)
 
-    assert BaseValue.get(static_value.uuid) is static_value
-    assert BaseValue.get(contextual_value.uuid) is contextual_value
-    assert BaseValue.get(modifiable_value.uuid) is modifiable_value
-
-    assert StaticValue.get(static_value.uuid) is static_value
-    assert ContextualValue.get(contextual_value.uuid) is contextual_value
-    assert ModifiableValue.get(modifiable_value.uuid) is modifiable_value
-
-    try:
-        StaticValue.get(contextual_value.uuid)
-    except ValueError as error:
-        assert "is not a StaticValue" in str(error)
-    else:
-        raise AssertionError("StaticValue.get() should reject ContextualValue")
-
-    try:
-        ContextualValue.get(static_value.uuid)
-    except ValueError as error:
-        assert "is not a ContextualValue" in str(error)
-    else:
-        raise AssertionError("ContextualValue.get() should reject StaticValue")
-
-    try:
-        ModifiableValue.get(static_value.uuid)
-    except ValueError as error:
-        assert "is not a ModifiableValue" in str(error)
-    else:
-        raise AssertionError("ModifiableValue.get() should reject StaticValue")
-
-    missing_uuid = uuid4()
-    assert BaseValue.get(missing_uuid) is None
-    assert ContextualValue.get(missing_uuid) is None
-    assert ModifiableValue.get(missing_uuid) is None
-
-    try:
-        StaticValue.get(missing_uuid)
-    except ValueError as error:
-        assert "is not a StaticValue" in str(error)
-        assert "NoneType" in str(error)
-    else:
-        raise AssertionError("StaticValue.get() should raise on missing UUID")
+    assert ModifiableValue.get(owned.uuid) is owned
+    assert ModifiableValue.get(transient.uuid) is None
+    assert ModifiableValue.get(uuid4()) is None
+    ModifiableValue.unregister(owned.uuid)
+    assert ModifiableValue.get(owned.uuid) is None
 
 
 if __name__ == "__main__":
@@ -592,5 +556,5 @@ if __name__ == "__main__":
     test_eb_01_002_base_object_lookup_is_typed()
     test_eb_01_003_value_and_block_registries_are_separate()
     test_eb_01_004_entity_registers_as_block_and_entity()
-    test_eb_01_005_value_subclass_lookup_contracts()
+    test_eb_01_005_value_registry_holds_owned_records_only()
     print("PASS: engine book registry tests")

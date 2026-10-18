@@ -1,23 +1,115 @@
 """Three authored summon spells using native costs, selection and event dispatch."""
 
-from typing import cast
+from typing import Optional, Tuple, cast
 
 from pydantic import Field
 
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
-from dnd.core.action_types import ActionVariantFacet
-from dnd.core.base_actions import BaseAction, Cost, PositionDiscoveryContract, TargetType
+from dnd.actions import (
+    AllyHelp,
+    Attack,
+    Dash,
+    Disengage,
+    Dodge,
+    Drop,
+    DropConcentration,
+    Hide,
+    Jump,
+    Move,
+    PickUp,
+    ShakeAwake,
+    Shove,
+    SpellAction,
+    SpellEvent,
+    StandUp,
+    Swim,
+    TraverseConnector,
+    entity_action_economy_cost_evaluator,
+)
+from dnd.conditions import HasAttackedTracker, HasTakenDamageTracker
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
+from dnd.core.creature_types import DamageType
+from dnd.core.base_actions import Cost, PositionDiscoveryContract, TargetType
 from dnd.core.events import EventPhase, EventQueue, Range, RangeType, SummonAdmissionEvent
-from dnd.entity import Entity
 from dnd.summoning.forms import available_forms, selected_form
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.types.summoning import SummonApplication, SummonFamily, SummonSelection
+from dnd.summoning.actions import DismissSummon
+from dnd.summoning.conditions import Summoned
+from dnd.monsters.spell_summon_actions import (
+    CinderousSwipe,
+    ConcussiveSmash,
+    DraconicBreathCadence,
+    DragonBreath,
+    DrainingKiss,
+    ElectrifiedFlail,
+    ElementalMultiattackBonus,
+    ElementalWarp,
+    ExplosiveIcicle,
+    GroundedThunder,
+    GushingAir,
+    HealingVapours,
+    HiemalStrike,
+    Immolation,
+    MuckToMetal,
+    MyrmidonBurrow,
+    MyrmidonCinderousSwipe,
+    MyrmidonStrikeDice,
+    MyrmidonTenacity,
+    PrimordialGales,
+    RagingVortex,
+    ScorchingStrike,
+    SeismicStrike,
+    SludgySling,
+    SmoulderingTouch,
+    SoilCloggedSlam,
+    SweetplumGales,
+    WaterSlam,
+    WintersBreath,
+)
+from dnd.monsters.spell_summons import FlamingSphereRam, SpiritualWeaponStrike
+from dnd.monsters.traits import (
+    HitSaveRiderFeature,
+    InnateFlight,
+    KeenHearingAndSmellFeature,
+    KeenPerceptionFeature,
+    MagicResistance,
+    MultiattackAction,
+    PackTacticsFeature,
+    WolfBiteProneRiderFeature,
+)
+from dnd.spells.conjuration import MistyStep
+from dnd.spells.enchantment import CharmPerson
+from dnd.spells.evocation import ScorchingRay, Thunderwave
+from dnd.spells.illusion import Invisibility
+from dnd.spells.necromancy import Revivify
+
+
+# What a summoned creature is composed with (its form's factory and the creature composer). The
+# creature is created in the cast, so its content is built with the spell, at the caster's creation.
+_CREATURE_CORE = (AllyHelp, Attack, Dash, Disengage, Dodge, Drop, DropConcentration, Hide, Jump, Move, PickUp,
+    ShakeAwake, Shove, Swim, TraverseConnector, HasAttackedTracker, HasTakenDamageTracker, DismissSummon)
+_BEAST_FORMS = (*_CREATURE_CORE, HitSaveRiderFeature, KeenHearingAndSmellFeature, KeenPerceptionFeature,
+    MultiattackAction, PackTacticsFeature, WolfBiteProneRiderFeature)
+_FIEND_FORMS = (*_CREATURE_CORE, InnateFlight, MagicResistance, MultiattackAction)
+_SPELL_CONSTRUCT_FORMS = (Dash, Disengage, Move, FlamingSphereRam, SpiritualWeaponStrike)
+# Elementals, Myrmidons, Planar Allies and the Draconic Spirit share one builder.
+_GREATER_SPIRIT_FORMS = (AllyHelp, Attack, Dash, Disengage, Dodge, Move, StandUp, Swim, CinderousSwipe,
+    ConcussiveSmash, DraconicBreathCadence, DragonBreath, DrainingKiss, ElectrifiedFlail, ElementalMultiattackBonus,
+    ElementalWarp, ExplosiveIcicle, GroundedThunder, GushingAir, HealingVapours, HiemalStrike, Immolation,
+    MuckToMetal, MyrmidonBurrow, MyrmidonCinderousSwipe, MyrmidonStrikeDice, MyrmidonTenacity, PrimordialGales,
+    RagingVortex, ScorchingStrike, SeismicStrike, SludgySling, SmoulderingTouch, SoilCloggedSlam, SweetplumGales,
+    WaterSlam, WintersBreath, InnateFlight, MultiattackAction, MistyStep, CharmPerson, ScorchingRay, Thunderwave,
+    Invisibility, Revivify)
 
 
 class SummonSpell(SpellAction):
     """One creature/position choice; the explicit world binding owns creation."""
+    creates = (*SpellAction.creates, Summoned)
 
     family: SummonFamily
     form_id: str | None = None
+    breath_type: DamageType = DamageType.FIRE
+    shared_resistance: DamageType = DamageType.FIRE
     spell_school: str = "conjuration"
     concentration: bool = True
     target_type: TargetType = TargetType.POSITION
@@ -32,7 +124,7 @@ class SummonSpell(SpellAction):
         if self.form_id is None or self.end_position is None:
             raise ValueError("Choose a creature and one destination")
         choice = SummonSelection(family=self.family, form_id=self.form_id,
-            cast_at_level=self.cast_at_level, target_position=self.end_position)
+            cast_at_level=self.cast_at_level, target_position=self.end_position,breath_type=self.breath_type,shared_resistance=self.shared_resistance)
         selected_form(choice)
         return choice
 
@@ -40,7 +132,7 @@ class SummonSpell(SpellAction):
         return EventQueue.preflight(SummonAdmissionEvent(source_entity_uuid=self.source_entity_uuid,
             selection=self.selection(), subjective=subjective))
 
-    def position_placement_error(self, *, subjective: bool = False) -> str | None:
+    def handler_admission_error(self, *, subjective: bool) -> str | None:
         try:
             proposal = self.admission(subjective=subjective)
         except ValueError as error:
@@ -51,19 +143,14 @@ class SummonSpell(SpellAction):
             return "Summoning is not bound to this encounter"
         return None
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        form = next((form for form in available_forms(self.family, self.cast_at_level)
-                     if form.form_id == self.form_id), None)
-        return (ActionVariantFacet(key="form", value=self.form_id or "choose",
-                                  label=form.display_name if form else "Choose creature"),)
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """One choice per creature form open at the cast level."""
+        return tuple((ActionVariantFacet(key="form", value=form.form_id, label=form.display_name),)
+                     for form in available_forms(self.family, level if level is not None else self.cast_at_level))
 
-    def get_discovery_variants(self, entity: Entity) -> list[BaseAction]:
-        return [slot.model_copy(update={"form_id": form.form_id})
-            for slot in super().get_discovery_variants(entity)
-            for form in available_forms(self.family, cast(SpellAction, slot).cast_at_level)]
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__summon_{self.form_id or 'choose'}"
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "form_id": selection_facet(selection, "form")}
 
     def get_discovery_display_name(self) -> str:
         form = next((form for form in available_forms(self.family, self.cast_at_level)
@@ -96,6 +183,7 @@ class SummonSpell(SpellAction):
 
 
 class ConjureAnimals(SummonSpell):
+    creates = (*SummonSpell.creates, *_BEAST_FORMS)
     name: str = "Conjure Animals"
     description: str = "Summon one beast. Higher slots unlock stronger available creatures."
     family: SummonFamily = SummonFamily.ANIMALS
@@ -103,6 +191,7 @@ class ConjureAnimals(SummonSpell):
 
 
 class ConjureFey(SummonSpell):
+    creates = (*SummonSpell.creates, *_BEAST_FORMS)
     name: str = "Conjure Fey"
     description: str = "Summon a beast-shaped Fey spirit. Losing concentration makes it hostile."
     family: SummonFamily = SummonFamily.FEY
@@ -110,7 +199,70 @@ class ConjureFey(SummonSpell):
 
 
 class ConjureFiend(SummonSpell):
+    creates = (*SummonSpell.creates, *_FIEND_FORMS)
     name: str = "Conjure Fiend"
     description: str = "Summon one fiend while concentration holds. Higher slots unlock stronger forms."
     family: SummonFamily = SummonFamily.FIEND
     spell_level: int = 3
+
+
+class SpiritualWeapon(SummonSpell):
+    creates = (*SummonSpell.creates, *_SPELL_CONSTRUCT_FORMS)
+    name: str = "Spiritual Weapon"
+    description: str = "Summon a ten-turn autonomous allied spectral weapon; bonus action, no concentration."
+    family: SummonFamily = SummonFamily.SPIRITUAL_WEAPON
+    form_id: str | None = "spiritual_weapon"
+    spell_level: int = 2
+    spell_school: str = "evocation"
+    concentration: bool = False
+    alt_cost_type: str | None = "bonus_actions"
+
+
+class FlamingSphere(SummonSpell):
+    creates = (*SummonSpell.creates, *_SPELL_CONSTRUCT_FORMS)
+    name: str = "Flaming Sphere"
+    description: str = "Summon a ten-turn autonomous allied sphere with saved Ram, enemy end-turn aura and native fire trail."
+    family: SummonFamily = SummonFamily.FLAMING_SPHERE
+    form_id: str | None = "flaming_sphere"
+    spell_level: int = 2
+    concentration: bool = True
+
+
+class ConjureElemental(SummonSpell):
+    creates = (*SummonSpell.creates, *_GREATER_SPIRIT_FORMS)
+    name:str="Conjure Elemental"
+    description:str="Summon an allied elemental until long rest; slot six unlocks Myrmidons."
+    family:SummonFamily=SummonFamily.ELEMENTAL
+    spell_level:int=5
+    concentration:bool=False
+
+class PlanarAlly(SummonSpell):
+    creates = (*SummonSpell.creates, *_GREATER_SPIRIT_FORMS)
+    name:str="Planar Ally"
+    description:str="Summon an allied Deva, Djinni or Cambion until long rest."
+    family:SummonFamily=SummonFamily.PLANAR_ALLY
+    spell_level:int=6
+    concentration:bool=False
+
+class SummonDragon(SummonSpell):
+    creates = (*SummonSpell.creates, *_GREATER_SPIRIT_FORMS)
+    name:str="Summon Dragon"
+    description:str="Summon a Draconic Spirit with independently chosen Breath and shared resistance."
+    family:SummonFamily=SummonFamily.DRAGON
+    form_id:str|None="draconic_spirit"
+    spell_level:int=5
+    def selection(self):
+        choice=super().selection()
+        elements=(DamageType.ACID,DamageType.COLD,DamageType.FIRE,DamageType.LIGHTNING,DamageType.POISON)
+        if choice.breath_type not in elements or choice.shared_resistance not in elements:raise ValueError("Choose one of the five elemental types")
+        return choice
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """Each form, with an independently chosen Breath and shared resistance."""
+        elements=(DamageType.ACID,DamageType.COLD,DamageType.FIRE,DamageType.LIGHTNING,DamageType.POISON)
+        return tuple((*form, ActionVariantFacet(key="damage_type", value=breath.value, label=breath.value+" Breath"),
+                      ActionVariantFacet(key="resistance", value=shared.value, label=shared.value+" shared resistance"))
+                     for form in super().facet_domain(scan, level, target) for breath in elements for shared in elements)
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "breath_type": DamageType(selection_facet(selection, "damage_type")),
+                "shared_resistance": DamageType(selection_facet(selection, "resistance"))}

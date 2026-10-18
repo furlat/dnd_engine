@@ -7,7 +7,7 @@ import pytest
 
 from dnd.actions import Attack, AttackEvent, SpellAction
 from dnd.actions_functional import (
-    execute_action,
+    execute_available_action,
     execute_by_index,
     get_available_actions,
     setup_standard_actions,
@@ -49,10 +49,18 @@ from dnd.entity import Entity, EntityConfig
 from dnd.spells.transmutation import HasteEffect
 from dnd.spells.transmutation import SlowedEffect
 from tests.engine.support import create_test_entity, reset_combat_state
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 HASTE_GRANT_SUFFIX = "__grant_haste"
 HASTE_ACTION_RESOURCE = "haste_action"
+
+
+def execute_action(actor, template_name: str, target: AvailableTarget):
+    """Perform the discovered row named `template_name` against `target`; None when discovery lists no such row."""
+    row = next((row for row in get_available_actions(actor).all_actions if row.template_name == template_name), None)
+    chosen = next((value for value in row.valid_targets if value.target_uuid == target.target_uuid), None) if row else None
+    return execute_available_action(actor, row, chosen) if chosen is not None else None
 
 
 @pytest.fixture(autouse=True)
@@ -334,9 +342,10 @@ def test_structural_extra_attack_preserves_haste_ordering(
         _execute(fighter, haste_attack, target_uuid=target.uuid)
 
     assert fighter.action_economy.resources["extra_attacks"].current == 1
+    # The structural template's weapon is an authored choice: its row names the chosen slot.
     _execute(
         fighter,
-        "Extra Attack_MELEE_MAIN",
+        "Extra Attack__MELEE_MAIN",
         target_uuid=target.uuid,
     )
     assert fighter.action_economy.resources["extra_attacks"].current == 0
@@ -353,14 +362,12 @@ def test_haste_extra_attack_miss_keeps_weapon_presentation_metadata() -> None:
             target_uuid=target.uuid,
         )
 
-    target.equipment.ac_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid,
             name="Forced Extra Attack miss",
             value=100,
-        )
-    )
+        ))
     with fixed_dice_faces(10):
         event = _execute(
             fighter,
@@ -437,7 +444,7 @@ def test_haste_discovery_exposes_every_standard_action_variant() -> None:
     variants = {
         variant.get_discovery_template_name(): variant
         for template in fighter.registered_actions
-        for variant in template.get_discovery_variants(fighter)
+        for variant in template.discovery_forms(fighter.action_scan(subjective=True))
     }
     names = set(variants)
 
@@ -452,7 +459,7 @@ def test_haste_discovery_exposes_every_standard_action_variant() -> None:
     assert f"Extra Attack_MELEE_MAIN{HASTE_GRANT_SUFFIX}" not in names
 
     for registered_template in fighter.registered_actions:
-        for variant in registered_template.get_discovery_variants(fighter):
+        for variant in registered_template.discovery_forms(fighter.action_scan(subjective=True)):
             if variant is not registered_template:
                 assert (
                     variant.registered_template_uuid
@@ -487,12 +494,12 @@ def test_srd_haste_policy_keeps_the_restricted_action_whitelist() -> None:
     )
     spell_variant_names = {
         variant.get_discovery_template_name()
-        for variant in spell.get_discovery_variants(fighter)
+        for variant in spell.discovery_forms(fighter.action_scan(subjective=True))
     }
     action_variant_names = {
         variant.get_discovery_template_name()
         for template in fighter.registered_actions
-        for variant in template.get_discovery_variants(fighter)
+        for variant in template.discovery_forms(fighter.action_scan(subjective=True))
     }
 
     assert "Strict Policy Probe" in spell_variant_names
@@ -615,26 +622,6 @@ def test_haste_and_action_surge_preserve_both_extra_attack_batches(
 
     assert fighter.action_economy.actions.normalized_score == 0
     assert fighter.action_economy.resources[HASTE_ACTION_RESOURCE].current == 0
-    assert fighter.action_economy.resources["extra_attacks"].current == 0
-
-
-def test_wire_template_name_resolves_haste_variant_without_cached_row() -> None:
-    """Serialized commands can resolve the generated Haste variant by name."""
-    fighter, target = _create_hasted_fighter(extra_attacks=1)
-
-    event = execute_action(
-        fighter,
-        f"Attack_MELEE_MAIN{HASTE_GRANT_SUFFIX}",
-        AvailableTarget(
-            index=0,
-            target_uuid=target.uuid,
-        ),
-    )
-
-    assert event is not None
-    assert not event.canceled
-    assert fighter.action_economy.resources[HASTE_ACTION_RESOURCE].current == 0
-    assert fighter.action_economy.actions.normalized_score == 1
     assert fighter.action_economy.resources["extra_attacks"].current == 0
 
 
@@ -1106,9 +1093,7 @@ def test_rage_maintenance_requires_a_hostile_creature_attack(recipient: str) -> 
 
 def test_divine_smite_keeps_slot_when_attacking_an_object() -> None:
     actor, _, prop_uuid = _create_grid_actor(1, None, slow=False, surge=False)
-    base = actor.action_economy.spell_slot_1.get_base_modifier()
-    assert base is not None
-    base.value = 1
+    actor.action_economy.spell_slot_1.base = 1
     actor.add_event_handler(create_divine_smite_handler(actor.uuid, 1))
     with fixed_dice_faces(18, 4, 4):
         result = _execute(actor, "Attack_MELEE_MAIN", target_uuid=prop_uuid)

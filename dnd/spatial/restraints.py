@@ -10,6 +10,7 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
 )
 from dnd.conditions import Restrained
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import (
     ActionEvent,
     BaseAction,
@@ -21,6 +22,7 @@ from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemoval
 from dnd.core.events import Event, EventPhase, EventQueue, SkillCheckEvent
 from dnd.entity import Entity
 from dnd.types.abilities import SkillName
+from dnd.types.discovery import ActorScan
 from dnd.spatial.memberships import (
     MembershipAreaCondition,
     SpatialConditionMembershipSource,
@@ -81,18 +83,11 @@ class EscapeSpatialRestraintAction(BaseAction):
             source_entity_name=entity.name if entity else None,
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if not isinstance(entity, Entity):
-            return declaration_event.cancel(status_message="Entity not found")
-        if self._source_membership(entity) is None:
-            return declaration_event.cancel(
-                status_message="Restraining source is no longer active",
-            )
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}",
-        )
+        if entity is None or self._source_membership(entity) is None:
+            return "Restraining source is no longer active"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -135,6 +130,7 @@ class EscapeSpatialRestraintAction(BaseAction):
 
 class SpatialRestraintSource(SpatialConditionMembershipSource):
     """One source lease sharing the public Restrained mechanics."""
+    creates = (Restrained,)
 
     check_dc: int = Field(ge=0)
     restraint_manifestation_uuid: Optional[UUID] = Field(

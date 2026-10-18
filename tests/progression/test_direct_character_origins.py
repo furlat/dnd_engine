@@ -59,7 +59,18 @@ from dnd.types.character_progression import (
 )
 from dnd.types.abilities import AbilityName
 from dnd.types.senses import SenseMode, SensesType
+from dnd.core.values import (
+    ValueRead,
+    read_value,
+    Channel,
+    Kind,
+    add_modifier,
+    modifier_of,
+    remove_modifier,
+    parts,
+)
 from tests.engine.support import create_test_entity
+from dnd.core.navigation import route
 
 
 _BASE_SCORES: tuple[tuple[AbilityName, int], ...] = tuple(
@@ -84,6 +95,11 @@ _ORIGIN_CASES = (
     (Species.HUMAN, None),
     (Species.TIEFLING, None),
 )
+
+
+def reading(value, target_uuid=None):
+    """The value read by its owner against an optional target."""
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
 
 
 @pytest.fixture(autouse=True)
@@ -763,9 +779,9 @@ def test_direct_dragonborn_breath_executes_damage_save_and_rest_use() -> None:
         name="Fail Breath Weapon save",
         value=-100,
     )
-    target.saving_throws.get_saving_throw(
+    add_modifier(target.saving_throws.get_saving_throw(
         "dexterity",
-    ).bonus.self_static.add_value_modifier(save_modifier)
+    ).bonus, Channel.SELF_STATIC, Kind.VALUE, save_modifier)
     apply_origin(caster, _resolved(Species.DRAGONBORN), character_level=6)
     template = _action(caster, "action.origin.dragonborn.breath_weapon")
     hp_before = target.get_hp()
@@ -808,7 +824,7 @@ def test_direct_lightfoot_capability_changes_creature_space_traversal() -> None:
     halfling.update_entity_senses(max_distance=20)
 
     assert not larger.blocks_walking(halfling.uuid)
-    assert halfling.senses.paths[(3, 0)] == [(1, 0), (2, 0), (3, 0)]
+    assert route(halfling.senses.paths, (3, 0)) == [(1, 0), (2, 0), (3, 0)]
     assert halfling.has_origin_capability(OriginCapability.NATURALLY_STEALTHY)
 
 
@@ -842,14 +858,13 @@ def test_origin_save_rules_consume_exact_cause_context(
     )
 
     for ability in ABILITY_ORDER:
-        bonus = entity.saving_throws.get_saving_throw(ability).bonus
-        bonus.set_context({SAVING_THROW_CONTEXT_KEY: context})
+        bonus = read_value(parts(entity.saving_throws.get_saving_throw(ability).bonus),
+                           ValueRead(entity.uuid, context={SAVING_THROW_CONTEXT_KEY: context}))
         assert bonus.advantage is (
             AdvantageStatus.ADVANTAGE
             if ability in abilities
             else AdvantageStatus.NONE
         )
-        bonus.clear_context()
 
 
 def test_halfling_lucky_and_half_orc_endurance_are_direct_bound_handlers() -> None:
@@ -860,7 +875,7 @@ def test_halfling_lucky_and_half_orc_endurance_are_direct_bound_handlers() -> No
     assert lucky.behavior_binding.behavior_id == "trait.origin.halfling.lucky"
     with fixed_dice_faces(1, 7):
         roll, event = halfling.roll_d20_event(
-            halfling.ability_scores.dexterity.ability_score,
+            reading(halfling.ability_scores.dexterity.ability_score),
             RollType.CHECK,
             skill_name="stealth",
         )
@@ -1205,12 +1220,10 @@ def test_origin_removal_rejects_a_modifier_moved_to_a_foreign_channel() -> None:
     )
     receipt = apply_origin(entity, _resolved(Species.HUMAN), character_level=1)
     ability, modifier_uuid = receipt.ability_score_modifier_ids[0]
-    modifier = entity.ability_scores.get_ability(
-        ability,
-    ).ability_score.self_static.value_modifiers.pop(modifier_uuid)
-    entity.health.max_hit_points_bonus.self_static.value_modifiers[
-        modifier_uuid
-    ] = modifier
+    ability_score = entity.ability_scores.get_ability(ability).ability_score
+    modifier = modifier_of(ability_score, Channel.SELF_STATIC, Kind.VALUE, modifier_uuid)
+    remove_modifier(ability_score, modifier_uuid, Channel.SELF_STATIC, Kind.VALUE)
+    add_modifier(entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, modifier)
 
     with pytest.raises(RuntimeError, match="modifier ownership changed"):
         remove_origin(entity)

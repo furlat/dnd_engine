@@ -81,10 +81,6 @@ class ObservedChangeRef(BaseModel):
     owner_uuid: UUID
 
 
-class AntimagicException(str, Enum):
-    ARTIFACT = "artifact"
-    DEITY = "deity"
-    FIELD = "antimagic_field"
 
 
 class EffectOriginKind(str, Enum):
@@ -108,12 +104,17 @@ class EffectOrigin(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     kind: EffectOriginKind = Field(default=EffectOriginKind.UNKNOWN)
-    antimagic_exception: AntimagicException | None = None
     source_id: Optional[str] = Field(default=None)
     source_event_lineage_uuid: Optional[str] = Field(default=None)
     source_position: Optional[Tuple[int, int]] = Field(default=None)
     base_spell_level: Optional[int] = Field(default=None, ge=0)
     effective_spell_level: Optional[int] = Field(default=None, ge=0)
+    spell_school: str | None = None
+    spellcasting_source_id: UUID | None = None
+    harmful: bool = False
+    magical: bool = False
+    area_application: bool = False
+    maximize_damage_dice: bool = False
 
     @classmethod
     def spell(
@@ -124,15 +125,23 @@ class EffectOrigin(BaseModel):
         source_position: Optional[Tuple[int, int]] = None,
         base_spell_level: int,
         effective_spell_level: int,
-        antimagic_exception: AntimagicException | None = None,
+        spell_school: str | None = None,
+        spellcasting_source_id: UUID | None = None,
+        harmful: bool = False,
+        area_application: bool = False,
+        maximize_damage_dice: bool = False,
     ) -> "EffectOrigin":
         """Create explicit spell provenance from a spell event payload."""
         return cls(
             kind=EffectOriginKind.SPELL,
-            antimagic_exception=antimagic_exception,
             source_id=source_id,
             source_event_lineage_uuid=source_event_lineage_uuid,
             source_position=source_position,
             base_spell_level=base_spell_level,
             effective_spell_level=effective_spell_level,
+            spell_school=spell_school,
+            spellcasting_source_id=spellcasting_source_id,
+            harmful=harmful, magical=True,
+            area_application=area_application,
+            maximize_damage_dice=maximize_damage_dice,
         )

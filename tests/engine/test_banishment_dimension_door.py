@@ -3,6 +3,7 @@
 import pytest
 
 from dnd.actions_functional import execute_available_action, get_available_actions, get_extra_position_options, register_spell
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.conditions import Concentrating, Poisoned
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType
@@ -14,10 +15,11 @@ from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.entity import Entity
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spells.abjuration import AntimagicField, Banishment
+from dnd.spells.abjuration import Banishment
 from dnd.spells.conjuration import DimensionDoor
 from dnd.types.actor import SpatialDisposition
 from tests.manual.spell_regression_support import create_spell_regression_actor, force_save_result, reset_spell_regression_arena
+from dnd.types.cells import cell_in
 
 
 @pytest.fixture
@@ -75,7 +77,7 @@ def test_dimension_door_commits_all_travelers_before_arrival_reactions(scene, wi
     assert len(transfers) == (2 if with_companion else 1)
     assert all(event.committed and event.portal_uuid is None for event in transfers)
     assert len({event.parent_event for event in transfers}) == 1
-    assert all(event.effect_origin is not None and event.effect_origin.source_id == "dimension_door" for event in transfers)
+    assert all(event.effect_origin is not None and event.effect_origin.source_id == "spell.dimension_door" for event in transfers)
     assert caster.action_economy.actions.normalized_score == 0
     assert caster.action_economy.spell_slot_4.normalized_score == 2
 
@@ -93,7 +95,7 @@ def test_unseen_destination_is_selectable_and_paid_mishap_damages_both(scene, bl
     for y in range(8):
         get_map().set_tile(9, y, walking_cost=0, blocks_optics=True)
     Entity.update_all_entities_senses(max_distance=125)
-    assert not caster.senses.visible.get(destination, False)
+    assert not (cell_in(capture_senses_snapshot(caster.senses).visible, destination))
     register_spell(caster, DimensionDoor)
     actions = get_available_actions(caster)
     row = next(row for row in actions.entity_actions if row.behavior_id == "spell.dimension_door")
@@ -137,19 +139,6 @@ def test_rejected_passenger_cannot_partially_teleport_caster(scene):
     assert caster.action_economy.spell_slot_4.normalized_score == 2
 
 
-@pytest.mark.parametrize("destination,blocked", [((8, 4), True), ((5, 2), True), ((12, 2), False)])
-def test_dimension_door_checks_each_actual_endpoint_not_intervening_space(scene, destination, blocked):
-    caster, companion, _ = scene
-    field_owner = create_spell_regression_actor("Field", (8, 2), "enemies", spell_slots={8: 1})
-    field = AntimagicField(source_entity_uuid=field_owner.uuid).apply()
-    assert field is not None and not field.canceled
-    result = door(caster, companion, destination)
-    assert result is not None
-    if blocked:
-        assert (caster.position, companion.position) == ((2, 2), (3, 2))
-    else:
-        assert (caster.position, companion.position) == ((12, 2), (13, 2))
-    assert caster.action_economy.spell_slot_4.normalized_score == 2
 
 
 @pytest.mark.parametrize("foreign", [False, True])
@@ -239,7 +228,7 @@ def test_dimension_door_unseen_open_space_succeeds_but_out_of_range_rejects(scen
         get_map().set_tile(9, y, walking_cost=0, blocks_optics=True)
     get_map().set_tile(105, 2)
     Entity.update_all_entities_senses(max_distance=125)
-    assert not caster.senses.visible.get((12, 2), False)
+    assert not cell_in(capture_senses_snapshot(caster.senses).visible, (12, 2))
     rejected = door(caster, caster, (105, 2))
     assert rejected is not None and rejected.canceled
     assert caster.action_economy.spell_slot_4.normalized_score == 3

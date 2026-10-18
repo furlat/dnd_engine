@@ -1,14 +1,28 @@
 from dnd.types.materials import Material
 from dnd.core.condition_types import ConditionDurationSummary, DurationType
 
-from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, WeaponAttackOverride
+from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, SpellWeaponProfile, WeaponAttackOverride
 """Equipment, armor, weapon, and shield models for entity combat gear."""
 
 from dataclasses import dataclass
-from typing import Callable, Iterable, Optional, List, Self, Literal, TypeVar, Union, Tuple
+from typing import Any, Callable, Dict, Iterable, Optional, List, Self, Literal, TypeVar, Union, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from dnd.core.values import ModifiableValue
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    value_score,
+    Channel,
+    Kind,
+    add_modifier,
+    normalized_base,
+    Part,
+    Row,
+    composed,
+    part,
+    parts,
+    with_rows,
+)
 from dnd.core.creature_types import DamageType
 from dnd.core.base_object import BaseObject
 from dnd.core.modifiers import NumericalModifier
@@ -30,7 +44,6 @@ from dnd.core.equipment_types import (
 from dnd.core.item_types import ItemEffectPresentationState, ItemPresentationKind, ItemPresentationState, ItemReleaseReason
 from dnd.types.summoning import TerminalOwnerRelease
 
-import copy
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
@@ -119,18 +132,18 @@ class Armor(EquippableItem):
     )
 
     ac: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=uuid4(),
-            base_value=0,
-            value_name="Armor Class"
+            base=0,
+            name="Armor Class"
         ),
         description="Armor Class provided by the armor, the base value is the base armor ac and the modifiers are the modifiers to the ac"
     )
     max_dex_bonus: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=uuid4(),
-            base_value=5,
-            value_name="Max Dex Bonus"
+            base=5,
+            name="Max Dex Bonus"
         ),
         description="Max Dex Bonus provided by the armor, the base value is the base max dex bonus and the modifiers are the modifiers to the max dex bonus"
     )
@@ -162,6 +175,10 @@ class Armor(EquippableItem):
         default=None,
         description="Whether the armor imposes disadvantage on Stealth checks"
     )
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (self.ac, self.max_dex_bonus)
 
     def compatible_equipment_slots(self) -> Tuple[EquipmentSlot, ...]:
         """Armor and accessories occupy their declared body slot."""
@@ -281,6 +298,10 @@ class Shield(EquippableItem):
         description="Armor Class bonus provided by the shield"
     )
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (self.ac_bonus,)
+
     def compatible_equipment_slots(self) -> Tuple[EquipmentSlot, ...]:
         """Shields occupy the melee off hand."""
         return (WeaponSlot.MELEE_OFF,)
@@ -313,6 +334,10 @@ class Shield(EquippableItem):
 class Weapon(EquippableItem):
     usage: WeaponUsage = WeaponUsage.HELD
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return tuple(value for value in (self.damage_bonus, self.attack_bonus) if value is not None)
+
     @property
     def is_body_attack(self) -> bool:
         """Explicit anatomy use, never inferred from the name or hand position."""
@@ -324,9 +349,11 @@ class Weapon(EquippableItem):
             raise ValueError("Body attacks require explicitly owned intrinsic natural weapons")
         return self
 
+    spell_attack_profile: SpellWeaponProfile | None = None
     weapon_kind: WeaponKind | None = None
     material: Material | None = None
     attack_overrides: dict[UUID, WeaponAttackOverride] = Field(default_factory=dict)
+    magical_attack_sources: set[UUID] = Field(default_factory=set)
 
     def attack_override(self, wielder_uuid: UUID) -> WeaponAttackOverride | None:
         return next((value for identity, value in self.attack_overrides.items()
@@ -339,7 +366,9 @@ class Weapon(EquippableItem):
 
     def attack_is_magical(self, wielder_uuid: UUID) -> bool:
         override = self.attack_override(wielder_uuid)
-        return (self.is_magical and self.contributions_active()) or (override is not None and override.magical)
+        return (self.is_magical and self.contributions_active()) or (override is not None and override.magical) or any(
+            (owner:=BaseObject.get(identity)) is not None and owner.contributions_active()
+            for identity in self.magical_attack_sources)
 
     def selected_attack_ability(self, abilities: AbilityScores, requested: AbilityName | None) -> AbilityName | None:
         override = self.attack_override(abilities.source_entity_uuid)
@@ -369,10 +398,10 @@ class Weapon(EquippableItem):
         description="Fixed bonus to damage rolls"
     )
     attack_bonus: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
+        default_factory=lambda: ModifiableValue(
             source_entity_uuid=uuid4(),
-            base_value=0,
-            value_name="Attack Bonus"
+            base=0,
+            name="Attack Bonus"
         ),
         description="Weapon-specific attack roll bonus.",
     )
@@ -418,9 +447,8 @@ class Weapon(EquippableItem):
                 raise ValueError("All extra damage targets must be of the same length")
         if self.is_magical:
             for value in (self.attack_bonus, self.damage_bonus):
-                modifier = value.get_base_modifier() if value is not None else None
-                if modifier is not None:
-                    modifier.contribution_owner_uuid = self.uuid
+                if value is not None:
+                    value.base_owner_uuid = self.uuid
         return self
 
     def owned_values(self) -> tuple[ModifiableValue, ...]:
@@ -492,7 +520,6 @@ class Weapon(EquippableItem):
             duration=ConditionDurationSummary(DurationType.PERMANENT, None),
             behavior_id="item.property.additional_damage", damage_type=damage_type,
             display_name=bonus.name,
-            suppression_provider_uuids=tuple(sorted(self.suppression_provider_uuids, key=str)) if self.is_magical else (),
         ) for bonus, damage_type in zip(self.extra_damage_bonus, self.extra_damage_type)
             if bonus.uuid not in owned))
         return state.model_copy(update={
@@ -503,7 +530,8 @@ class Weapon(EquippableItem):
             "item_effects": effects,
         })
 
-    def get_base_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores,
+    def get_base_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores, read: ValueRead,
+                        context: Optional[Dict[str, Any]],
                         is_off_hand: bool = False,
                         off_hand_ability_bonus: Optional[ModifiableValue] = None,
                         override_ability: Optional[AbilityName] = None) -> Damage:
@@ -512,6 +540,8 @@ class Weapon(EquippableItem):
         Args:
             equipment_block: Equipment block providing global and typed bonuses.
             ability_block: Ability scores used to derive STR or DEX damage.
+            read: The attack's read: wielder and target.
+            context: The attack context the damage bonus is read in.
             is_off_hand: Whether to use the off-hand ability bonus path.
             off_hand_ability_bonus: Optional ability bonus value for off-hand attacks.
             override_ability: Optional ability to use instead of weapon-derived STR/DEX.
@@ -519,58 +549,46 @@ class Weapon(EquippableItem):
         Returns:
             Damage model for the weapon's primary damage payload.
         """
-        bonuses = []
+        bonuses: List[Part] = []
         if self.damage_bonus is not None:
-            bonuses.append(self.damage_bonus)
+            bonuses.append(part(self.damage_bonus))
         if equipment_block.damage_bonus is not None:
-            bonuses.append(equipment_block.damage_bonus)
+            bonuses.append(part(equipment_block.damage_bonus))
 
         is_off_hand = is_off_hand and not self.is_body_attack
         override_ability = self.selected_attack_ability(ability_block, override_ability)
         if override_ability is not None and not is_off_hand:
             ability = ability_block.get_ability(override_ability)
-            bonuses.append(ability.get_combined_values())
+            bonuses.extend(ability.combined_value(read))
         elif not is_off_hand:
             if WeaponProperty.RANGED in self.properties:
-                dex_bonus = ability_block.dexterity.get_combined_values()
-                bonuses.append(dex_bonus)
+                bonuses.extend(ability_block.dexterity.combined_value(read))
             elif WeaponProperty.FINESSE in self.properties:
-                dex_bonus = ability_block.dexterity.get_combined_values()
-                strength_bonus = ability_block.strength.get_combined_values()
-                if dex_bonus.normalized_score > strength_bonus.normalized_score:
-                    bonuses.append(dex_bonus)
+                dex_bonus = ability_block.dexterity.combined_value(read)
+                strength_bonus = ability_block.strength.combined_value(read)
+                if value_score(dex_bonus, read, normalized=True) > value_score(strength_bonus, read, normalized=True):
+                    bonuses.extend(dex_bonus)
                 else:
-                    bonuses.append(strength_bonus)
+                    bonuses.extend(strength_bonus)
             else:
-                strength_bonus = ability_block.strength.get_combined_values()
-                bonuses.append(strength_bonus)
+                bonuses.extend(ability_block.strength.combined_value(read))
         else:
             if off_hand_ability_bonus is not None:
-                bonuses.append(off_hand_ability_bonus)
+                bonuses.append(part(off_hand_ability_bonus))
 
         if WeaponProperty.RANGED in self.properties:
-            ranged_bonus = equipment_block.ranged_damage_bonus
-            bonuses.append(ranged_bonus)
+            bonuses.append(part(equipment_block.ranged_damage_bonus))
         else:
-            melee_bonus = equipment_block.melee_damage_bonus
-            bonuses.append(melee_bonus)
+            bonuses.append(part(equipment_block.melee_damage_bonus))
 
-        combined_bonuses = bonuses[0].combine_values(bonuses[1:])
-        return Damage(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid, damage_dice=self.attack_damage_die(equipment_block.source_entity_uuid), dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
+        combined_bonuses = composed(bonuses)
+        return Damage(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=read.target_entity_uuid, context=context, damage_dice=self.attack_damage_die(equipment_block.source_entity_uuid), dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
 
-    def get_extra_damages(self) -> List[Damage]:
+    def get_extra_damages(self, target_entity_uuid: Optional[UUID]) -> List[Damage]:
         """Return extra damage payloads attached directly to this weapon."""
         damages = []
-        if self.is_magical and not self.contributions_active():
-            return damages
         for i in range(len(self.extra_damage_dices)):
-            damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.extra_damage_dices[i], dice_numbers=self.extra_damage_dices_numbers[i], damage_bonus=self.extra_damage_bonus[i], damage_type=self.extra_damage_type[i]))
-        return damages
-
-    def get_all_weapon_damages(self, equipment_block: 'Equipment', ability_block: AbilityScores) -> List[Damage]:
-        """Return primary plus extra weapon damage payloads."""
-        damages = [self.get_base_damage(equipment_block, ability_block)]
-        damages.extend(self.get_extra_damages())
+            damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target_entity_uuid, damage_dice=self.extra_damage_dices[i], dice_numbers=self.extra_damage_dices_numbers[i], damage_bonus=parts(self.extra_damage_bonus[i]), damage_type=self.extra_damage_type[i]))
         return damages
 
 _SLOT_ATTRIBUTE_BY_SLOT = {
@@ -727,74 +745,74 @@ class Equipment(BaseBlock):
         description="Special properties of the unarmed attack like finesse for monks"
     )
 
-    unarmored_ac: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    unarmored_ac: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=10,
-        value_name="Unarmored Armor Class"
+        base=10,
+        name="Unarmored Armor Class"
     ), description="Base Armor Class value used while unarmored.")
 
-    ac_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    ac_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Armor Class Bonus"
+        base=0,
+        name="Armor Class Bonus"
     ), description="General Armor Class bonus applied to armored and unarmored AC.")
 
-    damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Damage Bonus"
+        base=0,
+        name="Damage Bonus"
     ), description="General damage bonus for attacks made with this equipment.")
 
-    attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Attack Bonus"
+        base=0,
+        name="Attack Bonus"
     ), description="General attack roll bonus for attacks made with this equipment.")
 
-    melee_attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    melee_attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Melee Attack Bonus"
+        base=0,
+        name="Melee Attack Bonus"
     ), description="Attack roll bonus for melee attacks.")
 
-    ranged_attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    ranged_attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Ranged Attack Bonus"
+        base=0,
+        name="Ranged Attack Bonus"
     ), description="Attack roll bonus for ranged attacks.")
 
-    melee_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    melee_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Melee Damage Bonus"
+        base=0,
+        name="Melee Damage Bonus"
     ), description="Damage bonus for melee attacks.")
 
-    ranged_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    ranged_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Ranged Damage Bonus"
+        base=0,
+        name="Ranged Damage Bonus"
     ), description="Damage bonus for ranged attacks.")
-    unarmed_attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    unarmed_attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Unarmed Attack Bonus"
+        base=0,
+        name="Unarmed Attack Bonus"
     ), description="Attack roll bonus for unarmed attacks.")
 
-    unarmed_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    unarmed_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Unarmed Damage Bonus"
+        base=0,
+        name="Unarmed Damage Bonus"
     ), description="Damage bonus for unarmed attacks.")
 
-    off_hand_melee_ability_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    off_hand_melee_ability_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Off-Hand Melee Ability Bonus"
+        base=0,
+        name="Off-Hand Melee Ability Bonus"
     ), description="Ability modifier contribution for off-hand melee damage.")
-    off_hand_ranged_ability_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    off_hand_ranged_ability_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Off-Hand Ranged Ability Bonus"
+        base=0,
+        name="Off-Hand Ranged Ability Bonus"
     ), description="Ability modifier contribution for off-hand ranged damage.")
 
     extra_attack_damage_dices: List[Literal[4,6,8,10,12,20]] = Field(
@@ -814,6 +832,16 @@ class Equipment(BaseBlock):
         description="Extra damage type for the weapon",
     )
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (
+            self.unarmored_ac, self.ac_bonus, self.damage_bonus, self.attack_bonus, self.melee_attack_bonus,
+            self.ranged_attack_bonus, self.melee_damage_bonus, self.ranged_damage_bonus,
+            self.unarmed_attack_bonus, self.unarmed_damage_bonus, self.off_hand_melee_ability_bonus,
+            self.off_hand_ranged_ability_bonus, self.crit_threshold, self.crit_threshold_melee,
+            self.crit_threshold_ranged, self.crit_extra_dice, self.crit_extra_dice_melee,
+            self.crit_extra_dice_ranged)
+
     def owned_values(self) -> tuple[ModifiableValue, ...]:
         return (*super().owned_values(), *self.extra_attack_damage_bonus)
 
@@ -832,36 +860,36 @@ class Equipment(BaseBlock):
         description="Number of dice rolled for unarmed damage.",
     )
 
-    crit_threshold: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    crit_threshold: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Crit Threshold"
+        base=0,
+        name="Crit Threshold"
     ), description="General critical-threshold bonus for all attacks.")
-    crit_threshold_melee: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    crit_threshold_melee: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Melee Crit Threshold"
+        base=0,
+        name="Melee Crit Threshold"
     ), description="Critical-threshold bonus for melee attacks.")
-    crit_threshold_ranged: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    crit_threshold_ranged: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Ranged Crit Threshold"
+        base=0,
+        name="Ranged Crit Threshold"
     ), description="Critical-threshold bonus for ranged attacks.")
 
-    crit_extra_dice: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    crit_extra_dice: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Critical Extra Dice"
+        base=0,
+        name="Critical Extra Dice"
     ), description="General extra dice added on critical hits.")
-    crit_extra_dice_melee: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    crit_extra_dice_melee: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Melee Critical Extra Dice"
+        base=0,
+        name="Melee Critical Extra Dice"
     ), description="Extra dice added on melee critical hits.")
-    crit_extra_dice_ranged: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    crit_extra_dice_ranged: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
         source_entity_uuid=uuid4(),
-        base_value=0,
-        value_name="Ranged Critical Extra Dice"
+        base=0,
+        name="Ranged Critical Extra Dice"
     ), description="Extra dice added on ranged critical hits.")
 
     def get_all_equipped_items(self) -> List[EquippableItem]:
@@ -947,10 +975,9 @@ class Equipment(BaseBlock):
         ability_block: AbilityScores,
         weapon: Optional[Weapon],
         override_ability: Optional[AbilityName],
-        *, magical_properties_active: bool = True,
     ) -> Ability:
         """Select the ability used by a weapon attack roll."""
-        if weapon is not None and magical_properties_active:
+        if weapon is not None:
             override_ability = weapon.selected_attack_ability(ability_block, override_ability)
         if override_ability is not None:
             return ability_block.get_ability(override_ability)
@@ -1007,12 +1034,12 @@ class Equipment(BaseBlock):
         self,
         ability_block: AbilityScores,
         weapon_slot: WeaponSlot,
+        read: ValueRead,
         override_ability: Optional[AbilityName] = None,
         natural_weapon: Optional[NaturalWeaponSpec] = None,
-    ) -> Tuple[ModifiableValue, List[ModifiableValue], List[ModifiableValue], Range]:
-        """Return weapon, equipment, ability, and range attack components."""
+    ) -> Tuple[ModifiableValue, List[ModifiableValue], Tuple[Part, ...], Range]:
+        """Return weapon, equipment, ability, and range attack components for one attack read."""
         weapon = None if natural_weapon else self.get_weapon(weapon_slot)
-        ability_bonuses: List[ModifiableValue] = []
         attack_bonuses = [self.attack_bonus]
         if weapon is None:
             weapon_bonus = self.unarmed_attack_bonus
@@ -1031,8 +1058,7 @@ class Equipment(BaseBlock):
             weapon,
             override_ability,
         )
-        ability_bonuses.append(ability.get_combined_values())
-        return weapon_bonus, attack_bonuses, ability_bonuses, weapon_range
+        return weapon_bonus, attack_bonuses, ability.combined_value(read), weapon_range
 
     def get_weapon_attack_baseline(
         self,
@@ -1118,7 +1144,7 @@ class Equipment(BaseBlock):
                     weapon.extra_damage_dices_numbers,
                     weapon.extra_damage_bonus,
                     weapon.extra_damage_type,
-                ) if not weapon.is_magical or weapon.contributions_active()
+                )
             )
         else:
             ability = self._select_weapon_damage_ability(
@@ -1302,34 +1328,33 @@ class Equipment(BaseBlock):
         """Ranged slots are always ranged, melee slots are never ranged."""
         return weapon_slot in (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF)
 
-    def _get_main_unarmed_damage(self, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Damage:
-        """Combine unarmed, melee, equipment, and ability bonuses into one damage."""
+    def _get_main_unarmed_damage(self, ability_block: AbilityScores, read: ValueRead, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Damage:
+        """Combine unarmed, melee, equipment, and ability bonuses into one damage packet for an attack read."""
         unarmed_damage_bonus = self.unarmed_damage_bonus
         if override_ability is not None:
             ability = ability_block.get_ability(override_ability)
-            ability_bonus = ability.get_combined_values()
+            ability_bonus = ability.combined_value(read)
         else:
             ability = ability_block.strength
-            strength_bonus = ability.get_combined_values()
+            strength_bonus = ability.combined_value(read)
             ability_bonus = strength_bonus
             if WeaponProperty.FINESSE in self.unarmed_properties:
                 dexterity = ability_block.dexterity
-                dexterity_bonus = dexterity.get_combined_values()
-                if dexterity_bonus.normalized_score > strength_bonus.normalized_score:
+                dexterity_bonus = dexterity.combined_value(read)
+                if value_score(dexterity_bonus, read, normalized=True) > value_score(strength_bonus, read, normalized=True):
                     ability = dexterity
                     ability_bonus = dexterity_bonus
         if natural_weapon is not None and natural_weapon.fixed_damage_bonus is not None:
-            ability_bonus = ModifiableValue.create(source_entity_uuid=self.source_entity_uuid,
-                value_name="Intrinsic damage bonus",base_value=natural_weapon.fixed_damage_bonus)
-        combined_bonus = unarmed_damage_bonus.combine_values([self.damage_bonus,self.melee_damage_bonus, ability_bonus])
-        combined_bonus.set_context({
-            "attack_ability": ability.name,
-            "range_type": RangeType.REACH.value,
-        })
-        unarmed_damage = Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=natural_weapon.damage_dice if natural_weapon else self.unarmed_damage_dice, dice_numbers=natural_weapon.dice_numbers if natural_weapon else self.unarmed_dice_numbers, damage_bonus=combined_bonus, damage_type=natural_weapon.damage_type if natural_weapon else self.unarmed_damage_type)
+            ability_bonus = parts(ModifiableValue(source_entity_uuid=self.source_entity_uuid,
+                name="Intrinsic damage bonus",base=natural_weapon.fixed_damage_bonus))
+        combined_bonus = composed((*parts(unarmed_damage_bonus, self.damage_bonus, self.melee_damage_bonus),
+                                   *ability_bonus))
+        unarmed_damage = Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=read.target_entity_uuid,
+            context={"attack_ability": ability.name, "range_type": RangeType.REACH.value},
+            damage_dice=natural_weapon.damage_dice if natural_weapon else self.unarmed_damage_dice, dice_numbers=natural_weapon.dice_numbers if natural_weapon else self.unarmed_dice_numbers, damage_bonus=combined_bonus, damage_type=natural_weapon.damage_type if natural_weapon else self.unarmed_damage_type)
         return unarmed_damage
 
-    def _get_weapon_base_damage(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None) -> Optional[Damage]:
+    def _get_weapon_base_damage(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, read: ValueRead, override_ability: Optional[AbilityName] = None) -> Optional[Damage]:
         """Return the primary damage payload for a weapon slot, if it holds a weapon."""
         weapon = self._get_weapon_by_slot(weapon_slot)
         if isinstance(weapon, Weapon):
@@ -1340,53 +1365,45 @@ class Equipment(BaseBlock):
             if is_off_hand:
                 off_hand_ability_bonus = self.off_hand_ranged_ability_bonus if is_ranged else self.off_hand_melee_ability_bonus
 
-            damage = weapon.get_base_damage(
+            ability = self._select_weapon_damage_ability(ability_block, weapon, override_ability)
+            return weapon.get_base_damage(
                 self,
                 ability_block,
+                read,
+                {"attack_ability": ability.name, "range_type": weapon.range.type.value},
                 is_off_hand=is_off_hand,
                 off_hand_ability_bonus=off_hand_ability_bonus,
                 override_ability=override_ability,
             )
-            if damage.damage_bonus is not None:
-                ability = self._select_weapon_damage_ability(
-                    ability_block,
-                    weapon,
-                    override_ability,
-                )
-                damage.damage_bonus.set_context({
-                    "attack_ability": ability.name,
-                    "range_type": weapon.range.type.value,
-                })
-            return damage
         return None
 
-    def _get_extra_weapon_damages(self, weapon_slot: WeaponSlot) -> List[Damage]:
+    def _get_extra_weapon_damages(self, weapon_slot: WeaponSlot, target_entity_uuid: Optional[UUID]) -> List[Damage]:
         """Return extra damage payloads attached to the weapon in the slot."""
         weapon = self._get_weapon_by_slot(weapon_slot)
         if isinstance(weapon, Weapon):
-            return weapon.get_extra_damages()
+            return weapon.get_extra_damages(target_entity_uuid)
         return []
 
-    def get_extra_attack_damage(self, weapon_slot: Optional[WeaponSlot] = None) -> List[Damage]:
+    def get_extra_attack_damage(self, target_entity_uuid: Optional[UUID], weapon_slot: Optional[WeaponSlot] = None) -> List[Damage]:
         """Return equipment-level extra damage, plus weapon extras for a slot."""
         damages: List[Damage] = []
         for dice, dice_numbers, bonus, damage_type in zip(self.extra_attack_damage_dices, self.extra_attack_damage_dices_numbers, self.extra_attack_damage_bonus, self.extra_attack_damage_type):
-            damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=dice, dice_numbers=dice_numbers, damage_bonus=bonus, damage_type=damage_type))
+            damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target_entity_uuid, damage_dice=dice, dice_numbers=dice_numbers, damage_bonus=parts(bonus), damage_type=damage_type))
         if weapon_slot is not None:
-            return damages+self._get_extra_weapon_damages(weapon_slot)
+            return damages+self._get_extra_weapon_damages(weapon_slot, target_entity_uuid)
         else:
             return damages
 
-    def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> List[Damage]:
-        """Return all damage payloads for an attack from a weapon slot."""
+    def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, read: ValueRead, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> List[Damage]:
+        """Return all damage payloads for an attack read from a weapon slot."""
         if natural_weapon or self.is_unarmed(weapon_slot):
-            return [self._get_main_unarmed_damage(ability_block, override_ability=override_ability, natural_weapon=natural_weapon)]+self.get_extra_attack_damage()
+            return [self._get_main_unarmed_damage(ability_block, read, override_ability=override_ability, natural_weapon=natural_weapon)]+self.get_extra_attack_damage(read.target_entity_uuid)
         else:
             outs = []
-            base_damage = self._get_weapon_base_damage(weapon_slot, ability_block, override_ability=override_ability)
+            base_damage = self._get_weapon_base_damage(weapon_slot, ability_block, read, override_ability=override_ability)
             if base_damage is not None:
                 outs.append(base_damage)
-            outs.extend(self.get_extra_attack_damage(weapon_slot))
+            outs.extend(self.get_extra_attack_damage(read.target_entity_uuid, weapon_slot))
             return outs
 
     def get_main_damage_type(self, weapon_slot: WeaponSlot) -> DamageType:
@@ -1417,8 +1434,7 @@ class Equipment(BaseBlock):
         self,
     ) -> ArmorClassFormulaCandidate:
         """Represent the existing singleton mode as a compatibility candidate."""
-        base_modifier = self.unarmored_ac.get_base_modifier()
-        base_ac = base_modifier.normalized_value if base_modifier is not None else 10
+        base_ac = normalized_base(self.unarmored_ac) if self.unarmored_ac.base is not None else 10
         if self.unarmored_ac_type == UnarmoredAc.BARBARIAN:
             abilities: Tuple[AbilityName, ...] = (
                 "dexterity",
@@ -1444,8 +1460,9 @@ class Equipment(BaseBlock):
     def resolve_armor_class_formula_candidate(
         self,
         ability_block: AbilityScores,
+        read: ValueRead,
     ) -> Optional[ArmorClassFormulaCandidate]:
-        """Select the highest applicable formula, with stable first-source ties."""
+        """Select the highest applicable formula in an armor-class read, with stable first-source ties."""
         candidates = [
             self._legacy_armor_class_formula_candidate(),
             *self.armor_class_formula_candidates.values(),
@@ -1461,16 +1478,14 @@ class Equipment(BaseBlock):
         def score(candidate: ArmorClassFormulaCandidate) -> int:
             total = candidate.base_ac
             total += sum(
-                ability_block.get_ability(
-                    ability_name
-                ).get_combined_values(use_register=False).normalized_score
+                value_score(ability_block.get_ability(ability_name).combined_value(read), read, normalized=True)
                 for ability_name in candidate.ability_names
             )
             if (
                 candidate.allows_shield
                 and isinstance(self.weapon_melee_off, Shield)
             ):
-                total += self.weapon_melee_off.ac_bonus.normalized_score
+                total += value_score(parts(self.weapon_melee_off.ac_bonus), read, normalized=True)
             return total
 
         return max(applicable, key=score)
@@ -1496,52 +1511,39 @@ class Equipment(BaseBlock):
     def get_unarmored_ac_values(
         self,
         candidate: Optional[ArmorClassFormulaCandidate] = None,
-        *, use_register: bool = True,
-    ) -> List[ModifiableValue]:
-        """Return modifiable values that contribute to unarmored AC."""
-        values = [self.ac_bonus]
+    ) -> Tuple[Part, ...]:
+        """Return the parts of unarmored AC; a formula's base and a fixed unarmored bonus are rows of this read."""
+        values = [part(self.ac_bonus)]
+        unarmored = parts(self.unarmored_ac)
         if candidate is not None:
-            temporary_value = copy.deepcopy(self.unarmored_ac)
-            base_modifier = self.unarmored_ac.get_base_modifier()
-            current_base = (
-                base_modifier.normalized_value
-                if base_modifier is not None
-                else 0
-            )
-            base_delta = candidate.base_ac - current_base
+            base_delta = candidate.base_ac - normalized_base(self.unarmored_ac)
             if base_delta:
-                temporary_value.self_static.add_value_modifier(
-                    NumericalModifier(
-                        use_register=use_register,
-                        source_entity_uuid=self.source_entity_uuid,
-                        name="armor_class_formula_base",
-                        value=base_delta,
-                    )
-                )
-            values.append(temporary_value)
+                unarmored = with_rows(unarmored, (Row(Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
+                    use_register=False,
+                    source_entity_uuid=self.source_entity_uuid,
+                    name="armor_class_formula_base",
+                    value=base_delta,
+                )),))
         elif self.unarmored_ac_type in [UnarmoredAc.DRACONIC_SORCERER, UnarmoredAc.MAGIC_ARMOR]:
-            unarmored_ac_static_modifier = NumericalModifier(source_entity_uuid=self.source_entity_uuid, name="unarmored_ac_bonus", value=3, use_register=use_register)
-            temporary_value = copy.deepcopy(self.unarmored_ac)
-            temporary_value.self_static.add_value_modifier(unarmored_ac_static_modifier)
-            values.append(temporary_value)
-        else:
-            values.append(self.unarmored_ac)
+            unarmored = with_rows(unarmored, (Row(Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
+                source_entity_uuid=self.source_entity_uuid, name="unarmored_ac_bonus", value=3, use_register=False)),))
+        values.extend(unarmored)
         if (
             self.weapon_melee_off
             and isinstance(self.weapon_melee_off, Shield)
             and (candidate is None or candidate.allows_shield)
         ):
-            values.append(self.weapon_melee_off.ac_bonus)
-        return values
+            values.append(part(self.weapon_melee_off.ac_bonus))
+        return tuple(values)
 
-    def get_armored_ac_values(self) -> List[ModifiableValue]:
-        """Return modifiable values that contribute to armored AC."""
+    def get_armored_ac_values(self) -> Tuple[Part, ...]:
+        """Return the parts of armored AC."""
         values = [self.ac_bonus]
         if self.body_armor is not None and self.body_armor.type != ArmorType.CLOTH:
             values.append(self.body_armor.ac)
         if self.weapon_melee_off and isinstance(self.weapon_melee_off, Shield):
             values.append(self.weapon_melee_off.ac_bonus)
-        return values
+        return parts(*values)
 
     def get_armored_max_dex_bonus(self) -> Optional[ModifiableValue]:
         """Return the current armor's maximum Dexterity bonus value, if any."""
@@ -1595,18 +1597,10 @@ class Equipment(BaseBlock):
         return conflicts
 
     def _reparent_equippable_item(self, item: EquippableItem) -> None:
-        """Update item-owned values and channels to this equipment owner."""
+        """Give the item and its owned values this equipment owner."""
         item.source_entity_uuid = self.source_entity_uuid
-        for field_value in item.__dict__.values():
-            values = field_value if isinstance(field_value, list) else (field_value,)
-            for value in values:
-                if not isinstance(value, ModifiableValue):
-                    continue
-                value.source_entity_uuid = self.source_entity_uuid
-                value.self_static.source_entity_uuid = self.source_entity_uuid
-                value.to_target_static.source_entity_uuid = self.source_entity_uuid
-                value.self_contextual.source_entity_uuid = self.source_entity_uuid
-                value.to_target_contextual.source_entity_uuid = self.source_entity_uuid
+        for value in item.owned_values():
+            value.source_entity_uuid = self.source_entity_uuid
 
     def validate_initial_items(
         self,
@@ -1703,7 +1697,6 @@ class Equipment(BaseBlock):
         common_fields = {
             "name": item.name,
             "source_entity_uuid": self.source_entity_uuid,
-            "target_entity_uuid": self.target_entity_uuid,
             "item_uuid": item.uuid,
             "slot": slot,
             "parent_event": parent_event_uuid,
@@ -1983,36 +1976,36 @@ class Equipment(BaseBlock):
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
-            unarmored_ac = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.unarmored_ac, value_name="Unarmored Armor Class")
+            unarmored_ac = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.unarmored_ac, name="Unarmored Armor Class")
             for modifier in config.unarmored_ac_modifiers:
-                unarmored_ac.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            ac_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.ac_bonus, value_name="Armor Class Bonus")
+                add_modifier(unarmored_ac, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            ac_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.ac_bonus, name="Armor Class Bonus")
             for modifier in config.ac_bonus_modifiers:
-                ac_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            damage_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.damage_bonus, value_name="Damage Bonus")
+                add_modifier(ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            damage_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.damage_bonus, name="Damage Bonus")
             for modifier in config.damage_bonus_modifiers:
-                damage_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            attack_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.attack_bonus, value_name="Attack Bonus")
+                add_modifier(damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            attack_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.attack_bonus, name="Attack Bonus")
             for modifier in config.attack_bonus_modifiers:
-                attack_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            melee_attack_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.melee_attack_bonus, value_name="Melee Attack Bonus")
+                add_modifier(attack_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            melee_attack_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.melee_attack_bonus, name="Melee Attack Bonus")
             for modifier in config.melee_attack_bonus_modifiers:
-                melee_attack_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            ranged_attack_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.ranged_attack_bonus, value_name="Ranged Attack Bonus")
+                add_modifier(melee_attack_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            ranged_attack_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.ranged_attack_bonus, name="Ranged Attack Bonus")
             for modifier in config.ranged_attack_bonus_modifiers:
-                ranged_attack_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            melee_damage_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.melee_damage_bonus, value_name="Melee Damage Bonus")
+                add_modifier(ranged_attack_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            melee_damage_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.melee_damage_bonus, name="Melee Damage Bonus")
             for modifier in config.melee_damage_bonus_modifiers:
-                melee_damage_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            ranged_damage_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.ranged_damage_bonus, value_name="Ranged Damage Bonus")
+                add_modifier(melee_damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            ranged_damage_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.ranged_damage_bonus, name="Ranged Damage Bonus")
             for modifier in config.ranged_damage_bonus_modifiers:
-                ranged_damage_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            unarmed_attack_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.unarmed_attack_bonus, value_name="Unarmed Attack Bonus")
+                add_modifier(ranged_damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            unarmed_attack_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.unarmed_attack_bonus, name="Unarmed Attack Bonus")
             for modifier in config.unarmed_attack_bonus_modifiers:
-                unarmed_attack_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            unarmed_damage_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.unarmed_damage_bonus, value_name="Unarmed Damage Bonus")
+                add_modifier(unarmed_attack_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            unarmed_damage_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.unarmed_damage_bonus, name="Unarmed Damage Bonus")
             for modifier in config.unarmed_damage_bonus_modifiers:
-                unarmed_damage_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                add_modifier(unarmed_damage_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
                        one_handed_offhand_grants=set(config.one_handed_offhand_grants),

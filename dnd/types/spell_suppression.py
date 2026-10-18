@@ -13,7 +13,6 @@ class SpellSuppression(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    antimagic: bool = False
     provider_uuid: UUID
     positions: tuple[tuple[int, int], ...]
     provider_content_ref: ContentRef | None = None

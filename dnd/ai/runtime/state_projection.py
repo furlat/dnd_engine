@@ -1,4 +1,4 @@
-"""Assignment-owned recorded knowledge and exact native decision authority."""
+"""Project one assignment's knowledge, owned by the AI knowledge system, with exact native decision authority."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from dnd.ai.contracts.observation import (
 )
 from dnd.ai.runtime.decision_epoch import DecisionEpochBuild, build_decision_epoch
 from dnd.ai.runtime.knowledge_reduction import AIKnowledge
+from dnd.ai.runtime.knowledge_system import AIKnowledgeSystem, assignment_knowledge
 from dnd.controller import TurnContext
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
@@ -29,13 +30,15 @@ class AIDecisionState:
 
 
 class SubjectiveAIStateProjector:
-    """Project one side's retained knowledge without any transport/session layer."""
+    """Project one side's knowledge, read from the AI knowledge system, without any transport/session layer."""
 
     def __init__(
         self,
         *,
         assignment_id: str,
         controlled_entity_uuids: tuple[UUID, ...],
+        knowledge: AIKnowledgeSystem,
+        knowledge_key: UUID,
     ) -> None:
         if not assignment_id:
             raise ValueError("assignment_id must not be empty")
@@ -49,8 +52,8 @@ class SubjectiveAIStateProjector:
         )
         self._observation_cursor = 0
         self._world: SubjectiveWorldState | None = None
-        self._source_generation = EventQueue.generation_id()
-        self._knowledge = AIKnowledge(self._controlled_entity_uuids)
+        self._knowledge_system = knowledge
+        self._knowledge_key = knowledge_key
 
     @property
     def world(self) -> SubjectiveWorldState | None:
@@ -91,21 +94,15 @@ class SubjectiveAIStateProjector:
         actor: Entity,
         context: TurnContext,
     ) -> SubjectiveWorldState:
-        """Consume committed source facts, then expose this decision's knowledge."""
+        """Expose this decision's knowledge, advanced by the AI knowledge system to the cursor."""
         if actor.uuid not in self._controlled_entity_uuids:
             raise ValueError("actor is not controlled by this AI assignment")
-        if EventQueue.generation_id() != self._source_generation:
-            raise RuntimeError("AI assignment belongs to an earlier event generation")
-        self._knowledge.consume(
-            (index, event, None)
-            for index, event in EventQueue.iter_events_since(self._knowledge.source_cursor)
-        )
+        knowledge = assignment_knowledge(self._knowledge_system, self._knowledge_key)
         self._observation_cursor += 1
-        knowledge = self._knowledge
         if actor.uuid not in knowledge.actors:
             raise ValueError("AI actor requires its recorded birth before a decision")
-        session = self._session_state(actor)
-        encounter = self._encounter_state(actor=actor, context=context)
+        session = self._session_state(actor, knowledge)
+        encounter = self._encounter_state(actor=actor, context=context, knowledge=knowledge)
         # Fact values are immutable and shared; only publication containers are
         # copied so a movement guard retains its genuine previous observation.
         self._world = SubjectiveWorldState.model_construct(
@@ -120,7 +117,7 @@ class SubjectiveAIStateProjector:
         )
         return self._world
 
-    def _session_state(self, actor: Entity) -> ObservationSessionState:
+    def _session_state(self, actor: Entity, knowledge: AIKnowledge) -> ObservationSessionState:
         return ObservationSessionState(
             session_id=self._assignment_id,
             player_type="ai",
@@ -130,7 +127,7 @@ class SubjectiveAIStateProjector:
                 str(entity_uuid) for entity_uuid in self._controlled_entity_uuids
             ],
             active_entity_uuid=str(actor.uuid),
-            active_entity_name=self._knowledge.actors[actor.uuid].name,
+            active_entity_name=knowledge.actors[actor.uuid].name,
             is_my_turn=True,
         )
 
@@ -140,12 +137,13 @@ class SubjectiveAIStateProjector:
         *,
         actor: Entity,
         context: TurnContext,
+        knowledge: AIKnowledge,
     ) -> ObservationEncounterState | None:
         if context.encounter_uuid is None:
             return None
         rows: list[ObservationCombatantState] = []
         for entity_uuid in context.initiative_order:
-            fact = self._knowledge.known_entities.get(str(entity_uuid))
+            fact = knowledge.known_entities.get(str(entity_uuid))
             if fact is None or fact.knowledge_state is not KnowledgeState.VISIBLE:
                 continue
             rows.append(
@@ -175,7 +173,7 @@ class SubjectiveAIStateProjector:
             round_number=context.round_number,
             current_turn_index=subjective_turn_index,
             current_entity_uuid=str(actor.uuid),
-            current_entity_name=self._knowledge.actors[actor.uuid].name,
+            current_entity_name=knowledge.actors[actor.uuid].name,
             turn_started_source_event_cursor=(
                 context.turn_started_source_event_cursor
             ),

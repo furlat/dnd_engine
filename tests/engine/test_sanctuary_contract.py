@@ -88,14 +88,14 @@ def test_selected_harmful_spell_is_gated_before_costs(spell_type: type[SpellActi
         if spell_type in (FireBolt, PoisonSpray):
             assert warded.get_hp() < hp_before
         else:
-            assert any(name in warded.active_conditions for name in ("Paralyzed", "Charmed", "Stunned"))
+            assert any(c.get_display_name() in ("Paralyzed", "Charmed", "Stunned") for c in warded.active_conditions_by_uuid.values())
     else:
         assert result.canceled and result.canceled_from_phase is EventPhase.DECLARATION
         assert result.outcome_code == SANCTUARY_INTERRUPTION_OUTCOME_CODE
         assert result.outcome_source_entity_uuid == warded.uuid
         assert _resources(attacker) == before
         assert warded.get_hp() == hp_before
-        assert not any(name in warded.active_conditions for name in ("Paralyzed", "Charmed", "Stunned"))
+        assert not any(c.get_display_name() in ("Paralyzed", "Charmed", "Stunned") for c in warded.active_conditions_by_uuid.values())
 
 
 @pytest.mark.parametrize("saves", [False, True])

@@ -1,7 +1,7 @@
 from typing import Dict, Optional, List, Callable, Tuple
 from uuid import UUID, uuid4, uuid5
 from pydantic import BaseModel, Field, computed_field
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 from dnd.core.modifiers import NumericalModifier
 
 from dnd.core.base_block import BaseBlock
@@ -82,16 +82,6 @@ class Skill(BaseBlock):
             Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
         get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
             Searches through attributes and returns all BaseBlock instances that are attributes of this class.
-        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
-            Set the target entity for all the values contained in this Block instance.
-        clear_target_entity() -> None: (Inherited from BaseBlock)
-            Clear the target entity for all the values contained in this Block instance.
-        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
-            Set the context for all the values contained in this Block instance.
-        clear_context() -> None: (Inherited from BaseBlock)
-            Clear the context for all the values contained in this Block instance.
-        clear() -> None: (Inherited from BaseBlock)
-            Clear the source, target, and context for all the values contained in this Block instance.
 
     Class Methods:
         create(cls, source_entity_uuid: UUID, name: skills, source_entity_name: Optional[str] = None,
@@ -107,11 +97,15 @@ class Skill(BaseBlock):
     """
 
     name: SkillName = Field(default="acrobatics", description="The name of the skill in D&D 5e")
-    skill_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Skill Bonus"), description="Any additional bonus applied to skill checks, beyond ability modifier and proficiency")
+    skill_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(),base=0, name="Skill Bonus"), description="Any additional bonus applied to skill checks, beyond ability modifier and proficiency")
     proficiency_sources: ProficiencySourceSet = Field(
         default_factory=ProficiencySourceSet,
         description="Exact source-owned proficiency contributions.",
     )
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (self.skill_bonus,)
 
     @computed_field
     @property
@@ -218,10 +212,10 @@ class Skill(BaseBlock):
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
-            skill_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.skill_bonus, value_name=name+" Skill Bonus")
+            skill_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.skill_bonus, name=name+" Skill Bonus")
             if len(config.skill_bonus_modifiers) > 0:
                 for modifier in config.skill_bonus_modifiers:
-                    skill_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                    add_modifier(skill_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
             skill = cls(
                 source_entity_uuid=source_entity_uuid,
@@ -303,16 +297,6 @@ class SkillSet(BaseBlock):
             Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
         get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
             Searches through attributes and returns all BaseBlock instances that are attributes of this class.
-        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
-            Set the target entity for all the values contained in this Block instance.
-        clear_target_entity() -> None: (Inherited from BaseBlock)
-            Clear the target entity for all the values contained in this Block instance.
-        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
-            Set the context for all the values contained in this Block instance.
-        clear_context() -> None: (Inherited from BaseBlock)
-            Clear the context for all the values contained in this Block instance.
-        clear() -> None: (Inherited from BaseBlock)
-            Clear the source, target, and context for all the values contained in this Block instance.
 
     Computed Fields:
         proficiencies (List[Skill]): A list of all skills in which the entity is proficient.

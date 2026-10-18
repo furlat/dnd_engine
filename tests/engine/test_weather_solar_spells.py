@@ -29,6 +29,7 @@ from dnd.spells.evocation import IceStorm, Sunbeam, SunbeamEffect, Sunburst
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor, force_save_result, reset_spell_regression_arena,
 )
+from dnd.core.values import Channel, Kind, add_modifier, remove_all_modifiers
 
 
 @pytest.fixture
@@ -290,28 +291,12 @@ def test_sunlight_contribution_gate_retains_identity_and_authored_toggle(scene):
     identity = owner.light_source_uuid
     tile = grid.get_tile(*caster.position)
     assert tile is not None and tile.resolved_light_level is LightLevel.BRIGHT_LIGHT
-    first, second = uuid4(), uuid4()
-    owner.set_suppression(first, True)
-    owner.set_suppression(second, True)
-    grid.refresh_contribution_lights()
-    assert not grid.is_sunlit(caster.position) and tile.resolved_light_level is LightLevel.DARKNESS
-    assert grid.get_light_source_position(identity) == caster.position
-    owner.set_suppression(first, False)
-    grid.refresh_contribution_lights()
-    assert not grid.is_sunlit(caster.position)
-    owner.set_suppression(second, False)
-    grid.refresh_contribution_lights()
-    assert grid.is_sunlit(caster.position) and owner.light_source_uuid == identity
     grid.toggle_light_source(identity, False)
-    owner.set_suppression(first, True)
-    grid.refresh_contribution_lights()
-    owner.set_suppression(first, False)
-    grid.refresh_contribution_lights()
     assert not grid.is_sunlit(caster.position)
+    assert grid.get_light_source_position(identity) == caster.position
     grid.toggle_light_source(identity, True)
-    assert grid.is_sunlit(caster.position)
-    SunbeamEffect.unregister(owner.uuid)
-    grid.refresh_contribution_lights()
+    assert grid.is_sunlit(caster.position) and owner.light_source_uuid == identity
+    caster.remove_condition("Concentrating")
     assert not grid.is_sunlit(caster.position) and tile.resolved_light_level is LightLevel.DARKNESS
 
 
@@ -335,7 +320,7 @@ def test_sunburst_success_halves_damage_and_repeat_save_survives_source_absence(
     before = target.get_normal_hp()
     assert not cast(Sunburst, caster, target.position).canceled
     assert before - target.get_normal_hp() == 24
-    target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_all_modifiers()
+    remove_all_modifiers(target.saving_throws.get_saving_throw("constitution").bonus)
     force_save_result(target, "constitution", succeeds=True)
     caster._detach_from_world()
     with fixed_dice_faces(*([2] * 100)):
@@ -348,7 +333,7 @@ def test_solar_success_halves_damage_without_blindness(scene, spell, destination
     caster, target = scene
     Entity.update_entity_position(target, (10, 5))
     Entity.update_all_entities_senses(max_distance=300)
-    target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_all_modifiers()
+    remove_all_modifiers(target.saving_throws.get_saving_throw("constitution").bonus)
     force_save_result(target, "constitution", succeeds=True)
     before = target.get_normal_hp()
     assert not cast(spell, caster, destination).canceled
@@ -357,7 +342,7 @@ def test_solar_success_halves_damage_without_blindness(scene, spell, destination
 
 def test_ice_storm_mixed_resistance_and_source_death_preserve_terrain_until_round(scene):
     caster, target = scene
-    target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
         source_entity_uuid=target.uuid, target_entity_uuid=target.uuid, name="Cold immunity",
         value=ResistanceStatus.IMMUNITY, damage_type=DamageType.COLD))
     before = target.get_normal_hp()

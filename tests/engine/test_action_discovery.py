@@ -32,7 +32,7 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.items.consumables import build_healing_potion
@@ -73,7 +73,7 @@ def reset_action_state() -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, 20, 20)
     _action_game = Game()
 
@@ -377,19 +377,20 @@ def test_eb_09_008_target_filters_and_dead_targets_shape_entity_actions() -> Non
     ally_attack = find_attack_action(hero.get_available_actions(target_filter="allies"))
     assert [target.target_uuid for target in ally_attack.valid_targets] == [ally.uuid]
 
+    # Targets follow the contacts' evidence order: their cells, x-major.
     all_living_attack = find_attack_action(hero.get_available_actions(target_filter="all"))
     assert [target.target_uuid for target in all_living_attack.valid_targets] == [
-        enemy.uuid,
         ally.uuid,
+        enemy.uuid,
     ]
 
     all_targets_attack = find_attack_action(
         hero.get_available_actions(target_filter="all", include_dead=True)
     )
     assert [target.target_uuid for target in all_targets_attack.valid_targets] == [
+        ally.uuid,
         enemy.uuid,
         dead_enemy.uuid,
-        ally.uuid,
     ]
 
 

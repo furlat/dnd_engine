@@ -4,7 +4,7 @@ An encounter owns initiative order, round and turn boundaries, controller
 coordination, combat-log capture, and end-of-combat detection.
 """
 
-from typing import Any, Optional, Dict, List, ClassVar, Set, Tuple, Callable
+from typing import Any, FrozenSet, Optional, Dict, List, ClassVar, Set, Tuple, Callable
 
 __all__ = [
     "EncounterState",
@@ -23,6 +23,8 @@ import logging
 
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, RollType
+from dnd.core.values import ValueRead, read_value, parts
+from dnd.types.event_facts import GroupEntryKind
 from dnd.core.events import (
     Event, EventPhase, EventQueue,
     EncounterStartEvent, EncounterEndEvent,
@@ -32,9 +34,11 @@ from dnd.core.events import (
 )
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.gridmap import get_map
+from dnd.core.navigation import NO_CELLS_LAYER, NO_SIDES_LAYER
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.subjective_combat_log import project_combat_log
 from dnd.entity import Entity
+from dnd.blocks.sensory import spatial_senses_system
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.controller import (
     Controller,
@@ -70,8 +74,22 @@ def _compute_revealed_entities(event: Event, child_logs: List[CombatLogEntry]) -
     return revealed
 
 
+# Owned by the Encounter system, whose event computers are this module's functions: one string per
+# entity id (observers and participants), so event-time grants and log perceivers share their
+# strings instead of stringifying an id per version. Cleared whenever the encounter installs or
+# removes its computers; bounded by the encounter's entities. A pure UUID-to-text table.
+_ID_STRINGS: Dict[UUID, str] = {}
+
+
+def _id_string(identity: UUID) -> str:
+    text = _ID_STRINGS.get(identity)
+    if text is None:
+        text = _ID_STRINGS[identity] = str(identity)
+    return text
+
+
 def _compute_perceivers(event: Event) -> Set[str]:
-    """Return observer UUIDs that should receive an event log."""
+    """Return observer UUIDs that should receive an event log (a fresh set of shared id strings)."""
     grid = get_map()
 
     positions: Set[Tuple[int, int]] = event.get_affected_positions()
@@ -83,43 +101,40 @@ def _compute_perceivers(event: Event) -> Set[str]:
             if pos:
                 positions.add(pos)
 
-    perceivers: Set[str] = set()
-    for pos in positions:
-        perceivers |= {str(u) for u in grid.get_subscribers_at(pos)}
-
-    for uuid in participant_uuids:
-        if uuid:
-            perceivers.add(str(uuid))
-
-    return perceivers
+    perceivers = spatial_senses_system.observers_granted(positions)
+    perceivers.update(uuid for uuid in participant_uuids if uuid)
+    return {_id_string(uuid) for uuid in perceivers}
 
 
-def _compute_identified_entity_observers(event: Event) -> Dict[str, Set[str]]:
-    """Capture which observers identify each entity participating in an event."""
+def _compute_identified_entity_observers(
+    event: Event, previous: Dict[str, FrozenSet[str]],
+) -> Dict[str, FrozenSet[str]]:
+    """Capture which observers identify each entity participating in an event.
+
+    A participant identifies itself; an observer subscribed to its cell
+    identifies it when the participant is among that observer's contacts.
+    `previous` is the grants mapping the version carries from its predecessor:
+    the grants are computed for every version, and when every participant's grant
+    is unchanged the carried mapping is returned itself (grants are shared frozen
+    values), so versions share one mapping while it holds.
+    """
     grid = get_map()
-    grants: Dict[str, Set[str]] = {}
     participant_uuids = {
         entity_uuid
         for entity_uuid in event.get_participant_entity_uuids()
         if Entity.get(entity_uuid) is not None
     }
-
+    rows: List[Tuple[str, FrozenSet[str]]] = []
     for participant_uuid in participant_uuids:
-        observer_uuids = {participant_uuid}
+        key = _id_string(participant_uuid)
         position = grid.get_entity_position(participant_uuid)
-        if position is not None:
-            observer_uuids.update(grid.get_subscribers_at(position))
-
-        identified_by: Set[str] = set()
-        for observer_uuid in observer_uuids:
-            observer = Entity.get(observer_uuid)
-            if observer is None:
-                continue
-            if observer_uuid == participant_uuid or participant_uuid in observer.senses.entities:
-                identified_by.add(str(observer_uuid))
-        grants[str(participant_uuid)] = identified_by
-
-    return grants
+        rows.append((key, frozenset((key,)) if position is None
+            else spatial_senses_system.identifying_observers(participant_uuid, position)))
+    if len(rows) == len(previous) and all(
+            held_key == key and (held is observers or held == observers)
+            for (held_key, held), (key, observers) in zip(previous.items(), rows)):
+        return previous
+    return dict(rows)
 
 
 class EncounterState(str, Enum):
@@ -262,7 +277,7 @@ class Encounter(BaseObject):
     _encounter_registry: ClassVar[Dict[UUID, 'Encounter']] = {}
     _active_encounter: ClassVar[Optional['Encounter']] = None
     _combat_log_listeners: ClassVar[List[Callable[['Encounter', int, CombatLogEntry, Event], None]]] = []
-    _pending_leaves: Dict[UUID, Event | None] = PrivateAttr(default_factory=dict)
+    _pending_leaves: Dict[UUID, Event | None] = PrivateAttr(default={})
     _membership_execution_depth: int = PrivateAttr(default=0)
     _departed_turn_successor: bool = PrivateAttr(default=False)
 
@@ -380,6 +395,10 @@ class Encounter(BaseObject):
         )
 
         self.combatants[entity.uuid] = combatant
+        if self.state == EncounterState.ACTIVE:
+            entity.active_encounter_uuid = self.uuid
+        if controller.execution_mode is ControllerExecutionMode.EXTERNAL:
+            entity.is_player_companion=True
         return combatant
 
     def get_controller_for(self, entity_uuid: UUID) -> Optional[Controller]:
@@ -433,6 +452,9 @@ class Encounter(BaseObject):
                    and self.combatants[self.initiative_order[index]].joined_after_uuid == prepared.after_uuid):
                 index += 1
         self.combatants[prepared.entity.uuid] = prepared.combatant
+        prepared.entity.active_encounter_uuid = self.uuid
+        if prepared.controller.execution_mode is ControllerExecutionMode.EXTERNAL:
+            prepared.entity.is_player_companion=True
         self.initiative_order.insert(index, prepared.entity.uuid)
         if active_uuid is not None:
             self.current_turn_index = self.initiative_order.index(active_uuid)
@@ -496,6 +518,9 @@ class Encounter(BaseObject):
                 self.turn_state = TurnState.ENDED
                 self._end_turn_execution()
         for entity_uuid in pending:
+            entity = Entity.get(entity_uuid)
+            if entity is not None and entity.active_encounter_uuid == self.uuid:
+                entity.active_encounter_uuid = None
             combatant = self.combatants.pop(entity_uuid, None)
             if combatant is not None:
                 combatant.remove_from_register()
@@ -529,6 +554,9 @@ class Encounter(BaseObject):
             raise ValueError(f"Entity {entity_uuid} is not in this encounter")
         previous_controller_uuid = combatant.controller_uuid
         combatant.controller_uuid = controller.uuid
+        entity=Entity.get(entity_uuid)
+        if entity is not None and controller.execution_mode is ControllerExecutionMode.EXTERNAL:
+            entity.is_player_companion=True
         return previous_controller_uuid
 
     @staticmethod
@@ -536,7 +564,7 @@ class Encounter(BaseObject):
         entity = combatant.entity
         if entity is None:
             return
-        roll = Dice(count=1, value=20, bonus=entity.initiative, roll_type=RollType.CHECK).roll
+        roll = Dice(count=1, value=20, bonus=read_value(parts(entity.initiative), ValueRead(entity.uuid)), roll_type=RollType.CHECK).roll
         combatant.initiative_roll = roll.results if isinstance(roll.results, int) else roll.results[0]
         combatant.initiative_total = roll.total
 
@@ -601,8 +629,13 @@ class Encounter(BaseObject):
         self.round_number = 1
 
         Encounter._active_encounter = self
+        for entity_uuid in self.combatants:
+            entity = Entity.get(entity_uuid)
+            if entity is not None:
+                entity.active_encounter_uuid = self.uuid
 
         EventQueue.set_combat_log_callback(self._on_event_combat_log)
+        _ID_STRINGS.clear()
         EventQueue.set_perceiver_computer(_compute_perceivers)
         EventQueue.set_revealed_computer(_compute_revealed_entities)
         EventQueue.set_identified_entity_observer_computer(_compute_identified_entity_observers)
@@ -640,6 +673,11 @@ class Encounter(BaseObject):
             self.end_turn()
 
         self.state = EncounterState.ENDED
+        for entity_uuid in self.combatants:
+            entity = Entity.get(entity_uuid)
+            if entity is not None and entity.active_encounter_uuid == self.uuid:
+                entity.active_encounter_uuid = None
+                entity.action_economy.reset_all_costs()
         self.ended_at = datetime.now(UTC)
 
         if Encounter._active_encounter is self:
@@ -649,6 +687,7 @@ class Encounter(BaseObject):
         EventQueue.set_perceiver_computer(None)
         EventQueue.set_revealed_computer(None)
         EventQueue.set_identified_entity_observer_computer(None)
+        _ID_STRINGS.clear()
 
         self._notify_controllers_encounter_end()
 
@@ -682,7 +721,9 @@ class Encounter(BaseObject):
         )
         event = event.phase_to(EventPhase.EXECUTION)
         event = event.phase_to(EventPhase.EFFECT)
-        self._environment_step(parent_event=event)
+        # Every world-owned tick of the round is one instant: observers settle once.
+        with EventQueue.group(GroupEntryKind.ROUND_STEP, root=event, shares_damage_rolls=True):
+            self._environment_step(parent_event=event)
         event = event.phase_to(EventPhase.COMPLETION)
         return event
 
@@ -717,7 +758,7 @@ class Encounter(BaseObject):
             if not combatant.surprised:
                 continue
             entity = combatant.entity
-            if entity is None:
+            if entity is None or entity.prevents_surprise():
                 continue
             available_reactions = entity.action_economy.reactions.normalized_score
             if available_reactions > 0:
@@ -810,7 +851,7 @@ class Encounter(BaseObject):
         if not entity or not combatant:
             return None
 
-        if combatant.surprised and self.round_number == 1:
+        if combatant.surprised and self.round_number == 1 and not entity.prevents_surprise():
             return self._skip_surprised_turn(entity, combatant, controller)
 
         if combatant.is_dead or not combatant.is_alive:
@@ -852,8 +893,8 @@ class Encounter(BaseObject):
         Args:
             entity: Actor whose turn is starting.
         """
-        entity.senses.collision_blocked.clear()
-        entity.senses.directional_collision_blocked.clear()
+        entity.senses.collision_blocked = NO_CELLS_LAYER
+        entity.senses.directional_collision_blocked = NO_SIDES_LAYER
         entity.materialize_navigation(max_distance=20)
 
     def end_turn(self) -> Optional[TurnEndEvent]:
@@ -910,12 +951,12 @@ class Encounter(BaseObject):
         cursor = self.current_turn_started_source_event_cursor
         if cursor is None:
             return set()
-        return {
-            observer
-            for _, event in EventQueue.iter_events_since(max(0, cursor - 1))
-            if event.turn_execution_id == self.current_turn_execution_id
-            for observer in event.identified_entity_observer_uuids.get(str(entity_uuid), ())
-        }
+        key, turn = str(entity_uuid), self.current_turn_execution_id
+        witnesses: Set[str] = set()
+        for _, event in EventQueue.iter_events_since(max(0, cursor - 1)):
+            if event.turn_execution_id == turn:
+                witnesses.update(event.identified_entity_observer_uuids.get(key, ()))
+        return witnesses
 
     def next_turn(self) -> Optional[TurnStartEvent]:
         """

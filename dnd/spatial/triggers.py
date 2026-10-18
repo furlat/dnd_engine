@@ -8,7 +8,9 @@ from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, SpatialChangeEvent, StepMovementEvent, ForcedMovementEvent, MechanismActivationEvent, Trigger
-from dnd.core.gridmap import get_map
+from typing import ClassVar
+
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_controls import linked_item, request_control
@@ -19,6 +21,7 @@ from dnd.spatial.gas_traps import GasVent
 from dnd.spatial.jaws import JawTrap
 from dnd.spatial.portals import Portal
 from dnd.types.controls import ActivationLink, ControlLink
+from dnd.types.event_facts import GroupEntryKind
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from dnd.types.traps import TrapState
@@ -34,6 +37,7 @@ PRESSURE_PLATE_CONTENT_REF = ContentRef(
 
 class PressurePlate(SpatialCondition):
     """Local grounded occupancy produces edges, not a second occupant registry."""
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Pressure Plate"
     description: str = "A pressure-operated floor plate."
@@ -72,14 +76,16 @@ class PressurePlate(SpatialCondition):
         self._complete_change(effect)
 
     def _send_output(self, *, parent_event: Event) -> None:
-        if isinstance(self.link, ControlLink):
-            request_control(self.link, self.pressed, controller_uuid=self.uuid, parent_event=parent_event)
-        elif self.pressed:
-            # One actual press emits all authored pulses even if the first
-            # mechanism moves its recipient and releases this same plate.
-            links = self.link if isinstance(self.link, tuple) else (self.link,)
-            for link in links:
-                activate_link(link, parent_event=parent_event)
+        # One press and everything it drives are one instant.
+        with EventQueue.group(GroupEntryKind.TRAP_FIRE, root=parent_event):
+            if isinstance(self.link, ControlLink):
+                request_control(self.link, self.pressed, controller_uuid=self.uuid, parent_event=parent_event)
+            elif self.pressed:
+                # One actual press emits all authored pulses even if the first
+                # mechanism moves its recipient and releases this same plate.
+                links = self.link if isinstance(self.link, tuple) else (self.link,)
+                for link in links:
+                    activate_link(link, parent_event=parent_event)
 
     def _apply(self, execution_event: Event) -> tuple[
         list[tuple[UUID, UUID]], list[UUID], list[UUID], list[UUID], Event,
@@ -143,10 +149,12 @@ def materialize_pressure_plate(positions: set[tuple[int, int]], link: ControlLin
 def activate_link(link: ActivationLink, *, parent_event: Event) -> None:
     """Dispatch a private exact connection to its existing native mechanism."""
     mechanism = get_map().get_spatial_condition(link.target_condition_uuid)
-    if isinstance(mechanism, (FiniteTrap, JawTrap, GasVent)):
-        mechanism.fire(parent_event=parent_event)
-    elif isinstance(mechanism, (SpikeTrap, Portal)) and mechanism.trap_state is TrapState.READY:
-        mechanism.set_trap_state(TrapState.ACTIVATED, parent_event=parent_event)
+    # A plate's pulse and everything its mechanism does are one instant.
+    with EventQueue.group(GroupEntryKind.TRAP_FIRE, root=parent_event):
+        if isinstance(mechanism, (FiniteTrap, JawTrap, GasVent)):
+            mechanism.fire(parent_event=parent_event)
+        elif isinstance(mechanism, (SpikeTrap, Portal)) and mechanism.trap_state is TrapState.READY:
+            mechanism.set_trap_state(TrapState.ACTIVATED, parent_event=parent_event)
 
 
 TRIPWIRE_CONTENT_REF = PRESSURE_PLATE_CONTENT_REF.model_copy(update={
@@ -156,6 +164,7 @@ TRIPWIRE_CONTENT_REF = PRESSURE_PLATE_CONTENT_REF.model_copy(update={
 
 class Tripwire(SpatialCondition):
     """A grounded crossing of one authored grid boundary emits one pulse."""
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()  # base predicate: blocks nothing
 
     name: str = "Tripwire"
     content_ref: ContentRef = TRIPWIRE_CONTENT_REF
@@ -196,7 +205,7 @@ class Tripwire(SpatialCondition):
             if not isinstance(parent, (StepMovementEvent, ForcedMovementEvent)):
                 return None  # Relocation, deployment and removal are not crossings.
             actor = Entity.get(event.entity_uuid) if event.entity_uuid else None
-            if not isinstance(actor, Entity) or actor.position != event.position:
+            if actor is None or actor.position != event.position:
                 return None
             pulse = EventQueue.publish_declaration(MechanismActivationEvent(
                 name="Tripwire Crossing", source_entity_uuid=self.uuid, target_entity_uuid=actor.uuid,

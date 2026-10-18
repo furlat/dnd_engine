@@ -1,8 +1,8 @@
 # Implementation plan: 22 SRD spells, levels 4–9
 
-15 October 2026. **Planning only. Implementation has not started.** The human requested this plan in the existing spell worktree and subsequently requested detailed summoned-creature plans as well. Recommendations remain proposals except where explicitly marked as human decisions. **Human correction accepted:** Summon Dragon uses existing Multiattack for Rends, followed by a condition/handler granting Breath as a free action; no combined-outcome API or AI evaluator expansion. Decision 2 records the approved direction.
+15 October 2026. **Implementation completed; validation and independent reviews recorded below.** The human requested this plan in the existing spell worktree and subsequently requested detailed summoned-creature plans as well. The human instructed “ok let’s go” after reviewing the plan and requested the previous batch be committed first. Plan recommendations are now implementation defaults under that authorization; they are not attributed to individual human answers. **Human correction accepted:** Summon Dragon uses existing Multiattack for Rends, followed by a condition/handler granting Breath as a free action; no combined-outcome API or AI evaluator expansion. Decision 2 records the approved direction.
 
-Worktree: `/home/tommaso/.codex/worktrees/spells-rank-one-two/dnd_engine`, branch `codex/spells-rank-one-two`. This plan reads the uncommitted 36-spell implementation there. Preserve that work. Companion inventory: [rank-1/2 audit](../SRD_LEVEL_4_9_RANK_1_2_AUDIT_2026-10-15.md). Earlier implementation reference: [36-spell plan](BG3_STYLE_RANK_1_2_SPELL_IMPLEMENTATION_PLAN_2026-10-15.md).
+Worktree: `/home/tommaso/.codex/worktrees/spells-rank-one-two/dnd_engine`, branch `codex/spells-rank-one-two`. The previous 36-spell batch is committed there as `c72980091a5`. The completed 22-spell batch remains an uncommitted working-tree change for review. Companion inventory: [rank-1/2 audit](../SRD_LEVEL_4_9_RANK_1_2_AUDIT_2026-10-15.md). Earlier implementation reference: [36-spell plan](BG3_STYLE_RANK_1_2_SPELL_IMPLEMENTATION_PLAN_2026-10-15.md).
 
 ## Scope and source policy
 
@@ -72,7 +72,7 @@ Suppression and retirement are different operations. While suppressed, contribut
 
 ## Work order after decisions and implementation authorization
 
-**Phase A — qualify baseline and agree profiles.** Read `RECOVERY_PLAN.md`, this plan and `HOW_TO_TEST.MD`. Start the AGENTS-required plan-adherence subagent when implementation starts. Resolve the numbered decisions that affect a batch before coding it. Record baseline failures once; preserve the 36-spell changes. Confirm class-list policy and selected creature roster; author data rather than new frameworks.
+**Phase A — qualify baseline and record profiles.** Read `RECOVERY_PLAN.md`, this plan and `HOW_TO_TEST.MD`. Start the AGENTS-required plan-adherence subagent when implementation starts. Use the recorded recommended defaults for this authorized implementation; consult the human only if a necessary behavior exceeds those recommendations or the agreed scope. Record baseline failures once; preserve the 36-spell changes. Confirm class-list policy and selected creature roster; author data rather than new frameworks.
 
 **Phase B — ordinary roots and control.** Charm Monster, Vitriolic Sphere, Weird, Holy Aura, Aura of Life, Phantasmal Killer, Irresistible Dance, Flesh to Stone, Feeblemind, Power Word Heal, Foresight, Dispel Evil and Good. Land narrow prevention/cure/check hooks alongside the first consumer and tests. No stand-alone “cleanup” phase.
 
@@ -512,7 +512,7 @@ Source: [summoned Cambion](https://bg3.wiki/wiki/Planar_Ally:_Cambion), [body](h
 
 ## Remaining decisions: one numbered register
 
-These are the **only decision numbers** in this plan. Spell cards refer to them by number. Recommendations are not user answers. Source uncertainties are distinguished from confirmed rules. Resolve an affected decision before implementing that behavior; independent agreed batches can still proceed after implementation authorization.
+These are the **only decision numbers** in this plan. Spell cards refer to them by number. Recommendations are not individual user answers. The latest instruction authorizes implementing the recommended defaults. Source uncertainties remain distinguished from confirmed rules; escalate only a concrete scope/architecture departure that cannot be handled by those defaults.
 
 1. **Summon roster, combat loadouts and bounded body adaptations.** Recommend all eight BG 3 Conjure Elemental bodies and all three BG 3 Planar Ally bodies in the appendix, plus the official Draconic Spirit, using native autonomous allied AI. This makes creature content a substantial part of the batch. Keep permitted BG 3 monster actions; exclude Wrathful Smite, Drunken Inhale, Fiendish Charm and Rays of Fire as non-SRD spells. Deva simply loses Wrathful Smite; Djinni loses Drunken Inhale; Cambion uses real Charm Person/Scorching Ray and the explicitly adapted kiss prerequisite. Confirm whether that is preferable to a smaller SRD-body roster; **a smaller roster is a scope/profile change, not already chosen**. Recommend authoring the appendix's explicit numeric and senses/immunity fallbacks, native Prone/Stun/Haste behavior, ordinary supported flight, bound equipment/no loot, exact conditional nonmagical defenses, native caster-death cleanup and labeled grid-size/cadence adaptations. The unverified Earth affinity, Vortex cadence, Chilled→Frozen details, attack accuracy overrides and unusual movement costs must be pinned or explicitly accepted as the proposed adaptations before those actions are coded. Source-verified Vortex radius 20/single-field, Slam no-Prone-save and icicle per-recipient explosions are **not** open questions to replace with convenient invented rules. Recommend a one-turn native Frozen control only if the human wants that BG 3 combo; otherwise explicitly omit that transition instead of inventing an exception. No SRD Whelm/Earth Glide/Air Form port, no full BG 3 status engine. Conditional damage provenance and the required local status/field owners are real bounded additions; if their exact form exceeds the agreed budget, re-rank/re-scope the affected creatures openly rather than shipping empty loadouts.
 
@@ -630,3 +630,59 @@ These are **plan reviews**, not authorization to implement or evidence that game
 **Focused amendment reviews: PASS (anti-slop and anti-OOP).** The reviewers verified the human-requested existing Multiattack→condition-granted free Breath composition, ordinary profiles, exact turn/action ownership and removal of combined-outcome/schema/AI expansion. Anti-slop also verified canceled-root cleanup and the real-turn test of free Breath after the Action budget reaches zero. Summon Dragon remains rank 2. This amendment changes no other spell's design; no implementation or gameplay testing occurred.
 
 
+
+## Implementation record
+
+- Previous36-spell batch committed first as `c72980091a5`; focused pre-commit acceptance:157 passed in36.34s and clean whitespace check.
+- Implement all22 roots and12 proposed bodies using the plan recommendations, preserving BG3 >5.1 >5.2 and SRD-only spell identities/dependencies.
+- Dragon uses existing Multiattack plus one condition-granted free Breath; no combined-outcome changes.
+- Foresight uses the recommended Action casting adaptation; Feeblemind remains persistent with native GM-triggered30-day recovery, no calendar.
+- Power Word Heal uses the recommended pre-registered native automatic reaction toggle; no click-to-accept UI.
+- Summon roster/loadout omissions and actual SRD substitutions follow Decision1. The optional Chilled→Frozen transition is omitted under Decision1; retain native Wet/Chilled affinities. No global status port.
+- Defaults are engineering choices under the human's instruction to proceed, not invented explicit answers.
+- PhasesA–F complete: implementation, native contract exports, handoff, independent reviews and final acceptance are recorded below.
+
+
+### Final implementation record
+
+All22 spell roots and12 creature bodies are implemented in the requested worktree. The previous36-spell batch is committed as `c72980091a5`; the new22-spell change remains uncommitted for review. No NDClient files were changed. The exact Godot/engine handoff is [GODOT_HIGH_LEVEL_22_SPELL_HANDOFF_2026-10-15.md](../GODOT_HIGH_LEVEL_22_SPELL_HANDOFF_2026-10-15.md).
+
+Completed work follows the spell cards: separate exact-source controls/cures and strongest periodic fear cadence; native health/prevention facts; shared Holy Aura cast lifetime; remote Sword anchor attacks and compound preview admission; prepared concentration fields; fully admitted Forcecage ejections/sections and paid travel; retained portable/delayed payload items with atomic ending and administrative cleanup; all approved elemental, Myrmidon, planar and Dragon bodies/loadouts.
+
+Dragon uses ordinary Multiattack followed by one separate condition-granted free Breath. Native save bursts retain ordinary saving-throw profiles and existing attack categorization for autonomous selection; no mixed-outcome API or AI evaluator redesign. Conditional nonmagical B/P/S resistance receives each native attack's actual magical classification; fixed damage remains fixed on criticals and mixed packets retain their own affinity/save amounts. New summon support declarations have explicit content dependencies in the SRD5.1 adaptation pack, with the Dragon creature in5.2; this preserves one-way pack/import dependencies without importing a content installer into runtime modules.
+
+Public discovery partitions each cached variant by its own target type: portable Freezing Sphere remains reachable beside launch, and a floor bead exposes paid pickup/throw choices. Sword's chosen anchor must actually reach the selected victim. Native stand offers now complete and retain an explicit passive record/capture contract. The closing typing pass adds explicit absent-actor/recipient/placement guards, states the existing transform position capability and retains admitted wall objects directly; it does not change registry signatures or introduce checker bypasses. Source-only templates remain data composers; no new payload/summon manager or frontend model was introduced.
+
+Existing affected expectations were updated for their actual new contract: Misty Step relocations parent beneath the paid PortalTransfer child; Petrified has Poison damage immunity plus its ordinary other-damage resistance; the summon-form acceptance map includes the three new families. These are deliberate behavioral changes required by the cards, not exclusions introduced to hide regressions.
+
+**Inventory:**188 composed public catalog roots /190 native roots overall (including existing uncatalogued Entangle and Black Tentacles), of which187 native roots match the SRD union.67 native SRD spells are levels4–9. The source preference and exclusion of non-SRD new spell dependencies remain intact.
+
+**Independent final reviews:** anti-slop **PASS**, anti-OOP **PASS**, plan adherence **PASS**. The reviewers checked the final repairs and observed focused passing results. Their qualification does not mean exhaustive tabletop rules coverage or a clean archived/full-repository suite. The tracker identified five final card-level checks, all now authored and separately passed: actual lower-slot Counterspell CHECK under Foresight; both supported paid teleport methods in both Forcecage forms; mundane/Magic Weapon B/P/S classification; public throw/Break Enchantment/Sword follow-ups; authoritative Dragon record round-trip and passive replay with no second body/event creation.
+
+### Validation and reproducibility
+
+- Focused acceptance initially passed255 cases in86.80s across the five new engine modules, worker/progression files and affected Misty Step/standard-condition/summon lifecycle suites. This includes existing affected tests; it is not255 newly written tests.
+- A further seven explicit Deva Revivify, native Rebuke/OA sharing and five-element Dragon cases passed. The final finite card checks passed11 selected cases. These overlap other acceptance files and are not added to an inflated unique total.
+- Expanded final focused acceptance: **268 passed,89.09s**, recorded in `/tmp/high-level-spells-focused-final.log`. This is new-feature plus affected-owner acceptance, not268 new tests.
+- Broad engine run: **3,112 passed,120 deselected,382.73s**. It retains the prior documented engine exclusions below and ignores archived `test_solid_walls.py` at collection. This broad run preceded the closing type declarations and missing-actor/destination guards. The final affected acceptance and active architecture suites were rerun after those repairs; the broad run is not represented as a second run on the closing delta.
+- Player/progression/Python SDK lane: **499 passed,106.99s**, ignoring `tests/player/test_application_review.py`, which still imports archived `game.runtime_protocol`. Later new public follow-up/replay assertions are covered in expanded focused acceptance.
+- Active TypeScript player SDK: **63 passed**, zero failures. Native protocol exports regenerated through the active `devtools.export_player_protocol`, Python TypedDict generator and `sdk/player-typescript/tools/generate.mjs`; schema remains9,321 definitions/1,707 fields, digest `63c41fd68b001186dc11660cb00d6ddb76d4df7d827765947b18e3156e4761e6`.
+- Full architecture attempt: **65 passed /18 failures** in stale archived-server/import, frozen recovery-evidence and legacy hygiene checks. Active import/DAG/discovery/catalog gates: **35 passed,5 documented legacy cases deselected,26.73s**. No unrelated evidence hashes or archived modules were changed to force green results.
+- Configured Python type check: `uv run --no-sync pyright --outputjson`, **92 diagnostics in 323 files**, exactly matching all **92 diagnostics in 320 files** from committed baseline `c72980091a5`. Comparison by relative file, diagnostic rule and message gives **zero new diagnostics**, zero unmatched baseline diagnostics. All three new production modules are included. The baseline was checked from a temporary read-only Git archive with the same configuration/interpreter; no ignores or checker configuration changes. Raw results: `/tmp/high-level-spells-pyright-final.json`, `/tmp/high-level-spells-pyright-baseline.json`; comparison: `/tmp/high-level-spells-pyright-comparison.json`. This is a no-regression type result, not a clean-repository type claim. The active TypeScript test command also compiles with `tsc`.
+- `devtools/generate_typescript_sdk.py` is the old SDK generator and fails on missing archived `server.api_models`, including `--sdk-only`. It was not rewritten; the active player protocol workflow above succeeded.
+- Formatting/static-name checks cover newly authored files. Final `git diff --check`: **PASS**.
+
+Broad engine exclusions remain exactly the previous batch's documented names: `real_door`, `test_door_close_still_rejects_an_occupied_opening_and_retains_swing`, `test_eb_04_005`, `test_eb_04_007`, `test_eb_04_008`, `test_fireball_spreads_around_open_doorway_within_original_radius`, `test_connected_reference_l_wall_and_corridor`, `test_hand_operated_door_requires_nearby_contact`, and `test_cold_furniture_publishes_birth_then_owned_dynamics_and_replays_after_reset`.
+
+Reproduce expanded acceptance with the first plan command plus `tests/player/test_high_level_spell_transport.py tests/progression/test_high_level_spell_learning.py tests/engine/test_misty_step.py tests/engine/test_standard_conditions.py tests/engine/test_summoning_lifecycle.py`, using the stated UV environment and `-q --assert=plain --tb=short`. The exact broad-lane exclusion expression is documented above; deselected/ignored tests are not counted as passing.
+
+### Explicit limits and decisions retained
+
+All seventeen recommendations were used as engineering defaults under the human's proceed instruction, with the human's explicit Dragon correction overriding the old combined-attack proposal. The optional Frozen transition is omitted; native Wet/Chilled/Brittle interactions remain. Forcecage exposes fixed maximum20-ft cage/10-ft box forms, no independent size selection. Feeblemind recovery stays GM-triggered at30days rather than introducing a calendar. Foresight casts as an Action. PWH uses the pre-registered recipient toggle, not a confirmation UI.
+
+Evasion and Dispel Magic have no current engine implementation and were not silently added or claimed as verified interactions. No new Draconic Sorcerer subclass grant, RP/DM simulator, BG3-wide status port, autonomous-policy redesign or multi-floor work was included. Current native AI execution is qualified; optimal tactical choice for every utility/offensive permutation is not claimed.
+
+
+## Subsequent human-requested anti-slop review of all 58 spells
+
+A fresh critical review found defects missed by the original acceptance, and repaired them within the approved scope. The [complete audit](../SPELL_58_ANTISLOP_REVIEW_2026-10-15.md) records every finding, all 58 root dispositions and all 12 body checks. The final combined spell/player/progression run passes **483 tests**; active architecture gates pass **36 tests** with 5 unchanged legacy deselections; typing has **zero new diagnostics** against the existing 92-diagnostic baseline. Both reviewers and the plan tracker passed the closing repairs. Original validation above remains historical evidence, including its documented baseline exclusions. No new commit, NDClient work or framework expansion was made for this review.

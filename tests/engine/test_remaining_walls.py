@@ -14,13 +14,13 @@ from dnd.core.base_tiles import Tile
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import DamageAppliedEvent, EventHandler, EventPhase, EventQueue, EventType, Trigger
+from dnd.core.events import DamageAppliedEvent, EventHandler, EventPhase, EventQueue, EventType, SavingThrowEvent, Trigger
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.spells.wall_constructions import FrigidAirZone, WallOfIce, WallOfIceZone, WallOfForce, WallOfForceZone, WallOfStone, WallOfStoneZone
 from dnd.spells.wall_fields import WallOfThorns, WallOfThornsZone, WindWall, WindWallZone
 from dnd.spells.transmutation import Disintegrate
-from dnd.spells.abjuration import GlobeOfInvulnerability
+from dnd.spells.abjuration import GlobeOfInvulnerability, GlobeZone
 from dnd.spells.divination import SeeInvisibility
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.world import MovementMode
@@ -281,6 +281,23 @@ def test_stone_enclosure_escape_spends_reaction_not_normal_movement(succeeds):
     assert target.action_economy.movement_remaining() == 0
 
 
+def test_stone_enclosure_save_is_offered_only_inside_the_wall_box():
+    caster = scene(5)
+    enclosed = actor((7, 7))
+    outside = actor((12, 7))
+    force_save_result(enclosed, "dexterity", succeeds=True)
+    cursor = EventQueue.event_cursor()
+    with fixed_dice_faces(*([10] * 20)):
+        result = WallOfStone(source_entity_uuid=caster.uuid, end_position=(5, 5),
+            extra_target_positions=[(9, 5), (9, 9), (5, 9), (5, 5)]).apply()
+    assert result is not None and not result.canceled
+    savers = {event.target_entity_uuid for _, event in EventQueue.iter_events_since(cursor)
+              if isinstance(event, SavingThrowEvent) and event.phase is EventPhase.COMPLETION}
+    assert savers == {enclosed.uuid}
+    assert enclosed.position != (7, 7)
+    assert outside.position == (12, 7)
+
+
 def test_disintegrate_known_force_section_retires_complete_wall():
     caster = scene(5, slots={2: 2, 5: 2, 6: 2})
     result = SeeInvisibility(source_entity_uuid=caster.uuid).apply()
@@ -414,3 +431,44 @@ def test_disintegrate_ordinary_object_without_destroying_magic_item(identity, ma
     assert result is not None
     assert result.canceled is magical
     assert (BaseBlock.get(item.uuid) is not None) is magical
+
+
+@pytest.mark.parametrize("source_inside", [False, True])
+def test_new_stone_formation_uses_globe_source_and_clipped_cells(source_inside):
+    caster = scene(5)
+    owner = create_spell_regression_actor("Globe owner", (7, 4), "heroes", spell_slots={6: 1})
+    result = GlobeOfInvulnerability(source_entity_uuid=owner.uuid).apply()
+    accepted = result is not None and not result.canceled
+    assert accepted
+    globe = next(zone for zone in get_map().get_spatial_conditions() if isinstance(zone, GlobeZone))
+    if source_inside:
+        Entity.update_entity_position(caster, (7, 3))
+    cast(WallOfStone, caster, start=(5,5), end=(13,5))
+    stone = next(zone for zone in get_map().get_spatial_conditions() if isinstance(zone, WallOfStoneZone))
+    overlap = stone.affected_positions & globe.affected_positions
+    assert bool(overlap) is source_inside
+    if not source_inside:
+        assert stone.spatial_suppressions
+
+
+def test_completed_stone_survives_later_globe_and_ordinary_destruction():
+    caster = scene(5)
+    cast(WallOfStone, caster)
+    grid = get_map()
+    stone = next(zone for zone in grid.get_spatial_conditions() if isinstance(zone, WallOfStoneZone))
+    for _ in range(100):
+        stone.progress()
+    caster.remove_condition("Concentrating")
+    identities = tuple(stone.sections)
+    owner = create_spell_regression_actor("Globe owner", (7,4), "heroes", spell_slots={6: 1})
+    result = GlobeOfInvulnerability(source_entity_uuid=owner.uuid).apply()
+    accepted = result is not None and not result.canceled
+    retained = all(BaseBlock.get(identity) is not None for identity in identities)
+    assert accepted and retained
+    blocked = not grid.can_transition((7,4), (7,5), owner.uuid)
+    assert blocked
+    for identity in identities:
+        section = BaseBlock.get(identity)
+        section.receive_damage(10000, DamageType.BLUDGEONING, caster.uuid)
+    remaining = [identity for identity in identities if BaseBlock.get(identity) is not None]
+    assert not remaining

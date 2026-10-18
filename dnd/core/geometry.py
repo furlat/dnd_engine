@@ -1,8 +1,9 @@
 """Pure grid-geometry helpers for shape and ray calculations."""
 import math
 from functools import lru_cache
-from bisect import bisect_left, bisect_right
-from typing import Set, Tuple, List, Optional
+from typing import Literal, Set, Tuple, List, Optional
+
+import numpy as np
 
 
 def grid_distance_cells(
@@ -22,6 +23,15 @@ def grid_distance_feet(
 ) -> int:
     """Return the engine's floored Euclidean distance in feet."""
     return grid_distance_cells(origin, target) * 5
+
+
+def grid_distances_feet(origin: Tuple[int, int], positions: List[Tuple[int, int]]) -> List[int]:
+    """`grid_distance_feet` from one origin to each position (IEEE sqrt, as `math.sqrt`)."""
+    if not positions:
+        return []
+    offsets = np.array(positions, dtype=np.int64) - origin
+    squared = (offsets * offsets).sum(axis=1).astype(np.float64)
+    return (np.sqrt(squared).astype(np.int64) * 5).tolist()
 
 
 def position_in_sector(
@@ -133,11 +143,82 @@ def supercover_line(
     return list(_supercover_line_cached(start, end))
 
 
-def supercover_line_offsets(
-    delta: Tuple[int, int],
-) -> Tuple[Tuple[int, int], ...]:
-    """Return immutable offsets for a supercover ray delta."""
-    return _supercover_line_relative_cached(delta[0], delta[1])
+def supercover_line_relative(dx: int, dy: int) -> Tuple[Tuple[int, int], ...]:
+    """The supercover line from the origin to (dx, dy), as offsets from the origin."""
+    return _supercover_line_relative_cached(dx, dy)
+
+
+@lru_cache(maxsize=32768)
+def supercover_cells_relative(dx: int, dy: int) -> frozenset[Tuple[int, int]]:
+    """The cells of `supercover_line_relative(dx, dy)`, for set intersection."""
+    return frozenset(_supercover_line_relative_cached(dx, dy))
+
+
+# The route table's step code: an entry is ``cell << ROUTE_STEP_SHIFT | kind``, the kind of the
+# step into that cell (none for the origin and the padding).
+ROUTE_STEP_SHIFT = 2
+STEP_NONE, STEP_ALONG_X, STEP_ALONG_Y, STEP_DIAGONAL = 0, 1, 2, 3
+
+# Square radius in cells of the cached route table (161 x 161 endpoints, about 17 MB): the
+# engine's perception reach (`update_all_entities_senses(max_distance=80)`). Routes beyond it
+# come from the same stepping rule, computed for the endpoints asked about.
+ROUTE_TABLE_RADIUS = 80
+
+
+def supercover_route_steps(dx: np.ndarray, dy: np.ndarray, radius: int) -> Tuple[np.ndarray, np.ndarray]:
+    """Every `supercover_line_relative` from the origin to the endpoints (dx, dy), as its steps.
+
+    Row k holds the line to (dx[k], dy[k]) in order, one entry per cell: ``cell << ROUTE_STEP_SHIFT
+    | kind``, the cell flattened as ``(x + radius) * (2 * radius + 1) + (y + radius)`` and the kind
+    of the step into it (STEP_NONE for the origin, the first cell). Rows are padded with the cell
+    ``(2 * radius + 1) ** 2`` (one past the frame) and STEP_NONE. The second array holds each
+    line's length. Every endpoint lies within the radius. The same stepping rule as the scalar
+    line, applied to every endpoint at once.
+    """
+    side = 2 * radius + 1
+    nx, ny, sx, sy = np.abs(dx), np.abs(dy), np.sign(dx), np.sign(dy)
+    x, y, ix, iy = (np.zeros_like(dx) for _ in range(4))
+    longest = int((nx + ny).max()) + 1 if dx.size else 1
+    steps = np.full((dx.size, longest), (side * side) << ROUTE_STEP_SHIFT | STEP_NONE, dtype=np.int32)
+    steps[:, 0] = (radius * side + radius) << ROUTE_STEP_SHIFT | STEP_NONE
+    lengths = np.ones(dx.size, dtype=np.int32)
+    for step in range(1, longest):
+        active = (ix < nx) | (iy < ny)
+        x_mid = (1 + 2 * ix) * ny
+        y_mid = (1 + 2 * iy) * nx
+        move_x = active & (ix < nx) & ((iy >= ny) | (x_mid < y_mid))
+        move_y = active & ~move_x & (iy < ny) & ((ix >= nx) | (y_mid < x_mid))
+        step_x = move_x | (active & ~move_x & ~move_y)
+        step_y = move_y | (active & ~move_x & ~move_y)
+        x += sx * step_x
+        y += sy * step_y
+        ix += step_x
+        iy += step_y
+        kind = np.where(step_x & step_y, STEP_DIAGONAL, np.where(step_x, STEP_ALONG_X, STEP_ALONG_Y))
+        steps[active, step] = ((((x + radius) * side + (y + radius)) << ROUTE_STEP_SHIFT) | kind)[active]
+        lengths += active
+    return steps, lengths
+
+
+@lru_cache(maxsize=1)
+def supercover_route_table() -> Tuple[np.ndarray, np.ndarray]:
+    """The routes to every endpoint within ROUTE_TABLE_RADIUS (`supercover_route_steps`), kept:
+    row ``(dx + r) * (2r + 1) + (dy + r)`` holds the route to (dx, dy)."""
+    radius = ROUTE_TABLE_RADIUS
+    dx, dy = (axis.ravel() for axis in np.meshgrid(
+        np.arange(-radius, radius + 1), np.arange(-radius, radius + 1), indexing="ij"))
+    return supercover_route_steps(dx, dy, radius)
+
+
+def supercover_routes(dx: np.ndarray, dy: np.ndarray, radius: int) -> Tuple[np.ndarray, np.ndarray]:
+    """The routes to the endpoints (dx, dy) in the frame of ``radius``, trimmed to the longest:
+    read from the kept table when the radius is the table's, computed by the same rule otherwise."""
+    if radius != ROUTE_TABLE_RADIUS:
+        return supercover_route_steps(dx, dy, radius)
+    steps, lengths = supercover_route_table()
+    rows = (dx + radius) * (2 * radius + 1) + (dy + radius)
+    kept = lengths[rows]
+    return steps[rows, :int(kept.max()) if rows.size else 1], kept
 
 
 @lru_cache(maxsize=8192)
@@ -192,71 +273,6 @@ def _supercover_line_relative_cached(
         positions.append((x, y))
 
     return tuple(positions)
-
-
-def supercover_slope_order(
-    targets: List[Tuple[int, int]],
-) -> Tuple[List[Tuple[int, int]], List[int], int]:
-    """Rank bounded endpoint slopes exactly, including vertical rays.
-
-    Target denominators are at most M; half-cell boundary denominators are at
-    most 2M+1. Unequal rational slopes therefore differ by at least
-    1/(M*(2M+1)). Scaling by a larger integer makes their integer ranks distinct.
-    Equal slopes retain the same rank, so native strict/equal corner rules use
-    ordinary integer bisect without ray construction or approximate angles.
-    """
-    extent = max(max(x, y) for x, y in targets)
-    scale = extent * (2 * extent + 1) + 1
-    vertical = scale * (2 * extent + 2)
-    ranked = [(scale * y // x if x else vertical, (x, y)) for x, y in targets]
-    ranked.sort(key=lambda row: row[0])
-    return [position for _, position in ranked], [rank for rank, _ in ranked], scale
-
-
-def supercover_incoming_ranges(
-    ranks: List[int], scale: int, x: int, y: int,
-) -> Tuple[int, int, int, int]:
-    """Indices of native bottom, diagonal and left entry directions for a cell.
-
-    The sorted endpoint slopes are nonnegative and (x, y) is not the origin.
-    Open half-cell corner bounds reproduce the native supercover tie policy:
-    [lower, diagonal_start) enters vertically; equal middle slopes enter
-    diagonally; [diagonal_end, upper) enters horizontally. Axis cells still
-    admit non-axis rays passing through their interiors.
-    """
-    if x == 0:
-        lower = bisect_right(ranks, scale * (2 * y - 1))
-        upper = len(ranks)
-        return lower, upper, upper, upper
-    if y == 0:
-        upper = bisect_left(ranks, scale // (2 * x - 1))
-        return 0, 0, 0, upper
-    lower = bisect_right(ranks, scale * (2 * y - 1) // (2 * x + 1))
-    corner = scale * (2 * y - 1) // (2 * x - 1)
-    diagonal_start = bisect_left(ranks, corner)
-    diagonal_end = bisect_right(ranks, corner)
-    upper = bisect_left(ranks, scale * (2 * y + 1) // (2 * x - 1))
-    return lower, diagonal_start, diagonal_end, upper
-
-
-def supercover_incoming_rank_ranges(
-    scale: int, vertical: int, x: int, y: int,
-) -> Tuple[int, int, int, int]:
-    """Half-open integer-rank intervals for native incoming ray directions.
-
-    The same separating scale as ``supercover_slope_order`` makes different
-    endpoint/corner rationals occupy different integer ranks. Strict corner
-    bounds therefore need no list of target slopes or per-boundary bisection.
-    """
-    if x == 0:
-        lower, upper = scale * (2 * y - 1) + 1, vertical + 1
-        return lower, upper, upper, upper
-    if y == 0:
-        return 0, 0, 0, scale // (2 * x - 1)
-    lower = scale * (2 * y - 1) // (2 * x + 1) + 1
-    corner = scale * (2 * y - 1) // (2 * x - 1)
-    upper = scale * (2 * y + 1) // (2 * x - 1)
-    return lower, corner, corner + 1, upper
 
 
 def line_positions(
@@ -359,6 +375,15 @@ def _cone_relative_tiles(length: int) -> Tuple[Tuple[int, int, float], ...]:
     )
 
 
+def cube_axis(origin: Tuple[int, int], aim: Tuple[int, int]) -> Tuple[Literal["x", "y"], int]:
+    """Return the axis and sign an extended cube grows along toward ``aim``."""
+    dx = aim[0] - origin[0]
+    dy = aim[1] - origin[1]
+    if abs(dx) >= abs(dy):
+        return "x", 1 if dx >= 0 else -1
+    return "y", 1 if dy >= 0 else -1
+
+
 def rectangle_positions(
     origin: Tuple[int, int],
     size: int,
@@ -384,18 +409,8 @@ def rectangle_positions(
             for dx, dy in _centered_rectangle_offsets(size)
         }
     else:
-        if direction is None:
-            direction = (ox + 1, oy)
-
-        dx = direction[0] - ox
-        dy = direction[1] - oy
-
-        if abs(dx) >= abs(dy):
-            dir_x = 1 if dx >= 0 else -1
-            offsets = _directional_rectangle_offsets(size, "x", dir_x)
-        else:
-            dir_y = 1 if dy >= 0 else -1
-            offsets = _directional_rectangle_offsets(size, "y", dir_y)
+        axis, sign = cube_axis(origin, direction if direction is not None else (ox + 1, oy))
+        offsets = _directional_rectangle_offsets(size, axis, sign)
         return {
             (ox + rel_x, oy + rel_y)
             for rel_x, rel_y in offsets

@@ -62,6 +62,8 @@ from tests.manual.spell_regression_support import (
     force_save_result,
     reset_spell_regression_arena,
 )
+from dnd.core.values import Channel, Kind, add_modifier
+from tests.engine.support import route_paths
 
 
 def _dark_arena(width: int = 24, height: int = 15) -> None:
@@ -166,15 +168,13 @@ def test_flame_strike_applies_fire_and_radiant_as_typed_components() -> None:
         (7, 4),
         "monsters",
     )
-    target.health.damage_reduction.self_static.add_resistance_modifier(
-        ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
             source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid,
             name="Flame Strike fire immunity",
             value=ResistanceStatus.IMMUNITY,
             damage_type=DamageType.FIRE,
-        )
-    )
+        ))
     force_save_result(target, "dexterity", succeeds=False)
     Entity.update_all_entities_senses(max_distance=80)
     hp_before = get_hp(target)
@@ -540,7 +540,7 @@ def test_command_flee_uses_voluntary_movement_and_provokes_reactions() -> None:
         cost_name="Prior turn movement",
     )
     target.update_entity_senses(max_distance=20, path_max_distance=1)
-    assert max(len(path) for path in target.senses.paths.values()) <= 2
+    assert max(len(path) for path in route_paths(target.senses.paths).values()) <= 2
     reaction_before = watcher.action_economy.reactions.normalized_score
     hit_modifier = force_attack_hit(watcher)
 

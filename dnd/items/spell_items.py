@@ -2,7 +2,7 @@
 
 from types import MappingProxyType
 
-from typing import Any, Optional, cast as type_cast
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from pydantic import Field
@@ -18,8 +18,11 @@ from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType
 from dnd.core.equipment_types import WeaponSlot, WeaponKind
 from dnd.core.events import Event
+from dnd.items.scroll_learning import LearnSpellFromScroll
+from dnd.characters.spellbook import scroll_learning_error
 from dnd.items.consumables import TimedFireWeaponCoatCondition
 from dnd.core.aoe import AoEShape, Cube
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -38,7 +41,7 @@ from dnd.core.content.registration import (
     behavior_identity,
     get_content_declaration,
 )
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.core.content.runtime import RuntimeBehaviorKind, BehaviorBinding
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import (
     Damage,
@@ -47,8 +50,9 @@ from dnd.core.events import (
     RangeType,
 )
 from dnd.core.creature_types import DamageType
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
+from dnd.types.discovery import ActorScan
 from dnd.spells.abjuration import MageArmor
 from dnd.spells.enchantment import HoldPerson
 from dnd.spells.evocation import (
@@ -59,6 +63,7 @@ from dnd.spells.evocation import (
 )
 from dnd.spells.illusion import Invisibility
 from dnd.spells.transmutation import SpikeGrowth
+from dnd.spells.spell_utils import seen_point_error
 
 
 class SpellGrantingItem(UsableItem):
@@ -67,6 +72,7 @@ class SpellGrantingItem(UsableItem):
     This structural class intentionally has no content declaration and is not
     materializable by itself. Direct item builders provide authored identity.
     """
+    creates = (LearnSpellFromScroll,)
 
     is_magical: bool = True
     name: str = Field(
@@ -102,6 +108,8 @@ class SpellGrantingItem(UsableItem):
         description="Minimum cast level used for granted spell variants.",
     )
 
+    scribing_spell_id: str | None = Field(default=None, description="Explicit base spell taught by this authored scroll.")
+
     def get_use_actions(self, user_entity_uuid: UUID) -> list[BaseAction]:
         """Create item-bound spell variants without spell-slot costs."""
         if (not self.is_active or self.charges == 0 or not self.use_action_templates
@@ -109,7 +117,14 @@ class SpellGrantingItem(UsableItem):
             return []
         result: list[BaseAction] = []
         source_item_presentation = self.to_item_presentation_state()
-        for template in self.use_action_templates:
+        actor = Entity.get(user_entity_uuid)
+        templates = list(self.use_action_templates)
+        if self.scribing_spell_id is not None and actor is not None and scroll_learning_error(actor, self.scribing_spell_id) is None:
+            templates.append(LearnSpellFromScroll(source_entity_uuid=user_entity_uuid,
+                learned_spell_id=self.scribing_spell_id, template=True, use_register=False,
+                semantic_key="action.wizard.learn_scroll",
+                behavior_binding=BehaviorBinding(behavior_id="action.wizard.learn_scroll", provided_by_id=self.item_id, origin_root_id=self.item_id, runtime_owner_uuid=self.uuid)))
+        for template in templates:
             template_charge_cost = template.charge_cost
             if (
                 self.charges != -1
@@ -127,22 +142,24 @@ class SpellGrantingItem(UsableItem):
                         self.scroll_cast_level,
                     )
                 )
-                action = template._create_variant(
-                    cast_at_level=cast_level,
-                    costs=[
-                        Cost(
-                            name="Use Item",
-                            cost_type="actions",
-                            cost=1,
-                            evaluator=entity_action_economy_cost_evaluator,
-                        ),
-                    ],
-                    source_item_uuid=self.uuid,
-                    source_item_presentation=source_item_presentation,
-                    source_entity_uuid=user_entity_uuid,
-                    template=True,
-                    charge_cost=template_charge_cost,
-                )
+                # The item pays: its use cost and charges replace the slot, at the item's level.
+                action = template.model_copy(update={
+                    "uuid": uuid4(),
+                    "cast_at_level": cast_level,
+                    "is_variant": True,
+                    "use_register": False,
+                    "alt_cost_type": None,
+                    "alt_extra_costs": [],
+                    "alt_skip_slot": False,
+                    "costs": [Cost(name="Use Item", cost_type="actions", cost=1,
+                                   evaluator=entity_action_economy_cost_evaluator)],
+                    "source_item_uuid": self.uuid,
+                    "source_item_presentation": source_item_presentation,
+                    "source_entity_uuid": user_entity_uuid,
+                    "template": True,
+                    "charge_cost": template_charge_cost,
+                    "registered_template_uuid": template.registered_template_uuid or template.uuid,
+                })
                 if action.behavior_binding is None:
                     self.bind_dynamic_use_action(action)
                 result.append(action)
@@ -172,6 +189,7 @@ class SpellGrantingWearable(SpellGrantingItem, Armor):
 
 
 class EmberQuiverActivation(SpellAction):
+    creates = (*SpellAction.creates, TimedFireWeaponCoatCondition)
     name: str = "Ember Quiver"
     target_type: TargetType = TargetType.SELF
     alt_skip_slot: bool = True
@@ -183,13 +201,13 @@ class EmberQuiverActivation(SpellAction):
         self.selected_weapon_uuid = weapon.uuid if weapon else None
         return super()._create_declaration_event(parent_event, use_register=use_register)
 
-    def _validate(self,event: SpellEvent):
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         actor = Entity.get(self.source_entity_uuid)
         weapon = actor.equipment.get_weapon(WeaponSlot.RANGED_MAIN) if actor else None
         if weapon is None or weapon.weapon_kind not in (WeaponKind.LONGBOW, WeaponKind.SHORTBOW,
                     WeaponKind.LIGHT_CROSSBOW, WeaponKind.HEAVY_CROSSBOW, WeaponKind.HAND_CROSSBOW):
-            return event.cancel(status_message="Ember Quiver requires an equipped bow or crossbow")
-        return super()._validate(event)
+            return "Ember Quiver requires an equipped bow or crossbow"
+        return None
 
     def _apply(self,event: SpellEvent):
         actor = Entity.get(self.source_entity_uuid)
@@ -290,8 +308,6 @@ class _AcidFlaskSpell(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cube(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 size_feet=10,
                 centered=True,
             )
@@ -299,41 +315,8 @@ class _AcidFlaskSpell(SpellAction):
     def get_range(self) -> Range:
         return self.spell_range
 
-    def _validate(
-        self,
-        declaration_event: SpellEvent,
-    ) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(
-                status_message="No target position specified",
-            )
-        if (
-            target_pos not in caster.senses.visible
-            or not caster.senses.visible[target_pos]
-        ):
-            return declaration_event.cancel(
-                status_message=(
-                    f"Target position {target_pos} not in line of sight"
-                ),
-            )
-
-        distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
-            return declaration_event.cancel(
-                status_message=(
-                    f"Target out of range "
-                    f"({distance}ft > {self.spell_range.normal}ft)"
-                ),
-            )
-        return type_cast(
-            Optional[SpellEvent],
-            super()._validate(declaration_event),
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return seen_point_error(self, scan, selection)
 
     def _apply(
         self,
@@ -341,8 +324,8 @@ class _AcidFlaskSpell(SpellAction):
     ) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
         target = (
-            Entity.get(self.target_entity_uuid)
-            if self.target_entity_uuid
+            Entity.get(execution_event.target_entity_uuid)
+            if execution_event.target_entity_uuid
             else None
         )
         if not caster or not target:
@@ -360,6 +343,7 @@ class _AcidFlaskSpell(SpellAction):
         save_bonus = target.saving_throw_bonus(
             caster.uuid,
             "dexterity",
+            None,
         ).normalized_score
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -375,17 +359,17 @@ class _AcidFlaskSpell(SpellAction):
             ),
         )
 
-        no_bonus = ModifiableValue.create(
+        no_bonus = ModifiableValue(
             source_entity_uuid=caster.uuid,
-            base_value=0,
-            value_name="Acid Flask Damage",
+            base=0,
+            name="Acid Flask Damage",
         )
         acid_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             damage_dice=4,
             dice_numbers=2,
-            damage_bonus=no_bonus,
+            damage_bonus=parts(no_bonus),
             damage_type=DamageType.ACID,
         )
         damage_dice = acid_damage.get_dice(
@@ -444,6 +428,7 @@ def _direct_scroll(
         visual_variant_id=variant_id,
         scroll_cast_level=cast_level,
         use_action_templates=[template],
+        scribing_spell_id=template.get_authored_spell_id(),
         stack_id=variant_id,
     )
 

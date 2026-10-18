@@ -10,7 +10,7 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventPhase, EventQueue
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier
 
 
 class TutorialLeafBlock(BaseBlock):
@@ -18,12 +18,18 @@ class TutorialLeafBlock(BaseBlock):
 
     leaf_value: ModifiableValue = Field(description="Value owned by the leaf block.")
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        return (self.leaf_value,)
+
 
 class TutorialSheetBlock(BaseBlock):
     """Tutorial block with one direct value and one child block."""
 
     armor_class: ModifiableValue = Field(description="Value owned directly by the sheet.")
     leaf: TutorialLeafBlock = Field(description="Nested child block.")
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        return (self.armor_class,)
 
 
 class TutorialMarkerCondition(BaseCondition):
@@ -62,7 +68,7 @@ class TutorialArmorBonusCondition(BaseCondition):
             name="Tutorial Armor Bonus",
             value=self.bonus,
         )
-        modifier_uuid = value.self_static.add_value_modifier(modifier)
+        modifier_uuid = add_modifier(value, Channel.SELF_STATIC, Kind.VALUE, modifier)
         event = event.phase_to(EventPhase.EFFECT)
         return [(value.uuid, modifier_uuid)], [], [], [], event
 
@@ -72,16 +78,16 @@ def reset_block_state() -> None:
     EventQueue.reset()
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     BaseBlock._registry.clear()
 
 
 def create_tutorial_value(source_entity_uuid: UUID, name: str, base_value: int) -> ModifiableValue:
     """Create a named value for the tutorial block graph."""
-    return ModifiableValue.create(
+    return ModifiableValue(
         source_entity_uuid=source_entity_uuid,
-        value_name=name,
-        base_value=base_value,
+        name=name,
+        base=base_value,
     )
 
 
@@ -122,8 +128,8 @@ def test_blocks_discover_direct_children_values_and_deep_values() -> None:
     assert sheet.blocks_dict_name_uuid == {"Tutorial Leaf": sheet.leaf.uuid}
 
 
-def test_constructor_normalizes_source_target_and_context_into_the_block_tree() -> None:
-    """A parent block normalizes explicit child fields to its own identity."""
+def test_constructor_normalizes_owner_identity_into_the_block_tree() -> None:
+    """A parent block normalizes explicit child fields to its own owner identity."""
     reset_block_state()
     hero_id = uuid4()
     old_owner_id = uuid4()
@@ -150,48 +156,6 @@ def test_constructor_normalizes_source_target_and_context_into_the_block_tree() 
     assert sheet.armor_class.source_entity_uuid == hero_id
     assert sheet.leaf.source_entity_uuid == hero_id
     assert sheet.leaf.leaf_value.source_entity_uuid == hero_id
-    assert sheet.armor_class.target_entity_uuid == goblin_id
-    assert sheet.leaf.target_entity_uuid == goblin_id
-    assert sheet.leaf.leaf_value.target_entity_uuid == goblin_id
-    assert sheet.armor_class.context == context
-    assert sheet.leaf.context == context
-    assert sheet.leaf.leaf_value.context == context
-
-
-def test_target_and_context_propagation_reaches_values_and_children() -> None:
-    """Target and context changes propagate through a block's owned tree."""
-    reset_block_state()
-    hero_id = uuid4()
-    goblin_id = uuid4()
-    context = {"range": "melee"}
-    sheet = create_tutorial_sheet(hero_id)
-
-    sheet.set_target_entity(goblin_id, "Goblin")
-    sheet.set_context(context)
-
-    assert sheet.target_entity_uuid == goblin_id
-    assert sheet.armor_class.target_entity_uuid == goblin_id
-    assert sheet.armor_class.self_static.target_entity_uuid == goblin_id
-    assert sheet.armor_class.to_target_contextual.target_entity_uuid == goblin_id
-    assert sheet.leaf.target_entity_uuid == goblin_id
-    assert sheet.leaf.leaf_value.target_entity_uuid == goblin_id
-
-    assert sheet.context is context
-    assert sheet.armor_class.context is context
-    assert sheet.armor_class.self_contextual.context is context
-    assert sheet.armor_class.to_target_contextual.context is context
-    assert sheet.armor_class.self_static.context is None
-    assert sheet.leaf.context is context
-    assert sheet.leaf.leaf_value.context is context
-
-    sheet.clear()
-
-    assert sheet.target_entity_uuid is None
-    assert sheet.armor_class.target_entity_uuid is None
-    assert sheet.armor_class.from_target_static is None
-    assert sheet.context is None
-    assert sheet.armor_class.self_contextual.context is None
-    assert sheet.leaf.leaf_value.context is None
 
 
 def test_condition_lifecycle_is_opt_in_and_cleanup_removes_owned_modifiers() -> None:

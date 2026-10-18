@@ -8,7 +8,7 @@ from dnd.conditions import Frightened, Poisoned
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import DamageAppliedEvent, EventPhase, EventQueue, EventType
+from dnd.core.events import DamageAppliedEvent, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, ResistanceModifier, ResistanceStatus
 from dnd.entity import Entity
@@ -19,6 +19,7 @@ from dnd.core.creature_types import DamageType
 from tests.engine.support import set_hp
 from tests.engine.test_roster_support_spells import game, actor, cast
 from tests.manual.spell_regression_support import force_save_result
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def zones(kind):
@@ -150,7 +151,7 @@ def test_guardian_rejects_occupied_nonanchor_cell_before_payment(game):
 def test_guardian_counts_resolved_temp_hp_absorption(game, resistance, expected):
     caster, enemy = actor(game), actor(game, 'Enemy', (8, 2), 'foes')
     force_save_result(enemy, 'dexterity', succeeds=False)
-    enemy.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(name='Defense',
+    add_modifier(enemy.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(name='Defense',
         value=resistance, damage_type=DamageType.RADIANT, source_entity_uuid=enemy.uuid, target_entity_uuid=enemy.uuid))
     enemy.health.add_temporary_hit_points(30, source_entity_uuid=enemy.uuid)
     before = enemy.get_normal_hp()
@@ -160,6 +161,58 @@ def test_guardian_counts_resolved_temp_hp_absorption(game, resistance, expected)
         Entity.update_entity_position(enemy, (8, 3))
     assert enemy.get_normal_hp() == before
     assert zone.damage_dealt == expected
+
+
+@pytest.mark.parametrize("canceled", [False, True])
+def test_guardian_counter_uses_own_packet_despite_reactive_damage_and_healing(game, canceled):
+    caster, enemy = actor(game), actor(game, "Enemy", (8, 2), "foes")
+    force_save_result(enemy, "dexterity", succeeds=False)
+    cast(GuardianOfFaith, caster, end_position=(5, 2))
+    zone = zones(GuardianOfFaithZone)[0]
+    before = enemy.get_normal_hp()
+
+    def react(event, _):
+        if event.source_condition_uuid == zone.uuid:
+            enemy.receive_damage(7, DamageType.FIRE, caster.uuid, parent_event=event.uuid,
+                independent_resolution=True)
+            enemy.receive_healing(event.applied_damage + 7, enemy.uuid, parent_event=event.uuid)
+        return None
+
+    enemy.add_event_handler(EventHandler(source_entity_uuid=enemy.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.DAMAGE_APPLIED,
+            event_phase=EventPhase.EFFECT, event_target_entity_uuid=enemy.uuid)], event_processor=react))
+    if canceled:
+        enemy.add_event_handler(EventHandler(source_entity_uuid=enemy.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE,
+                event_phase=EventPhase.EFFECT, event_target_entity_uuid=enemy.uuid)],
+            event_processor=lambda event, _: event.cancel(status_message="Damage refused")))
+    with fixed_dice_faces(10):
+        Entity.update_entity_position(enemy, (8, 3))
+    assert enemy.get_normal_hp() == before
+    assert zone.damage_dealt == (0 if canceled else 20)
+
+
+def test_guardian_admission_temp_hp_keeps_counter_equal_to_its_applied_fact(game):
+    caster, enemy = actor(game), actor(game, "Enemy", (8, 2), "foes")
+    force_save_result(enemy, "dexterity", succeeds=False)
+    cast(GuardianOfFaith, caster, end_position=(5, 2))
+    zone = zones(GuardianOfFaithZone)[0]
+
+    def grant_during_admission(event, _):
+        enemy.health.add_temporary_hit_points(10, enemy.uuid)
+        return None
+
+    enemy.add_event_handler(EventHandler(source_entity_uuid=enemy.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE,
+            event_phase=EventPhase.EFFECT, event_target_entity_uuid=enemy.uuid)],
+        event_processor=grant_during_admission))
+    cursor = EventQueue.event_cursor()
+    with fixed_dice_faces(10):
+        Entity.update_entity_position(enemy, (8, 3))
+    facts = [event.applied_damage for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, DamageAppliedEvent) and event.phase is EventPhase.COMPLETION
+        and event.source_condition_uuid == zone.uuid]
+    assert facts and zone.damage_dealt == sum(facts)
 
 
 def test_feast_full_benefits_and_exact_tenth_recipient_turn_expiry(game):
@@ -176,7 +229,7 @@ def test_feast_full_benefits_and_exact_tenth_recipient_turn_expiry(game):
     eat(feast, target)
     assert target.get_max_hp() == maximum + 9 and target.get_normal_hp() == maximum - 21
     assert target.health.get_resistance(DamageType.POISON) is ResistanceStatus.IMMUNITY
-    assert target.saving_throw_bonus(None, 'wisdom').advantage is AdvantageStatus.ADVANTAGE
+    assert target.saving_throw_bonus(None, 'wisdom', None).advantage is AdvantageStatus.ADVANTAGE
     assert all(name not in target.active_conditions for name in ('Poisoned', 'Frightened', 'Disease'))
     assert target.action_economy.actions.normalized_score == 0
     assert feast.charges == 12 and target.uuid in feast.consumed_by
@@ -279,18 +332,17 @@ def test_feast_source_cleanup_preserves_other_immunity_and_advantage_owners(game
     caster, target = actor(game), actor(game, 'Guest', (3, 3))
     other = uuid4()
     target.add_condition_immunity_source('Poisoned', other)
-    target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
         name='Other poison immunity', source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
         value=ResistanceStatus.IMMUNITY, damage_type=DamageType.POISON))
-    target.saving_throws.get_saving_throw('wisdom').bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(name='Other Wisdom advantage', source_entity_uuid=target.uuid,
+    add_modifier(target.saving_throws.get_saving_throw('wisdom').bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name='Other Wisdom advantage', source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid, value=AdvantageStatus.ADVANTAGE))
     feast = feast_for(caster)
     eat(feast, target)
     target.remove_condition("Heroes' Feast")
     assert not any(isinstance(c, HeroesFeastSource) for c in target.active_conditions.values())
     assert target.health.get_resistance(DamageType.POISON) is ResistanceStatus.IMMUNITY
-    assert target.saving_throw_bonus(None, 'wisdom').advantage is AdvantageStatus.ADVANTAGE
+    assert target.saving_throw_bonus(None, 'wisdom', None).advantage is AdvantageStatus.ADVANTAGE
     result = target.add_condition(Poisoned(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid))
     assert result is None or result.canceled
     assert 'Poisoned' not in target.active_conditions

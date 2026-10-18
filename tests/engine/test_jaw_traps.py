@@ -22,7 +22,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spatial.jaws import ForceJawOpen, JawRestrained, SlipFreeOfJaw, materialize_jaw_trap
-from dnd.spells.abjuration import AntimagicFieldZone, FreedomOfMovement, FreedomOfMovementEscape
+from dnd.spells.abjuration import FreedomOfMovement, FreedomOfMovementEscape
 from dnd.spatial.mechanisms import LaneGeometry, materialize_finite_trap
 from dnd.spatial.gas_traps import materialize_gas_vent
 from dnd.spells.conjuration import EscapeWebAction, WebRestrained
@@ -242,23 +242,6 @@ def test_freedom_of_movement_escapes_only_the_mundane_lease_for_five_feet(arena)
     assert target.action_economy.movement_remaining() == 25
 
 
-def test_antimagic_suppresses_web_but_preserves_jaw_mechanics(arena):
-    target = actor(arena)
-    jaw = materialize_jaw_trap(target.position)
-    pulse(jaw, 1, 3)
-    web = web_source(target)
-    field = AntimagicFieldZone(source_entity_uuid=target.uuid, position=target.position,
-        anchor_uuid=target.uuid, affected_positions={target.position})
-    result = field.activate(parent_event=control(jaw))
-    assert result is not None and not result.canceled
-    assert target.active_conditions_by_uuid[web.uuid] is web and not web.contributions_active()
-    assert jaw_source(target).applied and "Restrained" in target.active_conditions
-    assert target.action_economy.movement_remaining() == 0
-    assert any(isinstance(action, ForceJawOpen) for action in target.registered_actions)
-    assert not any(isinstance(action, EscapeWebAction) and action.contributions_active() for action in target.registered_actions)
-    field.deactivate()
-    assert web.uuid in target.active_conditions_by_uuid
-    assert jaw_source(target).applied and "Restrained" in target.active_conditions
 
 
 def test_actual_lever_reset_releases_capture_then_disable_and_arm(arena):
@@ -344,36 +327,6 @@ def test_removal_veto_keeps_capture_closed_and_escape_does_not_claim_success(are
     assert target.action_economy.movement_remaining() == 0
 
 
-@pytest.mark.parametrize("first", ("standalone", "jaw"))
-def test_antimagic_of_independent_restraint_preserves_mundane_capture_in_both_orders(arena, first):
-    target = actor(arena)
-    standalone = Restrained(source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
-        tags={ConditionTag.MAGICAL})
-    jaw = materialize_jaw_trap(target.position)
-    if first == "standalone":
-        target.add_condition(standalone)
-        pulse(jaw, 1, 1, 3)
-    else:
-        pulse(jaw, 1, 3)
-        target.add_condition(standalone)
-    field = AntimagicFieldZone(source_entity_uuid=target.uuid, position=target.position,
-        anchor_uuid=target.uuid, affected_positions={target.position})
-    cause = control(jaw)
-    result = field.activate(parent_event=cause)
-    cause.phase_to(EventPhase.COMPLETION)
-    assert result is not None and not result.canceled
-    assert target.active_conditions_by_uuid[standalone.uuid] is standalone
-    assert jaw_source(target).applied and target.action_economy.movement_remaining() == 0
-    assert target.active_conditions["Restrained"].contributions_active()
-    field.deactivate()
-    assert standalone.uuid in target.active_conditions_by_uuid and standalone.tags == {ConditionTag.MAGICAL}
-    assert jaw_source(target).applied and target.action_economy.movement_remaining() == 0
-    cause = control(jaw)
-    assert jaw.set_trap_state(TrapState.DEACTIVATED, parent_event=cause)
-    cause.phase_to(EventPhase.COMPLETION)
-    assert target.active_conditions["Restrained"].uuid == standalone.uuid
-    assert target.remove_condition_by_uuid(standalone.uuid)
-    assert "Restrained" not in target.active_conditions and target.action_economy.movement_remaining() == 30
 
 
 def test_jaw_callback_observation_has_activation_revision(arena):

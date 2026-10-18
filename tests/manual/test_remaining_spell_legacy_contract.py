@@ -51,6 +51,17 @@ from dnd.spells.evocation import (
 from dnd.spells.illusion import Blur, Fear, HypnoticPattern, Invisibility
 from dnd.spells.necromancy import BlindnessDeafness, NecroticBless
 from dnd.spells.transmutation import ExpeditiousRetreat, JumpSpell
+from dnd.core.values import (
+    ValueRead,
+    outgoing_of,
+    read_value,
+    Channel,
+    Kind,
+    add_modifier,
+    remove_modifier,
+    modifiers_of,
+    parts,
+)
 from tests.engine.support import get_hp, has_condition, set_hp
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
@@ -67,15 +78,11 @@ def _force_spell_attack_hit(caster: Entity, target: Entity) -> UUID:
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,
     )
-    return caster.spellcasting.spell_attack_bonus.self_static.add_auto_hit_modifier(
-        modifier
-    )
+    return add_modifier(caster.spellcasting.spell_attack_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, modifier)
 
 
 def _remove_spell_attack_modifier(caster: Entity, modifier_uuid: UUID) -> None:
-    caster.spellcasting.spell_attack_bonus.self_static.remove_modifier(
-        modifier_uuid
-    )
+    remove_modifier(caster.spellcasting.spell_attack_bonus, modifier_uuid, Channel.SELF_STATIC)
 
 
 def _action_names(entity: Entity) -> set[str]:
@@ -261,7 +268,7 @@ def test_guiding_bolt_hit_upcast_mark_and_first_attack_cleanup() -> None:
     assert result.damage_rolls[0].effective_dice_count == 6
     assert has_condition(target, "Guiding Bolt")
     mark_modifiers = (
-        target.equipment.ac_bonus.to_target_static.advantage_modifiers.values()
+        modifiers_of(target.equipment.ac_bonus, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE)
     )
     assert any(modifier.name == "Guiding Bolt" for modifier in mark_modifiers)
 
@@ -465,14 +472,12 @@ def test_jump_spell_composes_modifiers_targets_ally_and_expands_discovery() -> N
         strength=10,
     )
     setup_standard_actions(ally)
-    additive_uuid = ally.jump_distance_additive.self_static.add_value_modifier(
-        NumericalModifier(
+    additive_uuid = add_modifier(ally.jump_distance_additive, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
             name="Jump spell matrix boots",
             value=10,
             source_entity_uuid=ally.uuid,
             target_entity_uuid=ally.uuid,
-        )
-    )
+        ))
     Entity.update_all_entities_senses(max_distance=100)
     jump_template = ally.get_action_template("Jump")
     assert isinstance(jump_template, Jump)
@@ -516,7 +521,7 @@ def test_jump_spell_composes_modifiers_targets_ally_and_expands_discovery() -> N
     restored_range = jump_template.get_range()
     assert restored_range is not None
     assert restored_range.normal == 25
-    ally.jump_distance_additive.self_static.remove_modifier(additive_uuid)
+    remove_modifier(ally.jump_distance_additive, additive_uuid, Channel.SELF_STATIC)
 
 
 def test_ray_of_frost_hit_and_slow_expire_on_caster_turn_not_target_turn() -> None:
@@ -899,14 +904,12 @@ def test_blur_and_blindness_deafness_execute_distinct_lifecycles() -> None:
     assert not blur_result.canceled
     assert has_condition(blur_caster, "Blur")
     assert has_condition(blur_caster, "Concentrating")
-    attack_bonus = attacker.attack_bonus(
-        WeaponSlot.MELEE_MAIN,
-        blur_caster.uuid,
-    )
-    target_ac = blur_caster.ac_bonus(attacker.uuid)
-    attack_bonus.set_from_target(target_ac)
+    attack_value, attack_context = attacker.weapon_attack_value(
+        ValueRead(attacker.uuid, blur_caster.uuid), WeaponSlot.MELEE_MAIN)
+    target_ac = blur_caster.armor_class_value(ValueRead(blur_caster.uuid, attacker.uuid))
+    attack_bonus = read_value(attack_value, ValueRead(attacker.uuid, blur_caster.uuid, attack_context,
+                                                      outgoing_of(target_ac, None)))
     assert attack_bonus.advantage is AdvantageStatus.DISADVANTAGE
-    attack_bonus.reset_from_target()
 
     blur_caster.remove_condition("Concentrating")
 
@@ -949,14 +952,12 @@ def test_blur_and_blindness_deafness_execute_distinct_lifecycles() -> None:
         assert has_condition(target, "Deafened")
     assert not has_condition(caster, "Concentrating")
 
-    first.saving_throws.constitution_saving_throw.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(first.saving_throws.constitution_saving_throw.bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=first.uuid,
             target_entity_uuid=first.uuid,
             name="Repeat save overrides initial forced failure",
             value=300,
-        )
-    )
+        ))
     with fixed_dice_faces(10):
         first.on_turn_end()
 

@@ -3,13 +3,29 @@
 Contains: HoldPerson, HoldPersonEffect, CharmPerson, TestBless, Sleep,
           Bane, BaneEffect, Bless, BlessEffect
 """
-import random
-from typing import Any, Optional, List, Set, Tuple, cast as type_cast
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll, resolve_saved_spell_damage
+from dnd.spells.spell_utils import spell_condition_profile
+
+from typing import Any, FrozenSet, Optional, List, Set, Tuple
 from uuid import UUID
+from dnd.core.base_block import BaseBlock, PreparedConditionRemovals
+from dnd.blocks.skills import all_skills, SKILL_TO_ABILITY
+from dnd.creature_transforms import apply_incapacitated_transform
+from dnd.core.modifiers import NumericalModifier, ContextualAdvantageModifier
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier, parts
+from dnd.conditions import prepare_control_removals
+from dnd.spells.hit_effects import QuarrySustain, ReapplyQuarry, install_hit_rider
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
+from dnd.types.discovery import ActorScan, ScanRecord
+from dnd.core.base_actions import Cost
+from dnd.actions import entity_action_economy_cost_evaluator
+from dnd.types.abilities import AbilityName
+from dnd.spells.content_metadata import srd_action_identity
 
 from pydantic import Field, PrivateAttr
 
 from dnd.core.base_actions import (
+    ActionOutcomeProfile, DamageRollProfile,
     ActionTargetEffectBranchProfile,
     ActionTargetEffectProfile,
     OutcomeResolution,
@@ -26,6 +42,8 @@ from dnd.core.condition_types import (
 )
 from dnd.types.character_progression import OriginCapability
 from dnd.core.events import (
+    DamageAppliedEvent,
+    ActionApplicationCommittedEvent,
     Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger,
     D20RollResultEvent, SavingThrowEvent,
 )
@@ -35,9 +53,12 @@ from dnd.core.modifiers import (
     AdvantageStatus,
 )
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
-from dnd.core.aoe import AoEShape, Sphere
+from dnd.core.aoe import AoEShape, Sphere, objective_footprint
+from dnd.core.gridmap import get_map
+from dnd.core.navigation import route_items
 
 from dnd.entity import Entity
+from dnd.encounter import Encounter
 from dnd.actions import Move, SpellAction, SpellEvent
 from dnd.conditions import Paralyzed, Charmed, Stunned, Prone
 from dnd.creature_transforms import (
@@ -45,7 +66,61 @@ from dnd.creature_transforms import (
     apply_unconscious_transform,
 )
 from dnd.spells.content_metadata import srd_spell_identity
-from dnd.spells.spell_utils import validate_line_of_sight
+from dnd.spells.spell_utils import target_turn_expiry_handler, deliver_spell_damage, condition_save
+from dnd.spells.spell_utils import (living_recipients_error, seen_point_error, seen_recipients_error,
+    selected_cast_level, target_count_error)
+
+from dnd.core.events import Damage
+from dnd.core.dice import AttackOutcome, roll_die_face
+
+
+class CharmPersonEffect(BaseCondition):
+    """One caster's finite spell owner and shared exact-charmer relationship."""
+    creates = (Charmed,)
+    name: str = "Charm Person"
+    description: str = "Charmed by this caster; their or their allies' damage ends this ten-turn charm."
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10, duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def model_post_init(self, context: object) -> None:
+        super().model_post_init(context)
+        self.name = f"Charm Person:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Charm Person"
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Charm recipient absent")
+        key = f"Charmed:{self.source_entity_uuid}"
+        charmed = target.active_conditions.get(key)
+        if charmed is None:
+            charmed = Charmed(name=key, immunity_names=("Charmed",),
+                source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid,
+                parent_condition=self.uuid, tags={ConditionTag.MAGICAL})
+            result = target.add_condition(charmed, parent_event=event)
+            if result is None or result.canceled or not charmed.applied:
+                return [], [], [], [], event.cancel(status_message="Charmed was not admitted")
+        self.add_shared_subcondition(charmed)
+
+        def damage_break(damaged: Event, _source_uuid: UUID) -> Event | None:
+            if not isinstance(damaged, DamageAppliedEvent) or damaged.applied_damage <= 0:
+                return None
+            source = Entity.get(damaged.source_entity_uuid)
+            charmer = Entity.get(self.source_entity_uuid)
+            if charmer is not None and source is not None and (
+                    source.uuid == charmer.uuid or charmer.is_ally(source)):
+                target.remove_condition_by_uuid(self.uuid, parent_event=damaged)
+            return None
+        handler = EventHandler(name="Charm Person allied damage", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.DAMAGE_APPLIED, event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=target.uuid)], event_processor=damage_break)
+        target.add_event_handler(handler)
+        return [], [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT, update={"condition": self})
+
+
+
 
 
 class CharmPerson(SpellAction):
@@ -54,6 +129,7 @@ class CharmPerson(SpellAction):
     Upcasting increases the target count, and targets that are fighting the
     caster receive advantage on the save.
     """
+    creates = (*SpellAction.creates, CharmPersonEffect)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Charm Person", description="Spell name.")
     description: str = Field(
@@ -100,49 +176,28 @@ class CharmPerson(SpellAction):
             return caster.uuid in target.get_visible_enemies()
         return False
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate line of sight, range, target type, and target spacing."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
-
-        if target_entity.creature_type != CreatureType.HUMANOID:
-            return declaration_event.cancel(
-                status_message=f"Charm Person only affects humanoids, not {target_entity.creature_type.value}"
-            )
-
-        distance = self.get_target_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        all_targets = self.get_all_targets()
-        if len(all_targets) > 1:
-            for i, t1 in enumerate(all_targets):
-                for t2 in all_targets[i+1:]:
-                    e1 = Entity.get(t1)
-                    e2 = Entity.get(t2)
-                    if e1 and e2:
-                        dist = e1.senses.get_feet_distance(e2.position)
-                        if dist > 30:
-                            return declaration_event.cancel(
-                                status_message=f"Targets must be within 30ft of each other ({e1.name} and {e2.name} are {dist}ft apart)"
-                            )
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """Seen targets in range, a humanoid primary, at most the slot's targets, all within 30 feet of each other."""
+        error = (seen_recipients_error(self, scan, selection.target_uuids) or target_count_error(
+            self, selection, 1 + max(0, selected_cast_level(self, selection) - self.spell_level)))
+        if error is not None:
+            return error
+        creature_type = scan.creatures[selection.target_uuids[0]].facts.creature_type
+        if creature_type != CreatureType.HUMANOID:
+            return f"Charm Person only affects humanoids, not {creature_type.value}"
+        targets = [target for identity in selection.target_uuids if (target := Entity.get(identity)) is not None]
+        for index, first in enumerate(targets):
+            for second in targets[index + 1:]:
+                distance = first.senses.get_feet_distance(second.position)
+                if distance > 30:
+                    return (f"Targets must be within 30ft of each other "
+                            f"({first.name} and {second.name} are {distance}ft apart)")
+        return None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the Wisdom save and apply Charmed on failure."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -158,7 +213,7 @@ class CharmPerson(SpellAction):
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid
             )
-            advantage_mod_uuid = target.saving_throws.get_saving_throw("wisdom").bonus.self_static.add_advantage_modifier(adv_mod)
+            advantage_mod_uuid = add_modifier(target.saving_throws.get_saving_throw("wisdom").bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, adv_mod)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -169,9 +224,9 @@ class CharmPerson(SpellAction):
         _, save_roll, success = target.saving_throw(save_request)
 
         if advantage_mod_uuid:
-            target.saving_throws.get_saving_throw("wisdom").bonus.self_static.remove_modifier(advantage_mod_uuid)
+            remove_modifier(target.saving_throws.get_saving_throw("wisdom").bonus, advantage_mod_uuid, Channel.SELF_STATIC)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "wisdom").normalized_score
+        save_bonus = save_roll.bonus  # the bonus the save applied
 
         fighting_text = " (advantage: fighting)" if is_fighting else ""
         effect_event = execution_event.phase_to(
@@ -185,17 +240,21 @@ class CharmPerson(SpellAction):
             status_message=f"WIS save: {save_roll.total} vs DC {dc}{fighting_text} - {'Success' if success else 'Failure'}"
         )
 
+        if effect_event.canceled:
+            return effect_event
         if success:
             return effect_event.with_updates(
                 status_message=f"{self.name} - {target.name} resists the charm"
             )
 
-        charmed = Charmed(
+        charmed = CharmPersonEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             tags={ConditionTag.MAGICAL}
         )
-        target.add_condition(charmed, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, charmed)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{self.name} - {target.name} is charmed"
@@ -204,6 +263,8 @@ class CharmPerson(SpellAction):
 
 class HoldPersonEffect(BaseCondition):
     """Apply Hold Person's spell-specific parent condition."""
+    creates = (Paralyzed,)
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
     name: str = Field(default="Hold Person", description="Condition name.")
     description: str = Field(default="Magically held in place", description="Rules-facing condition summary.")
     tags: Set[ConditionTag] = Field(
@@ -230,16 +291,17 @@ class HoldPersonEffect(BaseCondition):
 
         execution_event = declaration_event
 
-        paralyzed = Paralyzed(
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid,
-            tags={ConditionTag.MAGICAL}
-        )
-        sub_condition_event = target.add_condition(paralyzed, parent_event=execution_event)
-
-        if sub_condition_event is not None and sub_condition_event.phase == EventPhase.COMPLETION:
-            sub_condition_uuids.append(paralyzed.uuid)
+        existing = target.active_conditions.get("Paralyzed")
+        if existing is not None:
+            self.add_shared_subcondition(existing)
+        else:
+            paralyzed = Paralyzed(source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=target.uuid, parent_condition=self.uuid,
+                tags={ConditionTag.MAGICAL})
+            result = target.add_condition(paralyzed, parent_event=execution_event)
+            if result is None or result.canceled or not paralyzed.applied:
+                return [], [], [], [], declaration_event.cancel(status_message="Paralyzed was not admitted")
+            self.add_shared_subcondition(paralyzed)
 
         if self.caster_uuid:
             handler = self._create_repeat_save_handler()
@@ -304,7 +366,7 @@ class HoldPersonEffect(BaseCondition):
                 Trigger(
                     event_type=EventType.TURN_END,
                     event_phase=EventPhase.EFFECT
-                )
+                , event_source_entity_uuid=target_uuid)
             ],
             event_processor=repeat_save_processor
         )
@@ -321,6 +383,7 @@ class HoldPersonEffect(BaseCondition):
 )
 class HoldPerson(SpellAction):
     """Paralyze a humanoid after a failed Wisdom save."""
+    creates = (*SpellAction.creates, HoldPersonEffect)
     name: str = Field(default="Hold Person", description="Spell name.")
     description: str = Field(
         default="Target must succeed on WIS save or be paralyzed",
@@ -335,9 +398,10 @@ class HoldPerson(SpellAction):
         description="Maximum range for the target.",
     )
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare Hold Person's save-based paralysis branch."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return ActionTargetEffectProfile(
             semantic_id="control.hold_person",
@@ -358,45 +422,25 @@ class HoldPerson(SpellAction):
             ),
         )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate line of sight, range, and humanoid targeting."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
-
-        if target_entity.creature_type != CreatureType.HUMANOID:
-            return declaration_event.cancel(
-                status_message=f"Hold Person only affects humanoids, not {target_entity.creature_type.value}"
-            )
-
-        distance = self.get_target_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen humanoid within range."""
+        error = self.single_recipient_error(scan, selection)
+        if error is not None:
+            return error
+        creature_type = scan.creatures[selection.target_uuids[0]].facts.creature_type
+        if creature_type != CreatureType.HUMANOID:
+            return f"Hold Person only affects humanoids, not {creature_type.value}"
+        return None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the save and link a failed hold effect to concentration."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-        concentration = self.ensure_concentration(execution_event)
-
         effect_event, _, success = self.resolve_saving_throw(
             execution_event,
             caster=caster,
@@ -404,8 +448,11 @@ class HoldPerson(SpellAction):
             ability_name="wisdom",
             dc=dc,
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
+            self.ensure_concentration(effect_event)
             return effect_event.with_updates(
                 status_message=f"{self.name} - {target.name} saved"
             )
@@ -416,10 +463,9 @@ class HoldPerson(SpellAction):
             caster_uuid=caster.uuid,
             spell_dc=dc
         )
-        target.add_condition(hold_effect, parent_event=effect_event)
-
-        if hold_effect.applied:
-            concentration.add_linked_condition(target.uuid, hold_effect.uuid)
+        effect_event = self.apply_owned_condition(effect_event, hold_effect)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{self.name} - {target.name} is held (concentration)"
@@ -428,6 +474,7 @@ class HoldPerson(SpellAction):
 
 class HoldMonsterEffect(BaseCondition):
     """Apply Hold Monster's spell-specific parent condition."""
+    creates = (Paralyzed,)
     name: str = Field(default="Hold Monster", description="Condition name.")
     description: str = Field(default="Magically held in place", description="Rules-facing condition summary.")
     tags: Set[ConditionTag] = Field(
@@ -521,7 +568,7 @@ class HoldMonsterEffect(BaseCondition):
             name=f"Hold Monster Repeat Save ({target_uuid})",
             source_entity_uuid=target_uuid,
             trigger_conditions=[
-                Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT)
+                Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT, event_source_entity_uuid=target_uuid)
             ],
             event_processor=repeat_save_processor
         )
@@ -529,6 +576,7 @@ class HoldMonsterEffect(BaseCondition):
 
 class HoldMonster(SpellAction):
     """Paralyze one or more non-undead creatures after Wisdom saves."""
+    creates = (*SpellAction.creates, HoldMonsterEffect)
     name: str = Field(default="Hold Monster", description="Spell name.")
     description: str = Field(
         default="Target must succeed on WIS save or be paralyzed (not undead)",
@@ -565,9 +613,10 @@ class HoldMonster(SpellAction):
                 targets.append(extra)
         return targets[:self.get_max_targets_for_level()]
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare Hold Monster's save-based paralysis branch."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return ActionTargetEffectProfile(
             semantic_id="control.hold_monster",
@@ -588,41 +637,29 @@ class HoldMonster(SpellAction):
             ),
         )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Admit the whole selected group before spending or applying any hold."""
-        caster = Entity.get(self.source_entity_uuid)
-        if caster is None:
-            return declaration_event.cancel(status_message="Caster not found")
-        targets: list[Entity] = []
-        for target_uuid in self.get_all_targets():
-            target = Entity.get(target_uuid)
-            if target is None:
-                return declaration_event.cancel(status_message="Target not found")
-            contact = caster.senses.entities.get(target_uuid)
-            if contact is None or not contact.visual:
-                return declaration_event.cancel(status_message="Target is not visible")
-            if target.creature_type == CreatureType.UNDEAD:
-                return declaration_event.cancel(status_message="Hold Monster has no effect on undead")
-            if self.get_target_distance(target.position) > self.effective_range:
-                return declaration_event.cancel(status_message="Target out of range")
-            if any(other.senses.get_feet_distance(target.position) > 30 for other in targets):
-                return declaration_event.cancel(status_message="Targets must be within 30 feet of each other")
-            targets.append(target)
-        if not targets:
-            return declaration_event.cancel(status_message="Choose at least one target")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"Validated {self.name}")
+        error = (target_count_error(self, selection, 1 + max(0, selected_cast_level(self, selection) - self.spell_level))
+                 or seen_recipients_error(self, scan, selection.target_uuids))
+        if error is not None:
+            return error
+        if any(scan.creatures[identity].facts.creature_type == CreatureType.UNDEAD for identity in selection.target_uuids):
+            return "Hold Monster has no effect on undead"
+        targets = [target for identity in selection.target_uuids if (target := Entity.get(identity)) is not None]
+        if any(first.senses.get_feet_distance(second.position) > 30
+               for index, first in enumerate(targets) for second in targets[index + 1:]):
+            return "Targets must be within 30 feet of each other"
+        return None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the save and link a failed hold effect to concentration."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-
-        concentration_condition = self.ensure_concentration(execution_event)
 
         effect_event, _, success = self.resolve_saving_throw(
             execution_event,
@@ -631,8 +668,11 @@ class HoldMonster(SpellAction):
             ability_name="wisdom",
             dc=dc,
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
+            self.ensure_concentration(effect_event)
             return effect_event.with_updates(
                 status_message=f"{self.name} - {target.name} saved"
             )
@@ -643,10 +683,9 @@ class HoldMonster(SpellAction):
             caster_uuid=caster.uuid,
             spell_dc=dc
         )
-        target.add_condition(hold_effect, parent_event=effect_event)
-
-        if hold_effect.applied:
-            concentration_condition.add_linked_condition(target.uuid, hold_effect.uuid)
+        effect_event = self.apply_owned_condition(effect_event, hold_effect)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{self.name} - {target.name} is held"
@@ -672,33 +711,14 @@ class PowerWordKill(SpellAction):
     hp_threshold: int = Field(default=100, description="Maximum current HP affected by the spell.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FORCE, description="Primary damage type for VFX")
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate line of sight and range."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
-
-        distance = self.get_target_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen creature within range."""
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply instant death when the target is below the HP threshold."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -762,40 +782,15 @@ class TestBless(SpellAction):
                 targets.append(extra)
         return targets[:self.max_targets]
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range and line of sight for all targets."""
-        source_entity = Entity.get(self.source_entity_uuid)
-        if not source_entity:
-            return declaration_event.cancel(status_message="Source entity not found")
-
-        all_targets = self.get_all_targets()
-
-        for target_uuid in all_targets:
-            if target_uuid == self.source_entity_uuid:
-                continue
-
-            target_entity = Entity.get(target_uuid)
-            if not target_entity:
-                return declaration_event.cancel(status_message=f"Target entity not found")
-
-            contact = source_entity.senses.entities.get(target_uuid)
-            if contact is None or not contact.visual:
-                return declaration_event.cancel(
-                    status_message=f"{target_entity.name} not in line of sight"
-                )
-
-            distance = self.get_target_distance(target_entity.position)
-            if distance > self.effective_range:
-                return declaration_event.cancel(
-                    status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
-                )
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """At most max_targets, each the caster or a seen creature within range."""
+        others = [identity for identity in selection.target_uuids if identity != self.source_entity_uuid]
+        return target_count_error(self, selection, self.max_targets) or (
+            seen_recipients_error(self, scan, others) if others else None)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Complete the current target branch of the test spell."""
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not target:
             return execution_event.cancel(status_message="Target not found")
@@ -878,7 +873,7 @@ class SleepEffect(BaseCondition):
             name=f"Sleep Wake Handler ({target_uuid})",
             source_entity_uuid=target_uuid,
             trigger_conditions=[
-                Trigger(event_type=EventType.DAMAGE_APPLIED, event_phase=EventPhase.EFFECT)
+                Trigger(event_type=EventType.DAMAGE_APPLIED, event_phase=EventPhase.EFFECT, event_target_entity_uuid=target_uuid)
             ],
             event_processor=wake_processor
         )
@@ -886,6 +881,7 @@ class SleepEffect(BaseCondition):
 
 class Sleep(SpellAction):
     """Select creatures in an HP pool and apply magical sleep."""
+    creates = (*SpellAction.creates, SleepEffect)
     name: str = Field(default="Sleep", description="Spell name.")
     description: str = Field(
         default="Roll 5d8 HP pool. Affects creatures in order of lowest HP.",
@@ -915,8 +911,6 @@ class Sleep(SpellAction):
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Sphere(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
                 radius_feet=20
             )
 
@@ -926,8 +920,11 @@ class Sleep(SpellAction):
         upcast_bonus = max(0, self.cast_at_level - self.spell_level) * 2
         return (base_dice + upcast_bonus, 8)
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare Sleep's automatic agency-denial condition for selected targets."""
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
         _ = actor
         return ActionTargetEffectProfile(
             semantic_id="control.sleep",
@@ -949,19 +946,56 @@ class Sleep(SpellAction):
         """Select targets by current HP and cache the selection."""
         if self._selected_hp_pool_targets is not None:
             return list(self._selected_hp_pool_targets)
+        candidates = self._hp_pool_candidates()
+        self._ensure_hp_pool()
+        targets: List[UUID] = []
+        remaining = self.hp_pool_remaining if self.hp_pool_remaining > 0 else self.hp_pool_rolled
+        for hp, uid in candidates:
+            if hp <= remaining:
+                targets.append(uid)
+                remaining -= hp
 
-        if not (self.aoe_shape and self.end_position):
+        self.hp_pool_remaining = remaining
+        self._selected_hp_pool_targets = targets
+        return list(targets)
+
+    def _ensure_hp_pool(self) -> None:
+        if self.hp_pool_rolled == 0:
+            dice_count, dice_value = self.get_hp_pool_dice()
+            total = sum(roll_die_face(dice_value) for _ in range(dice_count))
+            self.hp_pool_rolled = total
+            self.hp_pool_remaining = total
+
+    def _apply_target_applications(self, execution_event: SpellEvent, effect_event: SpellEvent,
+                                   target_uuids: List[UUID]) -> SpellEvent:
+        """Spend the pool only on admitted applications; a vetoed creature costs nothing (Q3)."""
+        del target_uuids
+        self._ensure_hp_pool()
+        remaining = self.hp_pool_rolled
+        applied: List[UUID] = []
+        for hp, uid in self._hp_pool_candidates():
+            if hp > remaining:
+                continue
+            result = self._apply_target_application(execution_event, uid, parent_event=effect_event,
+                application_index=len(applied))
+            if result is None:
+                continue
+            remaining -= hp
+            applied.append(uid)
+        self.hp_pool_remaining = remaining
+        self._selected_hp_pool_targets = applied
+        return effect_event.with_updates(total_targets=len(applied), total_damage=0, aoe_position=self.end_position,
+            status_message=f"{self.name} affected {len(applied)} targets")
+
+    def _hp_pool_candidates(self) -> List[Tuple[int, UUID]]:
+        """Eligible creatures in the area, lowest current HP first."""
+        area = self._sleep_area()
+        if area is None:
             return []
-
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return []
-
-        self.aoe_shape.target = self.end_position
-        self.aoe_shape.compute_objective(caster.position)
+        grid = get_map()
 
         candidates: List[Tuple[int, UUID]] = []
-        for uid in self.aoe_shape.affected_entity_uuids:
+        for uid in {identity for cell in area for identity in grid.get_entities_at(cell)}:
             if not self.include_self and uid == self.source_entity_uuid:
                 continue
 
@@ -989,59 +1023,29 @@ class Sleep(SpellAction):
             candidates.append((entity.get_hp(), uid))
 
         candidates.sort(key=lambda x: (x[0], str(x[1])))
+        return candidates
 
-        if self.hp_pool_rolled == 0:
-            dice_count, dice_value = self.get_hp_pool_dice()
-            roll_results = [random.randint(1, dice_value) for _ in range(dice_count)]
-            total = sum(roll_results)
-            self.hp_pool_rolled = total
-            self.hp_pool_remaining = total
-
-        targets: List[UUID] = []
-        remaining = self.hp_pool_remaining if self.hp_pool_remaining > 0 else self.hp_pool_rolled
-        for hp, uid in candidates:
-            if hp <= remaining:
-                targets.append(uid)
-                remaining -= hp
-
-        self.hp_pool_remaining = remaining
-        self._selected_hp_pool_targets = targets
-        return list(targets)
+    def _sleep_area(self) -> Optional[FrozenSet[Tuple[int, int]]]:
+        """Return the objective area the HP pool chooses its targets from."""
+        caster = Entity.get(self.source_entity_uuid)
+        if self.aoe_shape is None or self.end_position is None or caster is None:
+            return None
+        return objective_footprint(self.aoe_shape, self.end_position, caster.position)
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
         """Record the same area used by the HP-pool selection for replay."""
         targets = self.get_all_targets()
-        positions = tuple(sorted(self.aoe_shape.affected_positions)) if self.aoe_shape is not None else None
-        return targets, positions
+        area = self._sleep_area()
+        return targets, tuple(sorted(area)) if area is not None else None
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate the area origin has line of sight and range."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position specified")
-
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(
-                status_message=f"Target position {target_pos} not in line of sight"
-            )
-
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen area origin within range."""
+        return seen_point_error(self, scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Sleep effect to current target (called once per target by convolution)."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -1051,12 +1055,16 @@ class Sleep(SpellAction):
             target_entity_name=target.name,
             status_message=f"Sleep affecting {target.name} ({target.get_hp()} HP)"
         )
+        if effect_event.canceled:
+            return effect_event
 
         sleep_effect = SleepEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid
         )
-        target.add_condition(sleep_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, sleep_effect)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{target.name} falls asleep ({target.get_hp()} HP)"
@@ -1065,6 +1073,7 @@ class Sleep(SpellAction):
 
 class PowerWordStunEffect(BaseCondition):
     """Apply Power Word Stun's condition tree and repeat save."""
+    creates = (Stunned,)
     name: str = Field(default="Power Word Stun", description="Condition name.")
     description: str = Field(default="Stunned by power word", description="Rules-facing condition summary.")
     tags: Set[ConditionTag] = Field(
@@ -1159,7 +1168,7 @@ class PowerWordStunEffect(BaseCondition):
             name=f"Power Word Stun Repeat Save ({target_uuid})",
             source_entity_uuid=target_uuid,
             trigger_conditions=[
-                Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT)
+                Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT, event_source_entity_uuid=target_uuid)
             ],
             event_processor=repeat_save_processor
         )
@@ -1167,6 +1176,7 @@ class PowerWordStunEffect(BaseCondition):
 
 class PowerWordStun(SpellAction):
     """Stun a target whose current hit points are at or below the threshold."""
+    creates = (*SpellAction.creates, PowerWordStunEffect)
     harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Power Word Stun", description="Spell name.")
     description: str = Field(
@@ -1182,33 +1192,14 @@ class PowerWordStun(SpellAction):
     )
     hp_threshold: int = Field(default=150, description="Maximum current HP affected by the spell.")
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate line of sight and range."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
-
-        distance = self.get_target_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen creature within range."""
+        return self.single_recipient_error(scan, selection)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Stunned when the target is below the HP threshold."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -1220,6 +1211,8 @@ class PowerWordStun(SpellAction):
             target_entity_name=target.name,
             status_message=f"Power Word Stun targeting {target.name} ({current_hp} HP)"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if current_hp <= self.hp_threshold:
             dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
@@ -1249,7 +1242,7 @@ def _bane_processor(
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
-    d4_value = random.randint(1, 4)
+    d4_value = roll_die_face(4)
     effective = event.get_effective_roll()
     new_total = effective.total - d4_value
     new_roll = effective.model_copy(update={"total": new_total})
@@ -1264,7 +1257,7 @@ def _bless_processor(
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
-    d4_value = random.randint(1, 4)
+    d4_value = roll_die_face(4)
     effective = event.get_effective_roll()
     new_total = effective.total + d4_value
     new_roll = effective.model_copy(update={"total": new_total})
@@ -1273,6 +1266,7 @@ def _bless_processor(
 
 class BaneEffect(BaseCondition):
     """Register Bane's d20 roll-result handler."""
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
     name: str = Field(default="Bane", description="Condition name.")
     description: str = Field(
         default="Subtract 1d4 from attack rolls and saving throws",
@@ -1326,6 +1320,7 @@ class BaneEffect(BaseCondition):
 
 class BlessEffect(BaseCondition):
     """Register Bless's d20 roll-result handler."""
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
     name: str = Field(default="Bless", description="Condition name.")
     description: str = Field(
         default="Add 1d4 to attack rolls and saving throws",
@@ -1379,6 +1374,7 @@ class BlessEffect(BaseCondition):
 
 class Bane(SpellAction):
     """Apply Bane to failed Charisma saves across multiple targets."""
+    creates = (*SpellAction.creates, BaneEffect)
     name: str = Field(default="Bane", description="Spell name.")
     description: str = Field(
         default="Up to 3 enemies: CHA save or -1d4 on attacks and saves",
@@ -1395,9 +1391,10 @@ class Bane(SpellAction):
     allow_same_target: bool = Field(default=False, description="Whether repeated targets are allowed.")
     valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare Bane's failed-save d20 penalty branch."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         return ActionTargetEffectProfile(
             semantic_id="control.bane",
@@ -1429,17 +1426,19 @@ class Bane(SpellAction):
                 targets.append(extra)
         return targets[:max_targets]
 
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """At most three creatures, plus one per slot level above 1st."""
+        return target_count_error(self, selection, 3 + max(0, selected_cast_level(self, selection) - self.spell_level))
+
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the Charisma save and apply Bane on failure."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-
-        concentration = self.ensure_concentration(execution_event)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -1458,8 +1457,11 @@ class Bane(SpellAction):
             target_entity_name=target.name,
             status_message=f"CHA save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}",
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
+            self.ensure_concentration(effect_event)
             return effect_event.with_updates(
                 status_message=f"Bane - {target.name} resists",
             )
@@ -1468,9 +1470,9 @@ class Bane(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
         )
-        target.add_condition(bane_effect, parent_event=effect_event)
-        if bane_effect.applied:
-            concentration.add_linked_condition(target.uuid, bane_effect.uuid)
+        effect_event = self.apply_owned_condition(effect_event, bane_effect)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"Bane - {target.name} is baned",
@@ -1479,6 +1481,7 @@ class Bane(SpellAction):
 
 class Bless(SpellAction):
     """Apply Bless across multiple allies without a saving throw."""
+    creates = (*SpellAction.creates, BlessEffect)
     name: str = Field(default="Bless", description="Spell name.")
     description: str = Field(
         default="Up to 3 allies: +1d4 on attacks and saves",
@@ -1495,8 +1498,11 @@ class Bless(SpellAction):
     allow_same_target: bool = Field(default=False, description="Whether repeated targets are allowed.")
     valid_target_filter: str = Field(default="self_or_allies", description="Action discovery target filter.")
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare Bless's automatic d20 support branch."""
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
         _ = actor
         return ActionTargetEffectProfile(
             semantic_id="support.bless",
@@ -1526,29 +1532,33 @@ class Bless(SpellAction):
                 targets.append(extra)
         return targets[:max_targets]
 
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """At most three creatures, plus one per slot level above 1st."""
+        return target_count_error(self, selection, 3 + max(0, selected_cast_level(self, selection) - self.spell_level))
+
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Bless to the current target in the convolution loop."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
-
-        concentration = self.ensure_concentration(execution_event)
-
-        bless_effect = BlessEffect(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid,
-        )
-        target.add_condition(bless_effect, parent_event=execution_event)
-        if bless_effect.applied:
-            concentration.add_linked_condition(target.uuid, bless_effect.uuid)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             target_entity_name=target.name,
             status_message=f"Bless - {target.name} is blessed",
         )
+        if effect_event.canceled:
+            return effect_event
+
+        bless_effect = BlessEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+        )
+        effect_event = self.apply_owned_condition(effect_event, bless_effect)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"Bless - {target.name} is blessed",
@@ -1657,7 +1667,7 @@ class CommandNextTurnEffect(BaseCondition):
                     event_source_entity_uuid=target_uuid,
                 )
             ],
-            runs_while_suppressed=True,
+
             event_processor=processor,
         )
 
@@ -1695,7 +1705,7 @@ class CommandNextTurnEffect(BaseCondition):
                     event_source_entity_uuid=target_uuid,
                 )
             ],
-            runs_while_suppressed=True,
+
             event_processor=processor,
         )
 
@@ -1722,6 +1732,7 @@ class CommandNextTurnEffect(BaseCondition):
 
 class CommandGrovelEffect(CommandNextTurnEffect):
     """Make the target fall prone and spend its next turn."""
+    creates = (Prone,)
     name: str = Field(default="Command: Grovel", description="Condition name.")
     description: str = Field(default="Commanded to grovel - falls prone", description="Rules-facing condition summary.")
     tags: Set[ConditionTag] = Field(
@@ -1764,6 +1775,7 @@ class CommandHaltEffect(CommandNextTurnEffect):
 
 class CommandFleeEffect(CommandNextTurnEffect):
     """Move away voluntarily and spend the rest of the target's next turn."""
+    creates = (Move,)
     name: str = Field(default="Command: Flee", description="Condition name.")
     description: str = Field(
         default="Commanded to flee - must move away from caster",
@@ -1793,9 +1805,10 @@ class CommandFleeEffect(CommandNextTurnEffect):
                 abs(target.position[0] - caster_pos[0])
                 + abs(target.position[1] - caster_pos[1])
             )
+            known_paths = dict(route_items(target.senses.paths))
             farther_positions = [
                 position
-                for position, path in target.senses.paths.items()
+                for position, path in known_paths.items()
                 if (
                     len(path) > 1
                     and (
@@ -1815,12 +1828,9 @@ class CommandFleeEffect(CommandNextTurnEffect):
                         position[1],
                     ),
                 )
-                path = list(target.senses.paths[best_position])
-                Move(
-                    source_entity_uuid=target.uuid,
-                    end_position=best_position,
-                    path=path,
-                ).apply(parent_event=event)
+                path = known_paths[best_position]
+                flight = Move(source_entity_uuid=target.uuid, end_position=best_position, path=path)
+                target.perform(flight, flight.current_selection(), parent_event=event)
 
         self._spend_commanded_turn(target)
 
@@ -1831,6 +1841,7 @@ class CommandFleeEffect(CommandNextTurnEffect):
 
 class Command(SpellAction):
     """Force a creature to follow a one-word command after a failed save."""
+    creates = (*SpellAction.creates, CommandFleeEffect, CommandGrovelEffect, CommandHaltEffect)
     name: str = Field(default="Command", description="Spell name.")
     description: str = Field(
         default="WIS save or follow a one-word command (Grovel/Flee/Halt)",
@@ -1847,9 +1858,10 @@ class Command(SpellAction):
     valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
     command_word: str = Field(default="grovel", description="Command word: grovel, flee, or halt.")
 
-    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+    def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare the save-based condition applied by the selected command."""
-        if not isinstance(actor, Entity):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
             return None
         word = self.command_word.lower()
         condition_fact, condition_keys = {
@@ -1884,25 +1896,19 @@ class Command(SpellAction):
             ),
         )
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate line of sight and undead immunity."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target and target.creature_type == CreatureType.UNDEAD:
-            return declaration_event.cancel(status_message="Command has no effect on undead")
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A seen creature within range that is not undead."""
+        error = self.single_recipient_error(scan, selection)
+        if error is not None:
+            return error
+        if scan.creatures[selection.target_uuids[0]].facts.creature_type == CreatureType.UNDEAD:
+            return "Command has no effect on undead"
+        return None
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the save and apply the selected command effect."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -1960,3 +1966,775 @@ class Command(SpellAction):
         return effect_event.with_updates(
             status_message=f"{target.name} is commanded to {self.command_word}"
         )
+
+
+class MockedEffect(BaseCondition):
+    """Spend disadvantage only when this recipient actually rolls an attack."""
+    name: str = "Vicious Mockery"
+    description: str = "Disadvantage on the next actual attack roll."
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    duration: Duration = Field(default_factory=lambda: Duration(duration=None,duration_type=DurationType.PERMANENT))
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Recipient no longer exists")
+        value = target.equipment.attack_bonus
+        modifier = add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
+            value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
+        def consume(rolled: Event, _: UUID) -> Optional[Event]:
+            target.remove_condition_by_uuid(self.uuid,parent_event=rolled)
+            return None
+        handler = EventHandler(name="Consume Mockery after attack roll",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.ATTACK_D20_ROLL_RESULT,
+                event_phase=EventPhase.EFFECT,event_source_entity_uuid=target.uuid)],event_processor=consume)
+        target.add_event_handler(handler)
+        expiry=target_turn_expiry_handler(self,turn_ends=1)
+        target.add_event_handler(expiry)
+        return [(value.uuid,modifier)],[handler.uuid,expiry.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class ViciousMockery(SpellAction):
+    creates = (*SpellAction.creates, MockedEffect)
+    name: str = "Vicious Mockery"
+    description: str = "WIS save or psychic damage and disadvantage on the next attack."
+    spell_level: int = 0
+    spell_school: str = "enchantment"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE,normal=60))
+    target_type: TargetType = TargetType.ENTITY
+    spell_damage_type: DamageType = DamageType.PSYCHIC
+
+    def get_target_effect_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
+        return spell_condition_profile(self,actor,key="vicious_mockery",condition_type=MockedEffect,beneficial=False,
+            save_ability='wisdom',fact=None,)
+
+    def get_outcome_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
+        return self.saving_throw_damage_outcome_profile(actor,dice_count=self._get_cantrip_dice_count(self.caster_level),die_size=4,damage_type=DamageType.PSYCHIC,save_ability="wisdom",half_damage_on_save=False)
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return self.single_recipient_error(scan, selection)
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+        if caster is None or target is None:
+            return event.cancel(status_message="Caster or recipient no longer exists")
+        effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="wisdom",
+            dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
+        if effect.canceled:
+            return effect
+        damage=Damage(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,damage_dice=4,
+            dice_numbers=self._get_cantrip_dice_count(self.caster_level),damage_bonus=caster.get_spell_damage_bonus(),
+            damage_type=DamageType.PSYCHIC)
+        packet=resolve_saved_spell_damage(damage, parent_event=effect, saved=saved, success_fraction=0)
+        roll=packet.final_roll
+        effect=deliver_spell_damage(effect,target,damage,roll,amount=packet.applied_amount)
+        if effect.canceled or saved:
+            return effect
+        target.add_condition(MockedEffect(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid),parent_event=effect)
+        return effect
+
+
+class AnimalFriendshipEffect(Charmed):
+    """A separate beast charm, broken by damage from the caster's original allies."""
+    name: str = "Animal Friendship"
+    immunity_names: tuple[str,...] = ("Charmed",)
+    caster_faction: Optional[str] = None
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10,duration_type=DurationType.ROUNDS))
+
+    def model_post_init(self,context: object) -> None:
+        super().model_post_init(context)
+        self.name=f"{self.get_display_name()}:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Animal Friendship"
+
+    def _apply(self,event: Event):
+        modifiers,handlers,children,spatial,effect=super()._apply(event)
+        if effect is None or effect.canceled:
+            return modifiers,handlers,children,spatial,effect
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        assert target is not None
+        def broken_by_damage(damaged: Event, _: UUID) -> Optional[Event]:
+            source=Entity.get(damaged.source_entity_uuid)
+            if source is not None and (source.uuid==self.source_entity_uuid or
+                    (self.caster_faction is not None and source.faction==self.caster_faction)):
+                target.remove_condition_by_uuid(self.uuid,parent_event=damaged)
+            return None
+        handler=EventHandler(name="Animal Friendship allied damage",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.DAMAGE_APPLIED,event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=target.uuid)],event_processor=broken_by_damage)
+        target.add_event_handler(handler)
+        return modifiers,[*handlers,handler.uuid],children,spatial,effect
+
+
+class AnimalFriendship(SpellAction):
+    creates = (*SpellAction.creates, AnimalFriendshipEffect)
+    name: str = "Animal Friendship"
+    description: str = "Charm a beast of Intelligence 3 or less; caster-allied damage ends the charm."
+    spell_level: int = 1
+    spell_school: str = "enchantment"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE,normal=60))
+    target_type: TargetType = TargetType.MULTI_ENTITY
+    harmful: bool = True
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag,...] = (SavingThrowEffectTag.CHARM,)
+    max_targets: int = 1
+    include_self: bool = False
+    allow_same_target: bool = False
+
+    def get_target_effect_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
+        return spell_condition_profile(self,actor,key="animal_friendship",condition_type=AnimalFriendshipEffect,beneficial=False,
+            save_ability='wisdom',fact=None,included=frozenset({CreatureType.BEAST.value}),)
+
+    def get_multi_target_count(self) -> Optional[int]:
+        return max(1,self.cast_at_level)
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        for identity in selection.target_uuids:
+            target=Entity.get(identity)
+            if target is None or target.creature_type is not CreatureType.BEAST or target.ability_scores.intelligence.ability_score.score>3:
+                return "Only beasts with Intelligence 3 or less are eligible"
+        return None
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+        if caster is None or target is None:
+            return event.cancel(status_message="Caster or beast no longer exists")
+        effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="wisdom",
+            dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
+        if not saved and not effect.canceled:
+            return self.apply_owned_condition(effect,AnimalFriendshipEffect(source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,caster_faction=caster.faction))
+        return effect
+
+
+class DissonantFearEffect(BaseCondition):
+    turn_ends: int | None = 2
+    name: str = "Dissonant Whispers Fear"
+    description: str = "Cannot move; attacks and ability checks have disadvantage even outside the caster's sight."
+    immunity_names: tuple[str,...] = ("Frightened",)
+    duration: Duration = Field(default_factory=lambda: Duration(duration=None,duration_type=DurationType.PERMANENT))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Fear recipient no longer exists")
+        modifiers=[]
+        for value in (target.equipment.attack_bonus,
+                      *(target.ability_scores.get_ability(ability).check_bonus for ability in ("strength","dexterity","constitution","intelligence","wisdom","charisma")),
+                      *(target.skill_set.get_skill(skill).skill_bonus for skill in all_skills)):
+            ident=add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
+                value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
+            modifiers.append((value.uuid,ident))
+        for value in target.action_economy.speed_values:
+            ident=add_modifier(value, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(name=self.name,value=0,
+                source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
+            modifiers.append((value.uuid,ident))
+        handlers=[]
+        if self.turn_ends is not None:
+            expiry=target_turn_expiry_handler(self,turn_ends=self.turn_ends)
+            target.add_event_handler(expiry)
+            handlers.append(expiry.uuid)
+        return modifiers,handlers,[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class DissonantWhispers(SpellAction):
+    creates = (*SpellAction.creates, DissonantFearEffect)
+    name: str = "Dissonant Whispers"
+    description: str = "WIS save for half psychic damage; failure gives two-turn fear."
+    spell_level: int = 1
+    spell_school: str = "enchantment"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE,normal=60))
+    target_type: TargetType = TargetType.ENTITY
+    spell_damage_type: DamageType = DamageType.PSYCHIC
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag,...] = (SavingThrowEffectTag.FEAR,)
+
+    def get_target_effect_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
+        return spell_condition_profile(self,actor,key="dissonant_whispers",condition_type=DissonantFearEffect,beneficial=False,
+            save_ability='wisdom',fact='selected_target.condition.frightened',)
+
+    def get_outcome_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
+        return self.saving_throw_damage_outcome_profile(actor,dice_count=3+self.get_upcast_bonus(),die_size=6,damage_type=DamageType.PSYCHIC,save_ability="wisdom",half_damage_on_save=True)
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return self.single_recipient_error(scan, selection)
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+        if caster is None or target is None:
+            return event.cancel(status_message="Caster or recipient no longer exists")
+        effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="wisdom",
+            dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
+        if effect.canceled:
+            return effect
+        damage=Damage(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid,damage_dice=6,
+            dice_numbers=3+max(0,self.cast_at_level-1),damage_bonus=caster.get_spell_damage_bonus(),damage_type=DamageType.PSYCHIC)
+        roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
+        effect=deliver_spell_damage(effect,target,damage,roll,amount=roll.total//2 if saved else roll.total)
+        if effect.canceled:
+            return effect
+        if not saved and target.is_active:
+            target.add_condition(DissonantFearEffect(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid),parent_event=effect)
+        return effect
+
+
+class HideousLaughterEffect(BaseCondition):
+    name: str = "Hideous Laughter"
+    description: str = "Prone and unable to act; WIS saves at turn end and with advantage after damage."
+    immunity_names: tuple[str,...] = ("Prone",)
+    spell_dc: int = 10
+    agency_denial: ConditionAgencyDenial = ConditionAgencyDenial.FULL_TURN
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10,duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Laughter recipient no longer exists")
+        modifiers=apply_incapacitated_transform(target,name=self.name,effect_source_uuid=self.source_entity_uuid)
+        def incoming_advantage(source_uuid: UUID,attacker_uuid: UUID | None=None,context: dict | None=None):
+            attacker=Entity.get(attacker_uuid) if attacker_uuid else None
+            if attacker is None or target.senses.get_feet_distance(attacker.position)>10:
+                return None
+            return AdvantageModifier(name=self.name,value=AdvantageStatus.ADVANTAGE,
+                source_entity_uuid=source_uuid,target_entity_uuid=attacker_uuid)
+        value=target.equipment.ac_bonus
+        ident=add_modifier(value, Channel.TO_TARGET_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
+            name=self.name,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid,
+            callable=incoming_advantage))
+        modifiers.append((value.uuid,ident))
+        for ability in ("strength","dexterity"):
+            value=target.saving_throws.get_saving_throw(ability).bonus
+            ident=add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
+                value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
+            modifiers.append((value.uuid,ident))
+        def repeat(boundary: Event,_: UUID) -> Optional[Event]:
+            caster=Entity.get(self.source_entity_uuid)
+            if caster is None:
+                target.remove_condition_by_uuid(self.uuid,parent_event=boundary)
+                return None
+            bonus=target.saving_throws.get_saving_throw("wisdom").bonus
+            ident=None
+            if boundary.event_type is EventType.DAMAGE_APPLIED:
+                ident=add_modifier(bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Laughter damage save",
+                    value=AdvantageStatus.ADVANTAGE,source_entity_uuid=target.uuid,target_entity_uuid=caster.uuid))
+            try:
+                request=caster.create_saving_throw_request(target_entity_uuid=target.uuid,ability_name="wisdom",
+                    dc=self.spell_dc,parent_event=boundary.uuid,
+                    saving_throw_context=self.saving_throw_context(effect_id="spell.hideous_laughter.repeat"))
+                _outcome,_roll,saved=target.saving_throw(request)
+            finally:
+                if ident is not None: remove_modifier(bonus, ident, Channel.SELF_STATIC)
+            if saved: target.remove_condition_by_uuid(self.uuid,parent_event=boundary)
+            return None
+        handler=EventHandler(name="Laughter recovery",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END,event_phase=EventPhase.EFFECT,event_source_entity_uuid=target.uuid),
+                Trigger(event_type=EventType.DAMAGE_APPLIED,event_phase=EventPhase.EFFECT,event_target_entity_uuid=target.uuid)],event_processor=repeat)
+        target.add_event_handler(handler)
+        return modifiers,[handler.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class HideousLaughter(SpellAction):
+    creates = (*SpellAction.creates, HideousLaughterEffect)
+    name: str = "Hideous Laughter"
+    description: str = "WIS save or persistent prone and inability to act; requires Intelligence 5+."
+    spell_level: int = 1
+    spell_school: str = "enchantment"
+    target_type: TargetType = TargetType.ENTITY
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE,normal=60))
+    concentration: bool = True
+    harmful: bool = True
+
+    def get_target_effect_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
+        return spell_condition_profile(self,actor,key="hideous_laughter",condition_type=HideousLaughterEffect,beneficial=False,
+            save_ability='wisdom',fact='selected_target.condition.incapacitated',)
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        target=Entity.get(selection.target_uuids[0]) if selection.target_uuids else None
+        if target is None or target.ability_scores.intelligence.ability_score.score<5:
+            return "Target needs Intelligence 5 or greater"
+        return self.single_recipient_error(scan, selection)
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+        if caster is None or target is None:
+            return event.cancel(status_message="Caster or recipient no longer exists")
+        dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+        effect,_,saved=self.resolve_saving_throw(event,caster=caster,target=target,ability_name="wisdom",dc=dc)
+        if saved or effect.canceled:
+            return effect
+        return self.apply_owned_condition(effect,HideousLaughterEffect(source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,spell_dc=dc))
+
+
+class HeroismEffect(BaseCondition):
+    name: str = "Heroism"
+    description: str = "Fear immunity and five source-owned temporary HP refreshed each turn."
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10,duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    _purge: PreparedConditionRemovals | None = PrivateAttr(default=None)
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Heroism recipient no longer exists")
+        self._purge=prepare_control_removals(target,frozenset({"Frightened"}),event)
+        if self._purge is None:
+            return [],[],[],[],event.cancel(status_message="Existing fear removal was rejected")
+        target.add_condition_immunity_source("Frightened",self.uuid)
+        def refresh(boundary: Event,_: UUID) -> Optional[Event]:
+            self._grant(target,boundary)
+            return None
+        handler=EventHandler(name="Heroism refresh",source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_START,event_phase=EventPhase.EFFECT,event_source_entity_uuid=target.uuid)],event_processor=refresh)
+        target.add_event_handler(handler)
+        return [],[handler.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+    def _grant(self,target: Entity,event: Event) -> None:
+        target.health.add_temporary_hit_points(5,self.source_entity_uuid,parent_event=event.uuid,source_id=f"condition.heroism.{self.uuid}")
+
+    def _commit_application(self,event: Event) -> None:
+        if self._purge is not None: BaseBlock.commit_owned_condition_removals(self._purge)
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None: self._grant(target,event)
+
+    def publish_prepared_application(self) -> None:
+        if self._purge is not None and self._purge.committed_result is not None:
+            BaseBlock.publish_owned_condition_removals(self._purge)
+
+    def _release_owned_runtime_state(self,*,parent_event: Event | None = None) -> None:
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if self._purge is not None and self._purge.committed_result is None:
+            BaseBlock.cancel_owned_condition_removals(self._purge,"Heroism was not committed")
+        if target is not None:
+            target.remove_condition_immunity_source("Frightened",self.uuid)
+            grant=target.health.temporary_hit_points_grant
+            if grant is not None and grant.source_id==f"condition.heroism.{self.uuid}":
+                target.health.clear_temporary_hit_points(parent_event=parent_event.uuid if parent_event else None)
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+
+class Heroism(SpellAction):
+    creates = (*SpellAction.creates, HeroismEffect)
+    name: str = "Heroism"
+    description: str = "Clear and prevent fear; refresh five temporary HP each turn."
+    spell_level: int = 1
+    spell_school: str = "enchantment"
+    target_type: TargetType = TargetType.MULTI_ENTITY
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH,normal=5))
+    valid_target_filter: str = "self_or_allies"
+    include_self: bool = True
+    concentration: bool = True
+    harmful: bool = False
+
+    def get_target_effect_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
+        return spell_condition_profile(self,actor,key="heroism",condition_type=HeroismEffect,beneficial=True,
+            save_ability=None,fact=None,)
+
+    def get_multi_target_count(self) -> Optional[int]:
+        return max(1,self.cast_at_level)
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),HeroismEffect(
+            source_entity_uuid=self.source_entity_uuid,target_entity_uuid=event.target_entity_uuid))
+
+
+class CalmedEffect(BaseCondition):
+    name: str = "Calm Emotions"
+    description: str = "Clear and prevent charm, fear and native rage effects."
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10,duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    _purge: PreparedConditionRemovals | None = PrivateAttr(default=None)
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Calm recipient no longer exists")
+        self._purge=prepare_control_removals(target,frozenset({"Charmed","Frightened","Raging","Frenzied"}),event)
+        if self._purge is None:
+            return [],[],[],[],event.cancel(status_message="Existing control removal was rejected")
+        for name in ("Charmed","Frightened","Raging","Frenzied"):
+            target.add_condition_immunity_source(name,self.uuid)
+        return [],[],[],[],event.phase_to(EventPhase.EFFECT)
+
+    def _commit_application(self,event: Event) -> None:
+        if self._purge is not None: BaseBlock.commit_owned_condition_removals(self._purge)
+
+    def publish_prepared_application(self) -> None:
+        if self._purge is not None and self._purge.committed_result is not None:
+            BaseBlock.publish_owned_condition_removals(self._purge)
+
+    def _release_owned_runtime_state(self,*,parent_event: Event | None = None) -> None:
+        if self._purge is not None and self._purge.committed_result is None:
+            BaseBlock.cancel_owned_condition_removals(self._purge,"Calm was not committed")
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            for name in ("Charmed","Frightened","Raging","Frenzied"):
+                target.remove_condition_immunity_source(name,self.uuid)
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+
+class CalmEmotions(SpellAction):
+    creates = (*SpellAction.creates, CalmedEffect)
+    name: str = "Calm Emotions"
+    description: str = "Humanoids in the area lose charm, fear and rage and cannot regain them."
+    spell_level: int = 2
+    spell_school: str = "enchantment"
+    target_type: TargetType = TargetType.POSITION_AOE
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE,normal=60))
+    valid_target_filter: str = "all"
+    include_self: bool = True
+    concentration: bool = True
+    harmful: bool = False
+
+    def get_target_effect_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
+        return spell_condition_profile(self,actor,key="calm_emotions",condition_type=CalmedEffect,beneficial=True,
+            save_ability=None,fact=None,included=frozenset({CreatureType.HUMANOID.value}),)
+
+    def model_post_init(self,context: Any) -> None:
+        super().model_post_init(context)
+        if self.aoe_shape is None:
+            self.aoe_shape=Sphere(radius_feet=20)
+
+    def _resolve_execution_targets(self):
+        return self._resolve_area_targets() if self.effective_target_type is TargetType.POSITION_AOE else super()._resolve_execution_targets()
+
+    def _apply(self,event: SpellEvent) -> Optional[SpellEvent]:
+        target=Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+        effect=event.phase_to(EventPhase.EFFECT)
+        if target is None or target.creature_type is not CreatureType.HUMANOID:
+            return effect
+        return self.apply_owned_condition(effect,CalmedEffect(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid))
+
+
+class HexQuarry(BaseCondition):
+    name: str = "Hex"
+    description: str = "Chosen ability checks and their skills have disadvantage; saves are unaffected."
+    ability: AbilityName = "strength"
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL,ConditionTag.CURSE})
+
+    def model_post_init(self,context: object) -> None:
+        super().model_post_init(context)
+        self.name=f"Hex:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Hex"
+
+    def _apply(self,event: Event):
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [],[],[],[],event.cancel(status_message="Hex recipient is absent")
+        values=[target.ability_scores.get_ability(self.ability).check_bonus]
+        for skill_name in all_skills:
+            skill=target.skill_set.get_skill(skill_name)
+            if SKILL_TO_ABILITY[skill_name]==self.ability:
+                values.append(skill.skill_bonus)
+        modifiers=[]
+        for value in values:
+            identity=add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name="Hex",value=AdvantageStatus.DISADVANTAGE,
+                source_entity_uuid=target.uuid,target_entity_uuid=self.source_entity_uuid))
+            modifiers.append((value.uuid,identity))
+        return modifiers,[],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+@srd_action_identity(content_id="action.spell.hex.reapply",display_name="Reapply Hex",
+    description="Choose a new quarry after the previous quarry is defeated.",parent_spell_name='Hex',source_page=154,sort_order=3010)
+class ReapplyHex(ReapplyQuarry):
+    name: str = "Reapply Hex"
+    description: str = "Choose a new quarry after the previous quarry is defeated."
+
+
+class HexEffect(QuarrySustain):
+    creates = (HexQuarry, ReapplyHex)
+    name: str = "Hex Sustain"
+    description: str = "Retains the caster's Hex and free reapplication until rest."
+    ability: AbilityName = "strength"
+
+    def create_quarry_condition(self,target: Entity) -> BaseCondition:
+        return HexQuarry(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid,ability=self.ability)
+
+    def _apply(self,event: Event):
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(self.quarry_uuid)
+        if caster is None or target is None or not self.set_quarry(target,event):
+            return [],[],[],[],event.cancel(status_message="Quarry cannot be hexed")
+        handler=install_hit_rider(self,dice_count=1,die_size=6,damage_type=DamageType.NECROTIC,weapon_only=False,quarry=lambda:self.quarry_uuid)
+        action=ReapplyHex(source_entity_uuid=caster.uuid,sustain_uuid=self.uuid,template=True)
+        caster.register_action(action)
+        self.action_uuid=action.uuid
+        return [],[handler.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class Hex(SpellAction):
+    creates = (*SpellAction.creates, HexEffect)
+    name: str = "Hex"
+    description: str = "Attack-roll hits add 1d6 necrotic; chosen ability CHECKS have disadvantage."
+    spell_level: int = 1
+    spell_school: str = "enchantment"
+    target_type: TargetType = TargetType.ENTITY
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.RANGE,normal=60))
+    concentration: bool = True
+    harmful: bool = True
+    ability: AbilityName = "strength"
+    costs: list[Cost] = Field(default_factory=lambda:[Cost(name="Hex",cost_type="bonus_actions",cost=1,
+        evaluator=entity_action_economy_cost_evaluator)])
+
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="ability", value=ability, label=ability.title()),)
+                     for ability in ("strength","dexterity","constitution","intelligence","wisdom","charisma"))
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "ability": selection_facet(selection, "ability")}
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return self.single_recipient_error(scan, selection)
+
+    def _apply(self,event: SpellEvent):
+        if event.target_entity_uuid is None:
+            return event.cancel(status_message="Quarry is absent")
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),HexEffect(
+            source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.source_entity_uuid,
+            quarry_uuid=event.target_entity_uuid,ability=self.ability))
+
+
+class CharmMonsterEffect(AnimalFriendshipEffect):
+    name: str = "Charm Monster"
+    duration: Duration = Field(default_factory=lambda: Duration(duration=600, duration_type=DurationType.ROUNDS))
+
+    def model_post_init(self, context: object) -> None:
+        super().model_post_init(context)
+        self.name = f"Charm Monster:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Charm Monster"
+
+
+class CharmMonster(SpellAction):
+    creates = (*SpellAction.creates, CharmMonsterEffect)
+    name: str = "Charm Monster"
+    description: str = "Charm visible creatures; combat grants save advantage and allied damage ends the charm."
+    spell_level: int = 4
+    spell_school: str = "enchantment"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
+    target_type: TargetType = TargetType.MULTI_ENTITY
+    harmful: bool = True
+    include_self: bool = False
+    allow_same_target: bool = False
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag, ...] = (SavingThrowEffectTag.CHARM,)
+
+    def get_multi_target_count(self) -> int:
+        return 1 + self.get_upcast_bonus()
+
+    def get_target_effect_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None: return None
+        return spell_condition_profile(self, actor, key="charm_monster",
+            condition_type=CharmMonsterEffect, save_ability="wisdom", fact="selected_target.condition.charmed")
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return living_recipients_error(self, scan, selection.target_uuids)
+
+    def _apply(self, event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+        if caster is None or target is None: return event.cancel(status_message="Charm recipient absent")
+        bonus = target.saving_throws.get_saving_throw("wisdom").bonus
+        advantage = None
+        encounter = Encounter.get(target.active_encounter_uuid) if target.active_encounter_uuid is not None else None
+        if encounter is not None and any(
+                target.is_enemy(ally) and (ally.uuid == caster.uuid or caster.is_ally(ally))
+                for ally in (combatant.entity for combatant in encounter.get_alive_combatants())):
+            advantage = add_modifier(bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
+                name="Combat charm save", value=AdvantageStatus.ADVANTAGE,
+                source_entity_uuid=target.uuid, target_entity_uuid=caster.uuid))
+        try:
+            effect, _, saved = self.resolve_saving_throw(event, caster=caster, target=target,
+                ability_name="wisdom", dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
+        finally:
+            if advantage is not None: remove_modifier(bonus, advantage, Channel.SELF_STATIC)
+        if saved or effect.canceled: return effect
+        return self.apply_owned_condition(effect, CharmMonsterEffect(source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid, caster_faction=caster.faction))
+
+
+class IrresistibleDanceEffect(BaseCondition):
+    name: str = "Irresistible Dance"
+    description: str = "Cannot use Actions or move; incoming attacks gain advantage, DEX saves suffer disadvantage."
+    immunity_names: tuple[str, ...] = ("Charmed",)
+    spell_dc: int
+    blocked_action_channels: frozenset[str] = frozenset({"actions"})
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    duration: Duration = Field(default_factory=lambda: Duration(duration=10, duration_type=DurationType.ROUNDS))
+
+    def model_post_init(self, context: object) -> None:
+        super().model_post_init(context)
+        self.name = f"Irresistible Dance:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Irresistible Dance"
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None: return [], [], [], [], event.cancel(status_message="Dancer absent")
+        modifiers = []
+        for value in target.action_economy.speed_values:
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(name=self.name, value=0,
+                source_entity_uuid=target.uuid, target_entity_uuid=self.source_entity_uuid))
+            modifiers.append((value.uuid, ident))
+        for value in (target.equipment.attack_bonus, target.saving_throws.get_saving_throw("dexterity").bonus):
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
+                value=AdvantageStatus.DISADVANTAGE, source_entity_uuid=target.uuid))
+            modifiers.append((value.uuid, ident))
+        value = target.equipment.ac_bonus
+        ident = add_modifier(value, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
+            value=AdvantageStatus.ADVANTAGE, source_entity_uuid=target.uuid))
+        modifiers.append((value.uuid, ident))
+        def recover(boundary: Event, _: UUID):
+            if condition_save(self, target, boundary, "wisdom", self.spell_dc, "spell.irresistible_dance.recovery", (SavingThrowEffectTag.CHARM,)):
+                target.remove_condition_by_uuid(self.uuid, parent_event=boundary)
+            return None
+        handler = EventHandler(name="Dance recovery", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target.uuid)], event_processor=recover)
+        target.add_event_handler(handler)
+        return modifiers, [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT)
+
+
+class IrresistibleDance(SpellAction):
+    creates = (*SpellAction.creates, IrresistibleDanceEffect)
+    name: str = "Irresistible Dance"
+    description: str = "No initial save; dancing blocks Actions/movement until a later Wisdom save."
+    spell_level: int = 6
+    spell_school: str = "enchantment"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
+    target_type: TargetType = TargetType.ENTITY
+    concentration: bool = True
+    harmful: bool = True
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag, ...] = (SavingThrowEffectTag.CHARM,)
+
+    def get_target_effect_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None: return None
+        return spell_condition_profile(self, actor, key="irresistible_dance", condition_type=IrresistibleDanceEffect,
+            fact="selected_target.condition.charmed")
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A living creature that passes the relationship filter, seen and within range."""
+        return living_recipients_error(self, scan, selection.target_uuids)
+
+    def _apply(self, event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None: return event.cancel(status_message="Caster absent")
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT), IrresistibleDanceEffect(
+            source_entity_uuid=caster.uuid, target_entity_uuid=event.target_entity_uuid,
+            spell_dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)))
+
+
+class FeeblemindEffect(BaseCondition):
+    name: str = "Feeblemind"
+    description: str = "INT and CHA become 1; spellcasting and magic item activation are prevented until cured."
+    spell_dc: int
+    blocks_spellcasting: bool = True
+    blocks_magic_item_activation: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL, ConditionTag.ABILITY_SCORE_REDUCTION})
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.PERMANENT))
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None: return [], [], [], [], event.cancel(status_message="Feeblemind recipient absent")
+        modifiers = []
+        for ability in ("intelligence", "charisma"):
+            value = target.ability_scores.get_ability(ability).ability_score
+            modifier = NumericalModifier(name=self.name, value=1, source_entity_uuid=target.uuid,
+                contribution_owner_uuid=self.uuid)
+            add_modifier(value, Channel.FIXED, Kind.VALUE, modifier)
+            modifiers.append((value.uuid, modifier.uuid))
+        def cure(incoming: Event, _: UUID):
+            if (isinstance(incoming, ActionApplicationCommittedEvent) and not incoming.canceled
+                    and incoming.spell_id == "spell.heal" and self.applied and self.contributions_active()):
+                target.remove_condition_by_uuid(self.uuid, parent_event=incoming)
+            return None
+        handler = EventHandler(name="Feeblemind accepted Heal cure", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.ACTION_APPLICATION_COMMITTED,event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=target.uuid)], event_processor=cure)
+        target.add_event_handler(handler)
+        return modifiers, [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT)
+
+    def recover_after_thirty_days(self, adjudication: Event) -> bool:
+        """GM/native time adjudication, deliberately absent from player actions."""
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None or not self.applied: return False
+        if condition_save(self, target, adjudication, "intelligence", self.spell_dc, "spell.feeblemind.recovery"):
+            return target.remove_condition_by_uuid(self.uuid, parent_event=adjudication)
+        return False
+
+
+class Feeblemind(SpellAction):
+    creates = (*SpellAction.creates, FeeblemindEffect)
+    name: str = "Feeblemind"
+    description: str = "4d6 psychic damage; failed INT save reduces INT/CHA to 1 and prevents casting or magic item activation."
+    spell_level: int = 8
+    spell_school: str = "enchantment"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
+    target_type: TargetType = TargetType.ENTITY
+    harmful: bool = True
+
+    def get_target_effect_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
+        return spell_condition_profile(self, actor, key="feeblemind", condition_type=FeeblemindEffect,
+            save_ability="intelligence")
+
+    def get_outcome_profile(self):
+        return ActionOutcomeProfile(resolution=OutcomeResolution.AUTOMATIC,
+            damage_rolls=[DamageRollProfile(dice_count=4, die_size=6, flat_bonus=0, damage_type=DamageType.PSYCHIC.value)])
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """A living creature that passes the relationship filter, seen and within range."""
+        return living_recipients_error(self, scan, selection.target_uuids)
+
+    def _apply(self, event: SpellEvent):
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+        if caster is None or target is None: return event.cancel(status_message="Recipient absent")
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+        effect, _, saved = self.resolve_saving_throw(event, caster=caster, target=target, ability_name="intelligence", dc=dc)
+        if effect.canceled: return effect
+        damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, dice_numbers=4,
+            damage_dice=6, damage_type=DamageType.PSYCHIC,
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid, base=0)))
+        effect = deliver_spell_damage(effect, target, damage, roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0))
+        if effect.canceled or saved or not target.is_active: return effect
+        return self.apply_owned_condition(effect, FeeblemindEffect(source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid, spell_dc=dc))

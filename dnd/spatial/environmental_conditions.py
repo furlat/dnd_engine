@@ -6,9 +6,10 @@ from uuid import UUID, uuid4
 from pydantic import Field
 
 from dnd.core.base_block import BaseBlock, LightLevel
-from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, Duration
 from dnd.core.condition_types import (
     ConditionCategory,
+    ConditionRemovalTrigger,
     ConditionTag,
     DurationType,
     HazardFilter,
@@ -33,9 +34,9 @@ from dnd.core.events import (
     SpatialEffectInteractionEvent,
     Trigger,
 )
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts
 from dnd.conditions import Poisoned, Prone
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.entity import Entity
@@ -48,7 +49,7 @@ from dnd.spatial.transitions import bind_spatial_interactions
 from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
 from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.traps import TrapConditionPayload, TrapDamage, TrapPayload, TrapState
-from dnd.types.world import OccupancyLayer
+from dnd.types.world import OccupancyLayer, SpatialChannel
 from dnd.types.spatial_effects import (
     SpatialEffectBlockingPolicy,
     SpatialEffectChangeOperation,
@@ -184,6 +185,11 @@ FIRE_SURFACE_TRANSITIONS = (
     ),
 )
 
+DRY_TRANSITION = SpatialEffectTransitionDefinition(
+    operation=SpatialEffectInteractionOperation.DRY,
+    action=SpatialEffectTransitionAction.REMOVE_AFFECTED,
+)
+
 WET_SURFACE_TRANSITIONS = (
     SpatialEffectTransitionDefinition(
         operation=SpatialEffectInteractionOperation.FREEZE,
@@ -206,6 +212,7 @@ WET_SURFACE_TRANSITIONS = (
 )
 
 ICE_SURFACE_TRANSITIONS = (
+    DRY_TRANSITION,
     SpatialEffectTransitionDefinition(
         operation=SpatialEffectInteractionOperation.VAPORIZE,
         action=(
@@ -293,11 +300,10 @@ class FireSurface(AreaCondition):
 
     def _deal_damage(self, entity: Entity, parent_event: Event) -> None:
         """Deal this surface's typed entry or turn-start damage."""
-        damage_bonus = ModifiableValue.create(
+        damage_bonus = ModifiableValue(
             source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=entity.uuid,
-            base_value=0,
-            value_name="Fire Surface Damage",
+            base=0,
+            name="Fire Surface Damage",
         )
         damage = Damage(
             name="Fire Surface",
@@ -305,7 +311,7 @@ class FireSurface(AreaCondition):
             target_entity_uuid=entity.uuid,
             damage_dice=4,
             dice_numbers=2,
-            damage_bonus=damage_bonus,
+            damage_bonus=parts(damage_bonus),
             damage_type=DamageType.FIRE,
         )
         damage_roll = damage.get_dice(AttackOutcome.HIT).roll
@@ -370,7 +376,7 @@ class FireSurface(AreaCondition):
             trigger_conditions=[
                 Trigger(
                     event_type=EventType.TURN_START,
-                    event_phase=EventPhase.EFFECT,
+                    event_phase=EventPhase.EXECUTION,
                 ),
             ],
             event_processor=damage_occupant,
@@ -419,8 +425,7 @@ class Wet(BaseCondition):
             (DamageType.LIGHTNING, ResistanceStatus.VULNERABILITY),
         ):
             modifier_uuid = (
-                target.health.damage_reduction.self_static
-                .add_resistance_modifier(ResistanceModifier(
+                add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
                     name=f"Wet {damage_type.value}",
                     source_entity_uuid=self.source_entity_uuid,
                     target_entity_uuid=target.uuid,
@@ -437,11 +442,32 @@ class Wet(BaseCondition):
             update={"condition": self},
             status_message=f"Applied Wet to {target.name}",
         )
-        return modifiers, [], [], [], effect
+        def reject_incompatible(incoming: Event, _: UUID):
+            if (isinstance(incoming, ConditionApplicationEvent) and not incoming.canceled
+                    and self.applied and self.contributions_active()
+                    and incoming.condition.blocked_while_wet):
+                return incoming.cancel(status_message="Active Wet prevents this condition")
+            return None
+
+        handler = EventHandler(name="Wet condition admission", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.CONDITION_APPLICATION,
+                event_phase=EventPhase.DECLARATION, event_target_entity_uuid=target.uuid)],
+            event_processor=reject_incompatible)
+        target.add_event_handler(handler)
+        return modifiers, [handler.uuid], [], [], effect
+
+
+    def on_membership_changed(self,event: Event) -> None:
+        target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if self.applied and target is not None:
+            for condition in tuple(target.active_conditions_by_uuid.values()):
+                if ConditionRemovalTrigger.WET_APPLICATION in condition.removal_triggers:
+                    target.remove_condition_by_uuid(condition.uuid,parent_event=event)
 
 
 class WetSurfaceMembership(SpatialConditionMembershipSource):
     """Exact Wet lease contributed by one water-bearing condition."""
+    creates = (Wet,)
 
     def create_manifestation(self, target: Entity) -> Wet:
         return Wet(
@@ -498,6 +524,15 @@ class WetSurfaceMembership(SpatialConditionMembershipSource):
 
 class WetAreaCondition(MembershipAreaCondition):
     """Continuous Wet membership shared by water-bearing conditions."""
+    creates = (WetSurfaceMembership,)
+
+    def _apply(self, execution_event: Event):
+        modifiers, handlers, children, spatial, effect = super()._apply(execution_event)
+        if effect is not None and not effect.canceled:
+            handler = bind_spatial_interactions(condition=self, transitions=(DRY_TRANSITION,))
+            spatial.append(handler.uuid)
+        return modifiers, handlers, children, spatial, effect
+
 
     membership_tags: frozenset[ConditionTag] = frozenset()
     membership_trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
@@ -562,6 +597,7 @@ class WetSurface(WetAreaCondition):
 
 class IceSurface(AreaCondition):
     """Frozen difficult ground with an authored Dexterity slip save."""
+    creates = (Prone,)
 
     name: str = Field(default="Ice Surface")
     has_visible_presence: bool = True
@@ -712,11 +748,10 @@ class ElectrifiedWater(WetAreaCondition):
     hazard_filter: HazardFilter = Field(default=HazardFilter.ALL)
 
     def _deal_damage(self, entity: Entity, parent_event: Event) -> None:
-        damage_bonus = ModifiableValue.create(
+        damage_bonus = ModifiableValue(
             source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=entity.uuid,
-            base_value=0,
-            value_name="Electrified Water Damage",
+            base=0,
+            name="Electrified Water Damage",
         )
         damage = Damage(
             name="Electrified Water",
@@ -724,7 +759,7 @@ class ElectrifiedWater(WetAreaCondition):
             target_entity_uuid=entity.uuid,
             damage_dice=4,
             dice_numbers=1,
-            damage_bonus=damage_bonus,
+            damage_bonus=parts(damage_bonus),
             damage_type=DamageType.LIGHTNING,
         )
         damage_roll = damage.get_dice(AttackOutcome.HIT).roll
@@ -789,7 +824,7 @@ class ElectrifiedWater(WetAreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT,
+                event_phase=EventPhase.EXECUTION,
             )],
             event_processor=damage,
         )
@@ -877,6 +912,7 @@ OIL_SURFACE_TRANSITIONS = (
 
 class OilSurface(AreaCondition):
     """Persistent slippery oil transformed directly by ignition."""
+    creates = (FireSurface,)
 
     name: str = Field(default="Oil Surface")
     has_visible_presence: bool = True
@@ -976,8 +1012,9 @@ def build_environmental_replacement(
 
 class SpikeTrap(SpatialCondition):
     """One persistent spike mechanism, its footprint and authored payload."""
+    creates = (Poisoned,)
 
-    crossing_channels: ClassVar[frozenset[str] | None] = frozenset()
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
 
     name: str = Field(default="Spike Trap")
     description: str = Field(
@@ -1018,6 +1055,9 @@ class SpikeTrap(SpatialCondition):
         return bool(senses is not None and self.uuid in senses.spatial_effects) or super().is_hazard_perceived_by(
             requesting_entity_uuid,
         )
+
+    def spatial_channels(self) -> frozenset[SpatialChannel]:
+        return super().spatial_channels() | {SpatialChannel.MOVEMENT}
 
     def is_hazardous_for(
         self, entity_uuid: Optional[UUID] = None, *,
@@ -1084,16 +1124,16 @@ class SpikeTrap(SpatialCondition):
         if not self.affects_occupancy_layer(entity.get_occupancy_layer()):
             return
         for component in self.payload.damages:
-            bonus = ModifiableValue.create(
+            bonus = ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=entity.uuid, base_value=0,
-                value_name="Spike Trap Damage",
+                base=0,
+                name="Spike Trap Damage",
             )
             damage = Damage(
                 name=self.name, source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=entity.uuid,
                 damage_dice=component.dice_sides, dice_numbers=component.dice_count,
-                damage_bonus=bonus, damage_type=component.damage_type,
+                damage_bonus=parts(bonus), damage_type=component.damage_type,
             )
             roll = damage.get_dice(AttackOutcome.HIT).roll
             entity.receive_damage(

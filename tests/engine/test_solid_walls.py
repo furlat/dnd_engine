@@ -4,7 +4,10 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions_functional import get_available_actions, execute_available_action
+from dnd.actions_functional import get_available_actions, execute_available_action, setup_standard_actions
+from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
+from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import (
     SOLID_WALL_MATERIALS, build_cliff_face, build_directional_wall,
@@ -12,17 +15,17 @@ from dnd.content.items.environment_item_builders import (
 from dnd.content.items.window_builders import build_window_component
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
+from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, ItemDestructionEvent
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemIntegrity
+from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.game import Game
 from dnd.types.world import CardinalDirection
 from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.world_authoring import set_world_tile_elevation
 from dnd.world_facts import WorldFacts, apply_world_fact
-from tests.game.door_destruction_scenarios import review_actor
 
 
 @pytest.fixture
@@ -32,6 +35,23 @@ def arena():
     yield game
     game.close()
     reset_engine_runtime()
+
+
+def review_actor(game: Game, name: str, position: tuple[int, int], *, strength: int = 10) -> Entity:
+    """Compose the clothed sword bearer from the retired door-destruction scenarios."""
+    actor = Entity.create(uuid4(), name, config=EntityConfig(position=position, faction="heroes",
+        ability_scores=AbilityScoresConfig(strength=AbilityConfig(ability_score=strength)),
+        health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=8, mode="maximums")])))
+    setup_standard_actions(actor)
+    install_body_response(actor, BLOOD_BODY_RESPONSE)
+    actor.install_initial_items((
+        (build_authored_item("weapon.longsword", actor.uuid), WeaponSlot.MELEE_MAIN),
+        (build_authored_item("apparel.robes.red_mage", actor.uuid), BodyPart.BODY),
+        (build_authored_item("apparel.cloth_shoes.red", actor.uuid), BodyPart.FEET),
+    ))
+    actor.compose_entity()
+    game.deploy_entity(actor, position)
+    return actor
 
 
 @pytest.mark.parametrize("item_id", ("environment.directional_wall", *SOLID_WALL_MATERIALS))

@@ -19,7 +19,7 @@ from dnd.core.base_tiles import (
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import get_map
-from dnd.types.senses import OpticalObscurement
+from dnd.types.senses import OBSCUREMENT_SETS, OpticalObscurement
 from dnd.entity import Entity
 from dnd.spells.conjuration import (
     Cloudkill,
@@ -41,6 +41,8 @@ from tests.manual.spell_regression_support import (
     force_save_result,
     reset_spell_regression_arena,
 )
+from tests.engine.support import search_tables
+from dnd.core.navigation import route_count
 
 
 def test_movement_mode_pathfinding_preserves_terrain_specific_routes() -> None:
@@ -53,14 +55,14 @@ def test_movement_mode_pathfinding_preserves_terrain_specific_routes() -> None:
         tile=difficult_terrain_factory((2, 0)),
     )
 
-    walking_distances, walking_paths = grid.compute_paths(
+    walking_distances, walking_paths = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
-    )
-    flying_distances, flying_paths = grid.compute_paths(
+    ))
+    flying_distances, flying_paths = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.FLYING,
-    )
+    ))
 
     assert walking_distances[(4, 0)] == 5
     assert flying_distances[(4, 0)] == 4
@@ -77,10 +79,10 @@ def test_movement_mode_pathfinding_preserves_terrain_specific_routes() -> None:
     grid = get_map()
     grid.set_tile(1, 0, tile=wall_factory((1, 0)))
 
-    wall_flying_distances, _ = grid.compute_paths(
+    wall_flying_distances, _ = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.FLYING,
-    )
+    ))
 
     assert (2, 0) not in wall_flying_distances
 
@@ -89,29 +91,29 @@ def test_movement_mode_pathfinding_preserves_terrain_specific_routes() -> None:
     for x in range(3):
         grid.set_tile(x, 0, tile=water_factory((x, 0)))
 
-    swimming_distances, swimming_paths = grid.compute_paths(
+    swimming_distances, swimming_paths = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.SWIMMING,
-    )
+    ))
 
     assert swimming_distances[(2, 0)] == 2
     assert swimming_paths[(2, 0)] == [(0, 0), (1, 0), (2, 0)]
     assert (3, 0) not in swimming_distances
 
-    land_swimming_distances, _ = grid.compute_paths(
+    land_swimming_distances, _ = search_tables(grid.compute_paths(
         (3, 0),
         movement_mode=MovementMode.SWIMMING,
-    )
+    ))
     assert land_swimming_distances == {(3, 0): 0}
 
     reset_spell_regression_arena(3, 1)
     grid = get_map()
     grid.set_tile(1, 0, tile=water_factory((1, 0)))
 
-    water_walking_distances, _ = grid.compute_paths(
+    water_walking_distances, _ = search_tables(grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
-    )
+    ))
 
     assert (2, 0) not in water_walking_distances
 
@@ -142,7 +144,7 @@ def test_hazard_filters_and_factions_preserve_exact_requester_semantics() -> Non
     )
     neutral.faction = None
     Entity.update_all_entities_senses(max_distance=40)
-    assert caster.senses.safe_paths == {}
+    assert route_count(caster.senses.safe_paths) == 0
     tile = grid.get_tile(5, 2)
     assert tile is not None
 
@@ -341,7 +343,7 @@ def test_cloudkill_preserves_initial_entry_turn_move_and_cleanup_rules() -> None
     assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert (
         OpticalObscurement.HEAVY
-        in get_map().get_optical_obscurements_at((10, 7))
+        in OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at((10, 7))]
     )
 
     entrant_hp = get_hp(entrant)
@@ -806,11 +808,11 @@ def test_incendiary_cloud_executes_initial_entry_turn_move_and_cleanup() -> None
     assert old_only_tile is not None
     assert added_tile is not None
     assert old_only_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(old_only_position) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(old_only_position)] == {
         OpticalObscurement.HEAVY
     }
     assert added_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(added_position) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(added_position)] == set()
 
     entrant = create_spell_regression_actor(
         "Incendiary Entrant",
@@ -833,9 +835,9 @@ def test_incendiary_cloud_executes_initial_entry_turn_move_and_cleanup() -> None
     assert old_only_position not in zone.affected_positions
     assert added_position in zone.affected_positions
     assert old_only_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(old_only_position) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(old_only_position)] == set()
     assert added_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(added_position) == {
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(added_position)] == {
         OpticalObscurement.HEAVY
     }
 
@@ -843,7 +845,7 @@ def test_incendiary_cloud_executes_initial_entry_turn_move_and_cleanup() -> None
 
     assert zone not in get_map().get_spatial_conditions()
     assert added_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert get_map().get_optical_obscurements_at(added_position) == set()
+    assert OBSCUREMENT_SETS[get_map().optical_obscurement_bits_at(added_position)] == set()
     Entity.update_entity_position(entrant, (2, 2))
     hp_after_cleanup = get_hp(entrant)
     Entity.update_entity_position(entrant, zone.position)

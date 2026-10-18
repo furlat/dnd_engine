@@ -32,12 +32,14 @@ from devtools.player_server_acceptance.http_performance import summary
 from devtools.player_server_acceptance.movement_scaling_fixture import (
     END, LEVELS, MOVER, SIZES, START, configuration, mutate_remote, prepare)
 from dnd.blocks.sensory import SpatialSensesSystem, spatial_senses_system
+from dnd.core.view import visible_count
+from dnd.core.cells import mask_count, mask_positions, values_items
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, DiceRoll
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.encounter import Encounter
 from dnd.player.reduction import reduce_initialization, reduce_operation
 from server import connection as worker_connection, worker
@@ -61,20 +63,21 @@ def census(runtime):
         'current_indexes': {
             'support_column_chunks': len(grid._support_columns),
             'contact_chunks': len(grid._contact_candidate_cells),
+            'observer_fields': len(spatial_senses_system.fields),
             'fov_origins': len(grid._fov_cache),
             'path_queries': len(grid._path_cache),
         },
         'seats': len(runtime.audiences),
         'audiences': {seat: {'remembered_tiles': len(owner.projection.remembered.tiles),
             'remembered_objects': len(owner.projection.remembered.objects),
-            'seen': len(owner.latest.senses.seen) if owner.latest.senses else 0,
-            'visible': len(owner.latest.senses.visible) if owner.latest.senses else 0,
+            'seen': mask_count(owner.projection.remembered.senses.seen) if owner.projection.remembered.senses else 0,
+            'visible': mask_count(owner.projection.remembered.senses.visible) if owner.projection.remembered.senses else 0,
             'fields': {runtime.session.game.entities[identity].name: {
-                'max_distance': senses._field.max_distance if senses._field else None,
-                'optical_route_cells': len(senses._field.optical_routes) if senses._field else 0,
-                'visible_cells': len(senses.visible)}
+                'optical_route_cells': int(field.routes.rows.size) if field is not None else 0,
+                'visible_cells': visible_count(senses.cells)}
                 for identity in runtime.session.seats[seat].observers
-                if (senses := spatial_senses_system.senses_by_observer.get(identity)) is not None}}
+                if (senses := spatial_senses_system.senses_by_observer.get(identity)) is not None
+                for field in (spatial_senses_system.fields.get(identity),)}}
             for seat, owner in runtime.audiences.items()}}
 
 
@@ -127,7 +130,7 @@ def heap_census(runtime):
             EventQueue._events_by_type, EventQueue._events_by_phase,
             EventQueue._events_by_source, EventQueue._events_by_target],
         'native_current': [get_map(), BaseBlock._registry, BaseObject._registry,
-            BaseValue._registry, Dice._registry, DiceRoll._registry, runtime.session],
+            ModifiableValue._registry, Dice._registry, DiceRoll._registry, runtime.session],
         'audience_current': [runtime.catalog, *runtime.audiences.values()],
     }
     reached, summaries = {}, {}
@@ -153,6 +156,7 @@ def heap_census(runtime):
             ('event_models', event), ('model_dicts', event.__dict__),
             ('model_field_sets', event.__pydantic_fields_set__),
             ('model_private_dicts', event.__pydantic_private__),
+            # Storage audit: the lists each version holds (later children live in the queue's index).
             ('children_events', event.children_events),
             ('lineage_children_events', event.lineage_children_events),
             ('children_lineages', event.children_lineages),
@@ -190,7 +194,7 @@ def heap_census(runtime):
         'tracked_outside_owner_union': len(collectible - union),
         'native_event_metadata': {name: row for name, (_, row) in metadata.items()},
         'registries': {'blocks': len(BaseBlock._registry),
-            'objects': len(BaseObject._registry), 'values': len(BaseValue._registry),
+            'objects': len(BaseObject._registry), 'values': len(ModifiableValue._registry),
             'dice': len(Dice._registry), 'rolls': len(DiceRoll._registry)},
         'elapsed_ms': (perf_counter_ns() - started) / 1e6,
     }
@@ -231,23 +235,13 @@ def run_worker(args):
         return result
 
     original_candidates = EventQueue._event_trigger_candidates
-    original_spatial = EventQueue._get_handlers_for_spatial_event
-    original_observers = SpatialSensesSystem.candidate_observer_uuids
-    original_optics = GridMap.capture_optical_obscurements
+    original_observers = SpatialSensesSystem.selected_observers
+    original_optics = GridMap.obscurement_layers
 
-    def candidates(cls, event, *, include_simple=True):
+    def candidates(cls, event, *, include_simple):
         result = original_candidates(event, include_simple=include_simple)
         if profile is not None:
             work_counts['handler_index_candidates_visited'] += len(result)
-        return result
-
-    def spatial(cls, event, position):
-        if profile is not None:
-            work_counts['spatial_handler_index_entries'] += len(
-                cls._spatial_handlers_by_position[(event.event_type, event.phase)].get(position, ()))
-        result = original_spatial(event, position)
-        if profile is not None:
-            work_counts['spatial_handlers_admitted_before_position_dedup'] += len(result)
         return result
 
     def observers(owner, event):
@@ -256,11 +250,11 @@ def run_worker(args):
             work_counts['candidate_observers'] += len(result)
         return result
 
-    def optics(owner, origin, radius):
-        result = original_optics(owner, origin, radius)
+    def optics(owner):
+        result = original_optics(owner)
         if profile is not None:
-            work_counts['optical_contributing_cells'] += len(result)
-            work_counts['optical_contributing_owners'] += sum(map(len, result.values()))
+            work_counts['optical_contributing_owners'] += len(result)
+            work_counts['optical_contributing_cells'] += sum(int(layer.values.astype(bool).sum()) for _, layer in result)
         return result
 
     def create(*arguments, **keywords):
@@ -334,9 +328,8 @@ def run_worker(args):
             patches.enter_context(patch.object(Encounter, 'advance_one_controller_action_boundary', advance_boundary))
         if args.diagnostic:
             patches.enter_context(patch.object(EventQueue, '_event_trigger_candidates', classmethod(candidates)))
-            patches.enter_context(patch.object(EventQueue, '_get_handlers_for_spatial_event', classmethod(spatial)))
-            patches.enter_context(patch.object(SpatialSensesSystem, 'candidate_observer_uuids', observers))
-            patches.enter_context(patch.object(GridMap, 'capture_optical_obscurements', optics))
+            patches.enter_context(patch.object(SpatialSensesSystem, 'selected_observers', observers))
+            patches.enter_context(patch.object(GridMap, 'obscurement_layers', optics))
         if args.gc_timing:
             gc.callbacks.append(gc_timing)
         try:
@@ -381,20 +374,20 @@ def local_result(state):
     return {'actors': sorted((actor.name, actor.last_visual_position, actor.normal_hp,
             actor.life_state.value, actor.present)
             for actor in state.actors.values() if local(actor.last_visual_position)),
-        'visible': sorted(position for position in senses.visible if local(position)) if senses else [],
-        'light': sorted((position, int(value)) for position, value in senses.effective_light_levels.items()
-            if local(position)) if senses else [],
+        'visible': [position for position in mask_positions(senses.visible) if local(position)] if senses else [],
+        'light': [(position, value) for position, value in values_items(senses.effective_light_levels)
+            if local(position)] if senses else [],
         'objects': sorted((value.item.name, tuple(value.placement.positions))
             for value in state.objects.values() if any(local(position) for position in value.placement.positions)),
-        'local_seen': sorted(position for position in senses.seen if local(position)) if senses else [],
+        'local_seen': [position for position in mask_positions(senses.seen) if local(position)] if senses else [],
         'entity_contacts': sorted((state.actors[identity].name, contact.position, contact.visual,
             tuple(mode.value for mode in contact.special_senses)) for identity, contact in senses.entities.items()
             if local(contact.position)) if senses else [],
         'object_contacts': sorted((state.objects[identity].item.name, contact.position, contact.visual,
             tuple(mode.value for mode in contact.special_senses)) for identity, contact in senses.objects.items()
             if local(contact.position) and identity in state.objects) if senses else [],
-        'hazards': sorted((position, hazardous) for position, hazardous in senses.hazardous_cells.items()
-            if local(position)) if senses else [],
+        'hazards': [(position, bool(hazardous)) for position, hazardous in values_items(senses.hazardous_cells)
+            if local(position)] if senses else [],
         'spatial_effects': [effect.model_dump(mode='json', exclude={'condition_uuid', 'source_entity_uuid'})
             for effect in senses.spatial_effects.values()
             if any(local(position) for position in effect.positions)] if senses else []}
@@ -405,9 +398,8 @@ def operation_shape(packet):
     def log_value(entry):
         if entry is None:
             return None
-        return {**{key: entry[key] for key in ('entry_type', 'source_name', 'target_name',
-            'compact', 'verbose', 'detailed', 'success')},
-            'sub_entries': [log_value(child) for child in entry['sub_entries']]}
+        return {key: entry[key] for key in ('entry_type', 'source_name', 'target_name',
+            'compact', 'verbose', 'detailed', 'success')}
     if packet['kind'] == 'initialization':
         return {'kind': 'initialization'}
     return {'kind': packet['kind'],
@@ -604,10 +596,10 @@ async def record(args, settings, url):
             while json.loads((args.output / 'census.json').read_text())['events'] < initial['events'] + args.amount:
                 await command()
         if args.axis == 'memory':
-            initial_seen = len(states[mover_seat].senses.seen)
+            initial_seen = mask_count(states[mover_seat].senses.seen)
             await move_to((7, 6))
             destination_y = 12
-            while len(states[mover_seat].senses.seen) < initial_seen + args.amount:
+            while mask_count(states[mover_seat].senses.seen) < initial_seen + args.amount:
                 destination_y += 6
                 if destination_y >= 1500:
                     raise RuntimeError('Authored exploration corridor exhausted before the requested memory count')

@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 from dnd.core.content.encounters import EncounterRecipe
 from dnd.player.audience import PlayerAudience, SeatAssignment
+from dnd.content.characters.build_types import CharacterBuild
 from server.protocol import BoundaryState, ChoicesRequest, CommandRequest, PlayerCursor, PreviewRequest, RejectionReason
 
 
@@ -16,6 +17,7 @@ class Start(BaseModel):
     recipe: EncounterRecipe | None
     assignments: tuple[SeatAssignment, ...] | None
     test_seed: int | None
+    player_builds: tuple[CharacterBuild, ...] | None = None
 
 
 class Advance(BaseModel):

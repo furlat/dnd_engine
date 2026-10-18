@@ -16,6 +16,11 @@ from types import MappingProxyType
 import dnd.classes.barbarian as barbarian
 import dnd.classes.feats as feats
 import dnd.classes.fighter as fighter
+import dnd.classes.divine as divine
+import dnd.classes.divine_intervention as intervention
+import dnd.items.divine_rewards as divine_rewards
+import dnd.classes.paladin as paladin
+import dnd.classes.wizard as wizard
 import dnd.classes.rage as rage
 import dnd.conditions as conditions
 import dnd.extensions.aegis_spark as aegis_spark
@@ -30,7 +35,12 @@ import dnd.spatial.jaws as jaws
 import dnd.spells.divination as divination
 import dnd.spells.enchantment as enchantment
 import dnd.spells.evocation as evocation
+import dnd.items.created_items as created_items
+import dnd.monsters.spell_summons as spell_summons
+import dnd.monsters.spell_summon_actions as summon_actions
+import dnd.items.spell_payloads as payloads
 import dnd.spells.illusion as illusion
+import dnd.spells.surfaces as surfaces
 import dnd.spells.necromancy as necromancy
 import dnd.spells.transmutation as transmutation
 import dnd.spells.walls as walls
@@ -97,11 +107,12 @@ def _srd(
     content_id: str,
     *,
     dependencies: tuple[ContentDependency, ...] = (),
+    srd_version: str = "5.1",
 ) -> ConditionBehaviorIdentitySpec:
     return ConditionBehaviorIdentitySpec(
         condition_type=condition_type,
         definition_kind=definition_kind,
-        pack_id=SRD_5_1_PACK_ID,
+        pack_id=f"content.srd_{srd_version.replace('.', '_')}_cc",
         content_id=content_id,
         dependencies=dependencies,
     )
@@ -127,6 +138,31 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     ConditionBehaviorIdentitySpec,
     ...,
 ] = (
+    _srd(intervention.InterventionUseOwner,ContentDefinitionKind.CONDITION,"condition.class.cleric.intervention_use"),
+    _srd(divine_rewards.HealingIncenseZone,ContentDefinitionKind.CONDITION,"spatial_effect.item.devotees_mace.healing_incense"),
+    _srd(paladin.CleansingTouchCapacity, ContentDefinitionKind.CONDITION,"condition.class.paladin.cleansing_capacity"),
+    _srd(paladin.DivineSenseEffect, ContentDefinitionKind.CONDITION, "condition.class.paladin.divine_sense"),
+    _srd(paladin.PaladinAuraBenefit, ContentDefinitionKind.CONDITION, "condition.class.paladin.aura_benefit"),
+    _srd(paladin.PaladinAuraMembership, ContentDefinitionKind.CONDITION, "condition.class.paladin.aura_membership"),
+    _srd(paladin.PaladinAuraZone, ContentDefinitionKind.CONDITION, "spatial_effect.class.paladin.aura"),
+    _srd(paladin.PaladinAuraRoot, ContentDefinitionKind.CONDITION, "condition.class.paladin.aura_owner"),
+    _srd(paladin.SacredWeaponEffect, ContentDefinitionKind.CONDITION, "condition.class.paladin.sacred_weapon"),
+    _srd(paladin.PurityOfSpirit, ContentDefinitionKind.CONDITION, "condition.class.paladin.purity_of_spirit"),
+    _srd(paladin.HolyNimbusEffect, ContentDefinitionKind.CONDITION, "condition.class.paladin.holy_nimbus"),
+    _srd(divine.ClassFeatureLifetime, ContentDefinitionKind.CONDITION, "condition.class.feature_lifetime"),
+    _srd(wizard.WizardRecoveryState, ContentDefinitionKind.CONDITION, "condition.class.wizard.recovery_state"),
+    _srd(divine.Turned, ContentDefinitionKind.CONDITION, "condition.class.divine.turned"),
+    *tuple(_srd(kind,ContentDefinitionKind.CONDITION,identity) for kind,identity in summon_actions.SUMMON_CONDITION_IDENTITIES),
+    _srd(payloads.SpellPayloadLifetime,ContentDefinitionKind.CONDITION,"condition.spell.payload_lifetime"),
+    _srd(wall_constructions.ForcecageZone,ContentDefinitionKind.CONDITION,"spatial_effect.spell.forcecage"),
+    _srd(summoning_conditions.IndependentSummonOwner,ContentDefinitionKind.CONDITION,"condition.spell.independent_summon_owner"),
+    _srd(illusion.PhantasmalKillerEffect, ContentDefinitionKind.CONDITION, "condition.spell.phantasmal_killer"),
+    _srd(illusion.WeirdEffect, ContentDefinitionKind.CONDITION, "condition.spell.weird"),
+    _srd(transmutation.FleshToStoneEffect, ContentDefinitionKind.CONDITION, "condition.spell.flesh_to_stone.stages"),
+    _srd(transmutation.FleshToStonePetrified, ContentDefinitionKind.CONDITION, "condition.spell.flesh_to_stone.petrified"),
+    ConditionBehaviorIdentitySpec(evocation.VitriolicResidue, ContentDefinitionKind.CONDITION, "content.srd_5_2_cc", "condition.spell.vitriolic_sphere.residue"),
+    ConditionBehaviorIdentitySpec(enchantment.CharmMonsterEffect, ContentDefinitionKind.CONDITION, "content.srd_5_2_cc", "condition.spell.charm_monster"),
+    _srd(enchantment.IrresistibleDanceEffect, ContentDefinitionKind.CONDITION, "condition.spell.irresistible_dance"),
     _original(monster_traits.HitSaveRiderFeature, ContentDefinitionKind.TRAIT, "trait.attack_hit_save_rider"),
     _original(monster_traits.KeenPerceptionFeature, ContentDefinitionKind.TRAIT, "trait.keen_perception"),
     _srd(monster_traits.MagicResistance,ContentDefinitionKind.TRAIT,"trait.magic_resistance"),
@@ -286,7 +322,6 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
 
     # SRD spell effects and zones.
     _srd(abjuration.AidEffect, ContentDefinitionKind.CONDITION, "condition.spell.aid"),
-    _srd(abjuration.AntimagicFieldZone, ContentDefinitionKind.CONDITION, "condition.spell.antimagic_field.zone"),
     _srd(abjuration.BanishedCondition, ContentDefinitionKind.CONDITION, "condition.spell.banishment"),
     _srd(abjuration.BeaconOfHopeEffect, ContentDefinitionKind.CONDITION, "condition.spell.beacon_of_hope"),
     _srd(abjuration.DeathWardEffect, ContentDefinitionKind.CONDITION, "condition.spell.death_ward"),
@@ -296,6 +331,20 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(abjuration.ProtectionFromEnergyEffect, ContentDefinitionKind.CONDITION, "condition.spell.protection_from_energy"),
     _srd(abjuration.ProtectionFromPoisonEffect, ContentDefinitionKind.CONDITION, "condition.spell.protection_from_poison"),
     _srd(abjuration.ResistanceEffect, ContentDefinitionKind.CONDITION, "condition.spell.resistance"),
+    _srd(enchantment.FeeblemindEffect, ContentDefinitionKind.CONDITION, "condition.spell.feeblemind", srd_version="5.1"),
+    _srd(divination.ForesightEffect, ContentDefinitionKind.CONDITION, "condition.spell.foresight", srd_version="5.1"),
+    _srd(divination.ForesightOwner, ContentDefinitionKind.CONDITION, "condition.spell.foresight.owner", srd_version="5.1"),
+    _srd(abjuration.HolyAuraEffect, ContentDefinitionKind.CONDITION, "condition.spell.holy_aura", srd_version="5.1"),
+    _srd(abjuration.HolyAuraBlindness, ContentDefinitionKind.CONDITION, "condition.spell.holy_aura.blindness", srd_version="5.1"),
+    _srd(abjuration.AuraOfLifeOwner, ContentDefinitionKind.CONDITION, "condition.spell.aura_of_life.owner", srd_version="5.2"),
+    _srd(abjuration.AuraOfLifeBenefit, ContentDefinitionKind.CONDITION, "condition.spell.aura_of_life.benefit", srd_version="5.2"),
+    _srd(abjuration.AuraOfLifeMembership, ContentDefinitionKind.CONDITION, "condition.spell.aura_of_life.membership", srd_version="5.2"),
+    _srd(abjuration.DispelEvilAndGoodEffect, ContentDefinitionKind.CONDITION, "condition.spell.dispel_evil_and_good", srd_version="5.1"),
+    _srd(wall_fields.BladeBarrierZone, ContentDefinitionKind.CONDITION,"spatial_effect.spell.blade_barrier"),
+    _srd(abjuration.AntilifeShellZone, ContentDefinitionKind.CONDITION,"spatial_effect.spell.antilife_shell"),
+    _srd(abjuration.AuraOfLifeZone, ContentDefinitionKind.CONDITION,"spatial_effect.spell.aura_of_life", srd_version="5.2"),
+    _srd(evocation.ResilientSphereEffect, ContentDefinitionKind.CONDITION,"condition.spell.resilient_sphere"),
+    _srd(evocation.ArcaneSwordEffect, ContentDefinitionKind.CONDITION,"condition.spell.arcane_sword"),
     _srd(abjuration.SanctuaryEffect, ContentDefinitionKind.CONDITION, "condition.spell.sanctuary"),
     _srd(abjuration.ShieldBuff, ContentDefinitionKind.CONDITION, "condition.spell.shield"),
     _srd(abjuration.ShieldOfFaithEffect, ContentDefinitionKind.CONDITION, "condition.spell.shield_of_faith"),
@@ -319,12 +368,58 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(divination.GuidanceEffect, ContentDefinitionKind.CONDITION, "condition.spell.guidance"),
     _srd(divination.SeeInvisibilityEffect, ContentDefinitionKind.CONDITION, "condition.spell.see_invisibility"),
     _srd(divination.TrueSeeingEffect, ContentDefinitionKind.CONDITION, "condition.spell.true_seeing"),
+    _srd(conditions.Revealed, ContentDefinitionKind.CONDITION, "condition.revealed"),
+    _srd(evocation.StarryWispEffect, ContentDefinitionKind.CONDITION, "condition.spell.starry_wisp", srd_version="5.2"),
+    _srd(evocation.FaerieFireEffect, ContentDefinitionKind.CONDITION, "condition.spell.faerie_fire"),
+    _srd(enchantment.DissonantFearEffect, ContentDefinitionKind.CONDITION, "condition.spell.dissonant_whispers", srd_version="5.2"),
+    _srd(enchantment.HideousLaughterEffect, ContentDefinitionKind.CONDITION, "condition.spell.hideous_laughter"),
+    _srd(enchantment.HeroismEffect, ContentDefinitionKind.CONDITION, "condition.spell.heroism"),
+    _srd(enchantment.CalmedEffect, ContentDefinitionKind.CONDITION, "condition.spell.calm_emotions"),
+    _srd(abjuration.ProtectionFromEvilAndGoodEffect, ContentDefinitionKind.CONDITION, "condition.spell.protection_from_evil_and_good"),
+    _srd(abjuration.PassWithoutTraceEffect, ContentDefinitionKind.CONDITION, "condition.spell.pass_without_trace"),
+    _srd(abjuration.PassWithoutTraceBonus, ContentDefinitionKind.CONDITION, "condition.spell.pass_without_trace.bonus"),
+    _srd(abjuration.PassWithoutTraceMembership, ContentDefinitionKind.CONDITION, "condition.spell.pass_without_trace.membership"),
+    _srd(abjuration.PassWithoutTraceZone, ContentDefinitionKind.CONDITION, "spatial_effect.spell.pass_without_trace"),
+    _srd(necromancy.RayOfSicknessPoison,ContentDefinitionKind.CONDITION,"condition.spell.ray_of_sickness.poison",srd_version="5.2"),
+    _srd(spell_summons.FlamingSphereAura,ContentDefinitionKind.CONDITION,"condition.spell.flaming_sphere.aura"),
+    _srd(spell_summons.FlamingSphereZone,ContentDefinitionKind.CONDITION,"spatial_effect.spell.flaming_sphere.aura"),
+    _srd(created_items.FlameBladeLifetime,ContentDefinitionKind.CONDITION,"condition.spell.flame_blade"),
+    _srd(transmutation.GoodberryBatch,ContentDefinitionKind.CONDITION,"condition.spell.goodberry.batch"),
+    _srd(transmutation.DragonsBreathEffect,ContentDefinitionKind.CONDITION,"condition.spell.dragons_breath",srd_version="5.2"),
+    _srd(necromancy.VampiricTouchEffect,ContentDefinitionKind.CONDITION,"condition.spell.vampiric_touch"),
+    _srd(evocation.MoonbeamZone,ContentDefinitionKind.CONDITION,"spatial_effect.spell.moonbeam"),
+    _srd(evocation.MoonbeamEffect,ContentDefinitionKind.CONDITION,"condition.spell.moonbeam"),
+    _srd(transmutation.PlantGrowthZone,ContentDefinitionKind.CONDITION,"spatial_effect.spell.plant_growth"),
+    _srd(transmutation.RainWetEffect,ContentDefinitionKind.CONDITION,"condition.spell.rain_wet"),
+    _srd(surfaces.AcidSurfacePenalty,ContentDefinitionKind.CONDITION,"condition.spell.acid_surface"),
+    _srd(surfaces.AcidSurfaceMembership,ContentDefinitionKind.CONDITION,"condition.spell.acid_surface.membership"),
+    _srd(surfaces.SpellAcidSurface,ContentDefinitionKind.CONDITION,"spatial_effect.spell.acid_surface"),
+    _srd(surfaces.SimpleToxinExposure,ContentDefinitionKind.CONDITION,"condition.spell.simple_toxin"),
+    _srd(surfaces.SimpleToxinSurface,ContentDefinitionKind.CONDITION,"spatial_effect.spell.simple_toxin"),
+    _srd(evocation.AcidArrowEffect,ContentDefinitionKind.CONDITION,"condition.spell.acid_arrow"),
+    _srd(abjuration.GlyphSleepEffect,ContentDefinitionKind.CONDITION,"condition.spell.glyph_of_warding.sleep"),
+    _srd(abjuration.GlyphOfWardingZone,ContentDefinitionKind.CONDITION,"spatial_effect.spell.glyph_of_warding"),
+    _srd(abjuration.GlyphOfWardingEffect,ContentDefinitionKind.CONDITION,"condition.spell.glyph_of_warding"),
+    _srd(evocation.DancingLightsEffect,ContentDefinitionKind.CONDITION,"condition.spell.dancing_lights"),
+    _srd(illusion.PhantasmalForceEffect,ContentDefinitionKind.CONDITION,"condition.spell.phantasmal_force"),
+    _srd(evocation.SearingSmiteEffect,ContentDefinitionKind.CONDITION,"condition.spell.searing_smite"),
+    _srd(conjuration.EnsnaringStrikeEffect,ContentDefinitionKind.CONDITION,"condition.spell.ensnaring_strike"),
+    _srd(evocation.BrandingSmiteEffect,ContentDefinitionKind.CONDITION,"condition.spell.branding_smite"),
+    _srd(transmutation.MagicWeaponEffect,ContentDefinitionKind.CONDITION,"condition.spell.magic_weapon"),
+    _srd(evocation.DivineFavorEffect,ContentDefinitionKind.CONDITION,"condition.spell.divine_favor"),
+    _srd(divination.HuntersMarkQuarry,ContentDefinitionKind.CONDITION,"condition.spell.hunters_mark.quarry"),
+    _srd(divination.HuntersMarkEffect,ContentDefinitionKind.CONDITION,"condition.spell.hunters_mark"),
+    _srd(enchantment.HexQuarry,ContentDefinitionKind.CONDITION,"condition.spell.hex.quarry"),
+    _srd(enchantment.HexEffect,ContentDefinitionKind.CONDITION,"condition.spell.hex"),
+    _srd(enchantment.MockedEffect, ContentDefinitionKind.CONDITION, "condition.spell.vicious_mockery"),
+    _srd(enchantment.AnimalFriendshipEffect, ContentDefinitionKind.CONDITION, "condition.spell.animal_friendship"),
     _srd(enchantment.BaneEffect, ContentDefinitionKind.CONDITION, "condition.spell.bane"),
     _srd(enchantment.BlessEffect, ContentDefinitionKind.CONDITION, "condition.spell.bless"),
     _srd(enchantment.CommandFleeEffect, ContentDefinitionKind.CONDITION, "condition.spell.command.flee"),
     _srd(enchantment.CommandGrovelEffect, ContentDefinitionKind.CONDITION, "condition.spell.command.grovel"),
     _srd(enchantment.CommandHaltEffect, ContentDefinitionKind.CONDITION, "condition.spell.command.halt"),
     _srd(enchantment.HoldMonsterEffect, ContentDefinitionKind.CONDITION, "condition.spell.hold_monster"),
+    _srd(enchantment.CharmPersonEffect, ContentDefinitionKind.CONDITION, "condition.spell.charm_person.effect"),
     _srd(enchantment.HoldPersonEffect, ContentDefinitionKind.CONDITION, "condition.spell.hold_person"),
     _srd(enchantment.PowerWordStunEffect, ContentDefinitionKind.CONDITION, "condition.spell.power_word_stun"),
     _srd(enchantment.SleepEffect, ContentDefinitionKind.CONDITION, "condition.spell.sleep"),
@@ -378,6 +473,7 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     # Original map-authored conditions.
     _original(tile_conditions.SpikeTrapCondition, ContentDefinitionKind.CONDITION, "condition.tile.spike_trap"),
     _original(tile_conditions.ZoneMarkerCondition, ContentDefinitionKind.CONDITION, "condition.tile.zone_marker"),
+    _original(summoning_conditions.SpiritualWeaponOwner,ContentDefinitionKind.CONDITION,"condition.spell.spiritual_weapon.owner"),
     _original(summoning_conditions.Summoned, ContentDefinitionKind.CONDITION, "condition.summoned"),
     _original(summoning_conditions.SummonControl, ContentDefinitionKind.CONDITION, "condition.summon_control"),
 )
@@ -453,11 +549,12 @@ def _provenance(
     spec: ConditionBehaviorIdentitySpec,
     display_name: str,
 ) -> ContentProvenance:
-    if spec.pack_id == SRD_5_1_PACK_ID:
+    if spec.pack_id in (SRD_5_1_PACK_ID,"content.srd_5_2_cc"):
+        version="5.2" if spec.pack_id=="content.srd_5_2_cc" else "5.1"
         return ContentProvenance(
-            primary_source_id="wotc.srd_5_1_cc",
+            primary_source_id=f"wotc.srd_{version.replace('.', '_')}_cc",
             source_anchor=(
-                "SRD 5.1 (CC-BY-4.0), existing rules-behavior inventory: "
+                f"SRD {version} (CC-BY-4.0), rules-behavior inventory: "
                 f"{display_name}"
             ),
             relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,

@@ -1,4 +1,4 @@
-# Single-pass change propagation — analysis and plan (v3.7)
+# Single-pass change propagation — analysis and plan (v3.16)
 
 Date: 2026-10-16. Status: **APPROVED by the human 2026-10-17 (incl. D7c, Q7 EXECUTION convention, temp-HP record-only).** **v3.5 adds available-actions discovery (§14, PD1/PD2) per the human's 2026-10-17 decisions (model approved 2026-10-17).** **v3.6 folds in the §14 antislop/antiOOP reviews and the whole-world-scan redesign. v3.7 folds in the v3.6 re-reviews, the human's answers (D14 approved; Q-W1, Q-W3, Q-W4 decided) and the first P0a measurements; open items are in §14.10.** Implementation is at P0a.
 
@@ -133,6 +133,8 @@ Sensory cost = `Σ settled facts × candidate observers × cost(path)`.
 
 ## 4. Objective physical layer vs subjective perception
 
+*For sensory settlement this section is superseded by §6b PV1: one settlement path over owned grids. The objective-layer rule (owners write; revisions bump at the write) stands.*
+
 **Objective layer.** Owners are GridMap, Tile, Item and Entity fields; no observer
 is involved. Revision bumps and cache invalidation happen **at the write**, so
 objective reads are never stale.
@@ -237,6 +239,8 @@ get hit").
 - Phase-B items run after depth returns to 0, each opening a fresh group.
 - `BaseAction.apply` itself does **not** open a group. Single-target actions and
   each Move step settle per fact through the §4 delta, as today but cheap.
+  **Amended 2026-10-18 (PV1a-3, human: "seems okay"):** an arrival opens a MOVE_STEP group, so
+  a step's facts settle once; nothing settles across steps (progress log, 2026-10-18).
 - Move is `POSITION_PATH` (`actions.py:563`), so OA and attack validation keep
   per-step perception (`reactions.py:50`, `actions.py:261`).
 
@@ -384,6 +388,12 @@ Thunderwave EVO:1606-1607.
 
 **Group settlers.** Owners holding work for a group register a settler on it (GridMap's pending light fact). They run after the pre-completion systems, so the light fact is published even when no sensory reducer is attached (no observers yet).
 
+**Late-completing facts.** A zone's own change completes right after its group (its completion reads settled senses). The group lists it in `completes_after`; systems receive the `OpenGroup` in `settle_group`, and the reducer does not settle those observers a second time for it.
+
+**Anchors.** An attached zone has two bindings: losing its anchor ends it inline (a broken trap cannot strike inside its own group), and following its anchor's moves is phase B.
+
+**Occupancy-free facts.** Zone membership, residue and movement-topology facts take the hazard path even when a pending step has bumped occupancy; the step's own fact settles contacts afterwards (anchored zones no longer force a full recompute mid-step).
+
 **Shared staged loop** (§5.6): `resolve_staged_area` in `dnd/spatial/area_reach.py`, used by Fireball and `payload_blast`. Each stage continues only when one of its own propagation barriers is `DESTROYED`; `BaseItem.destruction_lineage_uuid` (recorded at the accepted breakage) feeds `prerequisite_destruction_lineages`. No event scan, no `propagation_revision`.
 
 **Shared roll.** `Damage.get_dice` returns one `Dice` per (source, packet, outcome) inside a sharing group: area effects, zone install/move, cast loops, round step, and multi-target effects without attack rolls.
@@ -421,6 +431,23 @@ Thunderwave EVO:1606-1607.
 - Bug G goes to PD1b.
 - `requires_paths` / `_paths_dirty` deletion goes to P5.
 
+### 5.9 Residue field per material (D15, 2026-10-17)
+
+Measured: a body response or Fireball's ash deposits tile by tile; each new tile is a full condition lineage
+(application 4 versions + membership commit 2) and each accumulation its own tile fact. Stubbing body responses:
+Circle of Death 1.15 s → 0.58 s, 1,298 → 542 versions; Fireball 739 → 624 ms.
+
+- **Data on tiles.** Each `Tile` holds its residue after-values per material (`TileResidueState`, the existing wire
+  type; `condition_uuid` is the per-cell identity `uuid5(field, cell)`, stable across deposits). `to_world_tile_state`
+  reads them; nothing reads residues from tile conditions.
+- **One field per material per map** (`ResidueField`, owned by the map, keyed by `residue_id`): deposits, one
+  `SpatialHandler` over its hazardous cells (entry damage / fear, unchanged rules), traversal invalidation for new
+  hazardous cells, connected-ground queries for fear (`same_residue_ground` reads tile data).
+- **One deposit = one call = one fact**: `deposit_residues(cells → ellipses, profile, …)` updates every cell and
+  publishes one tiles fact (inert rows; `commit_tile_mechanics` when new hazardous cells appear). Body responses,
+  Fireball ash and spilled containers call it once per deposit. No residue condition lineages.
+- Object-face residues (`ObjectResidueCondition`) are unchanged.
+
 ## 6. Predicted counts (GC)
 
 | Unit | Meaning |
@@ -430,22 +457,22 @@ Thunderwave EVO:1606-1607.
 | O | the number of phase-B items, each its own group |
 
 - "After P3" assumes P1–P3; global cache wipes remain until P5.
-- "Conservative" prices P as FR; "Target" needs P4b.
+- "Conservative" prices P as FR. Millisecond targets are in §6a (D18); this table keeps the counts.
 
-| Case | Now | After P3 (conservative) | After P5 | Target |
-| --- | --- | --- | --- | --- |
-| Circle of Death (12 hit, 8 die) | 8×31 = 248 FR (~1.3 s) | 30·(1+O) P | wipes 0 | ~10 ms + O |
-| Holy Aura ×8 | ~240 FR | 30 P | — | ~10 ms |
-| **Fireball classic** | ~816 FR + barrel (2c+7)·V ≈ 750 FR + 1,470 hazard-only; ~25 wipes | 30·(1+O) P (~150 ms + O); wipes remain | 0 wipes | ~20 ms + O |
-| Magic Missile / Chain Lightning / Color Spray | deaths·(V+1) + blinds·V | 30·(1+O) P each | — | ~10 ms |
-| Sleet cast (C≈200) | 202·V = 6,060 FR obscured (~270 s) | 30 P obscured (~1.35 s) | — | ≤150 ms (P4b + D9) |
-| Sleet drop | ≈6,030 FR (~30 s) | 30 P (~150 ms) | — | ~50 ms |
-| Ice Storm (C≈49, 4 deaths) | ≈1,654 FR (~13 s at 8 ms) | 30·(1+O) P | — | ~10 ms |
-| Gust of Wind zone, 6 caster steps | per step (1 + 2ΔC + L)·V | per step: zone-move group ≤30 P | — | ~5 ms/step |
-| Wall of Stone (S=10, D=4, E=1, p=3) | S·V + 2V + 3D·V + 2E·p·V ≈ 540 FR | 30 P + escape steps (per-step deltas) | — | — |
-| Round step, 3 ROUNDS zones | 180 FR | 0 solves; ≤30 descriptor updates if duration is projected | — | <1 ms |
-| Thunderwave ×4 (10 ft) into Spike Growth | pushes × steps × 8 ENTER cascades | 30 P; the 8 Spike Growth entries resolve inline on their steps | — | — |
-| P-g1 / P-g2 / Darkness–Daylight / summon retirement | measured in P0b | 30 P per group | — | — |
+| Case | Now | After P3 (conservative) | After P5 |
+| --- | --- | --- | --- |
+| Circle of Death (12 hit, 8 die) | 8×31 = 248 FR (~1.3 s) | 30·(1+O) P | wipes 0 |
+| Holy Aura ×8 | ~240 FR | 30 P | — |
+| **Fireball classic** | ~816 FR + barrel (2c+7)·V ≈ 750 FR + 1,470 hazard-only; ~25 wipes | 30·(1+O) P (~150 ms + O); wipes remain | 0 wipes |
+| Magic Missile / Chain Lightning / Color Spray | deaths·(V+1) + blinds·V | 30·(1+O) P each | — |
+| Sleet cast (C≈200) | 202·V = 6,060 FR obscured (~270 s) | 30 P obscured (~1.35 s) | — |
+| Sleet drop | ≈6,030 FR (~30 s) | 30 P (~150 ms) | — |
+| Ice Storm (C≈49, 4 deaths) | ≈1,654 FR (~13 s at 8 ms) | 30·(1+O) P | — |
+| Gust of Wind zone, 6 caster steps | per step (1 + 2ΔC + L)·V | per step: zone-move group ≤30 P | — |
+| Wall of Stone (S=10, D=4, E=1, p=3) | S·V + 2V + 3D·V + 2E·p·V ≈ 540 FR | 30 P + escape steps (per-step deltas) | — |
+| Round step, 3 ROUNDS zones | 180 FR | 0 solves; ≤30 descriptor updates if duration is projected | — |
+| Thunderwave ×4 (10 ft) into Spike Growth | pushes × steps × 8 ENTER cascades | 30 P; the 8 Spike Growth entries resolve inline on their steps | — |
+| P-g1 / P-g2 / Darkness–Daylight / summon retirement | measured in P0b | 30 P per group | — |
 
 **P1 residue, stated honestly:** once `requires_paths` is gone, C·V hazard-only
 refreshes and C versions remain per terrain install until P2.
@@ -461,6 +488,324 @@ refreshes and C versions remain per terrain install until P2.
 - turn-start navigation;
 - AI decision;
 - Choices: modelled in §14.6 (PD1/PD2).
+
+## 6a. Whole-action targets (D18)
+
+Human, 2026-10-17:
+
+- "of course we need good targets for all the slowdowns we are getting this needs to be smooth and playable";
+- "i would say that 100ms is the max for any operations above that is crazy / 50 starts getting acceptable / <20 / <16 is where we would love to be";
+- "in general anotehr constraint no more than 100kb for each payload -- it should be more than enough to handle a single sub turn event";
+- "for now I would like to ignore gc mangament and reach the point where gc does not trigger or is not meaningfull it is more of an alaarm button for us now".
+
+§6 prices perception only. These targets cover the whole request the player waits on and every update the server sends.
+
+| Tier | Rule |
+| --- | --- |
+| **Ceiling** | No run of any operation over 100 ms; no seat update or request response over 100,000 B encoded (`encoded_bytes`, `response_bytes`). |
+| **Acceptable** | Median ≤50 ms. |
+| **Goal** | Median ≤20 ms; ≤16 ms (one frame at 60 fps) is where we want to be. |
+
+§6's Sleet sensory target (≤150 ms, "P4b + D9") is above the ceiling and withdrawn; §6b owns that term.
+
+**How a row is measured.**
+
+- One row per operation of every `gallery_crowd.py` CASES entry; the exit can't be met by leaving rows out.
+- 3 runs at one named commit, with no concurrent test or agent load. The median is held to a tier; every run is held to the ceiling.
+- Wall clock, GC pauses included.
+- Cast rows report the tool's five spans: construction, native, operation, publication, encoding. Request rows (Choices, Preview, Command, AI Advance) report the total; their split comes from the CPU sampler.
+- Payload: the largest encoded seat update of the operation (`encoded_bytes`), or the response (`response_bytes`) for requests.
+- GC is an alarm: gen-2 collections per operation are counted (`gc.callbacks`, to add to the tool) and reported with the row.
+
+**Now.** ms are median / worst of 3, with native / publication medians where the tool reports them; B is the largest update or response. The figures are provisional: most logs date from 16:34–16:47, before a7a2b9bf0, and the fighter Choices logs from 12:27, all under agent load. Rows marked *1 run* come from one loaded run. Every row is re-timed at one commit once the current agent wave is merged.
+
+| Row (GC case, operation) | Now ms | Largest B | Owners |
+| --- | --- | --- | --- |
+| Preview, caster | 7 / 8 | 1,956 | goal met; keep |
+| Preview, fighter | 5 / 5 | 853 | goal met; keep |
+| Choices hit, caster / fighter | 0 / 0 | 512,290 / 125,524 | PD2 (bytes) |
+| Choices miss, caster (123 rows, 1,474 targets) | 252 / 261 | 512,290 | PD1b, PD2 |
+| Choices miss, fighter | 140 / 148 | 125,524 | PD1b, PD2 |
+| Command, fighter attack | 46 / 48 | — | acceptable; P6, P7 |
+| Command, caster Fireball | 668 / 685 | — | P6, P7, PV1–PV3; the gap to the direct cast is measured with the sampler |
+| Fireball | 323 / 343 (159 / 148) | 1,023,988 | P6, P7, PV1–PV3 |
+| Circle of Death | 334 / 359 (156 / 158) | 1,110,472 | P6, P7, PV1–PV3 |
+| Ice Storm | 203 / 205 (85 / 101) | 681,267 | P6, P7, PV1–PV3 |
+| Sleet Storm cast | 513 / 536 (265 / 226) | 1,690,189 | PV1; P7, PV2, PV3 |
+| Sleet Storm concentration drop | 769 / 790 (191 / 538) | 5,169,992 | PV1; P7, PV2, PV3 |
+| Cloudkill cast (*1 run*; encoding 318 ms) | 808 | 971,673 | PV1; P7, PV2 (encoding), PV3 |
+| Cloudkill concentration drop (*1 run*) | 560 | 7,475,101 | PV1; P7, PV2, PV3 |
+| Darkness (*1 run*) | 739 | 801,180 | PV1; P7, PV2, PV3 |
+| Daylight (*1 run*) | 661 | 6,093,663 | PV1; P7, PV2, PV3 |
+| Gust of Wind cast | 190 / 196 (133 / 37) | 275,229 | P5, P6, PV1; P7, PV2, PV3 |
+| Gust of Wind move | 93–102 / 105 (51–63 / 31–37) | 245,183–247,982 | P5, P6, PV1; P7, PV2, PV3 |
+| Spirit Guardians cast | 81 / 88 (45 / 26) | 215,288 | P6; P7, PV2, PV3 |
+| Spirit Guardians move (3 cells, aura carried) | 233–308 / 605 (123–166 / 99–115) | 532,552–559,829 | P5, P6, PV1; P7, PV2, PV3 |
+| AI Advance, turn start | 304 / 345 | — | P7, PV1, PD1b / PD2, PT |
+| AI Advance, decision only | 99–101 / 105 | — | PD2, P7 |
+| AI Advance, acting (276 versions) | 327 / 351 | — | P6, P7 |
+
+Encoding cost is owned by PV2: it falls with the bytes.
+
+Rows still to measure: magic_missile, chain_lightning, holy_aura, mass_heal, mass_healing_word, delayed_blast_fireball, grease, web, spike_growth, thunderwave_spike_growth, caster_steps, turn_start, turn_undead, gas_vent_plate, portal_plate, wall_of_stone, summon_retirement, round_step_zones. Cases to add: a reaction on a human seat, and a whole AI round (§6b).
+
+**Rules.**
+
+- The exit passes only when every row holds the ceiling, in ms and in KB. A miss blocks the exit until the human decides.
+- After each merged batch the integrator re-times every row and records the table in the progress log.
+- A row still over the ceiling once its owners have landed gets its residual terms measured (sampler, counts) and reported to the human with a proposed phase. Targets are never silently changed.
+- Rows come down by removing work in systems: facts, passes, copies, allocations, bytes.
+  - No new cache or memo attributes on entities, blocks, values, conditions or runtime dataclasses.
+  - No manager or registry classes, no lazy properties.
+  - A value that must be kept is a frozen value owned by the system that computes it, keyed by named revisions, with its invalidation stated in this plan.
+- GC tuning, freezing around operations, pooling and disabling the collector are not fixes.
+  **Human decision 2026-10-17** (worker only, after the cycles were fixed): no automatic collection
+  inside a request; the request's survivors are collected after its reply and frozen; a cycle found
+  is printed as an alarm. The post-reply collection is timed per op (`collect_after_ms`) and
+  reported beside the op's own time, so its cost is not hidden.
+
+## 6b. Subjective vision as data (PV1–PV3, D19)
+
+Human, 2026-10-17:
+
+- "maybe the whole subjective vision thing needs a fix so that we can get to arrays as quickly as possible";
+- "you already know that nothing sees that no need to comptue shit" (a heavy blocker should prune work, not add it);
+- "no reason for this stuff t obe sent we can have better handing and partial updateds on for bodies";
+- "bro per seat or per observer is a nothingburger because worst case sceanrio is one observer one seat  for each character";
+- "we need to handle the per seat scenario per observer but of course when shared we should optimize".
+
+**Evidence (GC, 2026-10-17).**
+
+- **Blocker size changes nothing.** Darkness (~28 cells), Cloudkill (~50) and Sleet Storm (~200) each cause 30 full recomputes over the same 50,535 observer-cell pairs.
+  - Heavy obscurement is a per-cell filter over each observer's whole wall FOV (`recompute_observer`, optical stage).
+  - The numpy route masks (`get_optical_route_masks`) already hold the answer, and are then walked cell by cell in Python.
+  - Volume geometry, hazards, cell contacts, reverse memberships and emit are per-cell Python too.
+- **The blue seat (26 observers) receives 1,690,695 B on the cast and 5,177,992 B on the drop.**
+  - `observed_changes` is 51 % of the cast. It is derivable (0 mismatches over 3,543 rows), and no player-side runtime reader uses it.
+  - Re-sent bodies are 76 % of the drop: 234 re-acquisitions of 20 actors, identical to what the client holds. The `| acquired` term in `capture.py:_capture_actor_admissions` bypasses the known-actor check.
+  - 58 of 59 item fields are static per `item_id`.
+  - Hazards are re-sent as `false` for every re-added cell, and light sources come back at the revision the client already holds.
+- **Readers by cell** are heavy in sensory, entity pathing, projection, audience and the AI knowledge reducer; rules make about 24 such reads.
+
+**First principles.**
+
+- What can stop vision is a finite set: walls and optical boundaries, heavy obscurement, magical darkness, and the light level at the target cell.
+- What can see is a finite set: plain sight, darkvision, Devil's Sight and Truesight (each with a range), plus blindsight and tremorsense.
+- So subjective vision is a table, not a per-cell procedure. Today's rule (`_visual_route_modes`, `_route_light_levels`) is exactly:
+
+| On the route | Plain sight | Darkvision | Devil's Sight | Truesight | Blindsight / Tremorsense |
+| --- | --- | --- | --- | --- | --- |
+| Wall / optical boundary | blocks | blocks | blocks | blocks | own reach rule (unchanged) |
+| Heavy obscurement | blocks | blocks | blocks | blocks | ignores |
+| Magical darkness | blocks | blocks | sees through in range | sees through in range | ignores |
+
+- Light at the target cell: plain sight needs more than darkness; darkvision turns darkness into dim and dim into bright; Devil's Sight and Truesight turn darkness into bright.
+- Per cell: 4 eligibility bits (plain, darkvision, Devil's Sight, Truesight). Range and the route's obscurement bits decide each bit. The effective light, or "not seen", is one lookup in a 16 × 5 table.
+- A bigger blocker means more zeros, not more work.
+- Only checks against specific targets stay per target, over the creatures and objects on visible cells, never over cells: invisibility, hiding, object inclusion, and boundary evidence.
+
+**World grids: one owner each, replacing storage.**
+
+| Grid | Owner and writer | Deleted |
+| --- | --- | --- |
+| Obscurement: per-owner footprint masks, with combined bits derived in the same write | GridMap, written only at the AreaCondition membership commit; `excluded_owner_uuid` reads the per-owner layer | `_optical_obscurement_by_position` push dict, the `condition.get_optical_obscurement_at` pull branch, `_obscurement_index`. `_optics_blocking` stays: it is the objective physical-opacity cache, read only by wall / transition / directional geometry (PV1a). |
+| Resolved light level | written where `_resolve_light_contributions` runs; `Tile.resolved_light_level` reads it | the per-tile resolved copy |
+| Hazards | the owners' footprints already held by GridMap; per observer, each owner's `is_hazardous_for` is called once and its footprint OR-ed | per-cell hazard dicts |
+| Occupancy | unchanged authority (tile membership); contacts iterate the occupants in the window and index the visible mask | — (no occupant grid) |
+
+P4a's obscurement and light items fold into PV1, so that storage migrates once. P4b is closed: measured, not adopted.
+
+**PV1a done (2359fb559, merged 859a48752).**
+
+- Sleet cast native 692 → 111 ms, drop 317 → 93, Darkness 586 → 83, Daylight 323 → 90, Cloudkill 290 / 261 → 79 / 67, Fireball 188 → 173.
+- Per observer ~1.6 ms (old recompute 7.9 ms).
+- Equality against the base recordings on 7 cases, with ordering-only and the accepted walk-attribution differences.
+- Deleted:
+  - the scoped, hazard-only, emitter-log and reverse-index paths;
+  - `apply_sensory_update`, GridMap subscriptions and `ObserverRevisions`;
+  - the light epoch / change log and the per-tile resolved-light cache;
+  - the push obscurement API and `_obscurement_index`;
+  - boundary snapshots.
+- Not met: the per-observer budget (0.33 ms) and area independence (emit scales with changed cells).
+- Open:
+  - `Tile.resolved_light_level` is still computed from contributions (reading the GridMap grid from Tile would invert the DAG);
+  - ~179 test uses read `capture_senses_snapshot` set forms (PV1b).
+
+**PV1a-2 (next):**
+
+- all observers of a settlement batched as 2-D arrays;
+- the sphere-volume (~170 µs per observer) and spatial-effect (~200 µs per observer) loops vectorized;
+- emit independent of the changed area;
+- zone install (terrain written per tile, condition application models, item dousing; ~50–75 ms loaded, previously unowned).
+
+**PV1a-2 fan-out (codex/single-pass-fanout, 2026-10-18).**
+
+- Identity grants: the settled observers' granted cells are one frozen `GrantTable` owned by
+  SpatialSensesSystem and their only holder (`ObserverField.grants` is gone; no table while no observer holds a
+  row). Invalidation: each settlement replaces its observers' rows after it publishes; register and unregister
+  drop the observer's row with its field; reset and a replaced map empty it. `observers_granted` reads it with
+  one gather. The `_identity_grants` (subject, cell) memo stays and is cleared with every table write and on
+  register: Fireball asks `identifying_observers` 1,577 times for 30 keys (without the memo, +17 ms native);
+  its misses read the table.
+- A settlement publishes stage by stage over every view; the fixture (spatial-effect) and emitter stages are
+  each one array pass over the stacked views, with per-view rule calls and dict writes only.
+- Measured and not done: a stacked per-cell delta (2.1 ms per 30-observer settlement against 1.3 ms per
+  observer loop: data-bound); the sphere-volume loop (0 iterations on Darkness, Cloudkill, Sleet, Fireball);
+  zone install (Wall of Stone: `recompute_lights_at_positions`, light work, not sensory). The emit still scales
+  with the changed contacts (observed-change references and contact order), which the event payload lists.
+
+**PV1 is split so that it doesn't collide with P7.**
+
+- **PV1a** touches only sensory, GridMap, the new `dnd/core` view module and the rules / discovery readers. It can start now; the Sleet demonstration comes from PV1a.
+  - The emitted sensory event keeps its schema: its cell lists are produced from the mask difference, so the cost scales with changed cells.
+- **PV1b** comes after P7: the packed value through `SensesSnapshot`, `apply_current_senses`, capture, audience, the AI knowledge reducer and the SDK.
+
+**PV1 — perception as arrays, end to end.**
+
+- **The view function** lives in a `dnd/core` module and takes primitives: origin, the sense ranges, and the grids. numpy stays out of `dnd/types`.
+- **The cell sets in snapshots, native events and wire** are one frozen packed value: origin, shape and bytes.
+- **`Senses` holds published perception only:** window origin, visible, light and hazard arrays, the `seen` mask in map coordinates, and contacts. `ObserverField`, route modes, volume fields and the light epoch move into `SpatialSensesSystem`, keyed by observer uuid.
+- **Rules and discovery** (~30 sites) read through a few pure query functions.
+- **One settlement path:** observers whose window box intersects the change box are recomputed. The emit diffs the arrays directly.
+- **Deleted:**
+  - the hazard-only and scoped paths: `_can_scope`, `_update_scoped`, `_fact_scope`, `_refresh_footprint_scope`, the emitter change log (`light_epoch`, `light_sources_changed_since`, `forget_light_changes_through`) and the contact epoch;
+  - the reverse cell indexes;
+  - `Senses.apply_sensory_update`;
+  - the set forms in `SensesSnapshot`, `capture_senses_snapshot`, `apply_current_senses` (the one shared reducer), the AI's `visible_index` / `seen_index` and `observers_by_known_position`.
+- **The protocol changes freely.** The human said to ignore the Godot client: this repo's protocol and SDK are updated in the same change.
+- **Gate.** The cases are sleet_storm, darkness_daylight, cloudkill, fireball, gust_of_wind_walk, spirit_guardians_walk and ai_decision.
+  - **Spike** (devtools only): per-observer ms, plus equality with today's result on those cases.
+  - **Equality** with recordings made at the pre-PV1 commit (an archived arm), with no flag in `dnd/`.
+  - **Per-observer budget**, derived from §6a: sight windows cover the hall, so a settlement recomputes all ~30 observers. Their total must stay ≤10 ms (half the 20 ms goal), so each whole `recompute_observer` (view, contacts, hazards, emit) gets ≤0.33 ms, median over all observers on the cases.
+  - **No per-cell Python calls** in the view path (counts mode).
+  - **Area independence:** Darkness, Cloudkill and Sleet native ms within ±10 % of each other at one commit.
+
+**PV2 — the rest of the wire.**
+
+- `observed_changes` leaves the player `SensoryFact`; the native event keeps it.
+- The HUD sends only the sheets that changed (91,468 B for blue when sent whole). Spatial effects are a content id plus packed cells.
+- Expected seat bytes per row are recorded beside §6a's table when PV2 lands.
+- Object and entity contact changes are packed uuid deltas. The client derives nothing.
+- **Multi-observer seats** (human: "handle the per seat scenario per observer but of course when shared we should optimize"): each changed cell, body and item is sent once per seat, and each observer gets a bit list over the seat's shared cells. A one-observer seat is plain per-observer.
+- No retained client-side state for cells out of view (human: "a bad idea to keep 2 states"). Cells coming back into view carry their light and hazard values, packed.
+- **Combat log** (Fireball: 160,291 B in both seats' updates of 1,024,279 B and 358,941 B):
+  - `sub_entries` is deleted (110 nested copies: 104 repeat another top-level event log). The client composes the tree from the node lineage the update already carries, and `target_entry_indices` indexes `children_lineages`. Flattened, the log is 41,504 B.
+  - `root` is an index into `events`; the root event (44 KB) is sent twice today.
+  - The rendered strings stay server-side (12.6 KB after flattening): no SDK renderer.
+  - One data-only projection per seat replaces the three `project_combat_log` calls (`capture.py` ×2, `application.py` / `session.py`).
+- **Version identity:** every wire reference to a version (`lineage_uuid`, `parent_event`, `source_event_uuid`, `commit_event_uuid`, `cause_event_uuid`) uses the seat's public occurrence index (`ProjectionState.public_versions`, already `source_index`), across updates. The uuid strings are dropped in the same change: 377 rows in blue's Fireball update, 72 % of them intermediate versions.
+- **Gate:** every update ≤100 KB on every row.
+
+**PV3 — bodies and items as patches.**
+
+- There is one observation type: a patch against `ProjectionState.remembered`. First acquisition is a patch against an absent body, so there is no full-body branch.
+- The patch is computed in projection, after disclosure, from a before/after of the touched actors.
+- `remembered` changes only through `apply_player_fact` on the emitted patch, the same reducer the client runs.
+- **Items:** the client can't know items in advance (human). A seat receives an item's full record the first time it sees that `item_uuid`, then only patches. `EquipmentFact` becomes an item patch. The `PlayerActor` / `VisualItem` types change, not just the encoder.
+- **Gate:** no body bytes for unchanged re-acquisitions; the D16-C replica test passes.
+
+**P7b — stored versions frozen, capture by reference.**
+
+- The capture deep-copies every retained event (`capture.py:_retained_event` / `_detach_retained_event`; ~16 % of the sampled Fireball op, `smp_fb2`).
+- The copy exists because stored versions are mutated after storing:
+  - `_store_event` appends children into stored versions (`events.py:2333-2339`, `add_child_event`);
+  - `phase_to` mutates the previous version's `combat_log` in place;
+  - `conditions.py:2942` sets `combat_log` on a stored EFFECT version;
+  - `post` is a shallow `model_copy`, so versions share containers;
+  - events hold live objects (condition, values, costs).
+- **Work:**
+  - child links are read from the queue's lineage index;
+  - combat logs are built by copy-update before `post`;
+  - no shared mutable containers;
+  - live objects are replaced by values where capture reads them;
+  - then capture holds stored versions by reference.
+- **Gate:** versions frozen at store; no `deepcopy` in capture; the wire is byte-identical.
+
+**PT — turn start** (human: "of course bro it is unacepptable").
+
+- First AI Advance, sampled under load:
+  - AI knowledge catch-up ~48 %, folding every event since the AI's last turn: P7's AI item, plus PV1, since its indexes become arrays;
+  - AI discovery ~33 %, mostly object-contact checks that build a pydantic object per contact, plus object HP reads: PD1b / PD2;
+  - turn-start navigation ~11 %.
+- **AI knowledge system (the catch-up's one owner).** `AIKnowledge` starts at cursor 0 and folds the whole history on the assignment's first decision: ~193 ms of the 398 ms sampled first Advance (`smp_ai`, loaded).
+  - One AI-knowledge system owns the `AIKnowledge` values, keyed by assignment, and advances them at the EventQueue batch dispatch.
+  - A new assignment starts from the same cold composition the seats use. Assignments are created at session setup, in the summon cast, on rebind, and lazily in `_ensure_assignment`.
+  - Deleted: the lazy creation branch (unreachable) and the whole-history catch-up.
+  - **Integrator decisions (AIK, 2026-10-17):**
+    - One function, "advance this assignment's knowledge to the current cursor", called at batch dispatch for every assignment and by each decision or guard read for its own assignment. A read folds only the current batch's pending versions. The movement guard has to learn before a move completes (`tests/ai/test_event_knowledge.py`), so the pull can't be deleted outright.
+    - A cold start from live state would be a second, inexact path. The objective part (world, actors, pending conditions, open events) is the same for every assignment: it is one shared fold per session, advanced once per batch. Each assignment folds only its observers' sensory facts, from the observers' birth. Creation is folded from the record at the explicit creation site.
+    - Knowledge is keyed by the assignment object: opened at creation, dropped at close, cleared on generation reset.
+  - **Gate:** at the first decision, `AIKnowledge` equals today's full replay on the GC cases, or the memory differences are listed for sign-off; the summon-cast row is measured.
+- **Navigation:** one path search over a cost grid with a predecessor array. `walkable`, `paths`, `path_costs`, `safe_*` and `collision_blocked` stop being per-cell dicts and sets.
+- **Gate:** the turn-start rows within the ceiling.
+
+**PR — area-spell rules work (Fireball, Circle of Death, Ice Storm).**
+
+- After PV1a, Fireball's native time is ~200 ms (loaded), of which perception is ~37 ms. The CPU sample `smp_fb2` has 98 samples (~7.5 ms each, ±√n), and its rows are nested, so gains are stated in native ms and counts.
+- Saves are ~10 ms in total: 10 saves × ~1.2 ms per `saving_throw_bonus`.
+- **Work** (step 1 of PH item 2):
+  - **One frozen value-read context:** source, target, context, lineage and the opponent's outgoing channels, passed to every value read through the ~13 entry points (the set/clear pairs, `_temporary_target`, `set_from_target`, `get_target_entity`, `set_context`, `set_event_lineage`).
+  - Deleted in the same change: `_temporary_target`, the set/clear tree walks, `set_from_target` / `reset_from_target` and the `from_target_*` fields. An AST ban follows.
+  - Events store evaluated results (total, advantage, breakdown) as frozen records instead of live `ModifiableValue`s (`D20Event.bonus`). The deep copies on the save path then fall away; the transcript difference in `bonus` is expected and stated.
+  - Further terms only at exact, re-sampled sites (`SAMPLE_CHAIN`). `LiquidBarrel._on_destroy` is an authored rule, light refresh belongs to PV1, and event post / register belongs to P6 / D4.
+  - `defer_build` on BaseCondition / BaseAction (a startup trade, commit 804b0f7e0) stays. Its in-op cost is reported to the human.
+- **Gate:**
+  - a deterministic transcript tool checked into devtools, identical except for the stated `bonus` form;
+  - a value-read differential: every read over all GC rows equals recordings at the pre-PR commit;
+  - the contextual-modifier suites;
+  - native ms and counts before/after.
+
+**PH — heap: the GC alarm** (human: "reach the point where gc does not trigger or is not meaningfull").
+
+- **Measured (GC Sleet, HEAD 5c3b90e90; scratch `heap_attrib.py`, `heap_fields.py`):**
+  - Every Sleet run carries exactly one gen-2 collection of 264–303 ms over ~600K tracked objects.
+  - 587,332 tracked objects before the first op. Owners:
+    - entity / block registry 351K;
+    - player runtime 84K;
+    - event store 81K, growing 16–20K per op;
+    - unattributed 72K (item presentation states, visual items).
+  - Inside the registry:
+    - the `.values` of value-holding blocks ~183K: Health 53.6K, HitDice 32.4K, Ability, Skill and Equipment ~17K each, ActionEconomy 15K, Weapon 9K, …;
+    - `Senses.paths` 42K lists;
+    - `Senses._field` 35K;
+    - `Senses.objects` 13.8K;
+    - Tile containers ~25K, about 10 mostly empty containers per tile across 1,895 tiles.
+- **Why it matters.** A full collection runs when long-lived objects grow by 25 %. At 600K objects and +20–40K per op, it lands every few ops, and each pass over 600K objects costs ~280 ms, which alone breaks the ceiling.
+- **Work, each item removing objects rather than tuning the collector:**
+  1. Per-op retained growth → ~0:
+     - event versions hold no per-version sets or dicts of their own;
+     - shared frozen rows (`ObservedChangeRef`, `PerceivedContact`) are not copied (P7b);
+     - nothing else retains per-op containers.
+  2. Value layer as data: each block's `values` becomes compact records in a system-owned table. Modifiers live in system tables keyed by value, with no per-value dict / set / list graph. Reads stay exact.
+  3. Navigation as arrays (PT): `Senses.paths` becomes a predecessor array.
+  4. Perception (PV1a / PV1b): no per-observer field graph; audience per-cell sets become arrays.
+  5. Tiles: no empty per-tile containers. Absent means empty, and per-cell state lives in GridMap-owned maps.
+- **Gate** (CPython 3.13, thresholds 2000/10/10). A full pass runs when long-lived pending objects exceed a quarter of the long-lived total T. It costs ≈0.47 µs × T.
+  - promotions per op ≤ T / (4 · 30), so a 30-op session has no full pass;
+  - T ≤ ~210K, so any pass stays under 100 ms;
+  - measured per op by the gallery's gc counters (`gc` in each row: generations, ms, young survivors), on a separate ~30-op run with no forced collects;
+  - each stored version is 4–11 tracked objects, which sets a floor until P7b stores versions as compact frozen records;
+  - young-generation time is reported too: ~40 ms per Sleet op today (56 gen-0 and 5 gen-1 passes, ~112K young survivors per op).
+- **Value-layer data form (review).**
+  - One `ModifiableValue` is ~32 tracked objects: 6 pydantic models, each an instance plus `__dict__` plus fields-set, empty `generated_from` lists, UUIDs and a lambda.
+  - The target is one slotted record (uuid, name, source, base, normalizer) plus `modifiers: tuple[Row, ...]`, with channel and kind as columns, held by the value. Contribution lookups stay in `BaseObject._registry`; no new registry.
+  - Empty means an untracked empty dict or `()`, never `None` (a second branch).
+- **Done (PH-1, 43812709f):**
+  - the never-read block handler indexes are deleted;
+  - `generated_from` is a tuple;
+  - the identity normalizer replaces a per-value lambda;
+  - the source index is a plain dict.
+  - Tracked objects before the first op: 587,332 → 536,918.
+
+**Measurement cases to add:** a reaction that pauses for a human seat (an opportunity attack, Counterspell), and a whole AI round (every native-AI combatant's turn in sequence).
+
+**Order.**
+
+1. Spike (done).
+2. PV1a, alongside PW (PV2's non-cell items and PV3).
+3. PV1b after PV1a; PV2's cell packing with PV1b.
+4. P7b after PW, because both edit `capture.py`.
+5. The AI knowledge system after P7 (done); navigation after PV1, because it shares the grids.
 
 ## 7. Phases (execution order) and gates
 
@@ -483,20 +828,27 @@ refreshes and C versions remain per terrain install until P2.
 | **Re-measure** | — | top residual terms with counts and timings |
 | **PD1b** | **Rows, legality, selection, switched together (§14.2–§14.5):** the actor scan; `_admission_error` + `rule_error(scan, selection)` replacing 232 `_validate` + 4 discovery-only overrides (Q-W5); `Entity.perform` as the only `apply` entry; spells listed once with castable levels; aim points with hit sets; relocation destinations from the scan; region descriptors; env use via rings; objects from perception; Cleansing Touch and connectors bounded; one `ActionSelection` (§14.4b) through every consumer; the per-cell, variant, name/index paths deleted; bug G fixed by construction; profile hooks on the scan (Q-W6) | (b) discovery and Command agree on every GC row × target × level; (c) player, AI and server lanes green; remaining `_validate` overrides = the named handler-admission list; eventful validations 148,567 measured → 0; emitted targets 209,734 → ≤580 aims + ≈435 creature + ≈350 zone + R; LOS enumeration 378.7 s → 0; ordinary Choices timing reported (§14.6) |
 | **PD1c** | **Whole-world scans at execution (§14.8)**; D14 approved | GM1 brute-force equality; AST ban on world iteration in `dnd/`; the redesign's tests |
-| **P4a** | Shared objective inputs: boundary structures stored with placements; obscurement from the existing storage; light descriptors from one index | per-observer objective rebuild count → 0; timing |
-| **P5** | Scoped invalidation: cache entries keep bounds and drop on intersection; light selection by recorded lit area; entity caches on `observer_spatial_revisions`; path freshness by revisions; maintained barrier set | global wipes → 0; cache misses before/after; timing |
+| **P4a** | *Folded into PV1 (§6b): its obscurement and light storage migrate with the owned grids.* | — |
+| **P5** | Scoped invalidation: cache entries keep bounds and drop on intersection; light selection by recorded lit area; path freshness by revisions; maintained barrier set. *Under PV1 these survive outside perception; perception entity caches on `observer_spatial_revisions` stop, because PV1 deletes them.* | global wipes → 0; cache misses before/after; timing |
 | **PD2** | **Costs of what is kept (§14.7):**<br>• Command uses the bare admission check, not a full preview;<br>• preview cached as its projection, no JSON-size measurement, no double deep copy;<br>• capture without dump/validate rounds; `_make_action_info` without per-row `BaseCost.model_validate`;<br>• AI row-profile dumps removed;<br>• movement list (D13): copies at `entity.py:6885-6892`, per-call key sorting, shared path tuples, OA exposure intersection once per path tree, per-step hazard checks, swim/climb/fly bounded by remaining movement (U5);<br>• `_prepare_position_preview_cache` keyed by GridMap revisions instead of re-sorting each call;<br>• retained discovery graphs released at the operation boundary (§9.10).<br>*Conditional on the post-PD1 measurement (like P4b), adopted only if R(S−h) > Um+I+F (handoff:194):* owner revisions (external writes routed through owners first), the session cache by input sections, selection staleness on the same keys. | Choices cache hit / miss / Preview / Command ms before/after; copies/serializations per request counted |
-| **P4b** | *(conditional on the re-measure)* bounded passes: VU over shadow regions; ray-accumulated route obscurement | D9; eliminated > maintenance |
 | **P6** | Event machinery: COMPLETION handler lookup; per-cell dispatch re-reads; identity computation per version (D4); turn witness set; Fireball latest-version access; residue-fear provenance | versions and dispatch counts before/after |
-| **P7** | Seat-independent capture (pure function, frozen value); one fold per seat; AI knowledge reduction consumes settled sensory events once per group | publication and AI ms before/after |
+| **P7** | Seat-independent capture (pure function, frozen value); one fold per seat; AI knowledge reduction consumes settled sensory events once per group.<br>**D16-C**, the mirror fold leaves the live path. Deleted: `AudienceRuntime.latest`, `current_composition`, `committed_log_count`, `exclusive_current` and both of its branches, `PreparedPlayerOperation`, `prepare_current_operation`, `apply_current_operation`, the `prepared_sensory` parameters and the `prepare_sensory_delta` default. Capture and bookkeeping read `ProjectionState.remembered` (actors, content and the last HUD named there). `CaptureCheckpoint`'s own fold is derived from the projection fold, and its reset branch is deleted. The devtools consumers migrate with no `latest` shim. Reconnect and recording work from the journal. A capture error stays fatal. | publication and AI ms before/after; per-seat wire identical; replica test (the fold of emitted updates from initialization == `remembered` == a cold composition), with no production flag |
 | **P8** | Value layer: min/max once per read; bounded breakdown cache; stats snapshot on change | passive-perception and resistance evaluation counts before/after |
+| **PV1** | Perception as arrays end to end (§6b): owned world grids, one pure view function, one settlement path, packed cell sets through snapshot, event and wire; P4a's obscurement and light items folded in; spike first | §6b PV1 gate |
+| **PV2** | The rest of the wire (§6b); after P7 | §6b PV2 gate; every update ≤100 KB |
+| **PV3** | Bodies and items as patches (§6b); after P7 | §6b PV3 gate |
+| **P7b** | Stored versions frozen, capture by reference (§6b) | versions frozen at store; no deepcopy in capture; wire byte-identical |
+| **PR** | Area-spell rules work (§6b): value reads take the target as an argument; no deep copies on saves; per-target damage and destruction; startup schema builds | Fireball / Circle of Death / Ice Storm native before/after; transcript identical |
+| **PH** | Heap (§6b): per-op retained growth ~0; value layer as data; tiles without empty containers (paths and perception via PT / PV1) | 0 gen-2 collections inside measured ops; retained per op ≤1K |
+| **PT** | Turn start (§6b): the AI knowledge system (one owner, advanced at batch dispatch, cold start); navigation as a cost grid with a predecessor array | turn-start rows within the ceiling; first-decision knowledge equality |
 | **PC** | *(other repo; human)* NDClientGodot SDK schema 9 → 11; grouped world boundaries | — |
+| **Exit** | Whole-action targets (§6a, D18): every operation of every GC case re-timed after each merged batch | every run of every row ≤100 ms and every seat update ≤100 KB; acceptable and goal tiers reported per row; a miss blocks the exit until the human decides |
 
 **Correctness oracle.**
 
-- At each group close in tests, per observer, run a cold `recompute_observer` on a
-  copied `Senses`. Compare `visible`, `entities`, `objects`, `hazardous_cells` and
-  `effective_light_levels`; memory is excluded.
+- At each settlement in tests, the observers picked by window-box intersection
+  must produce the same arrays as recomputing every observer. PV1 is also checked
+  for equality against recordings made at the pre-PV1 commit (§6b). Memory is excluded.
 - Run the existing sensory, light, Fireball, Globe, residue-fear, pending-return
   and player capture suites.
 - Rule outcomes are data-driven from P0b. Outcomes changed by decided rules (one
@@ -512,7 +864,7 @@ stopped and reported.
 | --- | --- | --- |
 | D0 | Base `d13e6ad` | **Decided** |
 | D1 | Accumulated-changes facts with EFFECT dispatch; 4 readers migrated | **Approved** (with the plan, 2026-10-17) |
-| D2 | Outside groups, facts settle per fact through the §4 delta | Follows from §5.2 |
+| D2 | Outside groups, facts settle per fact through the §4 delta | Follows from §5.2; for sensory, superseded by PV1's one settlement path |
 | D3 | Duration-only ticks don't re-solve observers | **Approved** |
 | D4 | Identity grants per version, per-handler copies, lineage lists | Keep unless P6 shows they're safe to reduce |
 | D5 | ~~Discovery in a separate plan~~ **Superseded:** discovery is in scope (§14) | Human 2026-10-17 |
@@ -521,11 +873,16 @@ stopped and reported.
 | D7 / D7a | Groups for area/multi-target resolution; "all damages, then reactions"; cast-level reactions at root | **Decided** |
 | D7c | Groups also at the zone/wall/trap/portal/round-step entries of the index (area mechanics beyond casts). Supersedes handoff lines 110 ("no fabricated simultaneous admission") and 140 ("do not freeze every target at cast start") for area resolution. | **Approved** |
 | D8 | APPEAR effects needing the field observed first, if any, when the manual reducer calls go | Check in P2 |
-| D9 | Ray-accumulated obscurement equals per-cell supercover semantics, or a defined change accepted | Only if P4b |
 | D10 | Fixed order except player-selected order and authored physical order | **Approved** (correctness, not performance) |
 | D12 | Available-actions model (§14) | **Decided** (human 2026-10-17) |
 | D13 | Movement destination list kept; only its compute overhead fixed | **Decided** |
 | D14 | Whole-world scans replaced by bounded owner queries (§14.8, `WHOLE_WORLD_SCAN_REDESIGN_2026-10-17.md`) | **Approved** (human 2026-10-17); Q-W2 perceived preview; Q-W3 delete |
+| D15 | Residues: one condition per material for the whole map, updated per deposit (per-cell amounts and contributions), instead of one condition membership per tile | **Decided** (human 2026-10-17: "one condition for material across all map that gets updated … so we have good scaling") |
+| D16 | One sensory fold per seat: the projection's and the current state's audience compositions are one (the duplication predates event-stream reduction) | **Decided** (human 2026-10-17: "we obviously do not need to duplicate … or to even keep the separation if it is not needed") |
+| D17 | Spells listed once with castable levels; the selection names the level; the AI always casts the base level | **Decided** (human 2026-10-17) |
+| D16-C | D16's method: the server mirror fold (`prepare_current_operation` / `apply_current_operation`, the current composition) leaves the live path; bookkeeping reads the outgoing update; the replica check (emitted-update fold == cold composition) becomes a test | **Approved** (human 2026-10-17: "c is ok") |
+| D18 | Whole-action targets (§6a) for every operation: 100 ms ceiling, ≤50 ms acceptable, ≤20 / ≤16 ms goal; ≤100 KB per update; GC is an alarm, not managed | **Decided** (human 2026-10-17) |
+| D19 | Subjective vision as data (§6b): perception as one table applied as arrays; compact deltas; bodies and items as patches; turn start | **Decided** (human 2026-10-17); human answers: no item catalog, no retained client state, the Godot client ignored, turn start owned, per-observer deltas with shared parts once per seat |
 | D11 | Worktree | **Done** |
 
 ### 8.1 Verified bugs (verification pass at `d13e6ad`)
@@ -630,8 +987,7 @@ worktree. The rest is static reading.
    P7.
 6. ~~Whole-world scans~~ merged into §14.8 (v3.6).
 7. ~~Discovery revisions~~ owners named in §14.7 (v3.6).
-8. **Bounded passes** (P4b only): shadow regions with height, directional
-   boundaries and volumes. No fallback: the pass matches the cold oracle or P4b is not adopted.
+8. ~~Bounded passes~~ closed: P4b was measured and not adopted (progress log, 2026-10-17); PV1 replaces it.
 9. **Actor scan at execution** (PD1b): count every `apply()` entry point (reactions, OA, triggered spells, harness) and decide who builds the scan there without BaseAction importing Entity (§14.3b).
 10. **Retained discovery graphs** (handoff:118): release cost at the operation boundary, measured in P0b, owned by PD2.
 
@@ -645,7 +1001,6 @@ worktree. The rest is static reading.
 
 **Risks:**
 
-- Bounded passes are the hardest part. There is no fallback path: if a bounded pass can't match the cold oracle for a case, the pass is fixed (or P4b is not adopted at all), never branched.
 - Visible rule changes need sign-off: reactions after all targets' damage (inside
   the spell), one roll, fixed order, §5.6/§5.7 perception and push changes, bug
   fixes.
@@ -691,6 +1046,54 @@ worktree. The rest is static reading.
 | AI discovery | `ai/runtime/decision_epoch.py:148-157, 819-845, 948-971` |
 
 ## 12. Changes
+
+**v3.15 → v3.16:** PR and PH reviews folded in (PR as step 1 of the value-layer rewrite; PH gate on promotions and heap size; PH-1 done; gallery gc counters).
+
+**v3.14 → v3.15:** PR area-spell rules work (no phase owned it after P6 / P8).
+
+**v3.13 → v3.14:** PH heap phase, from the GC census (the GC alarm).
+
+**v3.12 → v3.13** (the v3.12 antislop and antiOOP reviews, all accepted):
+
+- The combat log is flattened and `root` is an index; no SDK renderer.
+- One version identity, the seat's occurrence index.
+- P7b freezes stored versions first.
+- The AI catch-up has one owner, the AI knowledge system, with a cold start.
+
+**v3.11 → v3.12** (Fireball payload and publication sample):
+
+- PV2 adds the combat log (no repeated child entries; `data` only, rendered by the SDK) and the version rows (indexes).
+- P7b: capture by reference.
+- PT: the AI catch-up folded at assignment creation.
+
+**v3.10 → v3.11** (v3.9 antislop review):
+
+- §6 Target column, P4b, D9, §9.8 and the bounded-pass risk deleted; P4a folded into PV1; §4 and D2 superseded for sensory.
+- §6a gains bytes per row and the Cloudkill / Darkness / Daylight rows; the ceiling is 100,000 B; encoding is owned by PV2.
+- PV1 is split into PV1a (now) and PV1b (after P7), with a derived per-observer budget (≤0.33 ms), named cases and an explicit deletion list.
+- The P5 items that survive are named.
+- The oracle is restated for one path.
+
+**v3.9 → v3.10** (human answers and the v3.9 antiOOP review):
+
+- §6b from first principles: vision as a sense × interceptor table applied as arrays.
+- World grids with one owner each, replacing storage.
+- `Senses` published only.
+- Packed cell sets end to end.
+- One observation type for bodies.
+- PT for turn start.
+- P4a folded into PV1; P4b closed.
+
+**v3.8 → v3.9** (human 2026-10-17 and the v3.8 reviews):
+
+- §6a: one row per GC operation; median and worst run; five spans; 100 KB per update; GC as an alarm; exit blocked by any miss; fixes are system work, not object caches; the 30 % publication share removed.
+- §6b: subjective vision as data (PV1–PV3), from the Sleet / Darkness / Cloudkill measurements and the payload study.
+- P7 carries the D16-C deletion list and the replica test.
+
+**v3.7 → v3.8** (human 2026-10-17):
+
+- §6a whole-action targets (D18, human tiers): 100 ms ceiling for any operation, ≤50 ms acceptable, ≤20 / ≤16 ms goal; owners per row; an exit row in §7.
+- D16 method C approved: the mirror fold leaves the live path; the replica check becomes a test.
 
 **v3 → v3.1:**
 
@@ -797,11 +1200,13 @@ worktree. The rest is static reading.
   one exception. Antislop #1 asked that a §5.2 entry close at its own exit even
   when nested. The antiOOP nesting rule (join; phase B after depth 0) was chosen
   instead, because it keeps one settle per spell and still gives each phase-B item
-  a fresh group. Move steps aren't groups at all.
+  a fresh group. Move steps aren't groups at all (amended 2026-10-18: a step is a MOVE_STEP group, §5.2).
 - **v3.2:** no separate re-review was run. v3.3–v3.5 changes are human decisions, plus §14, which is under review now.
 - **Bug verification:** done (§8.1).
 - **v3.5 §14:** antislop (13) and antiOOP (14), all accepted into v3.6. Where they conflicted, the code decided: `_aoe_origin_fov_cache` and `compute_subjective`/`compute_for_targeting` are dead (antislop); the footprint cache is not a new one (antiOOP; the existing `_propagation_fov_cache` remains).
 - **Whole-world redesign:** its own antislop (9 minor) and antiOOP (2 major) reviews, accepted; its `get_target_variants` hook is replaced by the §14.4 `facet_domain`/`with_selection` pair.
+- **v3.9 §6b:** antiOOP (10) and antislop (14), all accepted into v3.10 / v3.11, except light-source restore by revision: dropped, because the human rejected keeping a second state.
+- **v3.8 §6a / D16-C:** antislop (12) and antiOOP (11), accepted into v3.9, with two changes. A kept value's invalidation is stated in the plan; a separate human approval per value was not adopted, since the human did not ask for it. Request rows stay total-only with a sampler split; the tool is not extended for them.
 - **v3.6:** antislop (16) and antiOOP (14) re-reviews, all accepted into v3.7 except: antiOOP #5 (move spell protection into the footprint with provenance) is replaced by antislop #2 (leave it at its 5 sites; Globe is out of scope by human decision); antiOOP #7 (delete four relationship methods, migrate ~50 callers) is narrowed to a leaf function the methods delegate to; antiOOP #8 (106 profile hooks) is a human question (Q-W6); the antiOOP rule "no `Entity.get` in predicates" is dropped after the human's objection (rules keep world access).
 
 ## 14. Available actions (discovery) — human-decided model (2026-10-17)
@@ -1014,6 +1419,31 @@ Test fallout is 94 test files calling `get_available_actions` and 35 using `exec
   - `facet_domain(scan, level, target_record)` and `with_selection(selection) -> BaseAction`.
   - `apply(scan, selection, parent_event=None)`; base `_validate` calls `_admission_error`.
 - **`Entity`:** `action_scan(...)`, `creature_facts()`, and `perform(action, selection, parent_event=None)` as the only `apply` entry, with an AST test.
+
+**Correction (2026-10-17, coordinator, listed for sign-off): the executable instance keeps `apply(parent_event)`.**
+§14.3b had `apply(scan, selection, parent_event)` with "≈33 callers". It missed the tests: 159 test files make 673
+direct `.apply()` calls on executable instances. The intent is kept without that churn:
+- an executable instance is its own selection (`current_selection()` from its fields, which only `with_selection`
+  and `instantiate` set);
+- the base `_validate` asks the source block for its scan (`BaseBlock.action_scan()`, defined by Entity) and calls
+  `_admission_error(scan, self.current_selection())`: one legality path, shared with discovery;
+- discovery calls `_admission_error(scan, candidate)` on the registered template itself, with no copy and no event;
+- `Entity.perform(action, selection, parent_event)` = `action.with_selection(selection).apply(parent_event)` is the
+  only `.apply(` caller in `dnd/` (AST test over `dnd/`; tests keep building instances).
+
+**PD1b exit items (owned by the coordinator, gate (c) fails while they are open):**
+1. Physical access joins `_admission_error` and the `physical_access_error` override chain is deleted: Continual Flame, connector traversal and Multiattack declare their access as data the base reads.
+2. Per-target isolation: each per-target application is its own `with_selection` instance; `_apply_target_application` no longer mutates and restores `self.target_entity_uuid`.
+3. Execution scans carry no navigation (`action_scan(with_navigation=False)`); the `discovery.action_scan` counter is checked on the caster-step and Gust/Spirit Guardians walk rows, and no non-creature apply source reaches `_validate`.
+
+**Open in the fan-out: physical access.** Three `physical_access_error` overrides change the base check instead of
+adding to it (Continual Flame admits carried items without reach; connector traversal and Multiattack replace it).
+`rule_error` is additive, so the base reach check joins `_admission_error` only once those three are expressed as
+data the base reads (e.g. the access the action declares for the selected target), not as overrides.
+
+**Open in the fan-out: target counts.** 9 `get_all_targets` overrides cap or dedupe selected targets (Bless/Bane,
+Hold Person upcast, Eyebite...). Base admission now checks the selection as named, so "at most N" and "distinct"
+become `rule_error` messages instead of silent trimming.
 
 **Fan-out.** Five sub-agents run on disjoint file groups. Each converts the files' `_validate`, discovery-only and hook overrides into `rule_error`, plus profile hooks without an actor parameter, variants to `facet_domain`, and `apply()` callers to `Entity.perform`. Each runs its files' suites.
 

@@ -30,6 +30,7 @@ from dnd.types.physical_access import ContactPassage
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from dnd.types.world_placement import BoundaryStructure, BoundaryStructureKind, WorldPlacementKind, WorldPlacementSpec
 from dnd.world_facts import WorldFacts, apply_world_fact
+from tests.engine.support import admitted_in_discovery
 
 
 @pytest.fixture
@@ -41,7 +42,7 @@ def arena() -> Iterator[Game]:
     reset_engine_runtime()
 
 
-@pytest.mark.parametrize("position,allowed", [((2, 2), False), ((3, 2), True)])
+@pytest.mark.parametrize("position,allowed", [((2, 2), False), ((5, 2), True)])
 def test_hand_operated_door_requires_nearby_contact(arena: Game, position, allowed):
     actor = Entity.create(uuid4(), "Operator", config=EntityConfig(position=position))
     actor.compose_entity()
@@ -99,7 +100,7 @@ def test_visible_window_uses_actual_weapon_and_rejects_before_cost(arena: Game, 
     barrier(ContactPassage.HAND_AND_LIGHT_WEAPONS)
     assert target.uuid in source.senses.entities
     attack = Attack(source_entity_uuid=source.uuid, target_entity_uuid=target.uuid, weapon_slot=slot)
-    assert attack.validate_requirements_for_discovery() is allowed
+    assert admitted_in_discovery(attack) is allowed
     hp, actions = target.get_hp(), source.action_economy.actions.normalized_score
     with fixed_dice_faces(20, 4, 4, 4, 4):
         result = attack.apply()
@@ -113,9 +114,9 @@ def test_insert_break_exposes_frame_policy_and_same_uuid_facts(arena: Game) -> N
     frame = barrier(ContactPassage.HAND_AND_LIGHT_WEAPONS)
     insert = barrier(ContactPassage.BLOCKED, insert=True)
     attack = Attack(source_entity_uuid=source.uuid, target_entity_uuid=target.uuid, weapon_slot=slot)
-    assert not attack.validate_requirements_for_discovery()
+    assert not admitted_in_discovery(attack)
     insert.receive_damage(5, DamageType.BLUDGEONING, source.uuid)
-    assert attack.validate_requirements_for_discovery()
+    assert admitted_in_discovery(attack)
     assert not get_map().can_transition((2, 2), (3, 2), source.uuid)
     assert frame.get_hp() == 3
     facts = WorldFacts()
@@ -176,7 +177,7 @@ def test_hidden_barrier_is_not_disclosed_but_execution_does_not_pay(arena: Game)
     assert insert.uuid not in source.senses.objects
     action = MultiattackAction(source_entity_uuid=source.uuid, target_entity_uuid=target.uuid,
                               attack_sequence=((WeaponSlot.MELEE_MAIN, 1),))
-    assert action.validate_requirements_for_discovery()
+    assert admitted_in_discovery(action)
     hp, actions = target.get_hp(), source.action_economy.actions.normalized_score
     result = action.apply()
     assert result is not None and result.canceled
@@ -240,7 +241,7 @@ def test_solid_terrain_stops_projectiles_without_requiring_walkable_floor(arena:
     grid.set_tile(3, 2, tile=Tile.create((3, 2), name="Water", walking_cost=0))
     Entity.update_all_entities_senses()
     attack = Attack(source_entity_uuid=source.uuid, target_entity_uuid=target.uuid, weapon_slot=slot)
-    assert attack.validate_requirements_for_discovery()
+    assert admitted_in_discovery(attack)
     grid.set_tile(3, 2, tile=Tile.create((3, 2), name="Physical barrier", blocks_propagation=True))
     Entity.update_all_entities_senses()
     result = attack.apply()

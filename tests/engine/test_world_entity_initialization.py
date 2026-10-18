@@ -36,7 +36,7 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import ResistanceStatus
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue
 from dnd.types.world import CardinalDirection, LightLevel, MovementMode
 from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.entity import Entity, EntityConfig
@@ -342,6 +342,8 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
         "background": entity.character_background,
         "applied_origin_state": entity.applied_origin_state,
         "applied_class_levels": entity.applied_class_levels,
+        "scribed_spell_ids": entity.scribed_spell_ids,
+        "permanent_feature_uses": entity.permanent_feature_uses,
         "ability_scores": tuple(
             (ability.name, ability.ability_score.score)
             for ability in entity.ability_scores.abilities_list
@@ -901,7 +903,7 @@ def test_failed_birth_validation_discards_the_provisional_aggregate() -> None:
     )
     assert not any(
         value.source_entity_uuid == entity.uuid
-        for value in BaseValue._registry.values()
+        for value in ModifiableValue._registry.values()
     )
     assert not any(
         event.event_type is EventType.ENTITY_CREATED for event in _events()
@@ -1080,7 +1082,7 @@ def _assert_provisional_scenario_was_discarded(
         )
         assert not any(
             value.source_entity_uuid == entity_uuid
-            for value in BaseValue._registry.values()
+            for value in ModifiableValue._registry.values()
         )
 
 

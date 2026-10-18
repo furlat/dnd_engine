@@ -1,6 +1,8 @@
 """Dependency-neutral grid, lighting, and structural vocabulary."""
 
+from collections.abc import Iterable, Mapping
 from enum import Enum, StrEnum
+from functools import lru_cache
 
 
 class OccupancyLayer(StrEnum):
@@ -47,12 +49,56 @@ class WorldEdgeChannel(str, Enum):
     PROPAGATION = "propagation"
 
 
+class SpatialChannel(StrEnum):
+    """Objective world channel whose change invalidates derived spatial state."""
+
+    MOVEMENT = "movement"
+    # Physical sight geometry: what shadowcast field of view reads.
+    OPTICAL = "optical"
+    # Conditional obscurement along sight routes; physical field of view is unchanged.
+    OBSCUREMENT = "obscurement"
+    ILLUMINATION = "illumination"
+    PROPAGATION = "propagation"
+    OCCUPANCY = "occupancy"
+
+
+EDGE_CHANNEL_REVISIONS: Mapping[WorldEdgeChannel, SpatialChannel] = {
+    WorldEdgeChannel.MOVEMENT: SpatialChannel.MOVEMENT,
+    WorldEdgeChannel.OPTICAL: SpatialChannel.OPTICAL,
+    WorldEdgeChannel.PROPAGATION: SpatialChannel.PROPAGATION,
+}
+
+
+def edge_revision_channels(channels: Iterable[WorldEdgeChannel]) -> frozenset[SpatialChannel]:
+    """Return the revision channels invalidated by changed structural channels."""
+    return frozenset(EDGE_CHANNEL_REVISIONS[channel] for channel in channels)
+
+
+
+@lru_cache(maxsize=65536)
+def cell_key(position: tuple[int, int]) -> str:
+    """The wire key of one grid cell ("x,y")."""
+    return f"{position[0]},{position[1]}"
+
+
+@lru_cache(maxsize=65536)
+def key_cell(key: str) -> tuple[int, int]:
+    """The grid cell of one wire key ("x,y")."""
+    x_text, y_text = key.split(",", maxsplit=1)
+    return int(x_text), int(y_text)
+
+
 __all__ = [
     "CardinalDirection",
+    "cell_key",
+    "key_cell",
+    "EDGE_CHANNEL_REVISIONS",
     "LightLevel",
     "MovementMode",
     "OccupancyLayer",
+    "SpatialChannel",
     "WorldEdgeChannel",
+    "edge_revision_channels",
 ]
 
 

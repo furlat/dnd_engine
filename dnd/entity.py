@@ -1,22 +1,43 @@
 from dnd.core.effect_types import EventResolutionRef, EffectOrigin
+from dnd.core.damage import DamageResolution
 from dnd.core.attack_types import NaturalWeaponSpec
-from typing import AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
+from typing import cast, Callable, AbstractSet, Dict, FrozenSet, Hashable, Mapping, Optional, Any, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
-from collections import defaultdict
-from dataclasses import dataclass
-from contextlib import contextmanager
+from dataclasses import dataclass, field, replace
+from functools import cache
 import time
 
-from dnd.action_timing import action_timing_enabled, record_action_elapsed, record_action_timing
-from dnd.core.values import BaseValue, ModifiableValue, AdvantageStatus, composed_passive_score
+import numpy as np
+
+from dnd.action_timing import action_timing_enabled, record_action_count, record_action_elapsed, record_action_timing
+from dnd.core.values import (
+    ModifiableValue,
+    AdvantageStatus,
+    ValueRead,
+    ValueReading,
+    Part,
+    Row,
+    composed,
+    part,
+    parts,
+    value_advantage_sum,
+    with_rows,
+    outgoing_of,
+    read_value,
+    value_score,
+    Channel,
+    Kind,
+    add_modifier,
+    normalized_base,
+)
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.elevation import support_distance_feet
-from dnd.core.modifiers import NumericalModifier, ResistanceStatus
+from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.action_types import ActionEconomyCostType, RestrictedActionGrant
+from dnd.core.action_types import ActionEconomyCostType, ActionSelection, RestrictedActionGrant
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import (
     BehaviorBinding,
@@ -32,6 +53,7 @@ from dnd.core.spell_execution import current_spell_execution
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 from dnd.core.events import (
+    HealingAppliedEvent, RestCompletedEvent,
     Damage, Event, EventPhase, EventQueue, Range, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
     D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
     TakeDamageEvent, DamageAppliedEvent, DeathSaveEvent, InstantDeathEvent, DeathEvent, HealEvent,
@@ -52,8 +74,9 @@ from dnd.types.physical_access import PhysicalAccess
 from dnd.core.events import RangeType
 from dnd.types.actor import EntityStatsState, PendingSpatialReturn, SpatialDisposition
 from dnd.types.summoning import SummonOrigin, TerminalOwnerRelease
+from dnd.types.discovery import ActorScan, CreatureFacts, ObjectRecord, Relationship, ScanRecord, relationship
 from dnd.types.spatial_effects import SpatialDamageSource
-from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores, ability_score_normalizer
+from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
 from dnd.blocks.health import (
     DamageApplicationPreview,
@@ -69,7 +92,11 @@ from dnd.blocks.creature_proficiencies import (
 )
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
-from dnd.blocks.sensory import Senses, capture_senses_snapshot, spatial_senses_system
+from dnd.blocks.sensory import Senses, published_senses, spatial_senses_system
+from dnd.core.view import cell_seen, cell_visible, layer_value, visible_box, visible_positions
+from dnd.core.navigation import (NO_ROUTES, PathSearch, Routes, admit, candidate_steps, choose_routes,
+    destination_path, layer_key, route, route_candidates, route_cost, route_costs, route_count, route_destinations,
+    route_items, routes_box, routes_touch, tree_box, tree_cells, tree_mask)
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.blocks.inventory import Inventory, InventoryAddResult
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
@@ -97,11 +124,15 @@ from dnd.types.character_progression import (
 from dnd.types.character_receipts import CharacterGrantReceipt
 from dnd.core.gridmap import (
     ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN,
+    CellBox,
     PreparedObjectPlacement,
     get_map,
+    path_read_box,
+    union_box,
 )
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.geometry import supercover_line
+from dnd.core.aoe import AoEShape, FootprintIdentity, footprint_identity, objective_footprint
 from dnd.core.combat_log import EmptyLogData
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.creature_transforms import (
@@ -117,6 +148,18 @@ from dnd.core.base_actions import (
     OpportunityAttackExposure,
     PositionDiscoveryContract, target_resolution_sort_key,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ThreatExits:
+    """One discovery call's visible hostile threat domains, with which of them each path step exits.
+
+    `exits` memoizes domain indices per step, so it lives only with these
+    domains: the call's paths share their steps (plan PD2).
+    """
+
+    domains: Tuple[Tuple['Entity', FrozenSet[Tuple[int, int]]], ...]
+    exits: Dict[Tuple[Tuple[int, int], Tuple[int, int]], Tuple[int, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +206,8 @@ class PreparedEntityRetirement:
     canceled: bool = False
 
 
+# A suspended or restored presence can carry attached conditions of unknown extent.
+
 _CONCRETE_EQUIPMENT_SLOTS: Tuple[EquipmentSlot, ...] = (
     *tuple(WeaponSlot),
     BodyPart.HEAD,
@@ -201,14 +246,14 @@ def get_natural_roll(roll: DiceRoll) -> int:
 
 def determine_attack_outcome(
     roll: DiceRoll,
-    ac: Union[int, ModifiableValue],
+    ac: Union[int, ValueReading],
     crit_threshold: int = 20
 ) -> AttackOutcome:
         """Determine current engine d20 outcome from a roll and target number.
 
         Args:
             roll: D20 roll result.
-            ac: Target number or modifiable target number.
+            ac: Target number or evaluated armor class.
             crit_threshold: Minimum natural attack roll that upgrades a hit to
                 a critical hit.
 
@@ -216,7 +261,7 @@ def determine_attack_outcome(
             Engine outcome for the roll. Attack rolls use natural 1/critical
             semantics; saving throws and checks compare total against DC.
         """
-        target_ac = ac.normalized_score if isinstance(ac, ModifiableValue) else ac
+        target_ac = ac if isinstance(ac, int) else ac.normalized_score
 
         if roll.roll_type != RollType.ATTACK:
             return AttackOutcome.HIT if roll.total >= target_ac else AttackOutcome.MISS
@@ -303,6 +348,8 @@ class EntityConfig(BaseModel):
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
     size: Size = Field(default=Size.MEDIUM, description="Creature size (Tiny through Gargantuan)")
+    flesh_body: bool | None = None
+    cannot_manipulate_bodies: bool = False
     gaseous_body: bool = Field(default=False, description="Native body form affected by physical gas barriers.")
     native_plane_id: str = "material"
     current_plane_id: str = "material"
@@ -386,6 +433,12 @@ class Entity(BaseBlock):
         default=(),
         description="Prepared spells grouped by their exact semantic source.",
     )
+    scribed_spell_ids: Tuple[str, ...] = Field(
+        default=(), description="Permanent authored spells transcribed into this character's Wizard book.",
+    )
+    permanent_feature_uses: Tuple[str, ...] = Field(
+        default=(), description="Exact non-recharging feature uses supplied by captured character state.",
+    )
     feature_toggle_selections: Tuple[FeatureToggleSelection, ...] = Field(
         default=(),
         description="Explicit enabled and disabled player feature selections.",
@@ -421,11 +474,11 @@ class Entity(BaseBlock):
         description="Action economy block owned by this entity."
     )
     proficiency_bonus: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="proficiency_bonus", base_value=2),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), name="proficiency_bonus", base=2),
         description="Entity proficiency bonus value."
     )
     initiative: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="initiative", base_value=0),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), name="initiative", base=0),
         description="Initiative modifier value."
     )
     senses: Senses = Field(
@@ -449,6 +502,8 @@ class Entity(BaseBlock):
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
     size: Size = Field(default=Size.MEDIUM, description="Creature size (Tiny through Gargantuan)")
+    flesh_body: bool | None = None
+    cannot_manipulate_bodies: bool = False
     gaseous_body: bool = Field(default=False, description="Native body form affected by physical gas barriers.")
     native_plane_id: str = "material"
     current_plane_id: str = "material"
@@ -464,7 +519,6 @@ class Entity(BaseBlock):
     spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT
     pending_spatial_return: PendingSpatialReturn | None = None
     pending_spatial_return_handler_uuid: UUID | None = Field(default=None, exclude=True)
-    antimagic_presence_owner_uuid: UUID | None = Field(default=None, exclude=True)
     is_spatially_suspended: bool = Field(
         default=False,
         description="Whether a retained Entity is temporarily absent from the world.",
@@ -477,6 +531,8 @@ class Entity(BaseBlock):
         default_factory=dict,
         description="Source-owned durable size contributions.",
     )
+    temporary_size_steps: Dict[UUID, int] = Field(default_factory=dict)
+
     origin_capability_sources: Dict[OriginCapability, Set[UUID]] = Field(
         default_factory=dict,
         description="Source-owned durable non-numerical origin capabilities.",
@@ -494,6 +550,8 @@ class Entity(BaseBlock):
         ge=0,
         description="Swimming speed in feet. Zero means no natural or granted swimming speed."
     )
+    is_player_companion: bool = Field(default=False,
+        description="Explicit companion membership retained through death and temporary AI control.")
     uses_death_saves: bool = Field(
         default=False,
         description="Whether this entity follows the player-style death saving throw rules at 0 HP."
@@ -512,19 +570,26 @@ class Entity(BaseBlock):
     )
 
     jump_distance_additive: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="Jump Distance (Additive)", base_value=0),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), name="Jump Distance (Additive)", base=0),
         description="Additive jump-distance value used by spell and condition effects."
     )
     jump_distance_multiplier: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="Jump Distance (Multiplier)", base_value=1),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), name="Jump Distance (Multiplier)", base=1),
         description="Multiplicative jump-distance value used by spell and condition effects."
     )
     turn_duration_interval: Optional[Tuple[UUID, int]] = Field(
         default=None, exclude=True, description="Existing active encounter turn interval for item effect application.",
     )
+    active_encounter_uuid: UUID | None = None
     is_my_turn: bool = Field(default=False, description="True when it's this entity's turn")
     non_blocking: bool = Field(default=False, description="When True, entity does not block movement through its cell")
     intrinsic_ignore_difficult_terrain: bool = Field(default=False, alias="ignore_difficult_terrain")
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (
+            self.proficiency_bonus, self.initiative, self.jump_distance_additive,
+            self.jump_distance_multiplier, self.max_concentration_slots)
 
     @property
     def ignore_difficult_terrain(self) -> bool:
@@ -557,45 +622,24 @@ class Entity(BaseBlock):
     def ignore_underwater_penalties(self, value: bool) -> None:
         self.intrinsic_ignore_underwater_penalties = value
     max_concentration_slots: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="max_concentration_slots", base_value=1),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(), name="max_concentration_slots", base=1),
         description="Maximum simultaneous concentration slots available to this entity."
     )
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
 
-    _aoe_footprint_cache_context: Optional[Tuple[Any, ...]] = PrivateAttr(default=None)
-    _aoe_footprint_cache: Dict[
-        Tuple[Any, ...],
-        frozenset[Tuple[int, int]],
-    ] = PrivateAttr(default_factory=dict)
-    _aoe_preview_cache_context: Optional[Tuple[Any, ...]] = PrivateAttr(default=None)
-    _aoe_preview_cache: Dict[
-        Tuple[Any, ...],
-        Tuple[AvailableTarget, ...],
-    ] = PrivateAttr(default_factory=dict)
-    _aoe_contact_alive: Dict[UUID, bool] = PrivateAttr(default_factory=dict)
-    _aoe_origin_fov_cache_revision: Optional[int] = PrivateAttr(default=None)
-    _aoe_origin_fov_cache: Dict[
-        Tuple[Tuple[int, int], int],
-        Set[Tuple[int, int]],
-    ] = PrivateAttr(default_factory=dict)
     _fast_move_target_cache_revision: Optional[Tuple[int, int]] = PrivateAttr(default=None)
+    # The cells the last navigation materialization read and their traversal stamp then.
+    _navigation_traversal: Optional[Tuple[CellBox, int]] = PrivateAttr(default=None)
     _fast_move_target_cache: Dict[
         Tuple[Any, ...],
         Tuple[AvailableTarget, ...],
-    ] = PrivateAttr(default_factory=dict)
+    ] = PrivateAttr(default={})
     _position_preview_cache_context: Optional[Tuple[Any, ...]] = PrivateAttr(default=None)
     _position_preview_cache: Dict[
         Tuple[Any, ...],
         Tuple[AvailableTarget, ...],
-    ] = PrivateAttr(default_factory=dict)
-    _visible_position_cache: Dict[int, Tuple[Tuple[int, int], ...]] = PrivateAttr(
-        default_factory=dict
-    )
-    _aoe_nearby_candidates_cache: Dict[
-        Tuple[Tuple[Tuple[int, int], ...], int],
-        frozenset[Tuple[int, int]],
-    ] = PrivateAttr(default_factory=dict)
-    _life_state_modifier_ownership: ModifierOwnership = PrivateAttr(default_factory=list)
+    ] = PrivateAttr(default={})
+    _life_state_modifier_ownership: ModifierOwnership = PrivateAttr(default=[])
     _runtime_agency_revoked: bool = PrivateAttr(default=False)
     _character_grant_receipts: Dict[str, CharacterGrantReceipt] = PrivateAttr(
         default_factory=dict,
@@ -769,13 +813,13 @@ class Entity(BaseBlock):
         old_position = self.position
         self._set_position(position)
         try:
-            grid._commit_entity_membership(self.uuid, None, position)
+            grid.commit_entity_membership(self.uuid, None, position)
             self.is_deployed = True
             self._register_spatial_observer()
         except BaseException as exc:
             spatial_senses_system.unregister_observer(self.uuid)
             if grid.get_entity_position(self.uuid) == position:
-                grid._commit_entity_membership(self.uuid, position, None)
+                grid.commit_entity_membership(self.uuid, position, None)
             self._set_position(old_position)
             self.is_deployed = False
             if isinstance(exc, PositionCommitError):
@@ -783,7 +827,7 @@ class Entity(BaseBlock):
             raise PositionCommitError(exc) from exc
     def _publish_world_attachment(self, position: Tuple[int, int], *, parent_event: Event | None = None) -> None:
         try:
-            get_map()._publish_entity_membership(self.uuid, None, position,
+            get_map().publish_entity_membership(self.uuid, None, position,
                 parent_event=parent_event.uuid if parent_event is not None else None)
         except PositionPublicationError:
             raise
@@ -799,11 +843,11 @@ class Entity(BaseBlock):
         if not self.is_deployed:
             return
         grid = get_map()
-        grid._commit_entity_membership(self.uuid, self.position, None)
+        grid.commit_entity_membership(self.uuid, self.position, None)
         self.is_deployed = False
         spatial_senses_system.unregister_observer(self.uuid)
         try:
-            grid._publish_entity_membership(self.uuid, self.position, None)
+            grid.publish_entity_membership(self.uuid, self.position, None)
         except PositionPublicationError:
             raise
         except BaseException as exc:
@@ -823,16 +867,14 @@ class Entity(BaseBlock):
                 ValueError("Entity membership does not match its objective position")
             )
         elevation = grid.get_support_elevation_feet(self.position)
-        grid._commit_entity_membership(self.uuid, self.position, None)
+        grid.commit_entity_presence(self.uuid, self.position, None)
         self.suspended_support_elevation_feet = elevation
         self.is_deployed = False
         self.is_spatially_suspended = True
         self.spatial_disposition = SpatialDisposition.ABSENT
-        # Rare unknown coverage: attached conditions can extend beyond this anchor.
-        grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
         spatial_senses_system.unregister_observer(self.uuid)
         try:
-            grid._publish_entity_membership(
+            grid.publish_entity_membership(
                 self.uuid,
                 self.position,
                 None,
@@ -858,28 +900,26 @@ class Entity(BaseBlock):
         old_disposition = self.spatial_disposition
         self._set_position(position)
         try:
-            grid._commit_entity_membership(self.uuid, None, position)
+            grid.commit_entity_presence(self.uuid, None, position)
             self.is_deployed = True
             self.is_spatially_suspended = False
             self.spatial_disposition = SpatialDisposition.PRESENT
-            grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
             self._register_spatial_observer()
         except BaseException as exc:
             spatial_senses_system.unregister_observer(self.uuid)
             if grid.get_entity_position(self.uuid) == position:
-                grid._commit_entity_membership(self.uuid, position, None)
+                grid.commit_entity_presence(self.uuid, position, None)
             self._set_position(old_position)
             self.is_deployed = False
             self.is_spatially_suspended = True
             self.spatial_disposition = old_disposition
-            grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
             if isinstance(exc, PositionCommitError):
                 raise
             raise PositionCommitError(exc) from exc
         if not publish:
             return
         try:
-            grid._publish_entity_membership(
+            grid.publish_entity_membership(
                 self.uuid,
                 None,
                 position,
@@ -922,7 +962,7 @@ class Entity(BaseBlock):
         entity._set_position(new_position)
         entity.occupancy_layer = new_layer
         try:
-            grid._commit_entity_membership(entity.uuid, old_position, new_position)
+            grid.commit_entity_membership(entity.uuid, old_position, new_position)
         except BaseException as exc:
             entity._set_position(old_position)
             entity.occupancy_layer = old_layer
@@ -934,7 +974,7 @@ class Entity(BaseBlock):
         if not publish:
             return
         try:
-            grid._publish_entity_membership(
+            grid.publish_entity_membership(
                 entity.uuid,
                 old_position,
                 new_position,
@@ -971,7 +1011,7 @@ class Entity(BaseBlock):
             if source == position and layer is OccupancyLayer.GROUND:
                 continue
             try:
-                get_map()._publish_entity_membership(actor.uuid, source, position,
+                get_map().publish_entity_membership(actor.uuid, source, position,
                     parent_event=parent, previous_occupancy_layer=layer,
                     occupancy_layer=OccupancyLayer.GROUND)
             except BaseException as error:
@@ -1017,7 +1057,7 @@ class Entity(BaseBlock):
             return
         prepared.published = True
         try:
-            get_map()._publish_entity_membership(self.uuid, None, prepared.position,
+            get_map().publish_entity_membership(self.uuid, None, prepared.position,
                                                 parent_event=prepared.parent_event)
         except BaseException as error:
             raise PositionPublicationError(error) from error
@@ -1029,7 +1069,7 @@ class Entity(BaseBlock):
         if self.pending_spatial_return_handler_uuid is not None:
             return
         handler = EventHandler(name="Pending spatial return", source_entity_uuid=self.uuid,
-            runs_while_suppressed=True, event_processor=self._retry_spatial_return,
+            runs_while_owner_inactive=True, event_processor=self._retry_spatial_return,
             trigger_conditions=[Trigger(event_type=kind, event_phase=EventPhase.EFFECT)
                 for kind in (EventType.SPATIAL_ENTITY_LEFT, EventType.SPATIAL_TILE_CHANGED,
                              EventType.SPATIAL_OBJECT_REMOVED, EventType.SPATIAL_OBJECT_CHANGED)])
@@ -1189,6 +1229,7 @@ class Entity(BaseBlock):
             background=self.character_background,
             applied_origin_state=self.applied_origin_state,
             applied_class_levels=self.applied_class_levels,
+            scribed_spell_ids=self.scribed_spell_ids, permanent_feature_uses=self.permanent_feature_uses,
             ability_scores=tuple(
                 (ability.name, ability.ability_score.score)
                 for ability in self.ability_scores.abilities_list
@@ -1205,7 +1246,7 @@ class Entity(BaseBlock):
             ),
             proficiency_bonus=self.proficiency_bonus.normalized_score,
             initiative=self.initiative.normalized_score,
-            armor_class=self.ac_bonus(use_register=False).normalized_score,
+            armor_class=self.ac_bonus().normalized_score,
             life_state=self.health.life_state.value,
             remains_disposition=self.health.remains_disposition,
             current_hit_points=max(0, self.get_hp()),
@@ -1227,12 +1268,7 @@ class Entity(BaseBlock):
                 )
                 for hit_die in self.health.hit_dices
             ),
-            damage_affinities=tuple(
-                (damage_type.value, status.value)
-                for damage_type in DamageType
-                if (status := self.health.get_resistance(damage_type))
-                is not ResistanceStatus.NONE
-            ),
+            damage_affinities=self.health.damage_affinities(),
             walking_speed_feet=self.action_economy.current_speed(),
             swimming_speed_feet=self.swimming_speed,
             has_ordinary_sight=self.has_ordinary_sight,
@@ -1409,14 +1445,14 @@ class Entity(BaseBlock):
             )
         spatial_senses_system.unregister_observer(self.uuid)
         if grid.get_entity_position(self.uuid) is not None:
-            grid._commit_entity_membership(self.uuid, self.position, None)
+            grid.commit_entity_membership(self.uuid, self.position, None)
         self.__class__._entity_registry.pop(self.uuid, None)
         for obj in tuple(BaseObject._registry.values()):
             if isinstance(obj, BaseObject) and obj.source_entity_uuid in owned_source_uuids:
                 obj.remove_from_register()
-        for value in tuple(BaseValue._registry.values()):
+        for value in tuple(ModifiableValue._registry.values()):
             if value.source_entity_uuid in owned_source_uuids:
-                value.remove_from_register()
+                ModifiableValue.unregister(value.uuid)
         for block in owned_blocks:
             BaseBlock.unregister(block.uuid)
 
@@ -1590,14 +1626,14 @@ class Entity(BaseBlock):
             self.turn_duration_interval = None
             was_deployed = self.is_deployed
             if was_deployed:
-                grid._commit_entity_membership(self.uuid, self.position, None)
+                grid.commit_entity_membership(self.uuid, self.position, None)
             self.is_deployed = False
             self.is_spatially_suspended = False
             spatial_senses_system.unregister_observer(self.uuid)
             # The observer receives terminal membership while identity/position exists.
             if was_deployed:
                 try:
-                    grid._publish_entity_membership(self.uuid, self.position, None,
+                    grid.publish_entity_membership(self.uuid, self.position, None,
                         parent_event=parent_uuid, terminal_release=prepared.release)
                 except BaseException as error:
                     errors.append(error)
@@ -1615,8 +1651,9 @@ class Entity(BaseBlock):
         if errors:
             raise BaseExceptionGroup("Actor retirement publication failed after commitment", errors)
 
-    def validate_initial_composition(self) -> None:
-        """Validate one finished aggregate without publishing its birth fact."""
+    def validate_initial_composition(self, *, parent_event: Event | None = None,
+                                     summon_origin: SummonOrigin | None = None) -> EntityCreatedEvent:
+        """Validate one finished aggregate; return its unpublished birth fact."""
         if self.creation_committed:
             raise RuntimeError("entity creation is already committed")
         if self.is_deployed or self.is_spatially_suspended:
@@ -1639,7 +1676,7 @@ class Entity(BaseBlock):
             raise RuntimeError(
                 "registered action ownership disagrees with entity identity",
             )
-        self._entity_created_event()
+        return self._entity_created_event(parent_event=parent_event, summon_origin=summon_origin)
 
     def install_initial_items(
         self,
@@ -1687,8 +1724,7 @@ class Entity(BaseBlock):
                       parent_event: Event | None = None,
                       summon_origin: SummonOrigin | None = None) -> PreparedBirth:
         """Validate and retain the complete birth while still undeployed."""
-        self.validate_initial_composition()
-        created = self._entity_created_event(parent_event=parent_event, summon_origin=summon_origin)
+        created = self.validate_initial_composition(parent_event=parent_event, summon_origin=summon_origin)
         if initial_conditions:
             states = {state.condition_uuid: state for state in created.initial_condition_states}
             if initial_conditions.owner_uuid != self.uuid:
@@ -1751,13 +1787,14 @@ class Entity(BaseBlock):
             return None
         previous = self.faction
         self.faction = faction
-        get_map().invalidate_occupancy_paths({self.position})
-        return EventQueue.publish_completed_fact(EntityFactionChangedEvent(
+        get_map().invalidate_allegiance(self.position if self.is_deployed else None)
+        changed = EventQueue.publish_committed_phase(EntityFactionChangedEvent(
             source_entity_uuid=self.uuid, target_entity_uuid=self.uuid,
             entity_uuid=self.uuid, previous_faction=previous, faction_after=faction,
             parent_event=parent_event.uuid if parent_event is not None else None,
-            phase=EventPhase.COMPLETION, use_register=False,
+            phase=EventPhase.EFFECT, use_register=False,
         ))
+        return changed.phase_to(EventPhase.COMPLETION)
 
     @classmethod
     def get_all_entities(cls) -> List['Entity']:
@@ -1817,14 +1854,14 @@ class Entity(BaseBlock):
         senses = Senses.create(source_entity_uuid=source_entity_uuid, position=config.position)
         appearance = Appearance.create(source_entity_uuid=source_entity_uuid, config=config.appearance)
         action_economy = ActionEconomy.create(source_entity_uuid=source_entity_uuid, config=config.action_economy)
-        proficiency_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.proficiency_bonus)
+        proficiency_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.proficiency_bonus)
         for modifier in config.proficiency_bonus_modifiers:
-            proficiency_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            add_modifier(proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
         dex_mod = ability_scores.get_ability("dexterity").modifier
-        initiative = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=dex_mod, value_name="initiative")
+        initiative = ModifiableValue(source_entity_uuid=source_entity_uuid, base=dex_mod, name="initiative")
         for modifier in config.initiative_modifiers:
-            initiative.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            add_modifier(initiative, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
         spellcasting = SpellcastingBlock.create(
             source_entity_uuid=source_entity_uuid,
@@ -1860,6 +1897,8 @@ class Entity(BaseBlock):
             creature_type=config.creature_type,
             size=config.size,
             gaseous_body=config.gaseous_body,
+            flesh_body=config.flesh_body,
+            cannot_manipulate_bodies=config.cannot_manipulate_bodies,
             native_plane_id=config.native_plane_id, current_plane_id=config.current_plane_id,
             structural_base_size=config.size,
             has_ordinary_sight=config.has_ordinary_sight,
@@ -1894,19 +1933,34 @@ class Entity(BaseBlock):
                 f"structural size contributions disagree: {values}",
             )
         self.structural_size_sources[source_id] = size
-        self.size = size
+        self._resolve_size_contributions()
 
     def remove_structural_size_source(self, source_id: UUID) -> bool:
         """Remove exactly one durable size source and restore its predecessor."""
         if self.structural_size_sources.pop(source_id, None) is None:
             return False
-        remaining = set(self.structural_size_sources.values())
-        self.size = (
-            next(iter(remaining))
-            if remaining
-            else self.structural_base_size
-        )
+        self._resolve_size_contributions()
         return True
+
+    def _resolve_size_contributions(self) -> None:
+        sizes = tuple(Size)
+        durable = next(iter(self.structural_size_sources.values()), self.structural_base_size)
+        index = sizes.index(durable) + sum(self.temporary_size_steps.values())
+        size = sizes[max(0, min(len(sizes) - 1, index))]
+        if size is not self.size:
+            self.size = size
+            # Requesters with origin traversal compare sizes at this creature's cell
+            # (`can_traverse_creature_space`); its own searches key its size.
+            if self.is_deployed:
+                get_map().invalidate_occupancy_paths({self.position})
+
+    def add_temporary_size_step(self, owner_uuid: UUID, step: int) -> None:
+        self.temporary_size_steps[owner_uuid] = step
+        self._resolve_size_contributions()
+
+    def remove_temporary_size_step(self, owner_uuid: UUID) -> None:
+        self.temporary_size_steps.pop(owner_uuid, None)
+        self._resolve_size_contributions()
 
     def add_origin_capability_source(
         self,
@@ -1944,6 +1998,16 @@ class Entity(BaseBlock):
     ) -> bool:
         """Return whether any durable source grants this origin capability."""
         return bool(self.origin_capability_sources.get(capability))
+
+    def traversal_rule_inputs(self) -> Tuple[Hashable, ...]:
+        """Every value of this creature that path rules read when it requests a path.
+
+        Allegiance and size decide which creatures it may pass
+        (`can_traverse_creature_space`), passive perception which concealed
+        hazards it knows, and type and body form which crossings stop it.
+        """
+        return (self.faction, self.get_passive_perception(), self.size, self.creature_type, self.gaseous_body,
+                self.has_origin_capability(OriginCapability.HALFLING_NIMBLENESS))
 
     def can_traverse_creature_space(self, occupant: "Entity") -> bool:
         """Return whether allegiance or an origin rule permits crossing a cell.
@@ -1998,11 +2062,21 @@ class Entity(BaseBlock):
             return False
         return True
 
+    def end_blocked_cells(self, box: CellBox) -> List[Tuple[int, int]]:
+        """The cells of a box where `can_end_movement_at` (subjective) is false: only a cell holding an entity
+        can be one."""
+        return [position for position, (entities, _) in get_map().contact_cells_in_box(box)
+                if entities and not self.can_end_movement_at(position, subjective=True)]
+
     def is_obscured_by_larger_creature_from(
         self,
         observer: "Entity",
+        *, subjective: bool,
     ) -> bool:
-        """Return whether Naturally Stealthy has exact intervening cover."""
+        """Return whether Naturally Stealthy has exact intervening cover.
+
+        Subjective (discovery) counts only the larger creatures this creature perceives.
+        """
         if not self.has_origin_capability(
             OriginCapability.NATURALLY_STEALTHY,
         ):
@@ -2026,6 +2100,7 @@ class Entity(BaseBlock):
             )
             if any(
                 candidate is not None
+                and (not subjective or candidate.uuid in self.senses.entities)
                 and candidate.health.life_state is not LifeState.DEAD
                 and size_order.index(candidate.size) > own_size_index
                 for candidate in candidates
@@ -2049,44 +2124,6 @@ class Entity(BaseBlock):
         """Move through the objective spatial-event path."""
         Entity.update_entity_position(self, new_position)
 
-    def get_target_entity(self, copy: bool = False) -> Optional['Entity']:
-        """Return the currently targeted entity.
-
-        Args:
-            copy: Whether to return a deep copy instead of the live entity.
-
-        Returns:
-            The targeted entity, a copy of it, or `None` when no target is set.
-        """
-        if self.target_entity_uuid is None:
-            return None
-        target_entity = Entity.get(self.target_entity_uuid)
-        assert isinstance(target_entity, Entity)
-        return target_entity if not copy else target_entity.model_copy(deep=True)
-
-    @contextmanager
-    def _temporary_target(self, target_entity_uuid: UUID) -> Iterator[None]:
-        """Bind one cross-entity evaluation target and restore prior context.
-
-        Args:
-            target_entity_uuid: Entity UUID used while contextual values are evaluated.
-
-        Yields:
-            Control while this entity and its child values target the supplied entity.
-        """
-        previous_uuid = self.target_entity_uuid
-        previous_name = self.target_entity_name
-        changed = previous_uuid != target_entity_uuid
-        if changed:
-            self.set_target_entity(target_entity_uuid)
-        try:
-            yield
-        finally:
-            if changed:
-                self.clear_target_entity()
-                if previous_uuid is not None:
-                    self.set_target_entity(previous_uuid, previous_name)
-
     def check_condition_immunity(self, condition_name: str, condition: Optional[BaseCondition] = None) -> bool:
         """Evaluate static and contextual immunity for a condition.
 
@@ -2096,18 +2133,18 @@ class Entity(BaseBlock):
                 checks.
 
         Returns:
-            True when the entity is immune in its current target/context state.
+            True when a static or contextual immunity applies to the condition.
         """
         for static_immunity in self.condition_immunities:
             if static_immunity[0] == condition_name and self.condition_immunity_contributes(static_immunity[1]):
                 return True
         condition_contextual_immunities = self.contextual_condition_immunities.get(condition_name, [])
-        immunity_context = dict(self.context or {})
+        immunity_context: Dict[str, Any] = {}
         if condition is not None:
-            immunity_context.setdefault("condition", condition)
-            immunity_context.setdefault("condition_tags", condition.tags)
+            immunity_context["condition"] = condition
+            immunity_context["condition_tags"] = condition.tags
         for source_name, immunity_check in condition_contextual_immunities:
-            if self.condition_immunity_contributes(source_name) and immunity_check(self, self.get_target_entity(), immunity_context):
+            if self.condition_immunity_contributes(source_name) and immunity_check(self, immunity_context):
                 return True
         return False
 
@@ -2116,6 +2153,9 @@ class Entity(BaseBlock):
                                   check_save_throw: bool = True,
                                   parent_event: Event | None = None) -> Event | None:
         """Shared native entity admission: identity, immunity, saving throw."""
+        if condition.source_creature_type is None:
+            source = Entity.get(condition.source_entity_uuid)
+            if source is not None: condition.source_creature_type = source.creature_type
         try:
             if condition.name is None:
                 raise ValueError("BaseCondition name is not set")
@@ -2146,7 +2186,8 @@ class Entity(BaseBlock):
                 self._discard_uncommitted_condition_tree(condition)
                 return declaration_event
 
-            if self.check_condition_immunity(condition.name, condition=condition):
+            if any(self.check_condition_immunity(name, condition=condition)
+                   for name in (condition.name, *condition.immunity_names)):
                 target_name = self.name
                 condition_name = condition.name
                 entry = CombatLogEntry(data=EmptyLogData(),
@@ -2336,6 +2377,9 @@ class Entity(BaseBlock):
     def on_short_rest(self) -> None:
         """Apply entity-level short-rest recovery."""
         self.action_economy.on_short_rest()
+        rest = EventQueue.publish_committed_phase(RestCompletedEvent(source_entity_uuid=self.uuid,
+            target_entity_uuid=self.uuid, rest_type="short_rest", phase=EventPhase.EFFECT, use_register=False))
+        rest.phase_to(EventPhase.COMPLETION)
 
     def spend_hit_dice(
         self,
@@ -2363,7 +2407,7 @@ class Entity(BaseBlock):
         if count > hit_die.available_hit_dice:
             raise ValueError(f"Not enough hit dice available to spend {count}")
 
-        constitution_modifier = self.ability_scores.get_ability("constitution").get_combined_values(use_register=False).normalized_score
+        constitution_modifier = self.ability_scores.get_ability("constitution").modifier_reading().normalized_score
         results: List[HitDiceHealingResult] = []
         for _ in range(count):
             roll_result = self.health.spend_hit_die(
@@ -2408,6 +2452,9 @@ class Entity(BaseBlock):
         for item in holdings.values():
             item.on_long_rest(self.uuid)
         self.health.on_long_rest()
+        rest = EventQueue.publish_committed_phase(RestCompletedEvent(source_entity_uuid=self.uuid,
+            target_entity_uuid=self.uuid, rest_type="long_rest", phase=EventPhase.EFFECT, use_register=False))
+        rest.phase_to(EventPhase.COMPLETION)
         return True
 
     def snapshot_entity_stats(self) -> EntityStatsState:
@@ -2418,22 +2465,23 @@ class Entity(BaseBlock):
             maximum_hp=maximum_hp,
             temporary_hp=self.health.temporary_hit_points.normalized_score,
             temporary_hp_grant=self.health.temporary_hit_points_grant,
-            armor_class=self.ac_bonus(use_register=False).normalized_score,
+            armor_class=self.ac_bonus().normalized_score,
             resolved_size=self.size,
             native_plane_id=self.native_plane_id, current_plane_id=self.current_plane_id,
             spatial_disposition=self.spatial_disposition,
             healing_blocked=self.health.is_healing_blocked(),
-            damage_affinities=tuple(
-                (damage_type.value, status.value) for damage_type in DamageType
-                if (status := self.health.get_resistance(damage_type)) is not ResistanceStatus.NONE
-            ),
+            damage_affinities=self.health.damage_affinities(),
         )
 
     def get_max_hp(self) -> int:
-        """Return maximum normal HP before temporary hit points and damage."""
-        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values(use_register=False)
+        """Return maximum normal HP before temporary hit points and damage.
+
+        The Constitution modifier is read directly (normalized score plus its
+        bonus), not through a freshly built combined value on every HP read.
+        """
+        con_modifier = self.ability_scores.get_ability("constitution").modifier
         return self.health.get_max_hit_dices_points(
-            constitution_modifier=con_modifier.normalized_score
+            constitution_modifier=con_modifier
         ) + self.health.max_hit_points_bonus.normalized_score
 
     def get_normal_hp(self) -> int:
@@ -2809,20 +2857,14 @@ class Entity(BaseBlock):
         )
         event = event.phase_to(EventPhase.EXECUTION)
 
-        bonus = ModifiableValue.create(
-            source_entity_uuid=self.uuid,
-            target_entity_uuid=self.uuid,
-            base_value=0,
-            value_name="Death Saving Throw",
-        )
         roll, roll_event = self.roll_d20_event(
-            bonus,
+            read_value(parts(self.health.death_save_bonus), ValueRead(self.uuid)),
             RollType.SAVE,
             context={"death_save": True},
             parent_event=event.uuid,
         )
         natural_roll = get_natural_roll(roll)
-        succeeded = natural_roll >= 10
+        succeeded = roll.total >= 10
         became_stable = False
         regained_hit_point = False
         died = False
@@ -2837,6 +2879,7 @@ class Entity(BaseBlock):
             regained_hit_point = True
             succeeded = True
         elif natural_roll == 1:
+            succeeded = False
             died = self.add_death_save_failure(2, self.uuid, event.uuid) is not None
         elif succeeded:
             self.death_save_successes = min(3, self.death_save_successes + 1)
@@ -2861,55 +2904,40 @@ class Entity(BaseBlock):
         )
         return event.phase_to(EventPhase.COMPLETION)
 
-    def revive(
-        self,
-        hit_points: int = 1,
-        reduce_exhaustion: bool = True,
-        parent_event: Optional[Event] = None,
-    ) -> bool:
-        """Restore a dead entity to life as a rules primitive.
-
-        Args:
-            hit_points: Minimum HP total after revival.
-            reduce_exhaustion: Whether revival reduces Exhaustion by one level.
-            parent_event: Optional parent event for condition cleanup lineage.
-
-        Returns:
-            True if the entity was dead or at 0 HP and is now revived.
-
-        Raises:
-            ValueError: If `hit_points` is less than 1.
-        """
-        if hit_points < 1:
+    def prepare_revival(self, hit_points: int=1, *, reduce_exhaustion: bool=False,
+                        parent_event: Event | None=None) -> ReviveEvent | None:
+        """Admit revival phases without altering life state or hit points."""
+        if hit_points<1:
             raise ValueError("hit_points must be at least 1")
         if (self.health.life_state is not LifeState.DEAD
                 or self.health.remains_disposition is RemainsDisposition.DISINTEGRATED):
+            return None
+        event=ReviveEvent(source_entity_uuid=self.uuid,source_entity_name=self.name,target_entity_uuid=self.uuid,
+            target_entity_name=self.name,entity_uuid=self.uuid,entity_name=self.name,hit_points=hit_points,
+            reduce_exhaustion=reduce_exhaustion,parent_event=parent_event.uuid if parent_event else None,use_register=False)
+        event=EventQueue.publish_declaration(event)
+        if not event.canceled:
+            event=event.phase_to(EventPhase.EXECUTION)
+        if not event.canceled:
+            event=event.phase_to(EventPhase.EFFECT)
+        return None if event.canceled else event
+
+    def commit_revival(self,event: ReviveEvent) -> bool:
+        """Commit an accepted native revival after companion placement admission."""
+        if (event.canceled or event.target_entity_uuid!=self.uuid or event.phase is not EventPhase.EFFECT
+                or self.health.life_state is not LifeState.DEAD
+                or self.health.remains_disposition is RemainsDisposition.DISINTEGRATED):
             return False
-        revive_event = ReviveEvent(
-            source_entity_uuid=self.uuid,
-            source_entity_name=self.name,
-            target_entity_uuid=self.uuid,
-            target_entity_name=self.name,
-            entity_uuid=self.uuid,
-            entity_name=self.name,
-            hit_points=hit_points,
-            reduce_exhaustion=reduce_exhaustion,
-            parent_event=parent_event.uuid if parent_event is not None else None,
-            phase=EventPhase.DECLARATION,
-        )
-        revive_event = revive_event.phase_to(EventPhase.EXECUTION)
-        if revive_event.canceled:
-            return False
-        self._set_normal_hp(hit_points)
+        self._set_normal_hp(event.hit_points)
         self.reset_death_save_state()
-        self._transition_life_state(
-            LifeState.ALIVE,
-            LifeStateChangeReason.REVIVAL,
-            revive_event,
-        )
-        revive_event = revive_event.phase_to(EventPhase.EFFECT)
-        revive_event.phase_to(EventPhase.COMPLETION)
+        self._transition_life_state(LifeState.ALIVE,LifeStateChangeReason.REVIVAL,event)
+        event.phase_to(EventPhase.COMPLETION)
         return True
+
+    def revive(self,hit_points: int=1,reduce_exhaustion: bool=True,parent_event: Event | None=None) -> bool:
+        """Restore an intact DEAD entity through interruptible native revival."""
+        prepared=self.prepare_revival(hit_points,reduce_exhaustion=reduce_exhaustion,parent_event=parent_event)
+        return prepared is not None and self.commit_revival(prepared)
 
     def on_turn_start(self, encounter_uuid: Optional[UUID] = None, round_number: int = 0, turn_index: int = 0) -> TurnStartEvent:
         """
@@ -3042,20 +3070,18 @@ class Entity(BaseBlock):
 
         return event
 
-    def _get_bonuses_for_skill(self, skill_name: SkillName, *, use_register: bool = True) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
-        """Return component values that make up an entity skill bonus.
+    def _get_bonuses_for_skill(self, skill_name: SkillName, read: ValueRead) -> Tuple[Part, ...]:
+        """Return the parts of an entity skill bonus in one read.
 
         Args:
             skill_name: Skill to assemble.
+            read: The read the parts take part in.
 
         Returns:
-            Normalized proficiency, skill bonus, and ability modifier values.
+            Proficiency (with the skill's proficiency rule), skill bonus, and ability modifier parts.
         """
-        proficiency_bonus = self.proficiency_bonus
         skill = self.skill_set.get_skill(skill_name)
-        skill_bonus = skill.skill_bonus
-        ability_name = skill.ability
-        ability = self.ability_scores.get_ability(ability_name)
+        ability = self.ability_scores.get_ability(skill.ability)
         skill_proficiency_converter = skill._get_proficiency_converter()
 
         def proficiency_bonus_multiplier_callable(bonus: int) -> int:
@@ -3064,177 +3090,142 @@ class Entity(BaseBlock):
                 ability.check_proficiency_sources.apply(bonus),
             )
 
-        ability_bonus = ability.get_combined_values(use_register=use_register)
-        normalized_proficiency_bonus = proficiency_bonus.model_copy(deep=True)
-        normalized_proficiency_bonus.update_normalizers(proficiency_bonus_multiplier_callable)
-        return normalized_proficiency_bonus, skill_bonus, ability_bonus
+        return (part(self.proficiency_bonus, proficiency_bonus_multiplier_callable), part(skill.skill_bonus),
+                *ability.combined_value(read))
 
     def _get_bonuses_for_ability_check(
         self,
         ability_name: AbilityName,
-    ) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
-        """Return proficiency, ability modifier and check-only contributions."""
+        read: ValueRead,
+    ) -> Tuple[Part, ...]:
+        """Return proficiency, ability modifier and check-only parts in one read."""
         ability = self.ability_scores.get_ability(ability_name)
-        normalized_proficiency_bonus = self.proficiency_bonus.model_copy(
-            deep=True,
-        )
-        normalized_proficiency_bonus.update_normalizers(
-            ability.check_proficiency_sources.converter(),
-        )
-        return normalized_proficiency_bonus, ability.get_combined_values(), ability.check_bonus
+        return (part(self.proficiency_bonus, ability.check_proficiency_sources.converter()),
+                *ability.combined_value(read), part(ability.check_bonus))
 
-    def _get_bonuses_for_saving_throw(self, ability_name: AbilityName) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
-        """Return component values that make up an entity saving throw bonus.
+    def _get_bonuses_for_saving_throw(
+        self,
+        ability_name: AbilityName,
+        read: ValueRead,
+    ) -> Tuple[Part, ...]:
+        """Return the parts of an entity saving throw bonus in one read.
 
         Args:
             ability_name: Ability save to assemble.
+            read: The read the parts take part in.
 
         Returns:
-            Normalized proficiency, save bonus, and ability modifier values.
+            Proficiency (with the save's proficiency rule), save bonus, and ability modifier parts.
         """
         saving_throw = self.saving_throws.get_saving_throw(ability_name)
-        saving_throw_bonus = saving_throw.bonus
-        proficiency_bonus_multiplier_callable = saving_throw._get_proficiency_converter()
-        proficiency_bonus = self.proficiency_bonus
-        ability_bonus = self.ability_scores.get_ability(ability_name).get_combined_values()
+        return (part(self.proficiency_bonus, saving_throw._get_proficiency_converter()), part(saving_throw.bonus),
+                *self.ability_scores.get_ability(ability_name).combined_value(read))
 
-        normalized_proficiency_bonus = proficiency_bonus.model_copy(deep=True)
-        normalized_proficiency_bonus.update_normalizers(proficiency_bonus_multiplier_callable)
-        return normalized_proficiency_bonus, saving_throw_bonus, ability_bonus
-
-    def _get_attack_bonuses(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Tuple[ModifiableValue, ModifiableValue, List[ModifiableValue], List[ModifiableValue], Range]:
-        """Return component values that make up a weapon attack bonus.
+    def _get_attack_bonuses(self, read: ValueRead, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Tuple[Part, Tuple[Part, ...], List[ModifiableValue], Tuple[Part, ...], Range]:
+        """Return the parts of a weapon attack bonus in one read.
 
         Args:
+            read: The attack's read: attacker and target.
             weapon_slot: Equipment slot used for the attack.
             override_ability: Optional ability to use instead of weapon rules.
 
         Returns:
-            Proficiency value, weapon bonus, attack bonus list, ability bonus
-            list, and weapon range.
+            Proficiency part, weapon bonus parts, attack bonus values, ability
+            modifier parts, and weapon range.
         """
         weapon_bonus, attack_bonuses, ability_bonuses, range = (
             self.equipment.get_attack_bonus_components(
                 self.ability_scores,
                 weapon_slot,
+                read,
                 override_ability,
                 natural_weapon=natural_weapon,
             )
         )
-        proficiency_bonus = self.proficiency_bonus
+        proficiency_bonus = part(self.proficiency_bonus)
         weapon = None if natural_weapon else self.equipment.get_weapon(weapon_slot)
         if not self.creature_proficiencies.is_weapon_proficient(
             weapon.properties if weapon is not None else None,
             weapon.item_id if weapon is not None else None,
         ):
-            proficiency_bonus = proficiency_bonus.model_copy(deep=True)
-            proficiency_bonus.update_normalizers(lambda _bonus: 0)
+            proficiency_bonus = part(self.proficiency_bonus, lambda _bonus: 0)
 
+        weapon_bonuses = parts(weapon_bonus)
         if natural_weapon is not None and natural_weapon.fixed_attack_bonus is not None:
-            intrinsic = ModifiableValue.create(source_entity_uuid=self.uuid, target_entity_uuid=self.target_entity_uuid, value_name="Intrinsic attack bonus",
-                base_value=natural_weapon.fixed_attack_bonus)
+            intrinsic = ModifiableValue(source_entity_uuid=self.uuid, name="Intrinsic attack bonus",
+                base=natural_weapon.fixed_attack_bonus, use_register=False)
             # Keep independent actor/target effects; fixed baseline replaces STR/proficiency.
-            weapon_bonus = weapon_bonus.combine_values([intrinsic])
-            proficiency_bonus = ModifiableValue.create(source_entity_uuid=self.uuid, target_entity_uuid=self.target_entity_uuid, value_name="Intrinsic proficiency", base_value=0)
-            ability_bonuses = []
-        return proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range
+            weapon_bonuses = composed(parts(weapon_bonus, intrinsic))
+            proficiency_bonus = part(ModifiableValue(source_entity_uuid=self.uuid, name="Intrinsic proficiency",
+                                                     base=0, use_register=False))
+            ability_bonuses = ()
+        return proficiency_bonus, weapon_bonuses, attack_bonuses, ability_bonuses, range
 
-    def saving_throw_bonus(self, target_entity_uuid: Optional[UUID], ability_name: AbilityName) -> ModifiableValue:
-        """Build the complete saving throw bonus for an ability.
+    def _opposed_reading(
+        self,
+        target_entity_uuid: Optional[UUID],
+        components: Callable[['Entity', ValueRead], Tuple[Part, ...]],
+        context: Optional[Dict[str, Any]],
+    ) -> ValueReading:
+        """Read one composed d20 bonus against a target whose matching parts export modifiers.
+
+        A missing target, the reader itself, or a tile reads without opponent
+        rows; the target still reaches the reader's contextual rows. A
+        retained effect can outlive its source: its recorded DC still applies,
+        but only a present opponent contributes outgoing modifiers.
+        """
+        target_entity = Entity.get(target_entity_uuid) if target_entity_uuid is not None else None
+        opponent = None
+        if (target_entity is not None and target_entity.uuid != self.uuid
+                and get_map().get_tile_by_uuid(target_entity.uuid) is None):
+            opponent = outgoing_of(components(target_entity, ValueRead(target_entity.uuid, self.uuid)), None)
+        read = ValueRead(self.uuid, target_entity_uuid, context, opponent)
+        return read_value(composed(components(self, ValueRead(self.uuid, target_entity_uuid))), read)
+
+    def saving_throw_bonus(self, target_entity_uuid: Optional[UUID], ability_name: AbilityName,
+                           context: Optional[Dict[str, Any]]) -> ValueReading:
+        """Read the complete saving throw bonus for an ability against an opposing entity.
 
         Args:
             target_entity_uuid: Optional opposing entity whose outgoing
-                modifiers should be propagated.
+                modifiers apply.
             ability_name: Saving throw ability.
+            context: The save's situation (condition and cause facts).
 
         Returns:
-            Combined saving throw bonus.
+            The evaluated saving throw bonus.
         """
-        target_entity = Entity.get(target_entity_uuid) if target_entity_uuid is not None else None
-        # A retained effect can outlive its source. Its recorded DC still applies;
-        # only a currently present opponent can contribute outgoing modifiers.
-        if (target_entity_uuid is None or target_entity is None or target_entity_uuid == self.uuid
-                or get_map().get_tile_by_uuid(target_entity_uuid) is not None):
-            bonuses = self._get_bonuses_for_saving_throw(ability_name)
-            return bonuses[0].combine_values(list(bonuses)[1:]).model_copy(deep=True)
-
-        with self._temporary_target(target_entity_uuid), target_entity._temporary_target(self.uuid):
-            source_bonuses = self._get_bonuses_for_saving_throw(ability_name)
-            target_bonuses = target_entity._get_bonuses_for_saving_throw(ability_name)
-            for source_bonus, target_bonus in zip(source_bonuses, target_bonuses):
-                source_bonus.set_from_target(target_bonus)
-            try:
-                return source_bonuses[0].combine_values(list(source_bonuses)[1:]).model_copy(deep=True)
-            finally:
-                for source_bonus in source_bonuses:
-                    source_bonus.reset_from_target()
+        return self._opposed_reading(target_entity_uuid,
+            lambda entity, read: entity._get_bonuses_for_saving_throw(ability_name, read), context)
 
     def ability_check_bonus(
         self,
         target_entity_uuid: Optional[UUID],
         ability_name: AbilityName,
-    ) -> ModifiableValue:
-        """Build the complete bonus for a raw ability check."""
-        if target_entity_uuid is None or target_entity_uuid == self.uuid:
-            bonuses = self._get_bonuses_for_ability_check(ability_name)
-            return bonuses[0].combine_values(list(bonuses)[1:]).model_copy(
-                deep=True,
-            )
-
-        target_entity = Entity.get(target_entity_uuid)
-        if not isinstance(target_entity, Entity):
+    ) -> ValueReading:
+        """Read the complete bonus for a raw ability check against an optional opposing entity."""
+        if target_entity_uuid is not None and target_entity_uuid != self.uuid and not isinstance(
+                Entity.get(target_entity_uuid), Entity):
             raise ValueError(f"Target entity {target_entity_uuid} not found")
+        return self._opposed_reading(target_entity_uuid,
+            lambda entity, read: entity._get_bonuses_for_ability_check(ability_name, read), None)
 
-        with (
-            self._temporary_target(target_entity_uuid),
-            target_entity._temporary_target(self.uuid),
-        ):
-            source_bonuses = self._get_bonuses_for_ability_check(ability_name)
-            target_bonuses = target_entity._get_bonuses_for_ability_check(
-                ability_name,
-            )
-            for source_bonus, target_bonus in zip(
-                source_bonuses,
-                target_bonuses,
-            ):
-                source_bonus.set_from_target(target_bonus)
-            try:
-                return source_bonuses[0].combine_values(
-                    list(source_bonuses)[1:],
-                ).model_copy(deep=True)
-            finally:
-                for source_bonus in source_bonuses:
-                    source_bonus.reset_from_target()
-
-    def skill_bonus(self, target_entity_uuid: Optional[UUID], skill_name: SkillName) -> ModifiableValue:
-        """Build the complete skill bonus for a skill.
+    def skill_bonus(self, target_entity_uuid: Optional[UUID], skill_name: SkillName) -> ValueReading:
+        """Read the complete skill bonus against an optional opposing entity.
 
         Args:
             target_entity_uuid: Optional opposing entity whose outgoing
-                modifiers should be propagated.
+                modifiers apply.
             skill_name: Skill to assemble.
 
         Returns:
-            Combined skill bonus.
+            The evaluated skill bonus.
         """
-        if target_entity_uuid is None or target_entity_uuid == self.uuid:
-            bonuses = self._get_bonuses_for_skill(skill_name)
-            return bonuses[0].combine_values(list(bonuses)[1:]).model_copy(deep=True)
-
-        target_entity = Entity.get(target_entity_uuid)
-        if not isinstance(target_entity, Entity):
+        if target_entity_uuid is not None and target_entity_uuid != self.uuid and not isinstance(
+                Entity.get(target_entity_uuid), Entity):
             raise ValueError(f"Target entity {target_entity_uuid} not found")
-
-        with self._temporary_target(target_entity_uuid), target_entity._temporary_target(self.uuid):
-            source_bonuses = self._get_bonuses_for_skill(skill_name)
-            target_bonuses = target_entity._get_bonuses_for_skill(skill_name)
-            for source_bonus, target_bonus in zip(source_bonuses, target_bonuses):
-                source_bonus.set_from_target(target_bonus)
-            try:
-                return source_bonuses[0].combine_values(list(source_bonuses)[1:]).model_copy(deep=True)
-            finally:
-                for source_bonus in source_bonuses:
-                    source_bonus.reset_from_target()
+        return self._opposed_reading(target_entity_uuid,
+            lambda entity, read: entity._get_bonuses_for_skill(skill_name, read), None)
 
     def passive_skill(self, skill_name: SkillName) -> int:
         """Calculate passive skill score for a skill.
@@ -3249,34 +3240,20 @@ class Entity(BaseBlock):
         """
         timing = action_timing_enabled()
         started = time.perf_counter() if timing else 0.0
-        skill = self.skill_set.get_skill(skill_name)
-        ability = self.ability_scores.get_ability(skill.ability)
-
-        def proficiency_normalizer(bonus: int) -> int:
-            return max(skill.proficiency_sources.apply(bonus), ability.check_proficiency_sources.apply(bonus))
-
-        scalar = composed_passive_score(self.proficiency_bonus, skill.skill_bonus,
-            ability.ability_score, ability.modifier_bonus, ability.source_entity_uuid,
-            proficiency_normalizer, ability_score_normalizer)
-        if scalar is not None:
-            if timing:
-                record_action_timing(f"passive_skill.{skill_name}.scalar_ms", started)
-            return scalar
-
-        skill_bonuses = self._get_bonuses_for_skill(skill_name, use_register=False)
-        skill_bonus = skill_bonuses[0].combine_values(list(skill_bonuses[1:]), use_register=False)
+        read = ValueRead(self.uuid)
+        skill_bonus = composed(self._get_bonuses_for_skill(skill_name, read))
         if timing:
             record_action_timing(f"passive_skill.{skill_name}.skill_bonus_ms", started)
 
         started = time.perf_counter() if timing else 0.0
-        base = 10 + skill_bonus.normalized_score
+        base = 10 + value_score(skill_bonus, read, normalized=True)
         if timing:
             record_action_timing(f"passive_skill.{skill_name}.normalized_score_ms", started)
 
         started = time.perf_counter() if timing else 0.0
-        if skill_bonus.advantage == AdvantageStatus.ADVANTAGE:
+        if value_advantage_sum(skill_bonus, read) > 0:
             base += 5
-        elif skill_bonus.advantage == AdvantageStatus.DISADVANTAGE:
+        elif value_advantage_sum(skill_bonus, read) < 0:
             base -= 5
         if timing:
             record_action_timing(f"passive_skill.{skill_name}.advantage_ms", started)
@@ -3301,86 +3278,91 @@ class Entity(BaseBlock):
         """Entity relays to its Senses block for sense modes."""
         return self.senses.get_sense_modes()
 
-    def ac_bonus(self, target_entity_uuid: Optional[UUID]=None, *, use_register: bool = True) -> ModifiableValue:
-        """Build the entity's armor class value.
+    def armor_class_value(self, read: ValueRead) -> Tuple[Part, ...]:
+        """Compose the entity's armor class for one read.
 
         Args:
-            target_entity_uuid: Optional entity targeting this armor class.
-            use_register: Register temporary combined values for later UUID lookup.
+            read: The armor class read: this entity and the attacker it is read against.
 
         Returns:
-            Combined armor class value.
+            The parts of the armor class.
         """
-        should_clear_target = False
-        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
-            self.set_target_entity(target_entity_uuid)
-            should_clear_target = True
-
-        formula = self.equipment.resolve_armor_class_formula_candidate(
-            self.ability_scores
-        )
-        formula_ac: Optional[ModifiableValue] = None
+        formula = self.equipment.resolve_armor_class_formula_candidate(self.ability_scores, read)
+        denies_dexterity = any(condition.contributions_active() and condition.denies_dexterity_ac
+            for condition in self.active_conditions_by_uuid.values())
+        formula_ac: Optional[Tuple[Part, ...]] = None
         if formula is not None:
-            unarmored_values = self.equipment.get_unarmored_ac_values(formula, use_register=use_register)
-            abilities = self.equipment.get_unarmored_abilities(formula)
-            ability_bonuses = [self.ability_scores.get_ability(ability).get_combined_values(use_register=use_register) for ability in abilities]
-            formula_ac = unarmored_values[0].combine_values(
-                unarmored_values[1:] + ability_bonuses, use_register=use_register
-            )
+            unarmored_values = self.equipment.get_unarmored_ac_values(formula)
+            abilities = [ability for ability in self.equipment.get_unarmored_abilities(formula)
+                if not (denies_dexterity and ability == "dexterity")]
+            formula_ac = composed((*unarmored_values, *(ability_part for ability in abilities
+                for ability_part in self.ability_scores.get_ability(cast(AbilityName, ability)).combined_value(read))))
 
         if self.equipment.is_unarmored():
             if formula_ac is None:
                 raise RuntimeError("unarmored entity has no Armor Class formula")
+            return formula_ac
+        armored_values = self.equipment.get_armored_ac_values()
+        max_dexterity_bonus = self.equipment.get_armored_max_dex_bonus()
+        combined_dexterity_bonus = self.ability_scores.get_ability("dexterity").combined_value(read)
+
+        if denies_dexterity:
+            combined_dexterity_bonus = parts(ModifiableValue(source_entity_uuid=self.uuid, base=0, use_register=False))
+        if (max_dexterity_bonus is not None and value_score(combined_dexterity_bonus, read, normalized=True)
+                > value_score(parts(max_dexterity_bonus), read, normalized=True)):
+            combined_dexterity_bonus = parts(max_dexterity_bonus)
+
+        ac_bonus = composed((*armored_values, *combined_dexterity_bonus))
+        if (
+            formula_ac is not None
+            and value_score(formula_ac, read, normalized=True) > value_score(ac_bonus, read, normalized=True)
+        ):
             ac_bonus = formula_ac
-        else:
-            armored_values = self.equipment.get_armored_ac_values()
-            max_dexterity_bonus = self.equipment.get_armored_max_dex_bonus()
-            combined_dexterity_bonus = self.ability_scores.get_ability("dexterity").get_combined_values(use_register=use_register)
-
-            if max_dexterity_bonus is not None and combined_dexterity_bonus.normalized_score > max_dexterity_bonus.normalized_score:
-                combined_dexterity_bonus = max_dexterity_bonus
-
-            ac_bonus = armored_values[0].combine_values(armored_values[1:]+[combined_dexterity_bonus], use_register=use_register)
-            if (
-                formula_ac is not None
-                and formula_ac.normalized_score > ac_bonus.normalized_score
-            ):
-                ac_bonus = formula_ac
-
-        if should_clear_target:
-            self.clear_target_entity()
         return ac_bonus
 
-    def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> ModifiableValue:
-        """Build the entity's weapon attack bonus.
+    def ac_bonus(self, target_entity_uuid: Optional[UUID] = None) -> ValueReading:
+        """Read the entity's armor class against an optional attacker.
 
         Args:
-            weapon_slot: Equipment slot used for the attack.
-            target_entity_uuid: Optional target entity.
-            override_ability: Optional ability to use instead of weapon rules.
+            target_entity_uuid: Optional entity targeting this armor class.
 
         Returns:
-            Combined weapon attack bonus.
+            The evaluated armor class.
         """
-        should_clear_target = False
-        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
-            self.set_target_entity(target_entity_uuid)
-            should_clear_target = True
+        read = ValueRead(self.uuid, target_entity_uuid)
+        return read_value(self.armor_class_value(read), read)
 
+    def weapon_attack_value(self, read: ValueRead, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN,
+                            override_ability: Optional[AbilityName] = None,
+                            natural_weapon: Optional[NaturalWeaponSpec] = None,
+                            ) -> Tuple[Tuple[Part, ...], Optional[Dict[str, Any]]]:
+        """Compose the weapon attack bonus for one read, with the context its own rows read.
+
+        Args:
+            read: The attack's read: this entity and its target.
+            weapon_slot: Equipment slot used for the attack.
+            override_ability: Optional ability to use instead of weapon rules.
+            natural_weapon: Optional natural weapon used instead of equipment.
+
+        Returns:
+            Attack bonus parts and their attack context (None for a spell-attack weapon).
+        """
+        weapon = None if natural_weapon else self.equipment.get_weapon(weapon_slot)
+        if weapon is not None and weapon.spell_attack_profile is not None:
+            return self.spell_attack_value(read, casting_ability=weapon.spell_attack_profile.casting_ability), None
         (
             proficiency_bonus,
-            weapon_bonus,
+            weapon_bonuses,
             attack_bonuses,
             ability_bonuses,
             weapon_range,
         ) = self._get_attack_bonuses(
+            read,
             weapon_slot,
             override_ability=override_ability,
             natural_weapon=natural_weapon,
         )
-        bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
-        source_attack_bonus = proficiency_bonus.combine_values(bonuses)
-        source_attack_bonus.set_context({
+        return composed((proficiency_bonus, *weapon_bonuses, *parts(*attack_bonuses), *ability_bonuses)), {
             "attack_ability": self.equipment.get_weapon_attack_ability_name(
                 self.ability_scores,
                 weapon_slot,
@@ -3388,11 +3370,22 @@ class Entity(BaseBlock):
                 natural_weapon=natural_weapon,
             ),
             "range_type": weapon_range.type.value,
-        })
+        }
 
-        if should_clear_target:
-            self.clear_target_entity()
-        return source_attack_bonus
+    def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> ValueReading:
+        """Read the entity's weapon attack bonus against an optional target.
+
+        Args:
+            weapon_slot: Equipment slot used for the attack.
+            target_entity_uuid: Optional target entity.
+            override_ability: Optional ability to use instead of weapon rules.
+
+        Returns:
+            The evaluated weapon attack bonus.
+        """
+        value, context = self.weapon_attack_value(ValueRead(self.uuid, target_entity_uuid), weapon_slot,
+                                                  override_ability, natural_weapon)
+        return read_value(value, ValueRead(self.uuid, target_entity_uuid, context))
 
     def weapon_attack_outcome_baseline(
         self,
@@ -3413,6 +3406,10 @@ class Entity(BaseBlock):
         Returns:
             Actor-baseline attack bonus, advantage, and critical rules.
         """
+        weapon=None if natural_weapon else self.equipment.get_weapon(weapon_slot)
+        if weapon is not None and weapon.spell_attack_profile is not None:
+            return self.spell_attack_outcome_baseline(casting_ability=weapon.spell_attack_profile.casting_ability)
+
         equipment_bonus, equipment_advantage = self.equipment.get_weapon_attack_baseline(
             self.ability_scores,
             weapon_slot,
@@ -3459,6 +3456,11 @@ class Entity(BaseBlock):
         Returns:
             Immutable damage formulas representing one ordinary hit.
         """
+        weapon=None if natural_weapon else self.equipment.get_weapon(weapon_slot)
+        if weapon is not None and weapon.spell_attack_profile is not None:
+            return (DamageRollProfile(dice_count=weapon.dice_numbers,die_size=weapon.damage_dice,
+                damage_type=weapon.damage_type.value,flat_bonus=value_score(self.get_spell_damage_bonus(), ValueRead(self.uuid), normalized=True)),)
+
         profiles = self.equipment.get_weapon_damage_profiles(
             self.ability_scores,
             weapon_slot,
@@ -3535,29 +3537,30 @@ class Entity(BaseBlock):
         Returns:
             Damage packets for the weapon attack.
         """
-        should_clear_target = False
-        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
-            self.set_target_entity(target_entity_uuid)
-            should_clear_target = True
-        damages = self.equipment.get_damages(weapon_slot, self.ability_scores, override_ability=override_ability, natural_weapon=natural_weapon)
+        weapon=None if natural_weapon else self.equipment.get_weapon(weapon_slot)
+        if weapon is not None and weapon.spell_attack_profile is not None:
+            return [Damage(name=weapon.name,source_entity_uuid=self.uuid,target_entity_uuid=target_entity_uuid,
+                damage_dice=weapon.damage_dice,dice_numbers=weapon.dice_numbers,damage_type=weapon.damage_type,
+                damage_bonus=self.get_spell_damage_bonus(),effect_origin=weapon.spell_attack_profile.effect_origin)]
+
+        damages = self.equipment.get_damages(weapon_slot, self.ability_scores, ValueRead(self.uuid, target_entity_uuid),
+                                             override_ability=override_ability, natural_weapon=natural_weapon)
         size_dice = self.get_size_damage_dice(weapon_slot, natural_weapon=natural_weapon)
         if size_dice > 0 and damages:
             primary_type = damages[0].damage_type
-            size_damage_bonus = ModifiableValue.create(
+            size_damage_bonus = ModifiableValue(
                 source_entity_uuid=self.uuid,
-                base_value=0,
-                value_name="Size Damage Bonus",
+                base=0,
+                name="Size Damage Bonus",
             )
             damages.append(Damage(
                 source_entity_uuid=self.uuid,
-                target_entity_uuid=target_entity_uuid or self.target_entity_uuid,
+                target_entity_uuid=target_entity_uuid,
                 damage_dice=4,
                 dice_numbers=size_dice,
-                damage_bonus=size_damage_bonus,
+                damage_bonus=parts(size_damage_bonus),
                 damage_type=primary_type,
             ))
-        if should_clear_target:
-            self.clear_target_entity()
         return damages
 
     def take_damage(self, damages: List[Damage], attack_outcome: AttackOutcome) -> List[DiceRoll]:
@@ -3661,6 +3664,7 @@ class Entity(BaseBlock):
         damage_type: DamageType,
         source_entity_uuid: UUID,
         damage_rolls: Optional[List[DiceRoll]] = None,
+        component_amounts: tuple[int, ...] | None = None,
         damages: Optional[List[Damage]] = None,
         parent_event: Optional[UUID] = None,
         critical_hit: bool = False,
@@ -3672,6 +3676,9 @@ class Entity(BaseBlock):
         source_condition_uuid: UUID | None = None,
         normal_hit_point_damage_cap: int | None = None,
         zero_hp_disposition: RemainsDisposition = RemainsDisposition.INTACT,
+        ignores_resistance_immunity: bool = False,
+        on_resolved: Callable[[DamageResolution], None] | None = None,
+        on_completed: Callable[[TakeDamageEvent, DamageAppliedEvent | None], None] | None = None,
     ) -> int:
         """Apply damage through the engine event lifecycle.
 
@@ -3690,6 +3697,9 @@ class Entity(BaseBlock):
             critical_hit: Whether this damage came from a critical hit, for
                 damage-at-0 death-save failures.
             effect_id: Stable identity used by typed effect protections.
+            on_completed: Receives this operation's final incoming event and
+                optional applied-damage result after incoming completion. Each
+                result retains its actual admitted/canceled phase.
 
         Returns:
             Actual HP lost after handlers, cancellation, and resistances.
@@ -3707,7 +3717,7 @@ class Entity(BaseBlock):
         ]
 
         request_lineage = uuid4()
-        take_damage_event = TakeDamageEvent(
+        take_damage_event = TakeDamageEvent(ignores_resistance_immunity=ignores_resistance_immunity,
             lineage_uuid=request_lineage,
             resolution_ref=EventResolutionRef(lineage_uuid=request_lineage) if independent_resolution else None,
             name="Take Damage",
@@ -3718,6 +3728,7 @@ class Entity(BaseBlock):
             normal_hit_point_damage_cap=normal_hit_point_damage_cap,
             zero_hp_disposition=zero_hp_disposition,
             damage_rolls=damage_rolls or [],
+            component_amounts=component_amounts,
             damages=event_damages,
             effect_id=effect_id,
             parent_event=parent_event,
@@ -3745,13 +3756,14 @@ class Entity(BaseBlock):
         temporary_hp_after = max(0, self.health.temporary_hit_points.normalized_score)
         temporary_hit_point_damage = max(0, temporary_hp_before - temporary_hp_after)
         applied_damage = actual_damage + temporary_hit_point_damage
+        applied_event: DamageAppliedEvent | None = None
         if applied_damage > 0 and damage_resolution is not None:
             if (actual_damage > 0 and normal_hp_before <= 0 and self.uses_death_saves
                     and self.health.life_state in (LifeState.DYING, LifeState.STABLE)):
                 # Already-down actors stay at zero. Publish that actual pool;
                 # the resolved damage still owns death-save failures/overkill.
                 self._set_normal_hp(0)
-            self._complete_damage_applied_event(
+            applied_event = self._complete_damage_applied_event(
                 source_entity_uuid=source_entity_uuid,
                 damage_type=damage_type,
                 damages=take_damage_event.damages,
@@ -3818,6 +3830,10 @@ class Entity(BaseBlock):
         )
 
         take_damage_event = take_damage_event.phase_to(EventPhase.COMPLETION)
+        if on_resolved is not None and damage_resolution is not None:
+            on_resolved(damage_resolution)
+        if on_completed is not None:
+            on_completed(take_damage_event, applied_event)
 
         return actual_damage
 
@@ -3880,7 +3896,7 @@ class Entity(BaseBlock):
         source_description: str = "",
         parent_event: Optional[UUID] = None,
         spell_level: int = 0,
-        *, source_condition_uuid: Optional[UUID] = None,
+        *, source_condition_uuid: Optional[UUID] = None, effect_origin: EffectOrigin | None = None,
     ) -> int:
         """Apply healing through the engine event lifecycle.
 
@@ -3900,6 +3916,7 @@ class Entity(BaseBlock):
             Actual HP restored after caps and blockers.
         """
         heal_event = HealEvent(
+            effect_origin=effect_origin,
             name="Heal",
             source_entity_uuid=source_entity_uuid,
             target_entity_uuid=self.uuid,
@@ -3936,6 +3953,11 @@ class Entity(BaseBlock):
             "resulting_normal_hp": self.get_normal_hp(),
             "resulting_temporary_hp": max(0, self.health.temporary_hit_points.normalized_score),
         })
+        applied = EventQueue.publish_committed_phase(HealingAppliedEvent(
+            source_entity_uuid=source_entity_uuid, target_entity_uuid=self.uuid,
+            parent_event=heal_event.uuid, effect_origin=effect_origin, actual_healing=actual_healing,
+            phase=EventPhase.EFFECT, use_register=False))
+        applied.phase_to(EventPhase.COMPLETION)
         heal_event.phase_to(EventPhase.COMPLETION)
 
         return actual_healing
@@ -3981,7 +4003,8 @@ class Entity(BaseBlock):
         self._runtime_agency_revoked = True
 
     def allows_action_channels(self, channels: AbstractSet[ActionEconomyCostType]) -> bool:
-        return self.action_economy.allows_action_channels(channels)
+        return not any(condition.contributions_active() and condition.blocked_action_channels.intersection(channels)
+            for condition in self.active_conditions_by_uuid.values()) and self.action_economy.allows_action_channels(channels)
 
     def record_action_channels(self, channels: AbstractSet[ActionEconomyCostType]) -> None:
         self.action_economy.record_action_channels(channels)
@@ -4002,7 +4025,7 @@ class Entity(BaseBlock):
 
     def get_hp(self) -> int:
         """Return current total HP after Constitution, bonuses, temp HP, and damage."""
-        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values(use_register=False)
+        con_modifier = self.ability_scores.get_ability("constitution").modifier_reading()
         return self.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
 
     def get_weapon_range(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> Range:
@@ -4056,11 +4079,11 @@ class Entity(BaseBlock):
 
     def _visible_hostile_threat_domains(
         self,
-    ) -> List[Tuple['Entity', Set[Tuple[int, int]]]]:
+    ) -> List[Tuple['Entity', FrozenSet[Tuple[int, int]]]]:
         """Return threat cells for hostiles visible to this moving entity."""
         if self.action_economy.provokes_opportunity_attacks.normalized_score <= 0:
             return []
-        domains: List[Tuple['Entity', Set[Tuple[int, int]]]] = []
+        domains: List[Tuple['Entity', FrozenSet[Tuple[int, int]]]] = []
         for entity_uuid in sorted(self.senses.entities, key=str):
             if not self.senses.entities[entity_uuid].visual:
                 continue
@@ -4074,78 +4097,83 @@ class Entity(BaseBlock):
                 continue
             domains.append((
                 reactor,
-                set(reactor.senses.get_threathened_positions(knowledge_observer_uuid=self.uuid)),
+                frozenset(reactor.senses.get_threathened_positions(knowledge_observer_uuid=self.uuid)),
             ))
         return domains
 
     @staticmethod
     def _opportunity_attack_exposures_for_path(
-        path: List[Tuple[int, int]],
-        threat_domains: List[Tuple['Entity', Set[Tuple[int, int]]]],
+        path: Sequence[Tuple[int, int]],
+        threats: ThreatExits,
     ) -> List[OpportunityAttackExposure]:
-        """Return the first disclosed threat exit for each visible hostile."""
-        exposures: List[OpportunityAttackExposure] = []
-        for reactor, threatened_positions in threat_domains:
-            provoking_step = next(
-                (
-                    (from_position, to_position)
-                    for from_position, to_position in zip(path, path[1:])
-                    if from_position in threatened_positions
-                    and to_position not in threatened_positions
-                ),
-                None,
+        """Return the first disclosed threat exit for each visible hostile, in domain order.
+
+        Each step meets the domains once per discovery call (`threats.exits`).
+        """
+        domains = threats.domains
+        if not domains:
+            return []
+        first: Dict[int, Tuple[Tuple[int, int], Tuple[int, int]]] = {}
+        for step in zip(path, path[1:]):
+            exits = threats.exits.get(step)
+            if exits is None:
+                source, target = step
+                exits = threats.exits[step] = tuple(index for index, (_, cells) in enumerate(domains)
+                                                    if source in cells and target not in cells)
+            for index in exits:
+                first.setdefault(index, step)
+        return [OpportunityAttackExposure(reactor_uuid=domains[index][0].uuid,
+                                          reactor_name=domains[index][0].name,
+                                          from_position=step[0], to_position=step[1])
+                for index, step in sorted(first.items())]
+
+    def spell_attack_value(
+        self,
+        read: ValueRead,
+        *,
+        spellcasting_source_id: Optional[UUID] = None,
+        casting_ability: AbilityName | None = None,
+    ) -> Tuple[Part, ...]:
+        """Compose the spell attack bonus for one read.
+
+        Args:
+            read: The attack's read: this entity and its target.
+
+        Returns:
+            The parts of the spell attack bonus.
+        """
+        ability = self.ability_scores.get_ability(
+            casting_ability or self.spellcasting.resolve_spellcasting_ability(
+                spellcasting_source_id
             )
-            if provoking_step is None:
-                continue
-            exposures.append(OpportunityAttackExposure(
-                reactor_uuid=reactor.uuid,
-                reactor_name=reactor.name,
-                from_position=provoking_step[0],
-                to_position=provoking_step[1],
-            ))
-        return exposures
+        )
+        return composed((part(self.proficiency_bonus), *ability.combined_value(read),
+                         *parts(self.equipment.attack_bonus, self.spellcasting.spell_attack_bonus)))
 
     def spell_attack_bonus(
         self,
         target_entity_uuid: Optional[UUID] = None,
         *,
         spellcasting_source_id: Optional[UUID] = None,
-    ) -> ModifiableValue:
-        """Build combined spell attack bonus.
+        casting_ability: AbilityName | None = None,
+    ) -> ValueReading:
+        """Read the spell attack bonus against an optional target.
 
         Args:
-            target_entity_uuid: Optional target for cross-propagation.
+            target_entity_uuid: Optional target of the attack.
 
         Returns:
-            Combined spell attack bonus.
+            The evaluated spell attack bonus.
         """
-        should_clear_target = False
-        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
-            self.set_target_entity(target_entity_uuid)
-            should_clear_target = True
-
-        ability = self.ability_scores.get_ability(
-            self.spellcasting.resolve_spellcasting_ability(
-                spellcasting_source_id
-            )
-        )
-        ability_bonus = ability.get_combined_values()
-
-        combined = self.proficiency_bonus.combine_values([
-            ability_bonus,
-            self.equipment.attack_bonus,
-            self.spellcasting.spell_attack_bonus,
-        ])
-
-        if should_clear_target:
-            self.clear_target_entity()
-
-        return combined
+        read = ValueRead(self.uuid, target_entity_uuid)
+        return read_value(self.spell_attack_value(read, spellcasting_source_id=spellcasting_source_id,
+                                                  casting_ability=casting_ability), read)
 
     def spell_attack_outcome_baseline(
         self,
         *,
         spellcasting_source_id: Optional[UUID] = None,
+        casting_ability: AbilityName | None = None,
     ) -> AttackRollBaseline:
         """Read the actor-side spell attack model without allocating values.
 
@@ -4157,7 +4185,7 @@ class Entity(BaseBlock):
             Typed attack-roll contribution for a spell action outcome profile.
         """
         ability = self.ability_scores.get_ability(
-            self.spellcasting.resolve_spellcasting_ability(
+            casting_ability or self.spellcasting.resolve_spellcasting_ability(
                 spellcasting_source_id
             )
         )
@@ -4234,7 +4262,7 @@ class Entity(BaseBlock):
         spell_specific = self.spellcasting.spell_crit_extra_dice.normalized_score
         return general + spell_specific
 
-    def get_spell_damage_bonus(self) -> ModifiableValue:
+    def get_spell_damage_bonus(self) -> Tuple[Part, ...]:
         """Get combined spell damage bonus.
 
         Combines:
@@ -4244,9 +4272,7 @@ class Entity(BaseBlock):
         Returns:
             Combined spell damage bonus.
         """
-        combined = self.equipment.damage_bonus.combine_values([
-            self.spellcasting.spell_damage_bonus,
-        ])
+        combined = composed(parts(self.equipment.damage_bonus, self.spellcasting.spell_damage_bonus))
         execution = current_spell_execution()
         if (
             execution is None
@@ -4264,16 +4290,13 @@ class Entity(BaseBlock):
             return combined
 
         ability_modifier = self.ability_scores.get_ability(ability_name).modifier
-        combined.self_static.add_value_modifier(
-            NumericalModifier(
+        return with_rows(combined, (Row(Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 source_entity_uuid=self.uuid,
                 target_entity_uuid=self.uuid,
                 name=f"{ability_name.title()} Spell Damage Affinity",
                 value=ability_modifier,
                 use_register=False,
-            ),
-        )
-        return combined
+            )),))
 
     def spell_damage_outcome_bonus(self) -> int:
         """Read the actor-side spell damage bonus without allocating values.
@@ -4312,11 +4335,7 @@ class Entity(BaseBlock):
         if capacity is not None:
             return capacity > 0
         slot_attr = self.action_economy.spell_slot_value(level)
-        base_modifier = slot_attr.get_base_modifier()
-        return bool(
-            base_modifier is not None
-            and base_modifier.normalized_value > 0
-        )
+        return normalized_base(slot_attr) > 0
 
     def get_lowest_spell_slot(self, min_level: int) -> Optional[int]:
         """Find lowest available slot at or above min_level.
@@ -4342,57 +4361,83 @@ class Entity(BaseBlock):
             spell.
         """
         for level in range(1, 10):
-            base_mod = self.action_economy.spell_slot_value(
-                level,
-            ).get_base_modifier()
-            if base_mod and base_mod.value > 0:
+            slot_base = self.action_economy.spell_slot_value(level).base
+            if slot_base is not None and slot_base > 0:
                 return True
         if any(action.is_spell for action in self.registered_actions):
             return True
         return False
 
-    def is_ally(self, other: 'Entity') -> bool:
-        """Check if another entity is an ally (same faction).
+    def creature_facts(self) -> CreatureFacts:
+        """Target-only facts the rules read about this creature (plan §14.2)."""
+        return CreatureFacts(uuid=self.uuid, position=self.position, creature_type=self.creature_type,
+            life_state=self.health.life_state, condition_names=frozenset(self.active_conditions),
+            blocks_external_contact=any(condition.blocks_external_contact and condition.contributions_active()
+                for condition in self.active_conditions_by_uuid.values()),
+            faction=self.faction, size=self.size, has_positive_hp=self._has_positive_normal_hp_for_discovery(self))
 
-        Same faction = ally. None faction = no allies (except self).
-        An entity is always its own ally.
+    def action_scan(self, *, subjective: bool, with_navigation: bool = False) -> ActorScan:
+        """Everything the admission checks read, built once per discovery call or action (plan §14.2).
 
-        Args:
-            other: The entity to check
+        `subjective` is stated by every caller: discovery and preview read what
+        this creature perceives, execution reads the world.
 
-        Returns:
-            True if same entity, or same faction and neither has None faction
+        Admission reads perception, grants and charges. Navigation (reachable
+        costs, the reach mask, threat domains) is built only when discovery
+        asks for it: an executed action never pays for it.
         """
-        if other.uuid == self.uuid:
-            return True
-        if self.faction is None or other.faction is None:
-            return False
-        return self.faction == other.faction
+        record_action_count("discovery.action_scan", 1)
+        grid = get_map()
+        creatures: Dict[UUID, ScanRecord] = {}
+        for identity, contact in self.senses.entities.items():
+            other = Entity.get(identity)
+            if other is not None:
+                creatures[identity] = ScanRecord(facts=other.creature_facts(), position=contact.position,
+                    visual=contact.visual, relationship=relationship(self.uuid, self.faction, identity, other.faction))
+        x, y = self.position
+        reach_cells = frozenset(cell for cell in ((x + dx, y + dy) for dx in range(-2, 3) for dy in range(-2, 3))
+            if cell != self.position and grid.has_tile(*cell)
+            and grid.can_reach_between(self.position, cell, PhysicalAccess.HAND, self.uuid,
+                                       subjective=subjective)) if with_navigation else frozenset()
+        carried = (*self.inventory.items.values(), *self.equipment.get_all_equipped_items())
+        return ActorScan(
+            actor_uuid=self.uuid,
+            subjective=subjective,
+            position=self.position,
+            visible=frozenset(visible_positions(self.senses.cells)),
+            creatures=creatures,
+            objects={identity: ObjectRecord(uuid=identity, position=contact.position)
+                     for identity, contact in self.senses.objects.items()},
+            carried_items=frozenset(item.uuid for item in carried),
+            reach_cells=reach_cells,
+            threat_domains=({reactor.uuid: frozenset(cells) for reactor, cells in self._visible_hostile_threat_domains()}
+                            if with_navigation else {}),
+            slot_capacity={level: self.action_economy.spell_slot_value(level).normalized_score for level in range(1, 10)},
+            restricted_grants=self.get_restricted_action_grants(),
+            free_cast_grants=frozenset(self.spellcasting.free_cast_grants),
+            source_item_charges={item.uuid: item.charges for item in carried if isinstance(item, UsableItem)},
+            active_encounter_uuid=self.active_encounter_uuid,
+        )
+
+    def perform(self, action: BaseAction, selection: ActionSelection,
+                parent_event: Optional[Event] = None) -> Optional[Event]:
+        """Execute one registered action for one exact selection; the only `.apply(` entry in the engine."""
+        if action.source_entity_uuid != self.uuid:
+            raise ValueError(f"{action.name} does not belong to {self.name}")
+        return action.with_selection(selection).apply(parent_event)
+
+    def is_ally(self, other: 'Entity') -> bool:
+        """Same faction, or itself; a missing faction has no allies."""
+        return relationship(self.uuid, self.faction, other.uuid, other.faction) is not Relationship.ENEMY
 
     def is_enemy(self, other: 'Entity') -> bool:
-        """Check if another entity is an enemy (different faction).
-
-        Different faction = enemy. None faction = enemy to all (backward compatible).
-        An entity is not its own enemy.
-
-        Args:
-            other: The entity to check
-
-        Returns:
-            True if different faction or either has None faction
-        """
-        if other.uuid == self.uuid:
-            return False
-        if self.faction is None or other.faction is None:
-            return True
-        return self.faction != other.faction
+        """A different or missing faction; never itself."""
+        return relationship(self.uuid, self.faction, other.uuid, other.faction) is Relationship.ENEMY
 
     def is_enemy_of(self, other_uuid: UUID) -> bool:
-        """Faction-based enemy check (BaseBlock override)."""
+        """Faction-based enemy check (BaseBlock override); an absent creature counts as an enemy."""
         other = Entity.get(other_uuid)
-        if not other or not isinstance(other, Entity):
-            return True
-        return self.is_enemy(other)
+        return other is None or self.is_enemy(other)
 
     def get_visible_enemies(self, include_dead: bool = False) -> Dict[UUID, Tuple[int, int]]:
         """Get visible entities that are enemies.
@@ -4430,34 +4475,9 @@ class Entity(BaseBlock):
                 allies[entity_uuid] = contact.position
         return allies
 
-    @classmethod
-    def get_entities_by_faction(cls, faction: str) -> List['Entity']:
-        """Get all entities with the given faction.
-
-        Args:
-            faction: Faction identifier.
-
-        Returns:
-            Registered entities with that faction.
-        """
-        return [e for e in cls._entity_registry.values() if e.faction == faction]
-
-    @classmethod
-    def get_alive_by_faction(cls, faction: str) -> List['Entity']:
-        """Get all alive entities with the given faction.
-
-        Args:
-            faction: Faction identifier.
-
-        Returns:
-            Registered entities with that faction and positive HP.
-        """
-        return [e for e in cls._entity_registry.values()
-                if e.faction == faction and e.has_hp]
-
     def roll_d20(
         self,
-        bonus: ModifiableValue,
+        bonus: ValueReading,
         roll_type: RollType = RollType.ATTACK,
         context: Optional[Dict[str, Any]] = None,
         ability_name: Optional[AbilityName] = None,
@@ -4472,7 +4492,7 @@ class Entity(BaseBlock):
         ability, or skill metadata is attached when the rule supplies it.
 
         Args:
-            bonus: Modifiable value used as the d20 bonus.
+            bonus: The evaluated d20 bonus.
             roll_type: Attack, save, check, or generic d20 category.
             context: Optional handler context.
             ability_name: Ability context for saving throws.
@@ -4532,7 +4552,7 @@ class Entity(BaseBlock):
 
     def roll_d20_event(
         self,
-        bonus: ModifiableValue,
+        bonus: ValueReading,
         roll_type: RollType = RollType.CHECK,
         context: Optional[Dict[str, Any]] = None,
         ability_name: Optional[AbilityName] = None,
@@ -4547,7 +4567,7 @@ class Entity(BaseBlock):
         before completion collects combat-log subentries.
 
         Args:
-            bonus: Modifiable value used as the d20 bonus.
+            bonus: The evaluated d20 bonus.
             roll_type: Attack, save, check, or generic d20 category.
             context: Optional handler context.
             ability_name: Ability context for saving throws.
@@ -4627,16 +4647,12 @@ class Entity(BaseBlock):
             Declaration-phase saving throw event.
         """
         if isinstance(dc, UUID):
-            self.set_target_entity(dc)
-            new_dc = ModifiableValue.get(dc)
-            if new_dc is None or new_dc.source_entity_uuid != self.uuid:
+            dc_value = ModifiableValue.get(dc)
+            if dc_value is None or dc_value.source_entity_uuid != self.uuid:
                 raise ValueError("DC is not coming from self oir not present")
-            new_dc = new_dc.model_copy(deep=True)
-            new_dc.set_target_entity(target_entity_uuid)
-            int_dc = new_dc.normalized_score
+            int_dc = value_score(parts(dc_value), ValueRead(self.uuid, target_entity_uuid), normalized=True)
         else:
             int_dc = dc
-        self.clear_target_entity()
 
         target_entity = Entity.get(target_entity_uuid)
         target_entity_name = target_entity.name if target_entity else None
@@ -4685,19 +4701,12 @@ class Entity(BaseBlock):
             Declaration-phase skill check event.
         """
         if isinstance(dc, UUID):
-            self.set_target_entity(dc)
             dc_modifier = ModifiableValue.get(dc)
             if dc_modifier is None or dc_modifier.source_entity_uuid != self.uuid:
                 raise ValueError(f"not present {dc_modifier is None} or not coming from self")
-            if target_entity_uuid != dc_modifier.target_entity_uuid:
-                new_dc = dc_modifier.model_copy(deep=True)
-                new_dc.set_target_entity(target_entity_uuid)
-            else:
-                new_dc = dc_modifier
-            int_dc = new_dc.normalized_score
+            int_dc = value_score(parts(dc_modifier), ValueRead(self.uuid, target_entity_uuid), normalized=True)
         else:
             int_dc = dc
-        self.clear_target_entity()
 
         target_entity = Entity.get(target_entity_uuid)
         target_entity_name = target_entity.name if target_entity else None
@@ -4724,9 +4733,6 @@ class Entity(BaseBlock):
         if request.target_entity_uuid != self.uuid:
             raise ValueError("Target entity uuid does not match")
 
-        self.set_target_entity(request.source_entity_uuid)
-
-        save_bonus = self.saving_throw_bonus(request.source_entity_uuid, request.ability_name)
         save_context: Dict[str, Any] = {}
         if request.condition_context is not None:
             save_context["condition_context"] = request.condition_context
@@ -4734,8 +4740,7 @@ class Entity(BaseBlock):
             save_context[SAVING_THROW_CONTEXT_KEY] = (
                 request.saving_throw_context
             )
-        save_bonus.set_context(save_context)
-        save_bonus.set_event_lineage(request.lineage_uuid)
+        save_bonus = self.saving_throw_bonus(request.source_entity_uuid, request.ability_name, save_context)
         dc = request.get_dc()
         if dc is None:
             raise ValueError(f"DC is not set for {request.ability_name} saving throw with event id {request.uuid}")
@@ -4768,10 +4773,6 @@ class Entity(BaseBlock):
             status_message=f"{request.ability_name} save complete"
         )
 
-        save_bonus.clear_event_lineage()
-        save_bonus.clear_context()
-        self.clear_target_entity()
-
         final_roll = completion_event.dice_roll or roll
         final_success = completion_event.result if completion_event.result is not None else success
         final_outcome = outcome
@@ -4794,7 +4795,6 @@ class Entity(BaseBlock):
         """
         if request.target_entity_uuid != self.uuid:
             raise ValueError("Target entity uuid does not match")
-        self.set_target_entity(request.source_entity_uuid)
         skill_check_bonus = self.skill_bonus(request.source_entity_uuid, request.skill_name)
         dc = request.get_dc()
         if dc is None:
@@ -4828,7 +4828,6 @@ class Entity(BaseBlock):
             status_message=f"{request.skill_name} check complete"
         )
 
-        self.clear_target_entity()
         return final_outcome, final_roll, final_success
 
     def _blocks_walking_without_origin_traversal(
@@ -4903,7 +4902,7 @@ class Entity(BaseBlock):
             position=position,
             equipment_slot=equipment_slot,
             merged_into_item_uuid=merged_into_item_uuid,
-            entity_armor_class_after=self.ac_bonus(use_register=False).normalized_score,
+            entity_armor_class_after=self.ac_bonus().normalized_score,
             stack_count=stack_count,
             source_entity_uuid=self.uuid,
             parent_event=parent_event,
@@ -5232,21 +5231,19 @@ class Entity(BaseBlock):
         effective_path_distance = path_max_distance or max_distance
         self._materialize_navigation_distance(effective_path_distance)
 
-    def _requires_exhausted_movement_paths(
-        self,
-        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
-    ) -> bool:
+    def _position_action_forms(self) -> Dict[UUID, List[BaseAction]]:
+        """The discovery forms of the position actions, on this creature's perceived scan."""
+        scan = self.action_scan(subjective=True)
+        return {registered.uuid: registered.discovery_forms(scan) for registered in self.position_actions}
+
+    def _requires_exhausted_movement_paths(self, forms: Mapping[UUID, List[BaseAction]]) -> bool:
         """Return whether discovery still consumes paths with no movement left."""
         for registered in self.position_actions:
-            variants = (discovery_variants.get(registered.uuid)
-                        if discovery_variants is not None else None)
-            if variants is None:
-                variants = registered.get_discovery_variants(self)
-            for template in variants:
+            for template in forms.get(registered.uuid, ()):
                 target_type = template.effective_target_type
                 if target_type in (TargetType.POSITION, TargetType.POSITION_LOS):
                     contract = template.position_discovery
-                    if ((contract is None and target_type is TargetType.POSITION)
+                    if ((contract is None and target_type is TargetType.POSITION and template.is_movement)
                             or (contract is not None and contract.candidate_source == "reachable")):
                         return True
                 elif (target_type is TargetType.POSITION_PATH
@@ -5255,6 +5252,11 @@ class Entity(BaseBlock):
                     return True
         return False
 
+    def _navigation_traversal_current(self) -> bool:
+        """Whether no traversal write touched a cell the last navigation materialization read."""
+        recorded = self._navigation_traversal
+        return recorded is not None and get_map().traversal_stamp(recorded[0]) == recorded[1]
+
     def materialize_navigation_after_movement(self, movement_mode: MovementMode) -> None:
         """Refresh navigation, omitting unused routes after ordinary exhaustion."""
         remaining_distance = max(
@@ -5262,178 +5264,70 @@ class Entity(BaseBlock):
         )
         if (remaining_distance == 0
                 and self.action_economy.movement_remaining(MovementMode.WALKING) <= 0
-                and not self._requires_exhausted_movement_paths()):
+                and not self._requires_exhausted_movement_paths(self._position_action_forms())):
             self._materialize_navigation_distance(0)
         else:
             self.materialize_navigation(max_distance=20, path_max_distance=remaining_distance)
 
-    def _prefer_direct_navigation_paths(
-        self,
-        paths: Dict[Tuple[int, int], List[Tuple[int, int]]],
-        path_costs: Dict[Tuple[int, int], int],
-        threat_domains: List[Tuple['Entity', Set[Tuple[int, int]]]],
-        *,
-        walk_in_danger: bool,
-        has_reachable_hazard: bool,
-    ) -> None:
-        """Prefer equal-cost monotone routes that add no disclosed risk."""
-        grid = get_map()
-
-        def turns(path):
-            return sum(
-                (b[0] - a[0], b[1] - a[1]) != (c[0] - b[0], c[1] - b[1])
-                for a, b, c in zip(path, path[1:], path[2:])
-            )
-
-        def integer_cost(path):
-            total = 0
-            for source, target in zip(path, path[1:]):
-                cost = grid.movement_edge_cost_units(source, target, MovementMode.WALKING,
-                    ignore_difficult_terrain=self.ignore_difficult_terrain)
-                # Declaration and individual paid steps round fractional costs
-                # differently. Leave that existing boundary untouched.
-                if cost <= 0 or cost != int(cost):
-                    return None
-                total += int(cost) * 5
-            return total
-
-        def risk(path):
-            hazards = {step for step in path[1:]
-                if grid.is_position_hazardous_for(*step, self.uuid)}
-            reactors = {reactor.uuid for reactor, domain in threat_domains
-                if any(source in domain and target not in domain
-                       for source, target in zip(path, path[1:]))}
-            return hazards, reactors
-
-        for position, original in paths.items():
-            dx, dy = position[0] - self.position[0], position[1] - self.position[1]
-            if not dx and not dy:
-                continue
-            diagonal_steps = min(abs(dx), abs(dy))
-            cardinal_steps = abs(abs(dx) - abs(dy))
-            minimum_turns = int(bool(diagonal_steps and cardinal_steps))
-            best_turns = turns(original)
-            if best_turns == minimum_turns and not has_reachable_hazard and not threat_domains:
-                continue
-            best_hazards, best_reactors = risk(original)
-            if best_turns == minimum_turns and not best_hazards and not best_reactors:
-                continue
-            original_cost = integer_cost(original)
-            if original_cost is None or original_cost != path_costs[position]:
-                continue
-            sx, sy = (dx > 0) - (dx < 0), (dy > 0) - (dy < 0)
-            diagonal = [(sx, sy)] * diagonal_steps
-            cardinal = [(sx, 0) if abs(dx) > abs(dy) else (0, sy)] * cardinal_steps
-            previous = None
-            for directions in (diagonal + cardinal, cardinal + diagonal):
-                candidate = [self.position]
-                for step_x, step_y in directions:
-                    x, y = candidate[-1]
-                    candidate.append((x + step_x, y + step_y))
-                if candidate == original or candidate == previous:
-                    continue
-                previous = candidate
-                if any(step not in self.senses.seen and step not in self.senses.visible
-                       for step in candidate[1:]):
-                    continue
-                if not all(grid.can_transition(source, target, self.uuid,
-                    MovementMode.WALKING, walk_in_danger, True,
-                    self.senses.collision_blocked,
-                    directional_collision_blocked=self.senses.directional_collision_blocked)
-                    for source, target in zip(candidate, candidate[1:])):
-                    continue
-                if integer_cost(candidate) != original_cost:
-                    continue
-                hazards, reactors = risk(candidate)
-                if not hazards <= best_hazards or not reactors <= best_reactors:
-                    continue
-                if (hazards == best_hazards and reactors == best_reactors
-                        and minimum_turns >= best_turns):
-                    continue
-                paths[position] = candidate
-                best_hazards, best_reactors = hazards, reactors
-                best_turns = minimum_turns
+    @staticmethod
+    def _preferred_routes(routes: Routes, search: PathSearch, known: np.ndarray, hazard: np.ndarray,
+                          domains: Sequence[np.ndarray], has_reachable_hazard: bool) -> Routes:
+        """The route preference over one search's admitted routes; the candidate steps the search did not read
+        are answered as that search asks (`GridMap.answer_steps` with its query)."""
+        candidates = route_candidates(routes, search, known, hazard, domains, has_reachable_hazard)
+        if candidates is None:
+            return routes
+        steps = candidate_steps(search, candidates)
+        answers = get_map().answer_steps(search.query, steps.sources, steps.targets)
+        return choose_routes(routes, search, candidates, steps, answers)
 
     def _materialize_navigation_distance(self, effective_path_distance: int) -> None:
-        """Materialize the requested path domain, including an origin-only domain."""
+        """Materialize the requested path domain, including an origin-only domain.
+
+        The routes are the walking search's reached cells whose whole path is known (seen or visible) and where
+        this creature may end; when an admitted path crosses a hazardous cell, also those of the search that
+        avoids hazards (same start and reach, so the same box and the same cell masks). With more than one
+        route, the route preference picks each destination's path.
+        """
         grid = get_map()
-        distances, paths = grid.compute_paths(
-            self.position,
-            effective_path_distance,
-            requesting_entity_uuid=self.uuid,
-            subjective=True,
-            collision_blocked=self.senses.collision_blocked,
-            directional_collision_blocked=self.senses.directional_collision_blocked,
-            ignore_difficult_terrain=self.ignore_difficult_terrain,
-        )
-        filtered_paths: DefaultDict[
-            Tuple[int, int], List[Tuple[int, int]]
-        ] = defaultdict(list)
-        path_costs: Dict[Tuple[int, int], int] = {}
-        for position, path in paths.items():
-            if (
-                (position in self.senses.seen or position in self.senses.visible)
-                and all(
-                    step in self.senses.seen or step in self.senses.visible
-                    for step in path
-                )
-                and self.can_end_movement_at(position, subjective=True)
-            ):
-                filtered_paths[position] = path
-                path_costs[position] = int(distances[position] * 5)
-        safe_paths: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
-        safe_path_costs: Dict[Tuple[int, int], int] = {}
-        has_reachable_hazard = any(
-            grid.is_position_hazardous_for(step[0], step[1], self.uuid)
-            for step in {
-                step for path in filtered_paths.values() for step in path[1:]
-            }
-        )
+        senses = self.senses
+        # Paths read traversal within their search box; the walkable map reads every visible cell.
+        read_box = union_box(path_read_box(self.position, effective_path_distance), visible_box(senses.cells))
+        self._navigation_traversal = (read_box, grid.traversal_stamp(read_box))
+
+        def search_from_here(walk_in_danger: bool) -> PathSearch:
+            return grid.path_search(self.position, effective_path_distance, requesting_entity_uuid=self.uuid,
+                                    walk_in_danger=walk_in_danger, subjective=True,
+                                    collision_blocked=senses.collision_blocked,
+                                    directional_collision_blocked=senses.directional_collision_blocked,
+                                    ignore_difficult_terrain=self.ignore_difficult_terrain)
+
+        search = search_from_here(True)
+        tree = search.reached.tree
+        box = tree_box(tree)
+        known = tree_cells(tree, senses.cells.visible) | tree_cells(tree, senses.seen)
+        end_blocked = tree_mask(tree, self.end_blocked_cells(box))
+        paths = admit(tree, known, end_blocked)
+        hazard = tree_cells(tree, grid.hazard_cells(box, self.uuid))
+        has_reachable_hazard = routes_touch(paths, hazard)
+        safe_search: Optional[PathSearch] = None
+        safe_paths = NO_ROUTES
         if has_reachable_hazard:
-            safe_distances, safe_raw_paths = grid.compute_paths(
-                self.position,
-                effective_path_distance,
-                requesting_entity_uuid=self.uuid,
-                walk_in_danger=False,
-                subjective=True,
-                collision_blocked=self.senses.collision_blocked,
-                directional_collision_blocked=(
-                    self.senses.directional_collision_blocked
-                ),
-                ignore_difficult_terrain=self.ignore_difficult_terrain,
-            )
-            for position, path in safe_raw_paths.items():
-                if (
-                    (position in self.senses.seen or position in self.senses.visible)
-                    and all(
-                        step in self.senses.seen or step in self.senses.visible
-                        for step in path
-                    )
-                    and self.can_end_movement_at(position, subjective=True)
-                ):
-                    safe_paths[position] = path
-                    safe_path_costs[position] = int(
-                        safe_distances[position] * 5
-                    )
-        if len(filtered_paths) > 1:
-            threat_domains = self._visible_hostile_threat_domains()
-            self._prefer_direct_navigation_paths(filtered_paths, path_costs, threat_domains,
-                walk_in_danger=True, has_reachable_hazard=has_reachable_hazard)
-            self._prefer_direct_navigation_paths(safe_paths, safe_path_costs, threat_domains,
-                walk_in_danger=False, has_reachable_hazard=has_reachable_hazard)
-        walkable = {
-            position: grid.is_walkable(position[0], position[1])
-            for position in self.senses.visible
-        }
-        self.senses.replace_navigation(
-            walkable=walkable,
-            paths=filtered_paths,
-            path_costs=path_costs,
+            safe_search = search_from_here(False)
+            assert tree_box(safe_search.reached.tree) == box
+            safe_paths = admit(safe_search.reached.tree, known, end_blocked)
+        if route_count(paths) > 1:
+            domains = [tree_mask(tree, cells) for _, cells in self._visible_hostile_threat_domains()]
+            paths = self._preferred_routes(paths, search, known, hazard, domains, has_reachable_hazard)
+            if safe_search is not None:
+                safe_paths = self._preferred_routes(safe_paths, safe_search, known, hazard, domains,
+                                                    has_reachable_hazard)
+        senses.replace_navigation(
+            walkable=grid.walkable_cells(senses.cells.visible),
+            paths=paths,
             safe_paths=safe_paths,
-            safe_path_costs=safe_path_costs,
             path_max_distance=effective_path_distance,
         )
-        spatial_senses_system.refresh_observer(self.uuid)
 
     def update_entity_senses(
         self,
@@ -5441,7 +5335,7 @@ class Entity(BaseBlock):
         path_max_distance: Optional[int] = None,
     ) -> None:
         """Reduce perception, materialize navigation, and record any actual delta."""
-        before = capture_senses_snapshot(self.senses)
+        before = published_senses(self.senses)
         spatial_senses_system.recompute_observer(
             self.uuid,
             max_distance=max_distance,
@@ -5529,6 +5423,10 @@ class Entity(BaseBlock):
         """
         return next((a for a in self.registered_actions if a.name == name), None)
 
+    def get_registered_action(self, template_uuid: UUID) -> Optional[BaseAction]:
+        """The registered action a selection names by uuid (plan §14.4b)."""
+        return next((action for action in self.registered_actions if action.uuid == template_uuid), None)
+
     @property
     def entity_actions(self) -> List[BaseAction]:
         """Actions that target other entities (Attack, multi-target spells)."""
@@ -5542,7 +5440,9 @@ class Entity(BaseBlock):
         Includes path-based movement, line-of-sight positions, and AoE previews.
         """
         return [a for a in self.registered_actions
-                if a.effective_target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE)]
+                if a.effective_target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE)
+                or any(kind in (TargetType.POSITION,TargetType.POSITION_PATH,TargetType.POSITION_LOS,TargetType.POSITION_AOE)
+                    for kind in a.discovery_target_types)]
 
     @property
     def self_actions(self) -> List[BaseAction]:
@@ -5596,6 +5496,8 @@ class Entity(BaseBlock):
             ValueError: If the execution template has no authenticated
                 authored behavior binding.
         """
+        record_action_count("discovery.row", 1)
+        record_action_count("discovery.emitted_target", len(valid_targets))
         behavior_binding = template.behavior_binding
         if not isinstance(behavior_binding, BehaviorBinding):
             raise ValueError(
@@ -5626,8 +5528,10 @@ class Entity(BaseBlock):
             configured_action_ref=template.configured_action_ref,
             target_type=target_type,
             position_selection=template.get_position_selection(),
+            position_region=template.position_region(),
+            conditional_costs=template.get_conditional_costs(),
             allocation_completion=template.get_allocation_completion(),
-            variant_facets=template.get_variant_facets(),
+            variant_facets=template.row_facets(),
             interaction_affordance=(ActionAffordance(surface="world", binding="source_item", default_priority=100)
                 if is_item_use and source_item_uuid is not None
                 and get_map().get_object_placement(source_item_uuid) is not None
@@ -5645,32 +5549,33 @@ class Entity(BaseBlock):
             weapon_slot=weapon_slot,
             weapon_name=weapon_name,
             damage_types=row_damage_types,
-            outcome_profile=template.get_outcome_profile(self),
-            self_setup_profile=template.get_self_setup_profile(self),
-            target_effect_profile=template.get_target_effect_profile(self),
-            world_effect_profile=template.get_world_effect_profile(self),
+            outcome_profile=template.get_outcome_profile(),
+            self_setup_profile=template.get_self_setup_profile(),
+            target_effect_profile=template.get_target_effect_profile(),
+            world_effect_profile=template.get_world_effect_profile(),
             action_category=template.action_category,
             performs_attack=template.performs_attack,
             base_template_name=base_template_name,
             spell_level=description_facts.spell_level,
+            spellcasting_source_id=description_facts.spellcasting_source_id,
+            spellcasting_provider_id=description_facts.spellcasting_provider_id,
+            spellcasting_ability=description_facts.spellcasting_ability,
             cast_at_level=description_facts.cast_at_level,
+            cast_levels=description_facts.cast_levels,
             is_spell_variant=description_facts.is_spell_variant,
             requires_concentration=template.requires_concentration,
-            num_projectiles=template.get_multi_target_count() if target_type == TargetType.MULTI_ENTITY else None,
+            num_projectiles=((len(valid_targets) if template.any_number_of_targets else template.get_multi_target_count())
+                if target_type == TargetType.MULTI_ENTITY else None),
             allow_same_target=template.allow_same_target if target_type == TargetType.MULTI_ENTITY else None,
             is_item_use=is_item_use,
             source_item_uuid=source_item_uuid or template.source_item_uuid,
             item_stack_count=item_stack_count,
             item_charge_cost=item_charge_cost,
-            fixed_healing=template.get_fixed_healing(self),
+            fixed_healing=template.get_fixed_healing(),
             loot_item_uuid=description_facts.loot_item_uuid,
         )
-        for target in valid_targets:
-            if target.target_uuid is not None:
-                secondary = template.get_secondary_target_options(target.target_uuid)
-                target.secondary_targets = None if secondary is None else [
-                    option.model_copy(update={"index": len(valid_targets) + index})
-                    for index, option in enumerate(secondary)]
+        # Secondary recipients are perceived creatures and objects picked by uuid and admitted
+        # on demand by the action's rule (plan §14.4); rows carry no per-primary pool.
         action_info.set_execution_template(template)
         return action_info
 
@@ -5786,12 +5691,18 @@ class Entity(BaseBlock):
         self,
         template: BaseAction,
         target_pool: Dict[UUID, Tuple[int, int]],
+        scan: ActorScan,
     ) -> Tuple[List[AvailableTarget], int]:
-        """Validate candidate entity targets against a template.
+        """Admit candidate targets against the registered template itself (plan §14.3b).
+
+        Each candidate is a selection checked by `discovery_admission`: no copy
+        of the action and no declaration event. An object is listed at the
+        surface the admission reached it at.
 
         Args:
             template: Action template being discovered.
             target_pool: Candidate positions keyed by target UUID.
+            scan: This discovery call's actor scan.
 
         Returns:
             Affordable valid targets with stable indexes, plus the count of
@@ -5799,26 +5710,19 @@ class Entity(BaseBlock):
         """
         valid_targets: List[AvailableTarget] = []
         rules_valid_count = 0
+        base = template.current_selection()
         for target_uuid, target_pos in target_pool.items():
-            targeted_template = template.model_copy(
-                deep=True,
-                update={"target_entity_uuid": target_uuid},
-            )
-            if not targeted_template.validate_requirements_for_discovery():
+            selection = replace(base, target_uuids=(target_uuid,))
+            record_action_count("discovery.validation", 1)
+            error, contact = template.discovery_admission(scan, selection)
+            if error is not None:
                 continue
             rules_valid_count += 1
-            if not targeted_template.check_costs():
+            if template.target_dependent_costs and not template.with_selection(selection).check_costs():
                 continue
             target_entity = BaseBlock.get(target_uuid)
-            if isinstance(target_entity, BaseItem):
-                action_range = targeted_template.get_range()
-                access = targeted_template.get_physical_access()
-                if action_range is not None and access is not None:
-                    contact = get_map().attack_object_contact(self.uuid, target_uuid,
-                        range_feet=action_range.long or action_range.normal, access=access,
-                        subjective=True, origin=targeted_template.get_target_origin())
-                    if contact is not None:
-                        target_pos = contact
+            if contact is not None:
+                target_pos = contact
             valid_targets.append(AvailableTarget(
                 index=len(valid_targets),
                 target_uuid=target_uuid,
@@ -5834,7 +5738,7 @@ class Entity(BaseBlock):
         include_dead: bool,
     ) -> Dict[UUID, Tuple[int, int]]:
         """Add admitted contact recipients without polluting perceived-pool caches."""
-        candidates = template.get_touch_target_candidates()
+        candidates = {**template.get_touch_target_candidates(),**template.get_additional_target_candidates()}
         if not candidates:
             return target_pool
         pool = dict(target_pool)
@@ -5842,7 +5746,7 @@ class Entity(BaseBlock):
             other = Entity.get(identity)
             if other is None or (identity == self.uuid and not template.include_self):
                 continue
-            if not include_dead and not self._has_positive_normal_hp_for_discovery(other):
+            if not (include_dead or template.include_dead) and not self._has_positive_normal_hp_for_discovery(other):
                 continue
             pool[identity] = position
         return pool
@@ -5858,70 +5762,78 @@ class Entity(BaseBlock):
         result.update({identity: contact.position
             for identity, contact in self.senses.objects.items()
             if isinstance(item := BaseBlock.get(identity), BaseItem)
-            and item.is_active and (template.object_target_policy == "active"
-                or item.is_targetable and item.is_breakable())})
+            and (item.is_active if template.object_target_policy == "active" else item.is_breakable())})
         return result
+
+    def _aoe_footprint(
+        self,
+        shape: AoEShape,
+        aim: Tuple[int, int],
+        footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]],
+    ) -> FrozenSet[Tuple[int, int]]:
+        """Return one objective footprint, computed once per footprint identity per call."""
+        identity = footprint_identity(shape, aim, self.position)
+        footprint = footprints.get(identity)
+        if footprint is None:
+            record_action_count("discovery.footprint", 1)
+            footprint = objective_footprint(shape, aim, self.position)
+            footprints[identity] = footprint
+        return footprint
+
+    def _aoe_aim_points(self, template: BaseAction, admitted: Sequence[Tuple[int, int]],
+                        scan: ActorScan) -> List[Tuple[int, int]]:
+        """One aim point per perceived creature, the actor included (plan §14.1), that the action admits.
+
+        Each aim passes the one admission path (plan §14.3b). Free aims anywhere
+        in the row's region are validated on demand.
+        """
+        allowed = set(admitted)
+        aims = {contact.position for contact in self.senses.entities.values() if contact.position in allowed}
+        if self.position in allowed:
+            aims.add(self.position)
+        base = template.current_selection()
+        admitted_aims = []
+        for aim in sorted(aims):
+            record_action_count("discovery.validation", 1)
+            if template.discovery_error(scan, replace(base, positions=(aim,))) is None:
+                admitted_aims.append(aim)
+        return admitted_aims
 
     def _compute_aoe_at_position(
         self,
-        shape: Any,
-        shape_definition_key: Tuple[Any, ...],
-        pos: Tuple[int, int],
         template: BaseAction,
+        shape: AoEShape,
+        pos: Tuple[int, int],
         include_dead: bool,
         caster_visible_positions: AbstractSet[Tuple[int, int]],
-        fov_cache: dict,
-        barrier_positions: Set[Tuple[int, int]],
+        footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]],
         idx: int,
+        scan: ActorScan,
     ) -> Optional[AvailableTarget]:
-        """Compute AoE preview metadata for a candidate position.
+        """Compute the subjective AoE hit set of one candidate aim.
+
+        The objective footprint is the one execution resolves; the caster
+        sees its visible cells and the perceived occupants there.
 
         Args:
-            shape: Reusable preview shape to aim at the candidate position.
-            shape_definition_key: Precomputed immutable identity for the shape.
-            pos: Candidate target position.
             template: Action template being discovered.
+            shape: The template's area shape.
+            pos: Candidate aim.
             include_dead: Whether zero-HP entities stay targetable.
             caster_visible_positions: Visibility snapshot shared by this query.
-            fov_cache: Shared field-of-view cache for AoE computation.
-            barrier_positions: Positions that block AoE projection.
+            footprints: Call-local footprint table, keyed by footprint identity.
             idx: Discovery index to assign if the position is valid.
 
         Returns:
             Available target with AoE metadata, or `None` if filtered out.
         """
-        shape.target = pos
-        footprint_key = (
-            shape_definition_key,
-            shape.footprint_target_key(self.position),
-        )
-        cache_started = time.perf_counter() if action_timing_enabled() else 0.0
-        cached_footprint = self._aoe_footprint_cache.get(footprint_key)
-        if cached_footprint is None:
-            cached_footprint = frozenset(
-                self._compute_aoe_propagation_footprint(
-                    shape,
-                    fov_cache,
-                    barrier_positions,
-                )
-            )
-            self._aoe_footprint_cache[footprint_key] = cached_footprint
-            if cache_started:
-                record_action_timing("available_actions.aoe_footprint_cache_miss_ms", cache_started)
-        else:
-            if cache_started:
-                record_action_timing("available_actions.aoe_footprint_cache_hit_ms", cache_started)
-        shape.set_subjective_footprint(
-            self.position,
-            self.senses,
-            set(cached_footprint.intersection(caster_visible_positions)),
-            caster_uuid=self.uuid,
-        )
-
-        affected_uuids = sorted(
-            shape.affected_entity_uuids,
-            key=target_resolution_sort_key,
-        )
+        record_action_count("discovery.aoe_aim", 1)
+        positions = self._aoe_footprint(shape, pos, footprints) & caster_visible_positions
+        occupants = {entity_uuid for entity_uuid, contact in self.senses.entities.items()
+            if contact.position in positions}
+        if self.position in positions:
+            occupants.add(self.uuid)
+        affected_uuids = sorted(occupants, key=target_resolution_sort_key)
 
         if not template.include_self:
             affected_uuids = [uid for uid in affected_uuids if uid != self.uuid]
@@ -5943,9 +5855,12 @@ class Entity(BaseBlock):
 
         template_include_dead = template.include_dead
         if not template_include_dead and not include_dead:
+            # Perceived occupants' HP is a scan fact, computed once per creature per call.
             affected_uuids = [
                 uid for uid in affected_uuids
-                if self._aoe_contact_alive.get(uid, False)
+                if ((record := scan.creatures.get(uid)) is not None and record.facts.has_positive_hp)
+                or (record is None and (other := Entity.get(uid)) is not None
+                    and self._has_positive_normal_hp_for_discovery(other))
             ]
 
         if not affected_uuids and template.aoe_require_targets:
@@ -5964,67 +5879,7 @@ class Entity(BaseBlock):
             affected_entity_uuids=affected_uuids,
             affected_entity_names=affected_names,
             affected_count=len(affected_uuids),
-            affected_positions=list(shape.affected_positions)
-        )
-
-    def _compute_aoe_propagation_footprint(
-        self,
-        shape: Any,
-        fov_cache: dict,
-        barrier_positions: Set[Tuple[int, int]],
-    ) -> Set[Tuple[int, int]]:
-        """Return shape geometry plus propagation before subjective visibility.
-
-        The result is safe to cache inside authoritative engine state because
-        it contains no target facts. Each discovery pass still intersects it
-        with the actor's current visible cells before resolving entity UUIDs.
-        """
-        computed_origin = shape.get_origin(self.position)
-        shape.computed_origin = computed_origin
-        geometric = shape._get_positions_in_shape(computed_origin)
-        if shape.propagation == "connected":
-            return shape._connected_positions(computed_origin, geometric)
-        if computed_origin == self.position:
-            return set(geometric)
-        if geometric.isdisjoint(barrier_positions):
-            return set(geometric)
-        grid = get_map()
-        return grid.filter_propagation_positions(
-            computed_origin,
-            set(geometric),
-            shape._get_max_radius_tiles(),
-        )
-
-    def _aoe_discovery_cache_key(
-        self,
-        template: BaseAction,
-        valid_positions: List[Tuple[int, int]],
-        include_dead: bool,
-        shape_definition_key: Tuple[Any, ...],
-        include_aoe_preview: bool = True,
-    ) -> Tuple[Any, ...]:
-        """Build a per-query cache key for AoE preview discovery.
-
-        Args:
-            template: AoE action template or generated spell variant.
-            valid_positions: Candidate centers accepted by range and visibility.
-            include_dead: Whether dead entities are included by the query.
-            shape_definition_key: Precomputed immutable identity for the shape.
-
-        Returns:
-            Hashable key for the geometry and target filters that affect
-            subjective AoE preview rows.
-        """
-        return (
-            shape_definition_key,
-            template.get_target_origin(),
-            tuple(valid_positions),
-            template.valid_target_filter,
-            template.include_self,
-            template.include_dead,
-            include_dead,
-            template.aoe_require_targets,
-            include_aoe_preview or template.aoe_require_targets,
+            affected_positions=sorted(positions),
         )
 
     def preview_aoe_target(
@@ -6035,16 +5890,9 @@ class Entity(BaseBlock):
         shape = template.aoe_shape
         if shape is None or target.position is None:
             raise ValueError("Area preview requires a shape and selected aim")
-        grid = get_map()
-        if self._aoe_origin_fov_cache_revision != grid.propagation_revision:
-            self._aoe_origin_fov_cache_revision = grid.propagation_revision
-            self._aoe_origin_fov_cache.clear()
-        visible_positions = self._prepare_aoe_caches()
-        result = self._compute_aoe_at_position(
-            shape.model_copy(), self._aoe_shape_definition_key(shape),
-            target.position, template, include_dead, visible_positions,
-            self._aoe_origin_fov_cache, grid.get_barrier_positions(), target.index,
-        )
+        visible_positions = self._visible_cells()
+        result = self._compute_aoe_at_position(template, shape, target.position, include_dead,
+            visible_positions, {}, target.index, self.action_scan(subjective=True))
         if result is None:
             raise ValueError("The selected aim has no admitted recipients")
         return target.model_copy(deep=True, update={
@@ -6054,176 +5902,29 @@ class Entity(BaseBlock):
             "affected_positions": result.affected_positions,
         })
 
-    @staticmethod
-    def _aoe_shape_definition_key(shape: Any) -> Tuple[Any, ...]:
-        """Return every stable shape-definition field used by preview caches."""
-        return (
-            type(shape),
-            shape.model_dump_json(
-                exclude={
-                    "target",
-                    "computed_origin",
-                    "affected_positions",
-                    "affected_entity_uuids",
-                },
-                fallback=repr,
-            ),
-        )
-
-    def _compact_aoe_candidate_positions(
-        self,
-        shape_template: Any,
-        valid_positions: Sequence[Tuple[int, int]],
-    ) -> List[Tuple[int, int]]:
-        """Collapse target cells that resolve to the same AoE footprint."""
-        if len(valid_positions) < 2:
-            return list(valid_positions)
-
-        original_target = shape_template.target
-        positions_by_footprint: Dict[Tuple[object, ...], Tuple[int, int]] = {}
-        try:
-            for position in sorted(valid_positions):
-                shape_template.target = position
-                footprint_key = shape_template.footprint_target_key(self.position)
-                positions_by_footprint.setdefault(footprint_key, position)
-        finally:
-            shape_template.target = original_target
-        return list(positions_by_footprint.values())
-
-    def _prepare_aoe_caches(
+    def _visible_cells(
         self,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
     ) -> frozenset[Tuple[int, int]]:
-        """Invalidate AoE caches and return the query visibility snapshot."""
-        grid = get_map()
-        visible_position_set = frozenset(
+        """The query's visibility snapshot."""
+        return frozenset(
             caster_visible_positions
             if caster_visible_positions is not None
-            else (
-                position
-                for position, visible in self.senses.visible.items()
-                if visible
-            )
+            else visible_positions(self.senses.cells)
         )
-        visible_positions = tuple(sorted(visible_position_set))
-        footprint_context = (
-            self.position,
-            grid.propagation_revision,
-        )
-        if footprint_context != self._aoe_footprint_cache_context:
-            self._aoe_footprint_cache_context = footprint_context
-            self._aoe_footprint_cache.clear()
-
-        contact_facts: List[Tuple[Any, ...]] = []
-        contact_alive: Dict[UUID, bool] = {
-            self.uuid: self._has_positive_normal_hp_for_discovery(self)
-        }
-        for entity_uuid, contact in self.senses.entities.items():
-            perceived_position = contact.position
-            entity = Entity.get(entity_uuid)
-            if entity is None:
-                contact_facts.append(
-                    (str(entity_uuid), perceived_position, None, None, None)
-                )
-                continue
-            alive = self._has_positive_normal_hp_for_discovery(entity)
-            contact_alive[entity_uuid] = alive
-            contact_facts.append(
-                (
-                    str(entity_uuid),
-                    perceived_position,
-                    entity.name,
-                    entity.faction,
-                    alive,
-                )
-            )
-        self._aoe_contact_alive = contact_alive
-        contact_facts.sort(key=lambda fact: fact[0])
-        preview_context = (
-            footprint_context,
-            visible_positions,
-            self.name,
-            self.faction,
-            self._has_positive_normal_hp_for_discovery(self),
-            tuple(contact_facts),
-        )
-        if preview_context != self._aoe_preview_cache_context:
-            self._aoe_preview_cache_context = preview_context
-            self._aoe_preview_cache.clear()
-            self._aoe_nearby_candidates_cache.clear()
-        return visible_position_set
-
-    def _aoe_required_target_prefilter_positions(
-        self,
-        template: BaseAction,
-        include_dead: bool,
-    ) -> Set[Tuple[int, int]]:
-        """Return visible positions that can satisfy an AoE target requirement.
-
-        Args:
-            template: Position-AoE action whose required targets are being
-                discovered.
-            include_dead: Discovery-level dead-target override.
-
-        Returns:
-            Visible positions that can contribute at least one affected entity
-            after the action relationship filter is applied.
-        """
-        positions: Set[Tuple[int, int]] = set()
-        target_filter = template.valid_target_filter
-        allow_dead = include_dead or template.include_dead
-
-        for entity_uuid, contact in self.senses.entities.items():
-            perceived_position = contact.position
-            entity = Entity.get(entity_uuid)
-            if entity is None:
-                if target_filter == "all":
-                    positions.add(perceived_position)
-                continue
-            if not allow_dead and not self._has_positive_normal_hp_for_discovery(entity):
-                continue
-
-            if target_filter == "enemies":
-                matches = self.is_enemy(entity)
-            elif target_filter == "allies":
-                matches = self.is_ally(entity)
-            elif target_filter == "self_or_allies":
-                matches = self.is_ally(entity)
-            elif target_filter == "all":
-                matches = True
-            else:
-                matches = True
-
-            if matches:
-                positions.add(perceived_position)
-
-        if template.include_self and (allow_dead or self._has_positive_normal_hp_for_discovery(self)):
-            if target_filter in {"all", "allies", "self_or_allies"} or target_filter not in {
-                "enemies",
-                "allies",
-                "self_or_allies",
-                "all",
-            }:
-                positions.add(self.position)
-
-        return positions
 
     def _collect_self_actions(
         self,
-        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
+        scan: ActorScan,
+        forms: Mapping[UUID, List[BaseAction]],
         legal_only: bool = False,
     ) -> List[AvailableActionInfo]:
         """Collect SELF-targeting actions (Dash, Dodge, etc.)."""
         actions: List[AvailableActionInfo] = []
-        for registered_template in self.self_actions:
-            variants = (
-                discovery_variants.get(registered_template.uuid)
-                if discovery_variants is not None
-                else None
-            )
-            if variants is None:
-                variants = registered_template.get_discovery_variants(self)
+        for registered_template in self.registered_actions:
+            variants = forms[registered_template.uuid]
             for template in variants:
+                if template.effective_target_type is not TargetType.SELF:continue
                 template_name = template.get_discovery_template_name()
                 display_name = template.get_discovery_display_name()
                 can_afford = template.check_target_independent_costs()
@@ -6231,7 +5932,7 @@ class Entity(BaseBlock):
                     continue
                 requirements_met = (
                     can_afford
-                    and template.validate_requirements_for_discovery()
+                    and template.discovery_error(scan, template.current_selection()) is None
                 )
                 if legal_only and not requirements_met:
                     continue
@@ -6263,7 +5964,8 @@ class Entity(BaseBlock):
         self,
         potential_targets: Dict[UUID, Tuple[int, int]],
         include_dead: bool,
-        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
+        scan: ActorScan,
+        forms: Mapping[UUID, List[BaseAction]],
         legal_only: bool = False,
     ) -> List[AvailableActionInfo]:
         """Collect entity-targeting actions.
@@ -6278,7 +5980,7 @@ class Entity(BaseBlock):
         actions: List[AvailableActionInfo] = []
         timing = action_timing_enabled()
         started = time.perf_counter() if timing else 0.0
-        registered_entity_actions = self.entity_actions
+        registered_entity_actions = self.registered_actions
         target_pool_cache: Dict[Tuple[str, bool, bool], Dict[UUID, Tuple[int, int]]] = {}
         if timing:
             record_action_timing("available_actions.entity_actions.list_templates_ms", started)
@@ -6286,13 +5988,7 @@ class Entity(BaseBlock):
         for registered_template in registered_entity_actions:
             base_label = self._timing_label(registered_template.name)
             started = time.perf_counter() if timing else 0.0
-            variants = (
-                discovery_variants.get(registered_template.uuid)
-                if discovery_variants is not None
-                else None
-            )
-            if variants is None:
-                variants = registered_template.get_discovery_variants(self)
+            variants = forms[registered_template.uuid]
             if timing:
                 record_action_timing(
                     f"available_actions.entity_actions.variant_generation.{base_label}_ms",
@@ -6300,6 +5996,8 @@ class Entity(BaseBlock):
                 )
 
             for template in variants:
+                if template.effective_target_type not in (TargetType.ENTITY,TargetType.MULTI_ENTITY,TargetType.CREATURE_OR_OBJECT):
+                    continue
                 started = time.perf_counter() if timing else 0.0
                 template_name = template.get_discovery_template_name()
                 template_label = self._timing_label(template_name)
@@ -6346,7 +6044,7 @@ class Entity(BaseBlock):
 
                 started = time.perf_counter() if timing else 0.0
                 valid_targets, rules_valid_count = (
-                    self._validate_entity_targets(template, target_pool)
+                    self._validate_entity_targets(template, target_pool, scan)
                     if source_requirements_met
                     else ([], 0)
                 )
@@ -6425,48 +6123,38 @@ class Entity(BaseBlock):
         self,
         template: BaseAction,
         contract: PositionDiscoveryContract,
-        caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
+        visible_cells: Tuple[Tuple[Tuple[int, int], int], ...],
+        preview_facts: Tuple[Any, ...],
+        threats: Callable[[], ThreatExits],
     ) -> List[AvailableTarget]:
-        """Materialize plain-position candidates from subjective facts."""
-        self._prepare_position_preview_cache(caster_visible_positions)
+        """Materialize plain-position candidates from subjective facts.
+
+        `visible_cells` (sorted, with distances), `preview_facts` and the threat
+        domains are computed once per discovery call (plan PD2).
+        """
+        self._prepare_position_preview_cache(preview_facts)
         action_range = template.get_range()
         max_range = action_range.normal if action_range is not None else 0
-        threat_domains = (
-            self._visible_hostile_threat_domains()
-            if template.is_movement
-            else []
-        )
-        threat_signature = tuple(
-            (
-                str(reactor.uuid),
-                tuple(sorted(threatened_positions)),
-            )
-            for reactor, threatened_positions in threat_domains
-        )
+        exits = threats() if template.is_movement else ThreatExits(())
         cache_key = (
             template.get_semantic_key(),
             contract.model_dump_json(),
             max_range,
-            threat_signature,
+            tuple((reactor.uuid, cells) for reactor, cells in exits.domains),
         )
         cached_targets = self._position_preview_cache.get(cache_key)
         if cached_targets is not None:
             return list(cached_targets)
 
-        if contract.candidate_source == "reachable":
-            candidate_positions = self.senses.paths.keys()
-        else:
-            candidate_positions = self._get_subjective_visible_positions(
-                template,
-                caster_visible_positions,
-            )
+        candidate_positions = (sorted(route_destinations(self.senses.paths)) if contract.candidate_source == "reachable"
+                               else self._get_subjective_visible_positions(template, visible_cells))
 
         perceived_occupancy = {
             contact.position for contact in self.senses.entities.values()
         }
         perceived_occupancy.add(self.position)
         targets: List[AvailableTarget] = []
-        for position in sorted(candidate_positions):
+        for position in candidate_positions:
             if contract.exclude_source_position and position == self.position:
                 continue
             distance = self.senses.get_feet_distance(position)
@@ -6516,7 +6204,7 @@ class Entity(BaseBlock):
                     opportunity_attack_exposures=(
                         self._opportunity_attack_exposures_for_path(
                             disclosed_path,
-                            threat_domains,
+                            exits,
                         )
                         if disclosed_path is not None
                         else []
@@ -6531,13 +6219,15 @@ class Entity(BaseBlock):
         template: BaseAction,
         contract: PositionDiscoveryContract,
         candidates: Sequence[AvailableTarget],
+        scan: ActorScan,
     ) -> List[AvailableTarget]:
-        """Retain candidates whose target-specialized costs are affordable."""
+        """Retain candidates the action admits (plan §14.3b) whose target-specialized costs are affordable."""
         executable: List[AvailableTarget] = []
         remaining_movement = self.action_economy.movement_remaining()
         # Cost evaluation only reads the selected destination. Keep one detached
         # probe for this query instead of copying the full action for every cell.
         targeted_template = template.model_copy(deep=True)
+        base = template.current_selection()
         for candidate in candidates:
             if candidate.position is None:
                 continue
@@ -6546,6 +6236,9 @@ class Entity(BaseBlock):
                 and candidate.path_cost is not None
                 and candidate.path_cost > remaining_movement
             ):
+                continue
+            record_action_count("discovery.validation", 1)
+            if template.discovery_error(scan, replace(base, positions=(candidate.position,))) is not None:
                 continue
             targeted_template.end_position = candidate.position
             target_costs = targeted_template.effective_costs
@@ -6570,97 +6263,56 @@ class Entity(BaseBlock):
             )
         return executable
 
-    def _prepare_position_preview_cache(
-        self,
-        caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
-    ) -> None:
-        """Invalidate position previews when subjective destination facts change."""
-        visible_positions = tuple(
-            sorted(
-                caster_visible_positions
-                if caster_visible_positions is not None
-                else (
-                    position
-                    for position, visible in self.senses.visible.items()
-                    if visible
-                )
-            )
-        )
-        walkable_facts = tuple(sorted(self.senses.walkable.items()))
-        entity_facts = tuple(
-            sorted(
-                (str(entity_uuid), contact.position)
-                for entity_uuid, contact in self.senses.entities.items()
-            )
-        )
-        object_facts: List[Tuple[Any, ...]] = []
-        for object_uuid, contact in self.senses.objects.items():
-            position = contact.position
-            block = BaseBlock.get(object_uuid)
-            object_facts.append(
-                (
-                    str(object_uuid),
-                    position,
-                    block.blocks_walking(self.uuid, MovementMode.WALKING)
-                    if block is not None
-                    else None,
-                )
-            )
-        object_facts.sort(key=lambda fact: fact[0])
-        context = (
+    def _position_preview_facts(self, visible: FrozenSet[Tuple[int, int]]) -> Tuple[Any, ...]:
+        """Snapshot the perceived destination facts position previews read, once per discovery call.
+
+        Perception does not change during a discovery call. Navigation
+        (walkable cells, paths and their costs) may be rematerialized midway, but
+        only through `Senses.replace_navigation`, which advances the path
+        revision the cache context reads at every use instead.
+        """
+        return (
             self.position,
-            visible_positions,
-            walkable_facts,
-            entity_facts,
-            tuple(object_facts),
-            tuple(sorted(self.senses.collision_blocked)),
-            self.senses.path_revision,
-            get_map().movement_revision,
+            visible,
+            {identity: contact.position for identity, contact in self.senses.entities.items()},
+            {identity: (contact.position,
+                        None if (block := BaseBlock.get(identity)) is None
+                        else block.blocks_walking(self.uuid, MovementMode.WALKING))
+             for identity, contact in self.senses.objects.items()},
+            layer_key(self.senses.collision_blocked),
         )
+
+    def _prepare_position_preview_cache(self, preview_facts: Tuple[Any, ...]) -> None:
+        """Invalidate position previews when subjective destination facts change."""
+        context = (preview_facts, self.senses.path_revision, get_map().movement_revision)
         if context == self._position_preview_cache_context:
             return
         self._position_preview_cache_context = context
         self._position_preview_cache.clear()
-        self._visible_position_cache.clear()
 
     def _get_subjective_visible_positions(
         self,
         template: BaseAction,
-        caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
+        visible_cells: Tuple[Tuple[Tuple[int, int], int], ...],
     ) -> Tuple[Tuple[int, int], ...]:
-        """Return cached visible candidate cells within an action's range."""
+        """Return the visible candidate cells within an action's range, sorted.
+
+        `visible_cells` is the call's sorted visible cells with their distance in feet.
+        """
         action_range = template.get_range()
         max_range = action_range.normal if action_range is not None else 0
-        cached = self._visible_position_cache.get(max_range)
-        if cached is not None:
-            return cached
-        positions = tuple(
-            sorted(
-                position
-                for position in (
-                    caster_visible_positions
-                    if caster_visible_positions is not None
-                    else (
-                        candidate_position
-                        for candidate_position, visible in self.senses.visible.items()
-                        if visible
-                    )
-                )
-                if position != self.position
-                and (
-                    max_range <= 0
-                    or self.senses.get_feet_distance(position) <= max_range
-                )
-            )
+        return tuple(
+            position
+            for position, feet in visible_cells
+            if position != self.position
+            and (max_range <= 0 or feet <= max_range)
         )
-        self._visible_position_cache[max_range] = positions
-        return positions
 
     def _is_subjectively_walkable_position(self, position: Tuple[int, int]) -> bool:
         """Return whether perceived terrain and objects allow walking."""
-        if not self.senses.walkable.get(position, False):
+        if not layer_value(self.senses.walkable, position):
             return False
-        if position in self.senses.collision_blocked:
+        if layer_value(self.senses.collision_blocked, position):
             return False
         for object_uuid, contact in self.senses.objects.items():
             object_position = contact.position
@@ -6677,8 +6329,11 @@ class Entity(BaseBlock):
     def _collect_path_actions(
         self,
         remaining_movement: int,
-        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
-        caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
+        scan: ActorScan,
+        forms: Mapping[UUID, List[BaseAction]],
+        visible_cells: Tuple[Tuple[Tuple[int, int], int], ...],
+        preview_facts: Tuple[Any, ...],
+        threats: Callable[[], ThreatExits],
         legal_only: bool = False,
     ) -> List[AvailableActionInfo]:
         """Collect path-based movement and plain-position actions.
@@ -6691,14 +6346,9 @@ class Entity(BaseBlock):
         """
         grid = get_map()
         actions: List[AvailableActionInfo] = []
-        for registered_template in self.position_actions:
-            variants = (
-                discovery_variants.get(registered_template.uuid)
-                if discovery_variants is not None
-                else None
-            )
-            if variants is None:
-                variants = registered_template.get_discovery_variants(self)
+        hazard: Dict[Tuple[int, int], bool] = {}  # per cell, once per call: paths share their steps
+        for registered_template in self.registered_actions:
+            variants = forms[registered_template.uuid]
             for template in variants:
                 target_type = template.effective_target_type
                 if target_type not in (TargetType.POSITION, TargetType.POSITION_PATH):
@@ -6724,17 +6374,36 @@ class Entity(BaseBlock):
                     continue
 
                 valid_positions: List[AvailableTarget] = []
-                if target_type == TargetType.POSITION and template.position_discovery is not None:
+                if target_type == TargetType.POSITION and (template.position_discovery is not None
+                                                           or not template.is_movement):
+                    # A point without a declared contract is one in range the actor sees.
+                    contract = template.position_discovery or PositionDiscoveryContract()
                     candidates = self._collect_declared_position_targets(
                         template,
-                        template.position_discovery,
-                        caster_visible_positions,
+                        contract,
+                        visible_cells,
+                        preview_facts,
+                        threats,
                     )
-                    valid_positions = self._filter_targets_by_selected_cost(
+                    # Only movement lists its destinations (D13); any other
+                    # position is a free-aim region (plan §14.4).
+                    valid_positions = (self._filter_targets_by_selected_cost(
                         template,
-                        template.position_discovery,
+                        contract,
                         candidates,
-                    )
+                        scan,
+                    ) if template.is_movement else [])
+                    if not template.is_movement and candidates:
+                        actions.append(self._make_action_info(
+                            template_name=template_name,
+                            target_type=target_type,
+                            valid_targets=[],
+                            can_afford=True,
+                            availability_status=ActionAvailabilityStatus.AVAILABLE,
+                            template=template,
+                            display_name=display_name,
+                        ))
+                        continue
                     availability_status = (
                         ActionAvailabilityStatus.AVAILABLE
                         if valid_positions
@@ -6772,22 +6441,16 @@ class Entity(BaseBlock):
                     elif movement_mode == MovementMode.WALKING:
                         paths_by_position = self.senses.paths
                     else:
-                        _, computed_paths = grid.compute_paths(
+                        tree = grid.compute_paths(
                             self.senses.position,
                             requesting_entity_uuid=self.uuid,
                             movement_mode=movement_mode,
-                            subjective=True,
+                            subjective=scan.subjective,
                             ignore_difficult_terrain=self.ignore_difficult_terrain,
-                        )
-                        paths_by_position = {
-                            pos: path
-                            for pos, path in computed_paths.items()
-                            if (pos in self.senses.seen or pos in self.senses.visible)
-                            and all(
-                                step in self.senses.seen or step in self.senses.visible
-                                for step in path
-                            )
-                        }
+                        ).tree
+                        paths_by_position = admit(
+                            tree, tree_cells(tree, self.senses.cells.visible) | tree_cells(tree, self.senses.seen),
+                            tree_mask(tree, ()))
 
                     if template.is_movement and remaining_movement <= 0:
                         pass
@@ -6796,6 +6459,8 @@ class Entity(BaseBlock):
                             paths_by_position,
                             remaining_movement,
                             movement_mode,
+                            threats(),
+                            hazard,
                         )
                         rules_valid_count = (
                             len(valid_positions)
@@ -6803,39 +6468,40 @@ class Entity(BaseBlock):
                             else int(rules_route_exists)
                         )
                     else:
-                        threat_domains = self._visible_hostile_threat_domains()
-                        for position, normal_path in paths_by_position.items():
+                        exits = threats()
+                        base = template.current_selection()
+                        # Costs that do not depend on the destination are checked once per template.
+                        fixed_cost = (None if template.target_dependent_costs else (template.check_costs(), sum(
+                            cost.cost for cost in template.effective_costs if cost.cost_type == "movement")))
+                        for index, position in enumerate(route_destinations(paths_by_position)):
                             if position == self.senses.position:
                                 continue
-                            targeted_template = template.model_copy(
-                                deep=True,
-                                update={"end_position": position},
-                            )
-                            if not targeted_template.validate_requirements_for_discovery():
+                            selection = replace(base, positions=(position,))
+                            record_action_count("discovery.validation", 1)
+                            if template.discovery_error(scan, selection) is not None:
                                 continue
                             rules_valid_count += 1
-                            if not targeted_template.check_costs():
+                            if fixed_cost is None:
+                                executable = template.with_selection(selection)
+                                affordable = executable.check_costs()
+                                path_cost = sum(cost.cost for cost in executable.effective_costs
+                                                if cost.cost_type == "movement")
+                            else:
+                                affordable, path_cost = fixed_cost
+                            if not affordable:
                                 continue
-                            path_cost = sum(
-                                cost.cost
-                                for cost in targeted_template.effective_costs
-                                if cost.cost_type == "movement"
-                            )
+                            normal_path = destination_path(paths_by_position, index)
                             is_hazardous = any(
-                                grid.is_position_hazardous_for(
-                                    step[0], step[1], self.uuid,
-                                )
+                                hazard[step] if step in hazard else hazard.setdefault(
+                                    step, grid.is_position_hazardous_for(step[0], step[1], self.uuid))
                                 for step in normal_path[1:]
                             )
-                            safe_path_list: Optional[List[Tuple[int, int]]] = None
+                            # The target validates (copies) both paths; the senses' lists are only read.
+                            safe_path_list = (route(self.senses.safe_paths, position)
+                                              if movement_mode == MovementMode.WALKING and is_hazardous else None)
                             safe_cost: Optional[int] = None
-                            if (
-                                movement_mode == MovementMode.WALKING
-                                and is_hazardous
-                                and position in self.senses.safe_paths
-                            ):
-                                safe_path_list = list(self.senses.safe_paths[position])
-                                safe_cost = self._movement_path_cost_feet(
+                            if safe_path_list is not None:
+                                safe_cost = self.movement_path_cost_feet(
                                     safe_path_list,
                                     MovementMode.WALKING,
                                 )
@@ -6846,16 +6512,16 @@ class Entity(BaseBlock):
                                 path_cost=path_cost,
                                 is_path_hazardous=is_hazardous,
                                 safe_path_cost=safe_cost,
-                                path=list(normal_path),
+                                path=normal_path,
                                 safe_path=safe_path_list,
                                 opportunity_attack_exposures=self._opportunity_attack_exposures_for_path(
                                     normal_path,
-                                    threat_domains,
+                                    exits,
                                 ),
                                 safe_path_opportunity_attack_exposures=(
                                     self._opportunity_attack_exposures_for_path(
                                         safe_path_list,
-                                        threat_domains,
+                                        exits,
                                     )
                                     if safe_path_list is not None
                                     else []
@@ -6900,7 +6566,7 @@ class Entity(BaseBlock):
                     self.position[0] + delta_x,
                     self.position[1] + delta_y,
                 )
-                if position not in self.senses.seen and not self.senses.visible.get(position, False):
+                if not cell_seen(self.senses.seen, position) and not cell_visible(self.senses.cells, position):
                     continue
                 if grid.can_transition(
                     self.position,
@@ -6926,14 +6592,30 @@ class Entity(BaseBlock):
 
     def _collect_fast_move_targets(
         self,
-        paths_by_position: Mapping[Tuple[int, int], List[Tuple[int, int]]],
+        paths_by_position: Routes,
         remaining_movement: int,
         movement_mode: MovementMode,
+        threats: ThreatExits,
+        hazard: Dict[Tuple[int, int], bool],
     ) -> List[AvailableTarget]:
-        """Build legal movement targets from already-computed subjective paths."""
+        """Build legal movement targets from already-computed subjective paths.
+
+        The cache is cleared with the path and movement revisions. The senses'
+        paths, costs and safe paths are replaced only with a new path revision,
+        so they need no signature of their own; computed (non-walking) paths do.
+        `threats` and `hazard` are the discovery call's threat exits and per-cell hazard memo.
+        """
         movement_blocked = remaining_movement <= 0
         grid = get_map()
-        cache_revision = (self.senses.path_revision, grid.movement_revision)
+        # Targets read step costs and hazards only on these paths' cells, so
+        # only movement writes there (or new paths) can change them.
+        read_box: Optional[CellBox] = None
+        for routes in (paths_by_position, self.senses.safe_paths):
+            box = routes_box(routes)
+            if box is not None:
+                read_box = union_box(box, read_box)
+        cache_revision = (self.senses.path_revision,
+                          grid.traversal_stamp(read_box) if read_box is not None else 0)
         if cache_revision != self._fast_move_target_cache_revision:
             self._fast_move_target_cache_revision = cache_revision
             self._fast_move_target_cache.clear()
@@ -6941,38 +6623,19 @@ class Entity(BaseBlock):
         if movement_mode != MovementMode.WALKING:
             path_signature = tuple(
                 (position, tuple(path))
-                for position, path in paths_by_position.items()
+                for position, path in route_items(paths_by_position)
             )
-        cost_signature: Optional[Tuple[Tuple[Tuple[int, int], int], ...]] = None
-        safe_cost_signature: Optional[Tuple[Tuple[Tuple[int, int], int], ...]] = None
-        if paths_by_position is self.senses.paths:
-            cost_signature = tuple(sorted(self.senses.path_costs.items()))
-            safe_cost_signature = tuple(sorted(self.senses.safe_path_costs.items()))
+        if movement_blocked:
+            return []
         cache_context = (
             self.position,
             self.senses.position,
             remaining_movement,
             self.ignore_difficult_terrain,
-            movement_blocked,
             movement_mode,
             path_signature,
-            cost_signature,
-            safe_cost_signature,
+            tuple((reactor.uuid, cells) for reactor, cells in threats.domains),
         )
-        if movement_blocked:
-            return []
-        if remaining_movement <= 0:
-            return []
-
-        threat_domains = self._visible_hostile_threat_domains()
-        threat_signature = tuple(
-            (
-                str(reactor.uuid),
-                tuple(sorted(threatened_positions)),
-            )
-            for reactor, threatened_positions in threat_domains
-        )
-        cache_context = (*cache_context, threat_signature)
         cached_targets = self._fast_move_target_cache.get(cache_context)
         if cached_targets is not None:
             return list(cached_targets)
@@ -7004,57 +6667,54 @@ class Entity(BaseBlock):
         safe_path_seconds = 0.0
         exposure_seconds = 0.0
         target_model_seconds = 0.0
-        for pos, normal_path in paths_by_position.items():
+        walking = movement_mode == MovementMode.WALKING
+        # Walking costs are the senses' route costs; other modes price each path here.
+        walking_feet = [cost for _, cost in route_costs(paths_by_position)] if walking else []
+        for index, pos in enumerate(route_destinations(paths_by_position)):
             if pos == self.senses.position:
                 continue
             phase_started = time.perf_counter() if timing else 0.0
-            cached_path_cost = (
-                self.senses.path_costs.get(pos)
-                if paths_by_position is self.senses.paths
-                else None
-            )
-            path_cost = (
-                cached_path_cost
-                if cached_path_cost is not None
-                else cached_path_cost_feet(normal_path)
-            )
+            normal_path: Optional[List[Tuple[int, int]]] = None
+            if walking:
+                path_cost = walking_feet[index]
+            else:
+                normal_path = destination_path(paths_by_position, index)
+                path_cost = cached_path_cost_feet(normal_path)
             if timing:
                 path_cost_seconds += time.perf_counter() - phase_started
             if path_cost > remaining_movement:
                 continue
+            if normal_path is None:
+                normal_path = destination_path(paths_by_position, index)
 
             phase_started = time.perf_counter() if timing else 0.0
             is_hazardous = any(
-                grid.is_position_hazardous_for(step[0], step[1], self.uuid)
+                hazard[step] if step in hazard else hazard.setdefault(
+                    step, grid.is_position_hazardous_for(step[0], step[1], self.uuid))
                 for step in normal_path[1:]
             )
             if timing:
                 hazard_seconds += time.perf_counter() - phase_started
 
+            # The target validates (copies) both paths; the senses' lists are only read.
             safe_cost: Optional[int] = None
             safe_path_list: Optional[List[Tuple[int, int]]] = None
-            if (
-                movement_mode == MovementMode.WALKING
-                and is_hazardous
-                and pos in self.senses.safe_paths
-            ):
+            if walking and is_hazardous:
                 phase_started = time.perf_counter() if timing else 0.0
-                safe_path_list = list(self.senses.safe_paths[pos])
-                safe_cost = self.senses.safe_path_costs.get(pos)
-                if safe_cost is None:
-                    safe_cost = cached_path_cost_feet(safe_path_list)
+                safe_path_list = route(self.senses.safe_paths, pos)
+                safe_cost = route_cost(self.senses.safe_paths, pos)
                 if timing:
                     safe_path_seconds += time.perf_counter() - phase_started
 
             phase_started = time.perf_counter() if timing else 0.0
             opportunity_attack_exposures = self._opportunity_attack_exposures_for_path(
                 normal_path,
-                threat_domains,
+                threats,
             )
             safe_path_opportunity_attack_exposures = (
                 self._opportunity_attack_exposures_for_path(
                     safe_path_list,
-                    threat_domains,
+                    threats,
                 )
                 if safe_path_list is not None
                 else []
@@ -7069,7 +6729,7 @@ class Entity(BaseBlock):
                 path_cost=path_cost,
                 is_path_hazardous=is_hazardous,
                 safe_path_cost=safe_cost,
-                path=list(normal_path),
+                path=normal_path,
                 safe_path=safe_path_list,
                 opportunity_attack_exposures=opportunity_attack_exposures,
                 safe_path_opportunity_attack_exposures=safe_path_opportunity_attack_exposures,
@@ -7086,7 +6746,7 @@ class Entity(BaseBlock):
         self._fast_move_target_cache[cache_context] = tuple(valid_positions)
         return valid_positions
 
-    def _movement_path_cost_feet(
+    def movement_path_cost_feet(
         self,
         path: List[Tuple[int, int]],
         movement_mode: MovementMode,
@@ -7108,20 +6768,21 @@ class Entity(BaseBlock):
 
     def _collect_los_actions(
         self,
-        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
-        caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
+        scan: ActorScan,
+        forms: Mapping[UUID, List[BaseAction]],
+        seen: FrozenSet[Tuple[int, int]],
+        visible_cells: Tuple[Tuple[Tuple[int, int], int], ...],
+        preview_facts: Tuple[Any, ...],
+        threats: Callable[[], ThreatExits],
         legal_only: bool = False,
     ) -> List[AvailableActionInfo]:
         """Collect line-of-sight position actions."""
         actions: List[AvailableActionInfo] = []
-        for registered_template in self.position_actions:
-            variants = (
-                discovery_variants.get(registered_template.uuid)
-                if discovery_variants is not None
-                else None
-            )
-            if variants is None:
-                variants = registered_template.get_discovery_variants(self)
+        # A region is open when one seen cell is in range: decided once per registered
+        # action (range does not vary with the level row), stopping at the first cell.
+        region_open: Dict[UUID, bool] = {}
+        for registered_template in self.registered_actions:
+            variants = forms[registered_template.uuid]
             for template in variants:
                 if template.effective_target_type != TargetType.POSITION_LOS:
                     continue
@@ -7148,12 +6809,15 @@ class Entity(BaseBlock):
                     candidates = self._collect_declared_position_targets(
                         template,
                         template.position_discovery,
-                        caster_visible_positions,
+                        visible_cells,
+                        preview_facts,
+                        threats,
                     )
                     valid_positions = self._filter_targets_by_selected_cost(
                         template,
                         template.position_discovery,
                         candidates,
+                        scan,
                     )
                     availability_status = (
                         ActionAvailabilityStatus.AVAILABLE
@@ -7180,39 +6844,16 @@ class Entity(BaseBlock):
                     ))
                     continue
 
-                valid_pos_list = template.get_valid_positions()
-                valid_positions: List[AvailableTarget] = []
-                rules_valid_count = 0
-                for pos in valid_pos_list:
-                    targeted_template = template.model_copy(
-                        deep=True,
-                        update={"end_position": pos},
-                    )
-                    if not targeted_template.validate_requirements_for_discovery(allow_partial_position=True):
-                        continue
-                    rules_valid_count += 1
-                    if not targeted_template.check_costs():
-                        continue
-                    valid_positions.append(AvailableTarget(
-                        index=len(valid_positions),
-                        position=pos,
-                        distance=self.senses.get_feet_distance(pos),
-                        path_cost=sum(
-                            cost.cost
-                            for cost in targeted_template.effective_costs
-                            if cost.cost_type == "movement"
-                        ) or None,
-                    ))
-
-                availability_status = (
-                    ActionAvailabilityStatus.AVAILABLE
-                    if valid_positions
-                    else (
-                        ActionAvailabilityStatus.TARGET_COST_UNAFFORDABLE
-                        if rules_valid_count
-                        else ActionAvailabilityStatus.NO_VALID_TARGETS
-                    )
-                )
+                # A free-aim region, not a list of cells (plan §14.4): the row
+                # carries `position_region`; preview validates the chosen aim.
+                if not (template.contributions_active() and template.validate_source_requirements_for_discovery()):
+                    availability_status = ActionAvailabilityStatus.REQUIREMENTS_UNMET
+                else:
+                    if registered_template.uuid not in region_open:
+                        region_open[registered_template.uuid] = any(
+                            template.target_position_error(cell) is None for cell in seen)
+                    availability_status = (ActionAvailabilityStatus.AVAILABLE if region_open[registered_template.uuid]
+                                           else ActionAvailabilityStatus.NO_VALID_TARGETS)
                 if legal_only and (
                     availability_status is not ActionAvailabilityStatus.AVAILABLE
                 ):
@@ -7220,7 +6861,7 @@ class Entity(BaseBlock):
                 actions.append(self._make_action_info(
                     template_name=template_name,
                     target_type=TargetType.POSITION_LOS,
-                    valid_targets=valid_positions,
+                    valid_targets=[],
                     can_afford=True,
                     availability_status=availability_status,
                     template=template,
@@ -7231,42 +6872,37 @@ class Entity(BaseBlock):
     def _collect_aoe_actions(
         self,
         include_dead: bool,
-        fov_cache: dict,
-        barrier_positions: Optional[Set[Tuple[int, int]]],
-        discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
-        caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
+        scan: ActorScan,
+        footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]],
+        forms: Mapping[UUID, List[BaseAction]],
+        caster_visible_positions: FrozenSet[Tuple[int, int]],
+        visible_cells: Tuple[Tuple[Tuple[int, int], int], ...],
         legal_only: bool = False,
         include_aoe_preview: bool = True,
     ) -> List[AvailableActionInfo]:
         """Collect position-AoE actions with preview metadata.
 
+        Footprints go through the call-local footprint table.
+
         Args:
             include_dead: Whether zero-HP entities stay targetable.
-            fov_cache: Shared field-of-view cache for AoE computation.
-            barrier_positions: Positions that block AoE projection.
+            footprints: Call-local footprint table, keyed by footprint identity.
+            visible_cells: The call's sorted visible cells with their distance in feet.
 
         Returns:
             Available AoE action metadata.
         """
         actions: List[AvailableActionInfo] = []
-        grid = get_map()
-        visible_position_set = self._prepare_aoe_caches(caster_visible_positions)
-        self._prepare_position_preview_cache(visible_position_set)
+        visible_position_set = self._visible_cells(caster_visible_positions)
 
-        for registered_template in self.position_actions:
-            variants = (
-                discovery_variants.get(registered_template.uuid)
-                if discovery_variants is not None
-                else None
-            )
-            if variants is None:
-                variants = registered_template.get_discovery_variants(self)
+        for registered_template in self.registered_actions:
+            variants = forms[registered_template.uuid]
             for template in variants:
                 if template.effective_target_type != TargetType.POSITION_AOE:
                     continue
 
-                shape_template = template.aoe_shape
-                if shape_template is None:
+                shape = template.aoe_shape
+                if shape is None:
                     continue
 
                 can_afford = template.check_target_independent_costs()
@@ -7293,85 +6929,32 @@ class Entity(BaseBlock):
                     valid_pos_list = list(
                         self._get_subjective_visible_positions(
                             template,
-                            visible_position_set,
+                            visible_cells,
                         )
                     )
                 else:
                     valid_pos_list = template.get_valid_positions()
 
-                if template.aoe_require_targets:
-                    prefilter_positions = self._aoe_required_target_prefilter_positions(
-                        template,
-                        include_dead,
-                    )
-                    if prefilter_positions:
-                        radius = shape_template._get_max_radius_tiles()
-                        nearby_key = (tuple(sorted(prefilter_positions)), radius)
-                        candidates = self._aoe_nearby_candidates_cache.get(nearby_key)
-                        if candidates is None:
-                            candidates = frozenset(
-                                grid.get_positions_near_entities(
-                                    prefilter_positions,
-                                    radius,
-                                )
-                            )
-                            self._aoe_nearby_candidates_cache[nearby_key] = candidates
-                        valid_pos_list = [pos for pos in valid_pos_list if pos in candidates]
-                    else:
-                        if not legal_only:
-                            actions.append(self._make_action_info(
-                                template_name=template_name,
-                                target_type=TargetType.POSITION_AOE,
-                                valid_targets=[],
-                                can_afford=True,
-                                availability_status=(
-                                    ActionAvailabilityStatus.NO_VALID_TARGETS
-                                ),
-                                template=template,
-                                display_name=display_name,
-                            ))
-                        continue
-
-                valid_pos_list = self._compact_aoe_candidate_positions(
-                    shape_template,
-                    valid_pos_list,
-                )
-                shape_definition_key = self._aoe_shape_definition_key(shape_template)
-                cache_key = self._aoe_discovery_cache_key(
-                    template,
-                    valid_pos_list,
-                    include_dead,
-                    shape_definition_key,
-                    include_aoe_preview,
-                )
-                if cache_key in self._aoe_preview_cache:
-                    valid_positions = list(self._aoe_preview_cache[cache_key])
-                elif not include_aoe_preview and not template.aoe_require_targets:
+                valid_pos_list = self._aoe_aim_points(template, valid_pos_list, scan)
+                if not include_aoe_preview and not template.aoe_require_targets:
                     valid_positions = [AvailableTarget(
                         index=index, position=position,
                         distance=template.get_target_distance(position),
                     ) for index, position in enumerate(valid_pos_list)]
-                    self._aoe_preview_cache[cache_key] = tuple(valid_positions)
                 else:
                     valid_positions = []
-                    if barrier_positions is None:
-                        barrier_positions = grid.get_barrier_positions()
-                    preview_shape = shape_template.model_copy()
                     for pos in valid_pos_list:
                         target = self._compute_aoe_at_position(
-                            preview_shape,
-                            shape_definition_key,
-                            pos,
                             template,
+                            shape,
+                            pos,
                             include_dead,
                             visible_position_set,
-                            fov_cache,
-                            barrier_positions,
-                            len(valid_positions),
+                            footprints,
+                            len(valid_positions), scan,
                         )
                         if target is not None:
                             valid_positions.append(target)
-                    self._aoe_preview_cache[cache_key] = tuple(valid_positions)
 
                 availability_status = (
                     ActionAvailabilityStatus.AVAILABLE
@@ -7393,8 +6976,8 @@ class Entity(BaseBlock):
                 ))
         return actions
 
-    def _collect_object_actions(self, legal_only: bool = False) -> List[AvailableActionInfo]:
-        """Collect object-targeting actions."""
+    def _collect_object_actions(self, scan: ActorScan, legal_only: bool = False) -> List[AvailableActionInfo]:
+        """Collect object-targeting actions over perceived and carried objects."""
         actions: List[AvailableActionInfo] = []
         for template in self.object_actions:
             valid_targets: List[AvailableTarget] = []
@@ -7407,18 +6990,15 @@ class Entity(BaseBlock):
             if template.include_owned_item_targets:
                 for item in (*self.inventory.items.values(), *self.equipment.get_all_equipped_items()):
                     candidates[item.uuid] = self.position
+            base = template.current_selection()
             for obj_uuid, obj_pos in candidates.items():
                 obj_block = BaseBlock.get(obj_uuid)
                 if obj_block is not None and not obj_block.should_include_in_available_object_actions():
                     continue
-                targeted_template = template.model_copy(
-                    deep=True,
-                    update={"target_entity_uuid": obj_uuid},
-                )
-                if (
-                    targeted_template.validate_requirements_for_discovery()
-                    and targeted_template.check_costs()
-                ):
+                selection = replace(base, target_uuids=(obj_uuid,))
+                record_action_count("discovery.validation", 1)
+                if template.discovery_error(scan, selection) is None and (
+                        not template.target_dependent_costs or template.with_selection(selection).check_costs()):
                     obj_name = obj_block.name if obj_block else "Object"
                     distance = self.senses.get_feet_distance(obj_pos)
                     valid_targets.append(AvailableTarget(
@@ -7498,8 +7078,8 @@ class Entity(BaseBlock):
         result: AvailableActionsResult,
         potential_targets: Dict[UUID, Tuple[int, int]],
         include_dead: bool,
-        fov_cache: dict,
-        barrier_positions: Optional[Set[Tuple[int, int]]],
+        scan: ActorScan,
+        footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]],
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
         include_aoe_preview: bool = True,
@@ -7510,11 +7090,10 @@ class Entity(BaseBlock):
             result: Discovery result mutated in place.
             potential_targets: Outer discovery target pool keyed by UUID.
             include_dead: Whether zero-HP entities stay targetable.
-            fov_cache: Shared field-of-view cache for AoE computation.
-            barrier_positions: Positions that block AoE projection.
+            footprints: Call-local footprint table, keyed by footprint identity.
         """
         grid = get_map()
-        visible_position_set = self._prepare_aoe_caches(caster_visible_positions)
+        visible_position_set = self._visible_cells(caster_visible_positions)
         target_pool_cache: Dict[Tuple[str, bool, bool], Dict[UUID, Tuple[int, int]]] = {}
 
         use_sources: List[
@@ -7543,28 +7122,28 @@ class Entity(BaseBlock):
                 behavior_id=action.behavior_binding.behavior_id, label=action.name or "Use",
                 description=action.description or "",
                 template_name=f"{action.get_discovery_template_name()}__item_{identity}",
-                configured_action_ref=action.configured_action_ref, variant_facets=action.get_variant_facets(),
-                contact_positions=tuple(sorted(position for position in candidates
-                    if grid.manual_object_contact(self.uuid, identity, subjective=True, origin=position) is not None))))
+                configured_action_ref=action.configured_action_ref, variant_facets=action.row_facets(),
+                contact_positions=grid.manual_object_contact_origins(self.uuid, identity, candidates,
+                    subjective=scan.subjective)))
         for identity in self.senses.objects:
             item = BaseBlock.get(identity)
             if isinstance(item, BaseItem) and item.is_pickable:
                 descriptors.append(AvailableWorldInteraction(subject_uuid=identity, behavior_id="action.pick_up",
-                    label="Pick up", contact_positions=tuple(sorted(position for position in candidates
-                        if grid.manual_object_contact(self.uuid, identity, subjective=True, origin=position) is not None))))
+                    label="Pick up", contact_positions=grid.manual_object_contact_origins(self.uuid, identity,
+                        candidates, subjective=scan.subjective)))
         for connector in grid.get_all_connectors():
             if connector.aperture is None or connector.aperture.frame_uuid not in self.senses.objects:
                 continue
             endpoints = connector.endpoints if connector.bidirectional else connector.endpoints[:1]
             admitted = tuple(endpoint.position for endpoint in endpoints if endpoint.position in candidates
                 and connector.enabled and grid.connector_movement_cost(connector, endpoint.position,
-                    self.uuid, self.size, subjective=True, ignore_difficult_terrain=self.ignore_difficult_terrain) is not None)
+                    self.uuid, self.size, subjective=scan.subjective, ignore_difficult_terrain=self.ignore_difficult_terrain) is not None)
             descriptors.append(AvailableWorldInteraction(subject_uuid=connector.aperture.frame_uuid,
                 behavior_id="action.traverse_connector", label="Crawl through", connector_uuid=connector.uuid,
                 contact_positions=admitted, reason=None if admitted else "Passage is blocked or out of reach"))
         result.world_interactions = tuple(descriptors)
         for use_template, obj_uuid, item_name in observed_sources:
-            if grid.manual_object_contact(self.uuid, obj_uuid, subjective=True) is not None:
+            if grid.manual_object_contact(self.uuid, obj_uuid, subjective=scan.subjective) is not None:
                 use_sources.append((use_template, obj_uuid, item_name, None, False))
 
         for (
@@ -7608,7 +7187,7 @@ class Entity(BaseBlock):
                 continue
 
             if use_template.target_type == TargetType.SELF:
-                if not use_template.validate_requirements_for_discovery():
+                if use_template.discovery_error(scan, use_template.current_selection()) is not None:
                     if is_inventory_source and not legal_only:
                         self._append_unavailable_item_use_action(
                             result,
@@ -7646,6 +7225,7 @@ class Entity(BaseBlock):
                 valid_targets, rules_valid_count = self._validate_entity_targets(
                     use_template,
                     target_pool,
+                    scan,
                 )
                 if valid_targets:
                     result.entity_actions.append(self._make_action_info(
@@ -7681,87 +7261,7 @@ class Entity(BaseBlock):
                 if use_shape_template is None:
                     continue
 
-                valid_pos_list = use_template.get_valid_positions()
-
-                if use_template.aoe_require_targets:
-                    prefilter_positions = self._aoe_required_target_prefilter_positions(
-                        use_template,
-                        include_dead,
-                    )
-                    if prefilter_positions:
-                        radius = use_shape_template._get_max_radius_tiles()
-                        nearby_key = (tuple(sorted(prefilter_positions)), radius)
-                        candidates = self._aoe_nearby_candidates_cache.get(nearby_key)
-                        if candidates is None:
-                            candidates = frozenset(
-                                grid.get_positions_near_entities(
-                                    prefilter_positions,
-                                    radius,
-                                )
-                            )
-                            self._aoe_nearby_candidates_cache[nearby_key] = candidates
-                        valid_pos_list = [pos for pos in valid_pos_list if pos in candidates]
-                    else:
-                        if is_inventory_source and not legal_only:
-                            self._append_unavailable_item_use_action(
-                                result,
-                                template=use_template,
-                                template_name=template_name,
-                                display_name=display_name,
-                                source_item_uuid=item_uuid,
-                                item_stack_count=stack_count_field,
-                                availability_status=(
-                                    ActionAvailabilityStatus.NO_VALID_TARGETS
-                                ),
-                                can_afford=True,
-                            )
-                        continue
-
-                valid_pos_list = self._compact_aoe_candidate_positions(
-                    use_shape_template,
-                    valid_pos_list,
-                )
-                use_shape_definition_key = self._aoe_shape_definition_key(
-                    use_shape_template
-                )
-                cache_key = self._aoe_discovery_cache_key(
-                    use_template,
-                    valid_pos_list,
-                    include_dead,
-                    use_shape_definition_key,
-                    include_aoe_preview,
-                )
-                if cache_key in self._aoe_preview_cache:
-                    cached_targets = self._aoe_preview_cache[cache_key]
-                    if cached_targets:
-                        result.position_actions.append(self._make_action_info(
-                            template_name=template_name,
-                            target_type=TargetType.POSITION_AOE,
-                            valid_targets=list(cached_targets),
-                            can_afford=True,
-                            availability_status=(
-                                ActionAvailabilityStatus.AVAILABLE
-                            ),
-                            template=use_template,
-                            display_name=display_name,
-                            is_item_use=True,
-                            source_item_uuid=item_uuid,
-                            item_stack_count=stack_count_field,
-                        ))
-                    elif is_inventory_source and not legal_only:
-                        self._append_unavailable_item_use_action(
-                            result,
-                            template=use_template,
-                            template_name=template_name,
-                            display_name=display_name,
-                            source_item_uuid=item_uuid,
-                            item_stack_count=stack_count_field,
-                            availability_status=(
-                                ActionAvailabilityStatus.NO_VALID_TARGETS
-                            ),
-                            can_afford=True,
-                        )
-                    continue
+                valid_pos_list = self._aoe_aim_points(use_template, use_template.get_valid_positions(), scan)
 
                 use_valid_positions: List[AvailableTarget] = []
                 use_idx = 0
@@ -7771,23 +7271,19 @@ class Entity(BaseBlock):
                         distance=use_template.get_target_distance(position),
                     ) for index, position in enumerate(valid_pos_list)]
                 else:
-                    if barrier_positions is None:
-                        barrier_positions = grid.get_barrier_positions()
-                    use_preview_shape = use_shape_template.model_copy()
                     for pos in valid_pos_list:
                         target = self._compute_aoe_at_position(
-                            use_preview_shape,
-                            use_shape_definition_key,
-                            pos,
                             use_template,
+                            use_shape_template,
+                            pos,
                             include_dead,
                             visible_position_set,
-                            fov_cache, barrier_positions, use_idx
+                            footprints,
+                            use_idx, scan,
                         )
                         if target is not None:
                             use_valid_positions.append(target)
                             use_idx += 1
-                self._aoe_preview_cache[cache_key] = tuple(use_valid_positions)
                 if use_valid_positions:
                     result.position_actions.append(self._make_action_info(
                         template_name=template_name,
@@ -7816,29 +7312,13 @@ class Entity(BaseBlock):
                     )
 
             elif use_template.target_type == TargetType.POSITION_LOS:
-                use_valid_pos_list = use_template.get_valid_positions()
-                use_valid_positions_los: List[AvailableTarget] = []
-                use_idx = 0
-                for pos in use_valid_pos_list:
-                    targeted_template = use_template.model_copy(
-                        deep=True,
-                        update={"end_position": pos},
-                    )
-                    if (
-                        targeted_template.validate_requirements_for_discovery(allow_partial_position=True)
-                        and targeted_template.check_costs()
-                    ):
-                        use_valid_positions_los.append(AvailableTarget(
-                            index=use_idx,
-                            position=pos,
-                            distance=use_template.get_target_distance(pos),
-                        ))
-                        use_idx += 1
-                if use_valid_positions_los:
+                # A free-aim region, as for spells (plan §14.4).
+                if (use_template.validate_source_requirements_for_discovery()
+                        and use_template.get_valid_positions()):
                     result.position_actions.append(self._make_action_info(
                         template_name=template_name,
                         target_type=TargetType.POSITION_LOS,
-                        valid_targets=use_valid_positions_los,
+                        valid_targets=[],
                         can_afford=can_afford,
                         availability_status=ActionAvailabilityStatus.AVAILABLE,
                         template=use_template,
@@ -7864,24 +7344,20 @@ class Entity(BaseBlock):
             elif use_template.target_type in (TargetType.POSITION, TargetType.POSITION_PATH):
                 use_valid_positions_pos: List[AvailableTarget] = []
                 use_idx = 0
+                use_base = use_template.current_selection()
                 action_range = use_template.get_range()
                 max_range = action_range.normal if action_range else 0
-                for pos, is_visible in self.senses.visible.items():
-                    if not is_visible:
-                        continue
+                for pos in visible_positions(self.senses.cells):
                     if pos == self.senses.position:
                         continue
                     dist = use_template.get_target_distance(pos)
                     if max_range > 0 and dist > max_range:
                         continue
-                    targeted_template = use_template.model_copy(
-                        deep=True,
-                        update={"end_position": pos},
-                    )
-                    if (
-                        targeted_template.validate_requirements_for_discovery()
-                        and targeted_template.check_costs()
-                    ):
+                    selection = replace(use_base, positions=(pos,))
+                    record_action_count("discovery.validation", 1)
+                    if use_template.discovery_error(scan, selection) is None and (
+                            not use_template.target_dependent_costs
+                            or use_template.with_selection(selection).check_costs()):
                         use_valid_positions_pos.append(AvailableTarget(
                             index=use_idx,
                             position=pos,
@@ -7959,16 +7435,13 @@ class Entity(BaseBlock):
         if timing:
             record_action_timing("available_actions.result_model_ms", started)
 
+        # One actor scan for this call; every candidate is checked against it.
+        scan = self.action_scan(subjective=True)
+
         started = time.perf_counter() if timing else 0.0
-        discovery_variants = {
-            template.uuid: template.get_discovery_variants(self)
-            for template in self.registered_actions
-        }
-        result.set_registered_action_variants([
-            variant
-            for template in self.registered_actions
-            for variant in discovery_variants[template.uuid]
-        ])
+        # One read-only form per discovery row of each registered action (plan §14.4).
+        forms = {template.uuid: template.discovery_forms(scan) for template in self.registered_actions}
+        result.set_registered_action_variants([form for template in self.registered_actions for form in forms[template.uuid]])
         if timing:
             record_action_timing("available_actions.registered_variants_ms", started)
 
@@ -7991,7 +7464,7 @@ class Entity(BaseBlock):
             record_action_timing("available_actions.potential_targets_ms", started)
 
         started = time.perf_counter() if timing else 0.0
-        result.self_actions = self._collect_self_actions(discovery_variants, legal_only)
+        result.self_actions = self._collect_self_actions(scan, forms, legal_only)
         if timing:
             record_action_timing("available_actions.collect_self_actions_ms", started)
 
@@ -7999,7 +7472,8 @@ class Entity(BaseBlock):
         result.entity_actions = self._collect_entity_actions(
             potential_targets,
             include_dead,
-            discovery_variants,
+            scan,
+            forms,
             legal_only,
         )
         if timing:
@@ -8007,13 +7481,14 @@ class Entity(BaseBlock):
 
         required_path_distance = max(1, (remaining_movement + 4) // 5) if remaining_movement > 0 else 0
         if (self.senses.path_max_distance == 0
-                and self._requires_exhausted_movement_paths(discovery_variants)):
+                and self._requires_exhausted_movement_paths(forms)):
             # A newly registered consumer needs the domain omitted at the last
             # exhausted movement boundary before it can read current paths.
             required_path_distance = max(required_path_distance, 20)
         paths_need_refresh = (
             required_path_distance > 0
-            and not self.senses.has_clean_paths_for_distance(required_path_distance)
+            and not (self.senses.has_clean_paths_for_distance(required_path_distance)
+                     and self._navigation_traversal_current())
         )
         if paths_need_refresh:
             started = time.perf_counter() if timing else 0.0
@@ -8027,25 +7502,27 @@ class Entity(BaseBlock):
             record_action_timing("available_actions.skip_dirty_senses_no_movement_ms", time.perf_counter())
 
         started = time.perf_counter() if timing else 0.0
-        grid = get_map()
-        if self._aoe_origin_fov_cache_revision != grid.propagation_revision:
-            self._aoe_origin_fov_cache_revision = grid.propagation_revision
-            self._aoe_origin_fov_cache.clear()
-        fov_cache: dict = self._aoe_origin_fov_cache
-        barrier_positions = grid.get_barrier_positions() if include_aoe_preview else None
-        caster_visible_positions = frozenset(
-            position
-            for position, visible in self.senses.visible.items()
-            if visible
-        )
+        # One footprint per identity for this call only; dropped on return.
+        footprints: Dict[FootprintIdentity, FrozenSet[Tuple[int, int]]] = {}
+        # One position context per call (plan PD2): the scan's visible cells, sorted
+        # with their distance once; the perceived preview facts snapshotted once;
+        # the threat domains and their per-step exits resolved on first use.
+        # Navigation rematerialized above changes no perception.
+        caster_visible_positions = scan.visible
+        visible_cells = tuple((cell, self.senses.get_feet_distance(cell)) for cell in sorted(caster_visible_positions))
+        preview_facts = self._position_preview_facts(caster_visible_positions)
+        threats = cache(lambda: ThreatExits(tuple(self._visible_hostile_threat_domains())))
         if timing:
             record_action_timing("available_actions.prepare_position_context_ms", started)
 
         started = time.perf_counter() if timing else 0.0
         result.position_actions = self._collect_path_actions(
             result.remaining_movement,
-            discovery_variants,
-            caster_visible_positions,
+            scan,
+            forms,
+            visible_cells,
+            preview_facts,
+            threats,
             legal_only,
         )
         if timing:
@@ -8054,8 +7531,12 @@ class Entity(BaseBlock):
         started = time.perf_counter() if timing else 0.0
         result.position_actions.extend(
             self._collect_los_actions(
-                discovery_variants,
+                scan,
+                forms,
                 caster_visible_positions,
+                visible_cells,
+                preview_facts,
+                threats,
                 legal_only,
             )
         )
@@ -8066,10 +7547,11 @@ class Entity(BaseBlock):
         result.position_actions.extend(
             self._collect_aoe_actions(
                 include_dead,
-                fov_cache,
-                barrier_positions,
-                discovery_variants,
+                scan,
+                footprints,
+                forms,
                 caster_visible_positions,
+                visible_cells,
                 legal_only,
                 include_aoe_preview,
             )
@@ -8078,7 +7560,7 @@ class Entity(BaseBlock):
             record_action_timing("available_actions.collect_aoe_actions_ms", started)
 
         started = time.perf_counter() if timing else 0.0
-        result.object_actions = self._collect_object_actions(legal_only)
+        result.object_actions = self._collect_object_actions(scan, legal_only)
         if timing:
             record_action_timing("available_actions.collect_object_actions_ms", started)
 
@@ -8087,8 +7569,8 @@ class Entity(BaseBlock):
             result,
             potential_targets,
             include_dead,
-            fov_cache,
-            barrier_positions,
+            scan,
+            footprints,
             caster_visible_positions,
             legal_only,
             include_aoe_preview,

@@ -3,6 +3,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from dnd.core.content.encounters import EncounterRecipe
 from dnd.player.audience import SeatAssignment
+from dnd.content.characters.build_types import CharacterBuild
 
 
 class SeatCredential(BaseModel):
@@ -32,6 +33,7 @@ class ServerConfig(BaseModel):
     spool_limit_bytes: int = Field(default=1024 ** 3, ge=64 * 1024 ** 2)
     worker_timeout_seconds: float = Field(default=120, gt=0)
     test_seed: int | None = None  # private launch/test composition only
+    player_builds: tuple[CharacterBuild, ...] | None = None
 
     @model_validator(mode='after')
     def distinct_credentials(self) -> 'ServerConfig':

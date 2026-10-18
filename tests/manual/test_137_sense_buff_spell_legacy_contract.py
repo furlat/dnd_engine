@@ -4,6 +4,7 @@ from uuid import UUID
 
 from dnd.actions import SpellEvent
 from dnd.actions_functional import execute_by_index, register_spell
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.conditions import Concentrating, Invisible
 from dnd.core.base_actions import AvailableActionsResult
 from dnd.core.base_block import LightLevel, SensesType
@@ -34,6 +35,7 @@ from tests.manual.spell_regression_support import (
     force_save_result,
     reset_spell_regression_arena,
 )
+from dnd.types.cells import value_at
 
 
 def _caster(
@@ -368,7 +370,7 @@ def test_darkvision_reactively_reveals_dark_target_and_cleanup_hides_it() -> Non
     assert not _cast_darkvision(caster, caster).canceled
     assert enemy.uuid in caster.senses.entities
     assert (
-        caster.senses.effective_light_levels[enemy.position] is LightLevel.DIM_LIGHT
+        value_at(capture_senses_snapshot(caster.senses).effective_light_levels, enemy.position) == LightLevel.DIM_LIGHT
     )
     assert tile.resolved_light_level is LightLevel.DARKNESS
 

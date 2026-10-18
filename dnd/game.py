@@ -62,7 +62,7 @@ class Game:
                 or Entity.get(entity.uuid) is not entity):
             raise ValueError("deployment requires an unowned, absent live identity")
         grid = get_map()
-        grid._validate_entity_position(prepared.position, allow_none=False)
+        grid.validate_entity_position(prepared.position, allow_none=False)
         if not grid.is_walkable_for(*prepared.position, requesting_entity_uuid=entity.uuid):
             raise ValueError("deployment destination is unavailable")
 
@@ -137,6 +137,16 @@ class Game:
 
     def close(self, parent_event: Event | None = None) -> None:
         """Release every Entity owned by this game."""
+        errors: list[BaseException] = []
+        for entity in tuple(self.entities.values()):
+            for condition in tuple(entity.active_conditions_by_uuid.values()):
+                if condition.applied:
+                    try:
+                        condition.on_world_closed(parent_event)
+                    except BaseException as error:
+                        errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("World owner cleanup failed", errors)
         for callback in tuple(self._close_callbacks):
             callback(parent_event)
         for entity_uuid in tuple(self.entities):

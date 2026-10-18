@@ -1,0 +1,1058 @@
+--- a/dnd/spells/abjuration.py
++++ b/dnd/spells/abjuration.py
+@@ -2786,13 +2786,17 @@
+             target_entity_name=target.name,
+             status_message=f"Aid grants +{hp_bonus} max HP to {target.name}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         condition = AidEffect(
+             source_entity_uuid=caster.uuid,
+             target_entity_uuid=target.uuid,
+             hp_bonus=hp_bonus,
+         )
+-        target.add_condition(condition, parent_event=effect_event)
++        effect_event = self.apply_owned_condition(effect_event, condition)
++        if effect_event.canceled:
++            return effect_event
+ 
+         return effect_event.with_updates(
+             total_damage=0,
+@@ -3166,16 +3170,16 @@
+             target_entity_name=target.name,
+             status_message=f"Beacon of Hope inspires {target.name}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         condition = BeaconOfHopeEffect(
+             source_entity_uuid=caster.uuid,
+             target_entity_uuid=target.uuid
+         )
+-        target.add_condition(condition, parent_event=effect_event)
+-
+-        concentration = self.ensure_concentration(effect_event)
+-        if condition.applied:
+-            concentration.add_linked_condition(target.uuid, condition.uuid)
++        effect_event = self.apply_owned_condition(effect_event, condition)
++        if effect_event.canceled:
++            return effect_event
+ 
+         return effect_event.with_updates(
+             total_damage=0,
+--- a/dnd/spells/conjuration.py
++++ b/dnd/spells/conjuration.py
+@@ -154,6 +154,8 @@
+         return event.cancel(status_message="Caster or target not found")
+     effect, _, success = spell.resolve_saving_throw(
+         event, caster=caster, target=target, ability_name="dexterity", dc=dc)
++    if effect.canceled:
++        return effect
+     damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
+         damage_dice=10, dice_numbers=3 + spell.get_upcast_bonus(),
+         damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.LIGHTNING)
+@@ -492,6 +494,8 @@
+             target_entity_name=target.name,
+             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+ 
+         num_dice = self._get_cantrip_dice_count(self.caster_level)
+--- a/dnd/spells/enchantment.py
++++ b/dnd/spells/enchantment.py
+@@ -470,8 +470,6 @@
+             return execution_event.cancel(status_message="Caster or target not found")
+ 
+         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+-        concentration = self.ensure_concentration(execution_event)
+-
+         effect_event, _, success = self.resolve_saving_throw(
+             execution_event,
+             caster=caster,
+@@ -479,8 +477,11 @@
+             ability_name="wisdom",
+             dc=dc,
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         if success:
++            self.ensure_concentration(effect_event)
+             return effect_event.with_updates(
+                 status_message=f"{self.name} - {target.name} saved"
+             )
+@@ -491,10 +492,9 @@
+             caster_uuid=caster.uuid,
+             spell_dc=dc
+         )
+-        target.add_condition(hold_effect, parent_event=effect_event)
+-
+-        if hold_effect.applied:
+-            concentration.add_linked_condition(target.uuid, hold_effect.uuid)
++        effect_event = self.apply_owned_condition(effect_event, hold_effect)
++        if effect_event.canceled:
++            return effect_event
+ 
+         return effect_event.with_updates(
+             status_message=f"{self.name} - {target.name} is held (concentration)"
+@@ -697,8 +697,6 @@
+ 
+         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+ 
+-        concentration_condition = self.ensure_concentration(execution_event)
+-
+         effect_event, _, success = self.resolve_saving_throw(
+             execution_event,
+             caster=caster,
+@@ -706,8 +704,11 @@
+             ability_name="wisdom",
+             dc=dc,
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         if success:
++            self.ensure_concentration(effect_event)
+             return effect_event.with_updates(
+                 status_message=f"{self.name} - {target.name} saved"
+             )
+@@ -718,10 +719,9 @@
+             caster_uuid=caster.uuid,
+             spell_dc=dc
+         )
+-        target.add_condition(hold_effect, parent_event=effect_event)
+-
+-        if hold_effect.applied:
+-            concentration_condition.add_linked_condition(target.uuid, hold_effect.uuid)
++        effect_event = self.apply_owned_condition(effect_event, hold_effect)
++        if effect_event.canceled:
++            return effect_event
+ 
+         return effect_event.with_updates(
+             status_message=f"{self.name} - {target.name} is held"
+@@ -1126,12 +1126,16 @@
+             target_entity_name=target.name,
+             status_message=f"Sleep affecting {target.name} ({target.get_hp()} HP)"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         sleep_effect = SleepEffect(
+             source_entity_uuid=caster.uuid,
+             target_entity_uuid=target.uuid
+         )
+-        target.add_condition(sleep_effect, parent_event=effect_event)
++        effect_event = self.apply_owned_condition(effect_event, sleep_effect)
++        if effect_event.canceled:
++            return effect_event
+ 
+         return effect_event.with_updates(
+             status_message=f"{target.name} falls asleep ({target.get_hp()} HP)"
+@@ -1518,8 +1522,6 @@
+ 
+         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+ 
+-        concentration = self.ensure_concentration(execution_event)
+-
+         save_request = caster.create_saving_throw_request(
+             target_entity_uuid=target.uuid,
+             ability_name="charisma",
+@@ -1537,8 +1539,11 @@
+             target_entity_name=target.name,
+             status_message=f"CHA save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}",
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         if success:
++            self.ensure_concentration(effect_event)
+             return effect_event.with_updates(
+                 status_message=f"Bane - {target.name} resists",
+             )
+@@ -1547,9 +1552,9 @@
+             source_entity_uuid=caster.uuid,
+             target_entity_uuid=target.uuid,
+         )
+-        target.add_condition(bane_effect, parent_event=effect_event)
+-        if bane_effect.applied:
+-            concentration.add_linked_condition(target.uuid, bane_effect.uuid)
++        effect_event = self.apply_owned_condition(effect_event, bane_effect)
++        if effect_event.canceled:
++            return effect_event
+ 
+         return effect_event.with_updates(
+             status_message=f"Bane - {target.name} is baned",
+@@ -1613,21 +1618,21 @@
+         if not caster or not target:
+             return execution_event.cancel(status_message="Caster or target not found")
+ 
+-        concentration = self.ensure_concentration(execution_event)
+-
+-        bless_effect = BlessEffect(
+-            source_entity_uuid=caster.uuid,
+-            target_entity_uuid=target.uuid,
+-        )
+-        target.add_condition(bless_effect, parent_event=execution_event)
+-        if bless_effect.applied:
+-            concentration.add_linked_condition(target.uuid, bless_effect.uuid)
+-
+         effect_event = execution_event.phase_to(
+             new_phase=EventPhase.EFFECT,
+             target_entity_name=target.name,
+             status_message=f"Bless - {target.name} is blessed",
+         )
++        if effect_event.canceled:
++            return effect_event
++
++        bless_effect = BlessEffect(
++            source_entity_uuid=caster.uuid,
++            target_entity_uuid=target.uuid,
++        )
++        effect_event = self.apply_owned_condition(effect_event, bless_effect)
++        if effect_event.canceled:
++            return effect_event
+ 
+         return effect_event.with_updates(
+             status_message=f"Bless - {target.name} is blessed",
+--- a/dnd/spells/evocation.py
++++ b/dnd/spells/evocation.py
+@@ -674,6 +674,14 @@
+         if not caster or not target:
+             return execution_event.cancel(status_message="Caster or target not found")
+ 
++        effect_event = execution_event.phase_to(
++            EventPhase.EFFECT,
++            target_entity_name=target.name,
++            status_message=f"Magic Missile dart targets {target.name}",
++        )
++        if effect_event.canceled:
++            return effect_event
++
+         dart_damage = Damage(
+             source_entity_uuid=caster.uuid,
+             target_entity_uuid=target.uuid,
+@@ -688,18 +696,17 @@
+         )
+ 
+         damage_dice = dart_damage.get_dice(attack_outcome=AttackOutcome.HIT)
+-        damage_roll = finalize_spell_damage_roll(dart_damage, damage_dice.roll, parent_event=execution_event, effect_origin=self.effect_origin)
++        damage_roll = finalize_spell_damage_roll(dart_damage, damage_dice.roll, parent_event=effect_event, effect_origin=self.effect_origin)
+ 
+         actual_damage = target.receive_damage(
+             amount=damage_roll.total,
+             damage_type=DamageType.FORCE,
+             source_entity_uuid=caster.uuid,
+-            parent_event=execution_event.uuid,
++            parent_event=effect_event.uuid,
+             effect_id=MAGIC_MISSILE_DAMAGE_EFFECT_ID,
+         )
+ 
+-        return execution_event.phase_to(
+-            new_phase=EventPhase.EFFECT,
++        return effect_event.with_updates(
+             target_entity_name=target.name,
+             damages=[dart_damage],
+             damage_rolls=[damage_roll],
+@@ -1246,6 +1253,8 @@
+             target_entity_name=target.name,
+             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         num_dice = self.get_damage_dice_count()
+         damage_bonus = caster.get_spell_damage_bonus()
+@@ -1390,6 +1399,8 @@
+             target_entity_name=target.name,
+             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         num_dice = self.get_damage_dice_count()
+         damage_bonus = caster.get_spell_damage_bonus()
+@@ -1562,6 +1573,8 @@
+             target_entity_name=target.name,
+             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         num_dice = self.get_damage_dice_count()
+         damage_bonus = caster.get_spell_damage_bonus()
+@@ -1747,6 +1760,8 @@
+             target_entity_name=target.name,
+             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         num_dice = self.get_damage_dice_count()
+         damage_bonus = caster.get_spell_damage_bonus()
+@@ -2000,6 +2015,8 @@
+             target_entity_name=target.name,
+             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         num_dice = self.get_damage_dice_count()
+         damage_bonus = caster.get_spell_damage_bonus()
+@@ -3208,6 +3225,8 @@
+             save_ability="strength", save_dc=dc,
+             status_message=f"Gust of Wind hits {target.name}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         _apply_gust_push(target, dc, caster.position, caster.uuid, effect_event)
+ 
+@@ -3992,6 +4011,8 @@
+             save_dc=dc,
+             status_message=f"Prismatic ray strikes {target.name}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         color_roll = random.randint(1, 8)
+         if color_roll == 8:
+@@ -4210,6 +4231,8 @@
+             target_entity_name=target.name,
+             status_message=f"DEX save: {save_roll.total} vs DC {dc}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         fire_count = self.base_fire_dice + upcast_bonus
+         damage_bonus = caster.get_spell_damage_bonus()
+@@ -4708,6 +4731,8 @@
+             target_entity_name=target.name,
+             status_message=f"Prayer of Healing heals {target.name}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Prayer of Healing")
+         actual = target.receive_healing(
+@@ -4792,6 +4817,8 @@
+             target_entity_name=target.name,
+             status_message=f"Mass Healing Word heals {target.name}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Mass Healing Word")
+         actual = target.receive_healing(
+@@ -4878,6 +4905,8 @@
+             target_entity_name=target.name,
+             status_message=f"Mass Cure Wounds heals {target.name}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Mass Cure Wounds")
+         actual = target.receive_healing(
+@@ -5040,6 +5069,8 @@
+             target_entity_name=target.name,
+             status_message=f"Mass Heal heals {target.name}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         actual = target.receive_healing(
+             heal_amount, caster.uuid,
+@@ -5067,6 +5098,7 @@
+     description: str = Field(default="Affected by Divine Word", description="Rules-facing summary for the divine word effect condition.")
+     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the divine word effect for cleanup and filtering.")
+     duration_rounds: int = Field(default=10, description="Number of rounds that nonlethal divine word effect effects persist.")
++    _lethal: bool = PrivateAttr(default=False)
+ 
+     def _apply(self, declaration_event: Event) -> Tuple[
+         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+@@ -5082,18 +5114,13 @@
+         execution_event = declaration_event
+ 
+         current_hp = target.get_hp()
+-
+-        if current_hp <= 20:
++        self._lethal = current_hp <= 20
++
++        if self._lethal:
+ 
+             effect_event = execution_event.phase_to(
+                 EventPhase.EFFECT,
+                 status_message=f"Divine Word kills {target.name}"
+-            )
+-            target.receive_damage(
+-                amount=99999,
+-                damage_type=DamageType.FORCE,
+-                source_entity_uuid=self.source_entity_uuid,
+-                parent_event=effect_event.uuid,
+             )
+             return [], [], [], [], effect_event
+ 
+@@ -5151,6 +5178,18 @@
+             status_message=f"Divine Word affects {target.name} ({self.duration_rounds} rounds)"
+         )
+         return [], handler_uuids, sub_conditions_uuids, [], effect_event
++
++    def _commit_application(self, effect_event: Event) -> None:
++        if not self._lethal:
++            return
++        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
++        if target is not None:
++            target.receive_damage(
++                amount=99999,
++                damage_type=DamageType.FORCE,
++                source_entity_uuid=self.source_entity_uuid,
++                parent_event=effect_event.uuid,
++            )
+ 
+     def _create_duration_handler(self) -> EventHandler:
+         """Remove this condition after duration_rounds turns."""
+@@ -5232,12 +5271,16 @@
+             target_entity_name=target.name,
+             status_message=f"Divine Word targets {target.name} ({current_hp} HP)"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         condition = DivineWordEffect(
+             source_entity_uuid=caster.uuid,
+             target_entity_uuid=target.uuid,
+         )
+-        target.add_condition(condition, parent_event=effect_event)
++        effect_event = self.apply_owned_condition(effect_event, condition)
++        if effect_event.canceled:
++            return effect_event
+ 
+         if current_hp <= 20:
+             outcome = "killed outright"
+--- a/dnd/spells/illusion.py
++++ b/dnd/spells/illusion.py
+@@ -394,6 +394,8 @@
+             target_entity_name=target.name,
+             status_message=f"WIS save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         if success:
+             return effect_event.with_updates(
+@@ -406,12 +408,10 @@
+             caster_uuid=caster.uuid,
+             spell_dc=dc
+         )
+-        target.add_condition(fear_effect, parent_event=effect_event)
+-
+-        concentration = self.ensure_concentration(effect_event)
+-
+-        if fear_effect.applied:
+-            concentration.add_linked_condition(target.uuid, fear_effect.uuid)
++        effect_event = self.apply_owned_condition(effect_event, fear_effect)
++        if effect_event.canceled:
++            return effect_event
++
+ 
+         return effect_event.with_updates(
+             status_message=f"{target.name} is Frightened by Fear"
+@@ -632,6 +632,8 @@
+             target_entity_name=target.name,
+             status_message=f"WIS save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         if success:
+             return effect_event.with_updates(
+@@ -642,12 +644,10 @@
+             source_entity_uuid=caster.uuid,
+             target_entity_uuid=target.uuid
+         )
+-        target.add_condition(hp_effect, parent_event=effect_event)
+-
+-        concentration = self.ensure_concentration(effect_event)
+-
+-        if hp_effect.applied:
+-            concentration.add_linked_condition(target.uuid, hp_effect.uuid)
++        effect_event = self.apply_owned_condition(effect_event, hp_effect)
++        if effect_event.canceled:
++            return effect_event
++
+ 
+         return effect_event.with_updates(
+             status_message=f"{target.name} is mesmerized by Hypnotic Pattern"
+@@ -816,6 +816,8 @@
+             target_entity_name=target.name,
+             status_message=f"Color Spray affecting {target.name} ({target.get_hp()} HP)"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         color_spray_effect = ColorSprayEffect(
+             source_entity_uuid=caster.uuid,
+@@ -827,7 +829,9 @@
+                 target_entity_uuid=caster.uuid
+             )
+         )
+-        target.add_condition(color_spray_effect, parent_event=effect_event)
++        effect_event = self.apply_owned_condition(effect_event, color_spray_effect)
++        if effect_event.canceled:
++            return effect_event
+ 
+         return effect_event.with_updates(
+             status_message=f"{target.name} is blinded by Color Spray ({target.get_hp()} HP)"
+--- a/dnd/spells/necromancy.py
++++ b/dnd/spells/necromancy.py
+@@ -728,6 +728,8 @@
+             target_entity_name=target.name,
+             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         if success:
+             return effect_event.with_updates(
+@@ -741,7 +743,9 @@
+             spell_dc=dc,
+             effect_type=self.effect_type
+         )
+-        target.add_condition(bd_effect, parent_event=effect_event)
++        effect_event = self.apply_owned_condition(effect_event, bd_effect)
++        if effect_event.canceled:
++            return effect_event
+ 
+         return effect_event.with_updates(
+             status_message=f"{target.name} is {self.effect_type.capitalize()} by Blindness/Deafness"
+--- a/dnd/spells/transmutation.py
++++ b/dnd/spells/transmutation.py
+@@ -576,6 +576,8 @@
+             target_entity_name=target.name,
+             status_message=f"WIS save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+         )
++        if effect_event.canceled:
++            return effect_event
+ 
+         if success:
+             return effect_event.with_updates(
+@@ -589,11 +591,9 @@
+             spell_dc=dc,
+             tags={ConditionTag.MAGICAL}
+         )
+-        target.add_condition(slowed, parent_event=effect_event)
+-
+-        concentration = self.ensure_concentration(effect_event)
+-        if slowed.applied:
+-            concentration.add_linked_condition(target.uuid, slowed.uuid)
++        effect_event = self.apply_owned_condition(effect_event, slowed)
++        if effect_event.canceled:
++            return effect_event
+ 
+         return effect_event.with_updates(
+             status_message=f"{target.name} is Slowed"
+@@ -1340,6 +1340,12 @@
+             status_message=f"Enhanced {self.ability_type.title()} on {target.name}"
+         )
+ 
++        return outs, [], [], [], effect_event
++
++    def _commit_application(self, effect_event: Event) -> None:
++        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
++        if target is None:
++            return
+         if self.ability_type == "constitution":
+             healing = Healing(
+                 source_entity_uuid=self.source_entity_uuid,
+@@ -1350,8 +1356,6 @@
+             )
+             temp_hp = healing.get_dice().roll.total
+             target.health.add_temporary_hit_points(temp_hp, self.source_entity_uuid, parent_event=effect_event.uuid)
+-
+-        return outs, [], [], [], effect_event
+ 
+ 
+ class EnhanceAbility(SpellAction):
+@@ -2438,6 +2442,8 @@
+ 
+     def _apply(self,event: SpellEvent):
+         effect=event.phase_to(EventPhase.EFFECT)
++        if effect.canceled:
++            return effect
+         target=Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+         if self.mode=="create" and target is not None:
+             target.add_condition(RainWetEffect(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid,
+--- a/tests/engine/test_global_native_audit_regressions.py
++++ b/tests/engine/test_global_native_audit_regressions.py
+@@ -2,7 +2,7 @@
+ 
+ Inputs use real authored builds, registered abilities, item uses and event vetoes.
+ Outputs are HP, retained grants/conditions, spell slots and world lighting.
+-Strict xfails identify known failures; admitted controls must continue to pass.
++Strict xfails identify unrepaired findings; repaired spell cases run normally.
+ """
+ 
+ from dataclasses import replace
+@@ -247,7 +247,7 @@
+     assert (after == before) is refused
+ 
+ 
+-@pytest.mark.parametrize("refused", refusal_cases("GA-04: refused Bear's Endurance grants temporary HP"))
++@pytest.mark.parametrize("refused", [False, True], ids=["admitted", "refused"])
+ def test_enhance_ability_temp_hp_requires_condition_admission(game, refused):
+     caster = combatant(game)
+     target = combatant(game, "Recipient", (3, 2))
+@@ -295,7 +295,7 @@
+     )
+ 
+ 
+-@pytest.mark.parametrize("refused", refusal_cases("GA-08: refused spell target application still affects recipient"))
++@pytest.mark.parametrize("refused", [False, True], ids=["admitted", "refused"])
+ @pytest.mark.parametrize("spell_type", [MagicMissile, AcidSplash, Bless, MassHeal])
+ def test_each_spell_target_application_requires_its_own_admission(game, spell_type, refused):
+     caster = high_actor(game)
+--- /dev/null
++++ b/tests/engine/test_spell_target_admission_repairs.py
+@@ -0,0 +1,440 @@
++"""Native target/condition admission, exact sustain ownership and paid siblings.
++
++These desired-behavior cases fail against the task-start spell implementations.
++The caster, targets, registered repeat actions and all vetoes are real engine
++objects. Snapshots and witnesses are bounded native state/facts, not mocks.
++"""
++
++import random
++
++import pytest
++
++from dnd.conditions import Blinded, Deafened
++from dnd.core.creature_types import DamageType
++from dnd.core.dice import fixed_dice_faces
++from dnd.core.events import EventHandler, EventPhase, EventType, Trigger
++from dnd.core.gridmap import get_map
++from dnd.core.modifiers import NumericalModifier
++from dnd.spells.abjuration import Aid, BeaconOfHope
++from dnd.spells.conjuration import AcidSplash, CallLightning
++from dnd.spells.enchantment import Bane, Bless, HoldMonster, HoldPerson, Sleep
++from dnd.spells.evocation import (
++    BurningHands,
++    ConeOfCold,
++    DivineWord,
++    FlameStrike,
++    GustOfWind,
++    LightningBolt,
++    MagicMissile,
++    MassCureWounds,
++    MassHeal,
++    MassHealingWord,
++    PrayerOfHealing,
++    PrismaticSpray,
++    Shatter,
++    Sunbeam,
++    Thunderwave,
++)
++from dnd.spells.illusion import ColorSpray, Fear, HypnoticPattern
++from dnd.spells.necromancy import BlindnessDeafness
++from dnd.spells.transmutation import (
++    CreateOrDestroyWater,
++    EnhanceAbility,
++    Haste,
++    RainWetEffect,
++    Slow,
++)
++from tests.engine.test_high_level_spell_controls import high_actor
++from tests.engine.test_roster_support_spells import game as game  # noqa: PLC0414 - pytest fixture export
++from tests.manual.spell_regression_support import force_save_result
++
++TARGET_SPELLS = (
++    AcidSplash, Aid, Bane, BeaconOfHope, BlindnessDeafness, Bless, BurningHands,
++    CallLightning, ColorSpray, ConeOfCold, DivineWord, Fear, FlameStrike,
++    GustOfWind, HoldMonster, HypnoticPattern, LightningBolt, MagicMissile,
++    MassCureWounds, MassHeal, MassHealingWord, PrayerOfHealing, PrismaticSpray,
++    Shatter, Sleep, Slow, Thunderwave,
++)
++HEALING_SPELLS = (MassCureWounds, MassHeal, MassHealingWord, PrayerOfHealing)
++FRIENDLY_SPELLS = (Aid, BeaconOfHope, Bless, *HEALING_SPELLS)
++SUSTAINED_CONDITIONS = (Bane, BeaconOfHope, Bless, Fear, HoldMonster, HoldPerson, HypnoticPattern, Slow)
++
++
++def state(actor):
++    return {
++        "hp": actor.get_hp(), "maximum_hp": actor.get_max_hp(),
++        "temporary_hp": actor.health.temporary_hit_points.normalized_score,
++        "life": actor.health.life_state.value, "position": actor.position,
++        "conditions": frozenset(actor.active_conditions),
++    }
++
++
++def listen(actor, kinds, processor, *, target_uuid=None):
++    handler = EventHandler(
++        source_entity_uuid=actor.uuid,
++        trigger_conditions=[Trigger(
++            event_type=kind, event_phase=EventPhase.EFFECT,
++            **({"event_target_entity_uuid": target_uuid} if target_uuid is not None else
++               {"event_source_entity_uuid": actor.uuid}),
++        ) for kind in kinds],
++        event_processor=processor,
++    )
++    actor.add_event_handler(handler)
++    return handler
++
++
++def cast(spell):
++    previous_random = random.getstate()
++    try:
++        random.seed(1)
++        with fixed_dice_faces(*([4] * 200)):
++            result = spell.apply()
++    finally:
++        random.setstate(previous_random)
++    assert result is not None
++    return result
++
++
++def prepare_targets(game, spell_type):
++    caster = high_actor(game)
++    faction = "heroes" if spell_type in FRIENDLY_SPELLS else "foes"
++    first = high_actor(game, "First", (3, 2), faction)
++    second = high_actor(game, "Second", (4, 3) if spell_type is GustOfWind else (4, 2), faction)
++    for recipient in (first, second):
++        if spell_type in HEALING_SPELLS:
++            recipient.receive_damage(40, DamageType.FORCE, caster.uuid)
++        if spell_type in (Sleep, ColorSpray, DivineWord):
++            recipient.receive_damage(recipient.get_hp() - 5, DamageType.FORCE, caster.uuid)
++        for ability in ("wisdom", "constitution", "dexterity", "charisma", "strength"):
++            force_save_result(recipient, ability, succeeds=False)
++    return caster, first, second
++
++
++@pytest.mark.parametrize("spell_type", TARGET_SPELLS, ids=lambda kind: kind.__name__)
++@pytest.mark.parametrize("mode", ["admitted", "root_refused", "all_children_refused", "first_recipient_refused"])
++def test_refused_target_has_no_effect_and_admitted_siblings_continue(game, spell_type, mode):
++    caster, first, second = prepare_targets(game, spell_type)
++    before = state(first), state(second)
++    refused, committed = set(), []
++
++    def refuse(event, _):
++        reject = (
++            mode == "root_refused" and event.application is None
++            or mode == "all_children_refused" and event.application is not None
++            or mode == "first_recipient_refused" and event.application is not None
++            and event.target_entity_uuid == first.uuid
++        )
++        if reject:
++            refused.add(event.lineage_uuid)
++            return event.cancel(status_message="Target admission repair regression")
++        return event
++
++    def record_commit(event, _):
++        committed.append(event.target_entity_uuid)
++
++    listen(caster, (EventType.CAST_SPELL,), refuse)
++    listen(caster, (EventType.ACTION_APPLICATION_COMMITTED,), record_commit)
++    result = cast(spell_type(
++        source_entity_uuid=caster.uuid, target_entity_uuid=first.uuid,
++        extra_target_entity_uuids=[second.uuid], end_position=first.position,
++        **({"cast_at_level": {BlindnessDeafness: 3, HoldMonster: 6}[spell_type]}
++           if spell_type in (BlindnessDeafness, HoldMonster) else {}),
++    ))
++    after = state(first), state(second)
++    assert bool(refused) is (mode != "admitted")
++    if mode == "root_refused":
++        canceled = result.canceled
++        assert canceled
++    if mode in ("root_refused", "all_children_refused", "first_recipient_refused"):
++        assert after[0] == before[0]
++        assert first.uuid not in committed
++    else:
++        assert after[0] != before[0]
++        assert first.uuid in committed
++    if mode in ("root_refused", "all_children_refused"):
++        assert after[1] == before[1]
++        assert second.uuid not in committed
++    else:
++        assert after[1] != before[1]
++        assert second.uuid in committed
++
++
++@pytest.mark.parametrize("spell_type", SUSTAINED_CONDITIONS, ids=lambda kind: kind.__name__)
++@pytest.mark.parametrize("boundary", ["target_effect", "target_condition", "concentration"])
++def test_refused_sustain_preserves_previous_exact_concentration(game, spell_type, boundary):
++    caster = high_actor(game)
++    target = high_actor(game, "Only recipient", (3, 2),
++                        "heroes" if spell_type in FRIENDLY_SPELLS else "foes")
++    for ability in ("wisdom", "charisma"):
++        force_save_result(target, ability, succeeds=False)
++    initial = cast(Haste(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid))
++    initial_canceled = initial.canceled
++    assert not initial_canceled
++    old_concentration = caster.active_conditions["Concentrating"].uuid
++    old_haste = caster.active_conditions["Haste"].uuid
++    caster.action_economy.reset_all_costs()
++    before = state(target)
++    refused = []
++
++    def refuse(event, _):
++        if boundary == "target_effect":
++            selected = event.target_entity_uuid == target.uuid and (
++                spell_type is HoldPerson or event.application is not None
++            )
++        else:
++            selected = event.target_entity_uuid == (caster.uuid if boundary == "concentration" else target.uuid)
++            if boundary == "concentration":
++                selected = selected and event.condition.name == "Concentrating"
++        if selected:
++            refused.append(event.lineage_uuid)
++            return event.cancel(status_message="Keep previous exact sustain")
++        return event
++
++    listen(caster, (EventType.CAST_SPELL,) if boundary == "target_effect" else
++           (EventType.CONDITION_APPLICATION,), refuse)
++    cast(spell_type(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, end_position=target.position))
++    actual = (caster.active_conditions.get("Concentrating"), caster.active_conditions.get("Haste"))
++    retained = tuple(condition.uuid if condition is not None else None for condition in actual)
++    after = state(target)
++    assert len(refused) > 0
++    assert retained == (old_concentration, old_haste)
++    assert after == before
++
++
++@pytest.mark.parametrize("spell_type", [Bane, HoldMonster, HoldPerson], ids=lambda kind: kind.__name__)
++def test_admitted_all_saved_cast_keeps_its_existing_concentration_replacement_policy(game, spell_type):
++    caster = high_actor(game)
++    target = high_actor(game, "Successful saver", (3, 2), "foes")
++    cast(Haste(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid))
++    caster.action_economy.reset_all_costs()
++    force_save_result(target, "wisdom" if spell_type is not Bane else "charisma", succeeds=True)
++    before = state(target)
++    result = cast(spell_type(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid))
++    canceled = result.canceled
++    haste_retained = "Haste" in caster.active_conditions
++    assert not canceled
++    assert not haste_retained
++    after = state(target)
++    assert after == before
++
++
++def test_magic_missile_refused_middle_dart_keeps_ordinals_siblings_and_one_paid_cast(game):
++    caster = high_actor(game)
++    target = high_actor(game, "Dart recipient", (3, 2), "foes")
++    hp_before = target.get_hp()
++    slots_before = caster.action_economy.spell_slot_value(1).normalized_score
++    seen, committed = [], []
++
++    def veto_middle(event, _):
++        if event.application is None:
++            return event
++        seen.append(event.application.index)
++        if event.application.index == 1:
++            return event.cancel(status_message="Only middle dart is refused")
++        return event
++
++    def record_commit(event, _):
++        committed.append(event.target_entity_uuid)
++
++    listen(caster, (EventType.CAST_SPELL,), veto_middle)
++    listen(caster, (EventType.ACTION_APPLICATION_COMMITTED,), record_commit)
++    result = cast(MagicMissile(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid))
++    actual = {
++        "damage": hp_before - target.get_hp(), "reported_damage": result.total_damage,
++        "slots": caster.action_economy.spell_slot_value(1).normalized_score,
++        "actions": caster.action_economy.actions.normalized_score,
++        "ordinals": seen, "commits": len(committed),
++    }
++    assert actual == {"damage": 10, "reported_damage": 10, "slots": slots_before - 1,
++                      "actions": 0, "ordinals": [0, 1, 2], "commits": 2}
++
++
++@pytest.mark.parametrize("boundary", ["admitted", "target_condition", "concentration"])
++def test_enhance_ability_grants_temp_hp_only_after_both_admissions(game, boundary):
++    caster = high_actor(game)
++    target = high_actor(game, "Recipient", (3, 2))
++    cast(Haste(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid))
++    old_concentration = caster.active_conditions["Concentrating"].uuid
++    caster.action_economy.reset_all_costs()
++    target.health.add_temporary_hit_points(3, target.uuid)
++    old_grant = target.health.temporary_hit_points_grant
++    before = state(target)
++    refused = []
++
++    def refuse(event, _):
++        selected = (
++            boundary == "target_condition" and event.target_entity_uuid == target.uuid
++            or boundary == "concentration" and event.target_entity_uuid == caster.uuid
++            and event.condition.name == "Concentrating"
++        )
++        if selected:
++            refused.append(event.lineage_uuid)
++            return event.cancel(status_message="Reject Enhance Ability admission")
++        return event
++
++    listen(caster, (EventType.CONDITION_APPLICATION,), refuse)
++    result = cast(EnhanceAbility(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
++                                 enhance_ability_type="constitution"))
++    after = state(target)
++    canceled = result.canceled
++    assert bool(refused) is (boundary != "admitted")
++    assert canceled is (boundary != "admitted")
++    if boundary == "admitted":
++        assert after["temporary_hp"] == 8
++    else:
++        grant = target.health.temporary_hit_points_grant
++        concentration_uuid = caster.active_conditions["Concentrating"].uuid
++        assert after == before
++        assert grant == old_grant
++        assert concentration_uuid == old_concentration
++
++
++@pytest.mark.parametrize("refused", [False, True])
++def test_hold_person_honors_its_single_target_effect_boundary(game, refused):
++    caster, target, _ = prepare_targets(game, HoldPerson)
++    before = state(target)
++    witnesses = []
++
++    def veto(event, _):
++        if refused:
++            witnesses.append(event.lineage_uuid)
++            return event.cancel(status_message="Refuse Hold Person")
++        return event
++
++    listen(caster, (EventType.CAST_SPELL,), veto)
++    result = cast(HoldPerson(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid))
++    canceled = result.canceled
++    after = state(target)
++    assert canceled is refused
++    assert bool(witnesses) is refused
++    assert (after == before) is refused
++
++
++@pytest.mark.parametrize("refused", [False, True])
++def test_rain_recipient_refusal_preserves_independent_admitted_water_surface(game, refused):
++    caster = high_actor(game)
++    target = high_actor(game, "Rain recipient", (3, 2))
++    witnesses = []
++
++    def veto(event, _):
++        if refused and event.application is not None and event.target_entity_uuid == target.uuid:
++            witnesses.append(event.lineage_uuid)
++            return event.cancel(status_message="Refuse direct rain lease")
++        return event
++
++    listen(caster, (EventType.CAST_SPELL,), veto)
++    result = cast(CreateOrDestroyWater(source_entity_uuid=caster.uuid,
++        target_entity_uuid=target.uuid, end_position=target.position))
++    canceled = result.canceled
++    rain = any(isinstance(condition, RainWetEffect) for condition in target.active_conditions_by_uuid.values())
++    water = any(zone.name == "Wet Surface" for zone in get_map().get_spatial_conditions())
++    assert not canceled
++    assert bool(witnesses) is refused
++    assert rain is (not refused)
++    assert water
++
++
++@pytest.mark.parametrize("spell_type,repeat_name", [(CallLightning, "Call Lightning Strike"), (Sunbeam, "Sunbeam Strike")])
++@pytest.mark.parametrize("refused", [False, True])
++def test_real_retained_repeat_action_honors_each_target_admission(game, spell_type, repeat_name, refused):
++    caster = high_actor(game)
++    target = high_actor(game, "Recipient", (6, 2), "foes")
++    for ability in ("dexterity", "constitution"):
++        force_save_result(target, ability, succeeds=False)
++    initial = cast(spell_type(source_entity_uuid=caster.uuid, end_position=target.position))
++    canceled = initial.canceled
++    assert not canceled
++    template = caster.get_action_template(repeat_name)
++    assert template is not None
++    caster.action_economy.reset_all_costs()
++    before = state(target)
++    witnesses = []
++
++    def veto(event, _):
++        if refused and event.application is not None and event.target_entity_uuid == target.uuid:
++            witnesses.append(event.lineage_uuid)
++            return event.cancel(status_message="Refuse retained activation recipient")
++        return event
++
++    listen(caster, (EventType.CAST_SPELL, EventType.BASE_ACTION), veto)
++    cast(template.instantiate(end_position=target.position))
++    after = state(target)
++    grant_retained = caster.get_action_template(repeat_name) is not None
++    assert bool(witnesses) is refused
++    assert (after == before) is refused
++    assert grant_retained
++
++
++@pytest.mark.parametrize("boundary", ["target_effect", "healing_effect"])
++def test_mass_heal_refused_recipient_does_not_spend_later_recipients_pool(game, boundary):
++    caster, first, second = prepare_targets(game, MassHeal)
++    for target in (first, second):
++        target.health.max_hit_points_bonus.self_static.add_value_modifier(
++            NumericalModifier(source_entity_uuid=target.uuid, value=1000)
++        )
++        target.receive_damage(860, DamageType.FORCE, caster.uuid)
++    before = first.get_hp(), second.get_hp()
++    first.add_condition(Blinded(source_entity_uuid=first.uuid, target_entity_uuid=first.uuid))
++    first.add_condition(Deafened(source_entity_uuid=first.uuid, target_entity_uuid=first.uuid))
++    witnesses = []
++
++    def veto(event, _):
++        if boundary == "target_effect" and event.application is None:
++            return event
++        if event.target_entity_uuid == first.uuid:
++            witnesses.append(event.lineage_uuid)
++            return event.cancel(status_message="Preserve remaining healing pool")
++        return event
++
++    listen(caster, (EventType.CAST_SPELL,) if boundary == "target_effect" else (EventType.HEAL,), veto)
++    action = MassHeal(source_entity_uuid=caster.uuid, target_entity_uuid=first.uuid,
++                      extra_target_entity_uuids=[second.uuid])
++    cast(action)
++    hp_after = first.get_hp(), second.get_hp()
++    pool_after = action.healing_pool_remaining
++    assert len(witnesses) > 0
++    assert hp_after == (before[0], before[1] + 700)
++    assert pool_after == 0
++    if boundary == "target_effect":
++        retained = frozenset(first.active_conditions)
++        assert {"Blinded", "Deafened"} <= retained
++    else:
++        retained = frozenset(first.active_conditions)
++        assert not {"Blinded", "Deafened"} & retained
++
++
++@pytest.mark.parametrize("boundary", ["admitted", "condition_effect", "previous_removal"])
++def test_divine_word_lethal_effect_requires_condition_commit(game, boundary):
++    caster = high_actor(game)
++    target = high_actor(game, "Divine Word recipient", (3, 2), "foes")
++    target.receive_damage(target.get_hp() - 45, DamageType.FORCE, caster.uuid)
++    old_word = None
++    if boundary == "previous_removal":
++        initial = cast(DivineWord(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid))
++        initial_canceled = initial.canceled
++        assert not initial_canceled
++        old_word = target.active_conditions["Divine Word"].uuid
++        caster.action_economy.reset_all_costs()
++    target.receive_damage(target.get_hp() - 10, DamageType.FORCE, caster.uuid)
++    before = state(target)
++    witnesses = []
++
++    def veto(event, _):
++        if boundary == "condition_effect" or event.condition.uuid == old_word:
++            witnesses.append(event.lineage_uuid)
++            return event.cancel(status_message="Reject lethal condition commitment")
++        return event
++
++    if boundary != "admitted":
++        listen(caster, (EventType.CONDITION_APPLICATION,) if boundary == "condition_effect" else
++               (EventType.CONDITION_REMOVAL,), veto, target_uuid=target.uuid)
++    cast(DivineWord(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid))
++    after = state(target)
++    assert bool(witnesses) is (boundary != "admitted")
++    if boundary == "admitted":
++        assert after["life"] == "dead"
++    else:
++        assert after == before
++        if boundary == "previous_removal":
++            retained_uuid = target.active_conditions["Divine Word"].uuid
++            assert retained_uuid == old_word

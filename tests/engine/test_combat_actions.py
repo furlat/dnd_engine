@@ -49,7 +49,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import AdvantageStatus, BaseValue, ModifiableValue
+from dnd.core.values import AdvantageStatus, ModifiableValue, Channel, Kind, add_modifier
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.monsters.bestiary import (
@@ -105,7 +105,7 @@ def reset_core_action_state() -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, 20, 20)
     _combat_game = Game()
 
@@ -1079,7 +1079,7 @@ def test_eb_10_016_mixed_weapon_damage_applies_resistance_per_component() -> Non
     weapon.extra_damage_dices.append(6)
     weapon.extra_damage_dices_numbers.append(1)
     weapon.extra_damage_bonus.append(
-        ModifiableValue.create(source_entity_uuid=attacker.uuid, value_name="Fire Bonus", base_value=0)
+        ModifiableValue(source_entity_uuid=attacker.uuid, name="Fire Bonus", base=0)
     )
     weapon.extra_damage_type.append(DamageType.FIRE)
     Entity.update_all_entities_senses(max_distance=20)
@@ -1156,7 +1156,7 @@ def test_eb_10_019_mixed_weapon_damage_applies_vulnerability_and_immunity_per_co
         weapon.extra_damage_dices.append(6)
         weapon.extra_damage_dices_numbers.append(1)
         weapon.extra_damage_bonus.append(
-            ModifiableValue.create(source_entity_uuid=attacker.uuid, value_name="Fire Bonus", base_value=0)
+            ModifiableValue(source_entity_uuid=attacker.uuid, name="Fire Bonus", base=0)
         )
         weapon.extra_damage_type.append(DamageType.FIRE)
         Entity.update_all_entities_senses(max_distance=20)
@@ -1200,8 +1200,8 @@ def test_eb_10_019_mixed_weapon_damage_applies_vulnerability_and_immunity_per_co
     assert immune_damage == 6
 
 
-def test_eb_10_009_attack_target_context_is_temporary_on_miss() -> None:
-    """EB-10-009: attack cross-target context is cleaned even without damage."""
+def test_eb_10_009_attack_leaves_no_target_state_on_either_entity() -> None:
+    """EB-10-009: an attack reads both sides through its read values and sets no entity target state."""
     reset_core_action_state()
     attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
     target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
@@ -1225,99 +1225,17 @@ def test_eb_10_009_attack_target_context_is_temporary_on_miss() -> None:
     assert target.target_entity_uuid is None
 
 
-def test_attack_restores_preexisting_cross_target_context() -> None:
-    """Attack resolution restores both entities' prior contextual targets."""
-    reset_core_action_state()
-    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
-    prior_attacker_target = create_skeleton(
-        name="Prior attacker target",
-        position=(7, 5),
-        faction="monsters",
-    )
-    prior_target_target = create_goblin(
-        name="Prior target target",
-        position=(5, 6),
-        faction="heroes",
-    )
-    Entity.update_all_entities_senses(max_distance=20)
-    attacker.set_target_entity(prior_attacker_target.uuid)
-    target.set_target_entity(prior_target_target.uuid)
-    miss_modifier = force_attack_miss(attacker)
-
-    with fixed_dice(10):
-        event = Attack(
-            source_entity_uuid=attacker.uuid,
-            target_entity_uuid=target.uuid,
-            weapon_slot=WeaponSlot.MELEE_MAIN,
-        ).apply()
-
-    remove_attack_modifier(attacker, miss_modifier)
-
-    assert event is not None
-    assert event.attack_outcome is AttackOutcome.MISS
-    assert attacker.target_entity_uuid == prior_attacker_target.uuid
-    assert target.target_entity_uuid == prior_target_target.uuid
-
-
-def test_attack_restores_preexisting_context_when_resolution_raises(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Context restoration is exception-safe, not tied to individual returns."""
-    reset_core_action_state()
-    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
-    prior_attacker_target = create_skeleton(
-        name="Prior attacker target",
-        position=(7, 5),
-        faction="monsters",
-    )
-    prior_target_target = create_goblin(
-        name="Prior target target",
-        position=(5, 6),
-        faction="heroes",
-    )
-    Entity.update_all_entities_senses(max_distance=20)
-    attacker.set_target_entity(prior_attacker_target.uuid)
-    target.set_target_entity(prior_target_target.uuid)
-
-    original_attack_bonus = Entity.attack_bonus
-
-    def fail_attack_bonus(
-        entity: Entity,
-        *args: object,
-        **kwargs: object,
-    ) -> ModifiableValue:
-        if entity.uuid == attacker.uuid:
-            raise RuntimeError("deterministic target-context failure")
-        return original_attack_bonus(entity, *args, **kwargs)
-
-    monkeypatch.setattr(Entity, "attack_bonus", fail_attack_bonus)
-
-    with pytest.raises(RuntimeError, match="deterministic target-context failure"):
-        Attack(
-            source_entity_uuid=attacker.uuid,
-            target_entity_uuid=target.uuid,
-            weapon_slot=WeaponSlot.MELEE_MAIN,
-        ).apply()
-
-    assert attacker.target_entity_uuid == prior_attacker_target.uuid
-    assert target.target_entity_uuid == prior_target_target.uuid
-
-
 def test_eb_10_010_natural_rolls_drive_crit_and_crit_miss_outcomes() -> None:
     """EB-10-010: natural d20 values are read from the attack roll."""
     reset_core_action_state()
     attacker = create_goblin(name="Nat 20 Attacker", position=(5, 5), faction="heroes")
     target = create_skeleton(name="Unreachable AC", position=(6, 5), faction="monsters")
-    target.equipment.ac_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid,
             name="Unreachable AC",
             value=100,
-        )
-    )
+        ))
     Entity.update_all_entities_senses(max_distance=20)
 
     with fixed_dice(20):
@@ -1336,14 +1254,12 @@ def test_eb_10_010_natural_rolls_drive_crit_and_crit_miss_outcomes() -> None:
     reset_core_action_state()
     attacker = create_goblin(name="Nat 1 Attacker", position=(5, 5), faction="heroes")
     target = create_skeleton(name="Low AC", position=(6, 5), faction="monsters")
-    target.equipment.ac_bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
+    add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
             source_entity_uuid=target.uuid,
             target_entity_uuid=target.uuid,
             name="Low AC",
             value=-100,
-        )
-    )
+        ))
     Entity.update_all_entities_senses(max_distance=20)
 
     with fixed_dice(1):
@@ -1613,7 +1529,7 @@ if __name__ == "__main__":
         test_eb_10_026_player_style_stabilization_healing_and_massive_damage,
         test_eb_10_016_mixed_weapon_damage_applies_resistance_per_component,
         test_eb_10_019_mixed_weapon_damage_applies_vulnerability_and_immunity_per_component,
-        test_eb_10_009_attack_target_context_is_temporary_on_miss,
+        test_eb_10_009_attack_leaves_no_target_state_on_either_entity,
         test_eb_10_010_natural_rolls_drive_crit_and_crit_miss_outcomes,
         test_eb_10_011_ranged_range_flags_and_disadvantage,
         test_eb_10_012_jump_uses_step_events_and_opportunity_attacks,

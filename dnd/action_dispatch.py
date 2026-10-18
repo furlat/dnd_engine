@@ -11,7 +11,7 @@ from dnd.action_timing import (
     set_action_timing_recorder,
 )
 from dnd.actions import MovementEvent
-from dnd.actions_functional import execute_available_action
+from dnd.actions_functional import execute_available_action, is_free_aim
 from dnd.core.action_execution import (
     MovementContinuationGuard,
     movement_continuation_scope,
@@ -52,11 +52,12 @@ def dispatch_available_action(
     prefer_safe: bool = True,
     movement_guard: Optional[MovementContinuationGuard] = None,
     record_timing: Optional[ActionDispatchTimingRecorder] = None,
+    cast_at_level: Optional[int] = None,
 ) -> ActionDispatchResult:
     """Execute one exact discovery row and target without rediscovery."""
     if not action_info.can_afford:
         raise ActionDispatchError("Discovered action is not affordable")
-    if not any(candidate is target for candidate in action_info.valid_targets):
+    if not any(candidate is target for candidate in action_info.valid_targets) and not is_free_aim(action_info, target):
         raise ActionDispatchError(
             "Target is not the exact target authorized by this discovery row"
         )
@@ -85,6 +86,7 @@ def dispatch_available_action(
                 extra_target_uuids=list(extra_target_uuids) or None,
                 extra_target_positions=list(extra_target_positions) or None,
                 prefer_safe=prefer_safe,
+                cast_at_level=cast_at_level,
             )
     finally:
         if timing_token is not None:

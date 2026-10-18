@@ -10,6 +10,7 @@ from dnd.actions_functional import execute_use_action, register_spell, setup_sta
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content.items.environment_item_builders import build_trap_lever
 from dnd.conditions import Paralyzed
@@ -29,6 +30,7 @@ from dnd.spatial.portals import PORTAL_CONTENT_REF, PORTAL_HATCH_CONTENT_REF, ma
 from dnd.spells.evocation import GustOfWind, Thunderwave
 from dnd.types.traps import TrapState
 from dnd.types.world import OccupancyLayer
+from dnd.types.cells import cell_in
 
 
 @pytest.fixture
@@ -170,7 +172,7 @@ def test_exit_need_not_be_visible_and_keeps_its_own_height(game):
     get_map().set_tile_elevation((7, 2), height=3, surface_kind=ElevationSurfaceKind.ORDINARY, slope_axis=None)
     materialize_portal({(1, 1)}, (7, 2))
     Entity.update_all_entities_senses()
-    assert (7, 2) not in traveler.senses.visible
+    assert not cell_in(capture_senses_snapshot(traveler.senses).visible, (7, 2))
     result = Move(source_entity_uuid=traveler.uuid, end_position=(1, 1),
                   path=[(0, 1), (1, 1)], prefer_safe=False).apply()
     assert result is not None and not result.canceled

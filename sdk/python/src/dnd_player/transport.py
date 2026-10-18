@@ -7,6 +7,7 @@ from importlib.resources import files
 import json
 import math
 import random
+import re
 import time
 from typing import Any, cast
 from urllib.parse import quote
@@ -21,6 +22,11 @@ MAX_BYTES = 64 * 1024 * 1024
 _SCHEMA = json.loads(files('dnd_player').joinpath('player-api-v1.schema.json').read_bytes())
 IDENTITY = json.loads(files('dnd_player').joinpath('protocol-identity.json').read_bytes())
 _VALIDATORS: dict[str, Draft202012Validator] = {}
+
+
+def _base64url(value: str) -> bool:
+    """Packed bytes (cells, row subsets) travel as padded URL-safe base64."""
+    return len(value) % 4 == 0 and re.fullmatch(r'[A-Za-z0-9_-]*={0,2}', value) is not None
 
 
 class ApiError(Exception):
@@ -44,7 +50,7 @@ def _validate(root: str, value: Any) -> Any:
     validator = _VALIDATORS.get(root)
     if validator is None:
         validator = Draft202012Validator({'$defs': _SCHEMA['$defs'], '$ref': '#/$defs/' + root},
-            validate_formats=True, ignore_unknown_formats=False)
+            validate_formats=True, ignore_unknown_formats=False, formats={'base64url': _base64url})
         _VALIDATORS[root] = validator
     try:
         validator.validate(value)

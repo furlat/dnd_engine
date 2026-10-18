@@ -2,8 +2,12 @@
 
 from datetime import UTC, datetime
 from typing import TypedDict, cast
-from uuid import UUID, uuid5
+from uuid import UUID, uuid4, uuid5
 
+from dnd.content.characters.spellcasting_grants import reconcile_prepared_spell_entitlements
+from dnd.content.characters.cleric_grants import apply_cleric_level, remove_last_cleric_level
+from dnd.content.characters.paladin_grants import apply_paladin_level, remove_last_paladin_level
+from dnd.content.characters.wizard_grants import apply_wizard_level, remove_last_wizard_level
 from dnd.content.characters.barbarian_grants import (
     apply_barbarian_level,
     barbarian_level_has_active_child,
@@ -40,8 +44,9 @@ from dnd.types.character_receipts import (
     BarbarianGrantReceipt,
     CharacterGrantReceipt,
     FighterGrantReceipt,
-    SorcererGrantReceipt,
+    SorcererGrantReceipt, ClericGrantReceipt, PaladinGrantReceipt, WizardGrantReceipt,
 )
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier, modifier_of
 
 
 def _proficiency_source(entity: Entity) -> UUID:
@@ -77,6 +82,12 @@ def _validate_multiclass_prerequisites(
                 entity.ability_scores.strength.ability_score.score >= 13
                 or entity.ability_scores.dexterity.ability_score.score >= 13
             )
+        elif class_id is CharacterClass.CLERIC:
+            valid=entity.ability_scores.wisdom.ability_score.score>=13
+        elif class_id is CharacterClass.WIZARD:
+            valid=entity.ability_scores.intelligence.ability_score.score>=13
+        elif class_id is CharacterClass.PALADIN:
+            valid=entity.ability_scores.strength.ability_score.score>=13 and entity.ability_scores.charisma.ability_score.score>=13
         else:
             valid = entity.ability_scores.charisma.ability_score.score >= 13
         if not valid:
@@ -89,16 +100,16 @@ def _reconcile_proficiency(entity: Entity, total_level: int) -> None:
     if entity.character_body_id is None:
         return
     source_id = _proficiency_source(entity)
-    existing = entity.proficiency_bonus.self_static.value_modifiers.get(source_id)
+    existing = modifier_of(entity.proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, source_id)
     if existing is not None:
-        entity.proficiency_bonus.self_static.remove_value_modifier(source_id)
+        remove_modifier(entity.proficiency_bonus, source_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(source_id)
     if total_level == 0:
         return
     progression_bonus = proficiency_bonus_for_level(total_level) - 2
     if progression_bonus == 0:
         return
-    entity.proficiency_bonus.self_static.add_value_modifier(NumericalModifier(
+    add_modifier(entity.proficiency_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
         uuid=source_id,
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,
@@ -125,11 +136,15 @@ def _apply_family(
             level,
             initial_first_class=initial_first_class,
         )
-    return apply_sorcerer_level(
-        entity,
-        level,
-        initial_first_class=initial_first_class,
-    )
+    if level.class_id is CharacterClass.SORCERER:
+        return apply_sorcerer_level(entity,level,initial_first_class=initial_first_class)
+    if level.class_id is CharacterClass.CLERIC:
+        return apply_cleric_level(entity,level,initial_first_class=initial_first_class)
+    if level.class_id is CharacterClass.PALADIN:
+        return apply_paladin_level(entity,level,initial_first_class=initial_first_class)
+    if level.class_id is CharacterClass.WIZARD:
+        return apply_wizard_level(entity,level,initial_first_class=initial_first_class)
+    raise ValueError("Unsupported class")
 
 
 def _remove_family(
@@ -142,7 +157,11 @@ def _remove_family(
         return remove_last_fighter_level(entity)
     if level.class_id is CharacterClass.BARBARIAN:
         return remove_last_barbarian_level(entity, parent_event=parent_event)
-    return remove_last_sorcerer_level(entity, parent_event=parent_event)
+    if level.class_id is CharacterClass.SORCERER:return remove_last_sorcerer_level(entity,parent_event=parent_event)
+    if level.class_id is CharacterClass.CLERIC:return remove_last_cleric_level(entity,parent_event=parent_event)
+    if level.class_id is CharacterClass.PALADIN:return remove_last_paladin_level(entity,parent_event=parent_event)
+    if level.class_id is CharacterClass.WIZARD:return remove_last_wizard_level(entity,parent_event=parent_event)
+    raise ValueError("Unsupported class")
 
 
 def _has_active_child(entity: Entity, level: AppliedClassLevel) -> bool:
@@ -150,6 +169,8 @@ def _has_active_child(entity: Entity, level: AppliedClassLevel) -> bool:
         return barbarian_level_has_active_child(entity)
     if level.class_id is CharacterClass.SORCERER:
         return sorcerer_level_has_active_child(entity)
+    if level.class_id in (CharacterClass.CLERIC, CharacterClass.PALADIN, CharacterClass.WIZARD):
+        return bool(entity.character_grant_receipt(level.step_id).condition_uuids)
     return False
 
 
@@ -183,7 +204,7 @@ def _changed_facts(
         features = barbarian_receipt.feature_sources
         resources = barbarian_receipt.resource_contributions
         spell_sources = ()
-    else:
+    elif level.class_id is CharacterClass.SORCERER:
         sorcerer_receipt = cast(SorcererGrantReceipt, receipt)
         action_uuids = sorcerer_receipt.action_uuids
         handler_uuids = sorcerer_receipt.handler_uuids
@@ -193,6 +214,13 @@ def _changed_facts(
             *sorcerer_receipt.resource_recovery_contributions,
         )
         spell_sources = ("class.sorcerer.spellcasting",)
+    else:
+        prepared_receipt=cast(ClericGrantReceipt|PaladinGrantReceipt|WizardGrantReceipt,receipt)
+        action_uuids=prepared_receipt.action_uuids
+        handler_uuids=(*prepared_receipt.handler_uuids,*prepared_receipt.chassis.handler_uuids)
+        features=prepared_receipt.chassis.feature_sources
+        resources=(*prepared_receipt.resource_contributions,*prepared_receipt.chassis.resource_contributions)
+        spell_sources=(level.class_id.value+".spellcasting",) if level.class_id is not CharacterClass.PALADIN or level.resulting_class_level>=2 else ()
     # These receipts name direct class grants with authored semantic keys.
     action_ids = tuple(
         cast(str, action.semantic_key)
@@ -210,6 +238,7 @@ def _changed_facts(
         if choice.choice_id.endswith((
             ".cantrips",
             ".spell_known",
+            ".spellbook",
             ".spell_replacement",
         ))
         for value in choice.values
@@ -249,6 +278,7 @@ def _added_event(
         resulting_class_levels=_class_levels(resulting),
         applied_origin_state=entity.applied_origin_state,
         applied_class_levels=resulting,
+        scribed_spell_ids=entity.scribed_spell_ids, permanent_feature_uses=entity.permanent_feature_uses,
         prepared_spell_selections=entity.prepared_spell_selections,
         feature_toggle_selections=entity.feature_toggle_selections,
         **(changed or _ChangedLevelFacts()),
@@ -278,6 +308,7 @@ def _removed_event(
         resulting_class_levels=_class_levels(resulting),
         applied_origin_state=entity.applied_origin_state,
         applied_class_levels=resulting,
+        scribed_spell_ids=entity.scribed_spell_ids, permanent_feature_uses=entity.permanent_feature_uses,
         prepared_spell_selections=entity.prepared_spell_selections,
         feature_toggle_selections=entity.feature_toggle_selections,
         **(changed or _ChangedLevelFacts()),
@@ -315,6 +346,7 @@ def add_class_level(
     del execution
 
     receipt = _apply_family(entity, level, initial_first_class=False)
+    fact_committed = False
     try:
         if entity.applied_origin_state is not None and previous_levels:
             reconcile_origin_total_level(
@@ -322,6 +354,7 @@ def add_class_level(
                 previous_level=len(previous_levels),
                 new_level=len(previous_levels) + 1,
             )
+        reconcile_prepared_spell_entitlements(entity)
         _reconcile_proficiency(entity, len(previous_levels) + 1)
         completed = _added_event(
             entity,
@@ -330,8 +363,12 @@ def add_class_level(
             previous_levels=previous_levels,
             changed=_changed_facts(entity, level, receipt),
         )
-        return EventQueue.publish_completed_fact(completed)
+        EventQueue.run_pre_completion_callbacks(completed)
+        fact_committed = True
+        return _publish_level_change(completed)
     except BaseException:
+        if fact_committed:
+            raise
         _remove_family(entity, level)
         if entity.applied_origin_state is not None and previous_levels:
             reconcile_origin_total_level(
@@ -339,8 +376,21 @@ def add_class_level(
                 previous_level=len(previous_levels) + 1,
                 new_level=len(previous_levels),
             )
+        reconcile_prepared_spell_entitlements(entity)
         _reconcile_proficiency(entity, len(previous_levels))
         raise
+
+
+def _publish_level_change(completed):
+    """Deliver the settled level to owners, retaining its terminal fact on failure."""
+    try:
+        EventQueue.publish_committed_phase(completed.model_copy(update={
+            "uuid":uuid4(),"phase":EventPhase.EFFECT}))
+    finally:
+        EventQueue.register_completion_sequence((completed.model_copy(update={
+            "use_register":True,"is_first":False,"is_last":True,
+            "timestamp":datetime.now(UTC)}),))
+    return EventQueue.get_event_by_uuid(completed.uuid)
 
 
 def apply_initial_class_levels(
@@ -365,11 +415,13 @@ def apply_initial_class_levels(
                 level,
                 initial_first_class=index == 0,
             )
+        reconcile_prepared_spell_entitlements(entity)
         _reconcile_proficiency(entity, len(levels))
     except BaseException:
         while entity.applied_class_levels:
             installed = entity.applied_class_levels[-1]
             _remove_family(entity, installed)
+        reconcile_prepared_spell_entitlements(entity)
         _reconcile_proficiency(entity, 0)
         raise
 
@@ -412,7 +464,19 @@ def remove_last_class_level(entity: Entity) -> EntityLevelRemovedEvent:
         else None
     )
 
-    _remove_family(entity, level, parent_event=parent_event)
+    committed_failure = None
+    try:
+        _remove_family(entity, level, parent_event=parent_event)
+    except BaseException as failure:
+        if entity.applied_class_levels != previous_levels[:-1]:
+            raise
+        try:
+            entity.character_grant_receipt(level.step_id)
+        except KeyError:
+            committed_failure = failure
+        else:
+            raise
+
     if entity.applied_origin_state is not None:
         reconcile_origin_total_level(
             entity,
@@ -420,6 +484,7 @@ def remove_last_class_level(entity: Entity) -> EntityLevelRemovedEvent:
             new_level=len(previous_levels) - 1,
             parent_event=parent_event,
         )
+    reconcile_prepared_spell_entitlements(entity)
     _reconcile_proficiency(entity, len(previous_levels) - 1)
     completed = _removed_event(
         entity,
@@ -431,22 +496,22 @@ def remove_last_class_level(entity: Entity) -> EntityLevelRemovedEvent:
     if parent_event is not None:
         completed.lineage_uuid = parent_event.lineage_uuid
         completed.parent_event = parent_event.parent_event
-        completed.children_events = list(parent_event.children_events)
+        parent_children, parent_lineage_children = EventQueue.child_links(parent_event)
+        completed.children_events = list(parent_children)
         completed.lineage_children_events = list(dict.fromkeys((
-            *parent_event.lineage_children_events,
-            *parent_event.children_events,
+            *parent_lineage_children,
+            *parent_children,
         )))
+    fact_committed = False
     try:
-        return EventQueue.publish_completed_fact(completed)
+        EventQueue.run_pre_completion_callbacks(completed)
+        fact_committed = True
+        published = _publish_level_change(completed)
     except BaseException:
+        if fact_committed:
+            raise
         if parent_event is not None:
-            committed = completed.model_copy(update={
-                "use_register": True,
-                "is_first": True,
-                "is_last": True,
-                "timestamp": datetime.now(UTC),
-            })
-            EventQueue.register_completion_sequence((committed,))
+            _publish_level_change(completed)
             raise
         restored_receipt = _apply_family(
             entity,
@@ -462,6 +527,7 @@ def remove_last_class_level(entity: Entity) -> EntityLevelRemovedEvent:
                 previous_level=len(previous_levels) - 1,
                 new_level=len(previous_levels),
             )
+        reconcile_prepared_spell_entitlements(entity)
         _reconcile_proficiency(entity, len(previous_levels))
         if restored_receipt != receipt:
             raise RuntimeError("class-level removal restoration changed its receipt")
@@ -484,6 +550,10 @@ def remove_last_class_level(entity: Entity) -> EntityLevelRemovedEvent:
         entity.set_event_handler_order(prior_block_handler_order)
         EventQueue.set_event_handler_order(prior_global_handler_order)
         raise
+
+    if committed_failure is not None:
+        raise committed_failure
+    return published
 
 
 def hydrate_class_progression(entity: Entity) -> None:
@@ -532,6 +602,7 @@ def hydrate_class_progression(entity: Entity) -> None:
                     for choice in level.choices
                 ),
             )
+        reconcile_prepared_spell_entitlements(entity)
         _reconcile_proficiency(entity, len(semantic_levels))
     except BaseException:
         while entity.applied_class_levels:
@@ -549,6 +620,7 @@ def hydrate_class_progression(entity: Entity) -> None:
             )
             entity.applied_origin_state = origin_state
         entity.applied_class_levels = semantic_levels
+        reconcile_prepared_spell_entitlements(entity)
         _reconcile_proficiency(entity, 0)
         raise
 

@@ -145,7 +145,6 @@ class ItemEffectPresentationState(BaseModel):
     description: str = ''
     damage_type: DamageType | None = None
     applied_source_event_cursor: int | None = None
-    suppression_provider_uuids: tuple[UUID, ...] = ()
 
 
 class ItemPresentationState(BaseModel):
@@ -159,7 +158,6 @@ class ItemPresentationState(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    suppression_provider_uuids: tuple[UUID, ...] = ()
     item_uuid: UUID = Field(description="Stable item instance identity.")
     item_id: str = Field(
         pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$",

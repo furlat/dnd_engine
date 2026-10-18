@@ -3,6 +3,7 @@
 from typing import Optional
 from uuid import UUID, uuid4
 
+from dnd.core.values import ValueRead, read_value, parts
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, DiceRoll, RollType, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
@@ -20,14 +21,19 @@ from dnd.core.events import (
     StepMovementEvent,
     Trigger,
 )
-from dnd.core.values import BaseValue, ModifiableValue
+from dnd.core.values import ModifiableValue
+
+
+def reading(value, target_uuid=None):
+    """The value read by its owner against an optional target."""
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
 
 
 def reset_reaction_state() -> None:
     """Clear global state touched by these event-reaction examples."""
     EventQueue.reset()
     BaseObject._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Dice._registry.clear()
     DiceRoll._registry.clear()
     EventQueue.set_combat_log_callback(None)
@@ -342,16 +348,15 @@ def test_d20_result_processor_replaces_low_attack_roll(capsys) -> None:
     hero_id = uuid4()
     target_id = uuid4()
 
-    attack_bonus = ModifiableValue.create(
+    attack_bonus = ModifiableValue(
         source_entity_uuid=hero_id,
-        target_entity_uuid=target_id,
-        value_name="Attack Bonus",
-        base_value=4,
+        name="Attack Bonus",
+        base=4,
     )
     attack_d20 = Dice(
         count=1,
         value=20,
-        bonus=attack_bonus,
+        bonus=reading(attack_bonus, target_id),
         roll_type=RollType.ATTACK,
     )
 
@@ -396,7 +401,7 @@ def test_d20_result_processor_replaces_low_attack_roll(capsys) -> None:
         target_entity_uuid=target_id,
         original_roll=low_roll,
         dc=15,
-        bonus=attack_bonus,
+        bonus=reading(attack_bonus, target_id),
         weapon_slot=WeaponSlot.MELEE_MAIN,
     ).phase_to(EventPhase.EFFECT)
 

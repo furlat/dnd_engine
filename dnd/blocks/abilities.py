@@ -1,7 +1,10 @@
 from typing import Dict, Optional, List, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field,  computed_field
-from dnd.core.values import ModifiableValue
+from dnd.core.values import (
+    ModifiableValue, Part, ValueRead, ValueReading, composed, parts, read_value, value_score, Channel, Kind,
+    add_modifier,
+)
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
 
@@ -56,16 +59,6 @@ class Ability(BaseBlock):
             Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
         get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
             Searches through attributes and returns all BaseBlock instances that are attributes of this class.
-        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
-            Set the target entity for all the values contained in this Block instance.
-        clear_target_entity() -> None: (Inherited from BaseBlock)
-            Clear the target entity for all the values contained in this Block instance.
-        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
-            Set the context for all the values contained in this Block instance.
-        clear_context() -> None: (Inherited from BaseBlock)
-            Clear the context for all the values contained in this Block instance.
-        clear() -> None: (Inherited from BaseBlock)
-            Clear the source, target, and context for all the values contained in this Block instance.
 
     Computed Fields:
         modifier (int): The calculated ability modifier, combining the normalized ability score and any bonuses.
@@ -79,11 +72,11 @@ class Ability(BaseBlock):
         default="strength",
         description="The name of the ability (Strength, Dexterity, Constitution, Intelligence, Wisdom, or Charisma)"
     )
-    ability_score: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=10, value_name="Ability Score",score_normalizer=ability_score_normalizer), description="The base ability score, typically ranging from 3 to 20 for most characters")
-    modifier_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Modifier Bonus"), description="Any additional bonus to the ability modifier, separate from the base score")
+    ability_score: ModifiableValue = Field(default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(),base=10, name="Ability Score",score_normalizer=ability_score_normalizer), description="The base ability score, typically ranging from 3 to 20 for most characters")
+    modifier_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(),base=0, name="Modifier Bonus"), description="Any additional bonus to the ability modifier, separate from the base score")
     check_bonus: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),
-            base_value=0, value_name="Ability Check Bonus"),
+        default_factory=lambda: ModifiableValue(source_entity_uuid=uuid4(),
+            base=0, name="Ability Check Bonus"),
         description="Check-only modifiers, independent of saving throws and attacks.",
     )
     check_proficiency_sources: ProficiencySourceSet = Field(
@@ -93,6 +86,10 @@ class Ability(BaseBlock):
             "this ability."
         ),
     )
+
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """This block's values: its value fields, in declaration order."""
+        return (self.ability_score, self.modifier_bonus, self.check_bonus)
 
     def add_check_proficiency_source(
         self,
@@ -133,28 +130,30 @@ class Ability(BaseBlock):
         """
         return ability_score_normalizer(self.ability_score.score) + self.modifier_bonus.normalized_score
 
-    def get_combined_values(self, *, use_register: bool = True) -> ModifiableValue:
-        """Build a modifiable value representing this ability's modifier.
+    def combined_value(self, read: ValueRead) -> Tuple[Part, ...]:
+        """This ability's modifier as the parts of a read: its raw score, normalized as a modifier, and its bonus.
 
         Args:
-            use_register: Register the returned value and its temporary components.
+            read: The read the ability modifier takes part in.
 
         Returns:
-            Modifiable value whose normalized score is derived from the raw
-            aggregate ability score plus direct modifier bonuses.
+            The ability-modifier part (the raw aggregate score read in `read`) and the
+            direct modifier bonus.
         """
-        ability_modifier = ModifiableValue.create(
+        ability_modifier = ModifiableValue(
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
-            target_entity_uuid=self.target_entity_uuid,
-            target_entity_name=self.target_entity_name,
-            base_value=self.ability_score.score,
-            value_name=f"{self.name} Ability Modifier",
+            base=value_score(parts(self.ability_score), read, normalized=False),
+            name=f"{self.name} Ability Modifier",
             score_normalizer=ability_score_normalizer,
-            use_register=use_register,
+            use_register=False,
         )
-        ability_modifier.generated_from.append(self.ability_score.uuid)
-        return ability_modifier.combine_values([self.modifier_bonus], use_register=use_register)
+        return composed(parts(ability_modifier, self.modifier_bonus))
+
+    def modifier_reading(self) -> ValueReading:
+        """This ability's modifier read with no target or context."""
+        read = ValueRead(self.source_entity_uuid)
+        return read_value(self.combined_value(read), read)
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None,
@@ -176,14 +175,14 @@ class Ability(BaseBlock):
         if config is None:
             return cls(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, name=name)
         else:
-            ability_score = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.ability_score, value_name=name+" Ability Score", score_normalizer=ability_score_normalizer)
+            ability_score = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.ability_score, name=name+" Ability Score", score_normalizer=ability_score_normalizer)
             if len(config.ability_scores_modifiers) > 0:
                 for modifier in config.ability_scores_modifiers:
-                    ability_score.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            modifier_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.modifier_bonus, value_name=name+" Modifier Bonus")
+                    add_modifier(ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            modifier_bonus = ModifiableValue(source_entity_uuid=source_entity_uuid, base=config.modifier_bonus, name=name+" Modifier Bonus")
             if len(config.modifier_bonus_modifiers) > 0:
                 for modifier in config.modifier_bonus_modifiers:
-                    modifier_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+                    add_modifier(modifier_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             return cls(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, name=name, ability_score=ability_score, modifier_bonus=modifier_bonus)
 
 class AbilityScoresConfig(BaseModel):
@@ -239,16 +238,6 @@ class AbilityScores(BaseBlock):
             Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
         get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
             Searches through attributes and returns all BaseBlock instances that are attributes of this class.
-        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
-            Set the target entity for all the values contained in this Block instance.
-        clear_target_entity() -> None: (Inherited from BaseBlock)
-            Clear the target entity for all the values contained in this Block instance.
-        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
-            Set the context for all the values contained in this Block instance.
-        clear_context() -> None: (Inherited from BaseBlock)
-            Clear the context for all the values contained in this Block instance.
-        clear() -> None: (Inherited from BaseBlock)
-            Clear the source, target, and context for all the values contained in this Block instance.
 
     Computed Fields:
         abilities_list (List[Ability]): A list of all Ability instances in this AbilityScores block.

@@ -9,7 +9,8 @@ Contains all rage/frenzy related code:
 - Frenzy system (Berserker path)
 """
 
-from dnd.core.action_types import RestrictedActionKind
+from dnd.core.action_types import ActionSelection, RestrictedActionKind
+from dnd.types.discovery import ActorScan
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
@@ -39,11 +40,12 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
     entity_action_economy_cost_applier,
     entity_resource_cost_evaluator,
-    Attack, AttackEvent,
+    Attack,
 )
 from pydantic import Field
 from typing import Any, ClassVar, Optional, List, Tuple, cast
 from uuid import UUID
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def _child_binding(parent_binding, behavior_id: str, runtime_owner_uuid: UUID):
@@ -382,9 +384,7 @@ class Raging(BaseCondition):
             target_entity_uuid=self.target_entity_uuid
         )
         try:
-            mod_uuid = athletics.skill_bonus.self_static.add_advantage_modifier(
-                str_adv_mod,
-            )
+            mod_uuid = add_modifier(athletics.skill_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, str_adv_mod)
         except BaseException:
             str_adv_mod.remove_from_register()
             raise
@@ -398,9 +398,7 @@ class Raging(BaseCondition):
             target_entity_uuid=self.target_entity_uuid
         )
         try:
-            mod_uuid = str_save.bonus.self_static.add_advantage_modifier(
-                str_save_adv,
-            )
+            mod_uuid = add_modifier(str_save.bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, str_save_adv)
         except BaseException:
             str_save_adv.remove_from_register()
             raise
@@ -414,8 +412,7 @@ class Raging(BaseCondition):
         )
         try:
             mod_uuid = (
-                target.equipment.melee_damage_bonus.self_contextual
-                .add_value_modifier(rage_dmg_mod)
+                add_modifier(target.equipment.melee_damage_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, rage_dmg_mod)
             )
         except BaseException:
             rage_dmg_mod.remove_from_register()
@@ -432,8 +429,7 @@ class Raging(BaseCondition):
             )
             try:
                 mod_uuid = (
-                    target.health.damage_reduction.self_static
-                    .add_resistance_modifier(resist_mod)
+                    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, resist_mod)
                 )
             except BaseException:
                 resist_mod.remove_from_register()
@@ -522,6 +518,7 @@ class Rage(BaseAction):
         active_raging_condition_uuid: Exact active root owned by this template.
         costs: Bonus-action and rage-resource costs rebuilt after model initialization.
     """
+    creates = (Raging,)
     name: str = Field(default="Rage", description="Action name displayed for entering rage.")
     description: str = Field(
         default="Enter a primal rage",
@@ -583,34 +580,25 @@ class Rage(BaseAction):
             source_entity_name=source_name
         )
 
-    def validate_requirements_for_discovery(self) -> bool:
-        """Check non-cost prerequisites for exposing Rage as executable."""
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return False
-
-        if "Frenzied" in entity.active_conditions:
-            return False
-
-        return super().validate_requirements_for_discovery()
-
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        """Validate Rage can be used."""
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """Rage needs no protection against it, no frenzy, no heavy armor and no current rage."""
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
-            return declaration_event.cancel(status_message="Entity not found")
+            return "Entity not found"
+
+        if entity.check_condition_immunity("Raging"):
+            return "Rage is prevented by an active protection"
+        if "Frenzied" in entity.active_conditions:
+            return "Already frenzied"
 
         body_armor = entity.equipment.body_armor
         if body_armor and body_armor.type == ArmorType.HEAVY:
-            return declaration_event.cancel(status_message="Cannot rage in heavy armor")
+            return "Cannot rage in heavy armor"
 
         if "Raging" in entity.active_conditions:
-            return declaration_event.cancel(status_message="Already raging")
+            return "Already raging"
 
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Rage ready"
-        )
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[Event]:
         """Apply Rage - enter the rage state."""
@@ -705,19 +693,12 @@ class EndRage(BaseAction):
             source_entity_name=source_name
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        """Validate End Rage can be used."""
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if entity is None:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        if "Raging" not in entity.active_conditions and "Frenzied" not in entity.active_conditions:
-            return declaration_event.cancel(status_message="Not currently raging")
-
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="End Rage ready"
-        )
+        if entity is None or ("Raging" not in entity.active_conditions
+                              and "Frenzied" not in entity.active_conditions):
+            return "Not currently raging"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply End Rage - remove rage state."""
@@ -747,6 +728,7 @@ class RageFeature(BaseCondition):
         rage_uses: Maximum rage resource uses granted by the feature.
         rage_damage: Rage damage bonus wired into registered Rage actions.
     """
+    creates = (EndRage, Rage)
     name: str = Field(default="Rage Feature", description="Feature condition name for Barbarian rage.")
     description: str = Field(
         default="Can enter a primal rage as a bonus action",
@@ -945,26 +927,19 @@ class FrenziedStrike(Attack):
         ),
     ], description="Bonus-action cost, independent of ordinary attack credits.")
 
-    def validate_source_requirements_for_discovery(self) -> bool:
-        entity = Entity.get(self.source_entity_uuid)
-        return (
-            entity is not None
-            and "Frenzied" in entity.active_conditions
-            and self.weapon_slot in (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF)
-            and entity.equipment.get_weapon(self.weapon_slot) is not None
-            and super().validate_source_requirements_for_discovery()
-        )
-
-    def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
         if entity is None or "Frenzied" not in entity.active_conditions:
-            return declaration_event.cancel(status_message="Must be in a frenzy")
+            return "Must be in a frenzy"
         if (
             self.weapon_slot not in (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF)
             or entity.equipment.get_weapon(self.weapon_slot) is None
         ):
-            return declaration_event.cancel(status_message="Frenzied Strike requires a melee weapon")
-        return super()._validate(declaration_event)
+            return "Frenzied Strike requires a melee weapon"
+        return Attack.rule_error(self, scan, selection)
+
+# Frenzied (defined above) creates FrenziedStrike.
+Frenzied.creates = (*Frenzied.creates, FrenziedStrike)
 
 
 class Frenzy(BaseAction):
@@ -980,6 +955,7 @@ class Frenzy(BaseAction):
         active_raging_condition_uuid: Exact active root owned by this template.
         costs: Bonus-action and rage-resource costs rebuilt after model initialization.
     """
+    creates = (Frenzied, Raging)
     name: str = Field(default="Frenzy", description="Action name displayed for entering Berserker frenzy.")
     description: str = Field(
         default="Enter a frenzied rage",
@@ -1041,19 +1017,22 @@ class Frenzy(BaseAction):
             source_entity_name=source_name
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
+            return "Entity not found"
+
+        if entity.check_condition_immunity("Raging"):
+            return "Rage is prevented by an active protection"
 
         body_armor = entity.equipment.body_armor
         if body_armor and body_armor.type == ArmorType.HEAVY:
-            return declaration_event.cancel(status_message="Cannot frenzy in heavy armor")
+            return "Cannot frenzy in heavy armor"
 
         if "Raging" in entity.active_conditions or "Frenzied" in entity.active_conditions:
-            return declaration_event.cancel(status_message="Already raging")
+            return "Already raging"
 
-        return declaration_event.phase_to(EventPhase.EXECUTION)
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[Event]:
         entity = Entity.get(self.source_entity_uuid)
@@ -1137,6 +1116,7 @@ class FrenzyFeature(BaseCondition):
         description: Short rules-facing summary of the Frenzy feature.
         rage_damage: Rage damage bonus wired into registered Frenzy actions.
     """
+    creates = (Frenzy,)
     name: str = Field(default="Frenzy Feature", description="Feature condition name for Berserker Frenzy.")
     description: str = Field(
         default="Can enter a frenzied rage for bonus action attacks",

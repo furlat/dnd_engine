@@ -13,7 +13,7 @@ from dnd.core.effect_types import ApplicationResolutionRef, EventResolutionRef, 
 from dnd.types.event_facts import SpatialChangeType
 
 from pydantic import BeforeValidator, PlainSerializer, TypeAdapter
-from dnd.player.compatibility import recorded_area_policy, recorded_application, recorded_combat_log, legacy_damage_reference
+from dnd.player.compatibility import recorded_area_policy, recorded_application, recorded_combat_log, legacy_damage_reference, recorded_retired_magic_fields
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, TraverseConnectorEvent, ShoveEvent, SpellEvent
 from dnd.blocks.base_item import ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
@@ -28,10 +28,11 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.content.runtime import EffectiveHandlerPresentation
 from dnd.core.events import (
+    SpellMasteryStudiedEvent, ConditionMembershipCommittedEvent, RestResourcesRecoveredEvent, PermanentFeatureUsedEvent, ActionApplicationCommittedEvent, MaximumHitPointReductionEvent, EffectApplicationEvent, ActionCostsCommittedEvent, RestCompletedEvent, SpellbookChangedEvent, SpellPreparationChangedEvent, HealingAppliedEvent, SpellDamageRollResultEvent,
     AreaReachEvent, AttackD20RollResultEvent, D20Event, D20RollResultEvent, DamageAppliedEvent,
     DamageRollResultEvent, DeathEvent, DeathSaveEvent, EncounterEndEvent,
     EncounterEvent, EncounterStartEvent, EntityCreatedEvent, EntityFactionChangedEvent, Event, EventPhase, ExposedFlameEvent,
-    ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, HealRollResultEvent, InstantDeathEvent,
+    ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, StandOfferEvent, HealEvent, HealRollResultEvent, InstantDeathEvent,
     ItemDestructionEvent, LifeStateChangeEvent, ReviveEvent, RoundEndEvent, RoundEvent, RoundStartEvent,
     SavingThrowD20RollResultEvent, SavingThrowEvent, SensoryUpdateEvent,
     SkillCheckD20RollResultEvent, SkillCheckEvent, SpatialChangeEvent, SpatialEffectChangeEvent, SpatialEffectInteractionEvent,
@@ -44,7 +45,8 @@ from dnd.core.events import (
 # must first acquire a retained capture contract; they cannot decode by importing
 # arbitrary classes named by a file. Technical headers remain ordinary Event.
 EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
-    Event, ActionEvent, AreaReachEvent, WorldInitializedEvent, WorldModifiedEvent, EntityCreatedEvent, EntityFactionChangedEvent, ConditionStateChangedEvent,
+    EffectApplicationEvent, ActionCostsCommittedEvent, RestCompletedEvent, SpellbookChangedEvent, SpellPreparationChangedEvent, HealingAppliedEvent, SpellDamageRollResultEvent,
+    Event, ActionEvent, SpellMasteryStudiedEvent, ConditionMembershipCommittedEvent, RestResourcesRecoveredEvent, PermanentFeatureUsedEvent, ActionApplicationCommittedEvent, MaximumHitPointReductionEvent, AreaReachEvent, WorldInitializedEvent, WorldModifiedEvent, EntityCreatedEvent, EntityFactionChangedEvent, ConditionStateChangedEvent,
     AttackEvent, SpellEvent, MovementEvent, JumpEvent, TraverseConnectorEvent, ShoveEvent, CounterspellReactionEvent,
     EquipmentEvent, WeaponEquipEvent, WeaponUnequipEvent, ArmorEquipEvent,
     ArmorUnequipEvent, ShieldEquipEvent, ShieldUnequipEvent, ItemLocationStateEvent,
@@ -55,7 +57,7 @@ EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
     HealEvent, TemporaryHitPointsChangedEvent, DeathEvent, DeathSaveEvent, InstantDeathEvent, ReviveEvent,
     LifeStateChangeEvent, SensoryUpdateEvent, SpatialChangeEvent, TileElevationChangeEvent,
     SpatialEffectChangeEvent, SpatialEffectInteractionEvent, StepMovementEvent,
-    ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, EncounterEvent, EncounterStartEvent, EncounterEndEvent,
+    ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, StandOfferEvent, EncounterEvent, EncounterStartEvent, EncounterEndEvent,
     RoundEvent, RoundStartEvent, RoundEndEvent, TurnEvent, TurnStartEvent, TurnEndEvent,
 )}
 # Keep the original archive discriminator while the Python name describes both operations.
@@ -64,7 +66,7 @@ EVENT_MODELS[ITEM_RESOURCE_WIRE_TYPE] = EVENT_MODELS.pop(
     "dnd.blocks.base_item.ItemResourceChangeEvent")
 LOG = TypeAdapter(CombatLogEntry | None)
 HANDLERS = TypeAdapter(tuple[EffectiveHandlerPresentation, ...])
-GRANTS = TypeAdapter(dict[str, set[str]])
+GRANTS = TypeAdapter(dict[str, frozenset[str]])
 
 
 def _encode_recorded_log(entry: CombatLogEntry | None) -> dict[str, Any] | None:
@@ -101,13 +103,24 @@ ADDITIVE_FIELDS = {
     DamageAppliedEvent: {"body_release", "critical_hit", "impact_direction", "spatial_source"},
     TakeDamageEvent: {"intercepted_by_condition_uuid", "spatial_source", "effect_origin"},
     HealEvent: {"source_condition_uuid"},
-    EntityCreatedEvent: {"healing_blocked", "occupancy_layer", "temporary_hit_points_grant", "summon_origin", "initial_condition_states"},
+    EntityCreatedEvent: {"healing_blocked", "occupancy_layer", "temporary_hit_points_grant", "summon_origin", "initial_condition_states", "scribed_spell_ids", "permanent_feature_uses"},
     SensoryUpdateEvent: {"observed_changes", "hazardous_cells_changed", "spatial_effects_changed", "spatial_effects_removed"},
-    SpatialChangeEvent: {"commit_event_uuid", "tile_state", "tile_present", "object_state", "previous_occupancy_layer", "occupancy_layer", "terminal_release"},
+    SpatialChangeEvent: {"commit_event_uuid", "tile_state", "tile_states", "tile_present", "object_state", "previous_occupancy_layer", "occupancy_layer", "terminal_release"},
     MovementEvent: {"movement_mode", "start_layer", "end_layer", "resolved_area_positions"},
     JumpEvent: {"movement_mode", "start_layer", "end_layer", "resolved_area_positions"},
     StepMovementEvent: {"movement_mode", "from_layer", "to_layer", "resolved_speed_feet"},
 }
+
+# Optional admission/provenance facts added by the native spell ownership repair.
+for _model in EVENT_MODELS.values():
+    for _field in ("effect_origin", "spellcasting_source_id", "maximize_damage_dice", "ignores_resistance_immunity"):
+        if _field in _model.model_fields:
+            ADDITIVE_FIELDS.setdefault(_model, set()).add(_field)
+
+for _model in EVENT_MODELS.values():
+    if "application_intercepted_by" in _model.model_fields:
+        ADDITIVE_FIELDS.setdefault(_model, set()).add("application_intercepted_by")
+ADDITIVE_FIELDS[SpellEvent].update({"magical_transfer", "authored_spell_id", "can_deal_damage"})
 
 # Retained pre-interruption completion archives did not record these declarations.
 # They suffice for completion replay, but cannot establish a cancellation receipt.
@@ -150,7 +163,7 @@ def decode_event(value: Any) -> Event:
     """Read a recorded concrete event without ambient runtime construction."""
     if isinstance(value, Event):
         return value
-    payload = dict(value)
+    payload = recorded_retired_magic_fields(dict(value))
     wire_type = payload.pop("wire_type", None)
     if wire_type not in EVENT_MODELS:
         raise ValueError(f"unknown or missing recorded event wire_type: {wire_type}")
@@ -188,6 +201,43 @@ def decode_event(value: Any) -> Event:
     return event
 
 
+def _recorded_resolution(event: Event, by_lineage: dict[UUID, Event], resolved: dict[UUID, ResolutionRef | None],
+                         pending: set[UUID]) -> ResolutionRef | None:
+    """One event's admitted resolution, memoized in `resolved`. A module function, so the
+    recursion leaves no closure cycle holding the whole operation's events alive."""
+    if event.lineage_uuid in resolved:
+        return resolved[event.lineage_uuid]
+    if event.lineage_uuid in pending:
+        raise ValueError("Cyclic legacy event ancestry")
+    if "resolution_ref" not in event._recorded_omissions:
+        return event.resolution_ref
+    pending.add(event.lineage_uuid)
+    parent = by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
+    result: ResolutionRef | None = None
+    if isinstance(event, ActionEvent):
+        application = event.application
+        if application is not None and "application" in event._recorded_omissions:
+            owner = parent
+            while isinstance(owner, AreaReachEvent):
+                owner = by_lineage.get(owner.parent_lineage) if owner.parent_lineage is not None else None
+            if not isinstance(owner, ActionEvent):
+                raise ValueError(f"Legacy application {event.uuid} has no recorded action owner")
+            application = application.model_copy(update={"lineage_uuid": owner.lineage_uuid})
+        result = (ApplicationResolutionRef(lineage_uuid=application.lineage_uuid,
+            application_id=application.application_id) if application is not None
+            else EventResolutionRef(lineage_uuid=event.lineage_uuid))
+    elif isinstance(event, TakeDamageEvent):
+        # A legacy object result can reduce without a damage-animation owner.
+        # Projection diagnoses missing proof if it admits a creature request.
+        result = (legacy_damage_reference(event.uuid, event.lineage_uuid,
+            event.parent_lineage, is_request=True) if event.parent_lineage is None else None)
+    elif parent is not None:
+        result = _recorded_resolution(parent, by_lineage, resolved, pending)
+    pending.remove(event.lineage_uuid)
+    resolved[event.lineage_uuid] = result
+    return result
+
+
 def upgrade_recorded_resolutions(events: tuple[Event, ...]) -> tuple[Event, ...]:
     """Admit old native relations only when retained resolution evidence proves them.
 
@@ -197,46 +247,12 @@ def upgrade_recorded_resolutions(events: tuple[Event, ...]) -> tuple[Event, ...]
     by_lineage = {event.lineage_uuid: event for event in events}
     resolved: dict[UUID, ResolutionRef | None] = {}
     pending: set[UUID] = set()
-
-    def reference(event: Event) -> ResolutionRef | None:
-        if event.lineage_uuid in resolved:
-            return resolved[event.lineage_uuid]
-        if event.lineage_uuid in pending:
-            raise ValueError("Cyclic legacy event ancestry")
-        if "resolution_ref" not in event._recorded_omissions:
-            return event.resolution_ref
-        pending.add(event.lineage_uuid)
-        parent = by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
-        result: ResolutionRef | None = None
-        if isinstance(event, ActionEvent):
-            application = event.application
-            if application is not None and "application" in event._recorded_omissions:
-                owner = parent
-                while isinstance(owner, AreaReachEvent):
-                    owner = by_lineage.get(owner.parent_lineage) if owner.parent_lineage is not None else None
-                if not isinstance(owner, ActionEvent):
-                    raise ValueError(f"Legacy application {event.uuid} has no recorded action owner")
-                application = application.model_copy(update={"lineage_uuid": owner.lineage_uuid})
-            result = (ApplicationResolutionRef(lineage_uuid=application.lineage_uuid,
-                application_id=application.application_id) if application is not None
-                else EventResolutionRef(lineage_uuid=event.lineage_uuid))
-        elif isinstance(event, TakeDamageEvent):
-            # A legacy object result can reduce without a damage-animation owner.
-            # Projection diagnoses missing proof if it admits a creature request.
-            result = (legacy_damage_reference(event.uuid, event.lineage_uuid,
-                event.parent_lineage, is_request=True) if event.parent_lineage is None else None)
-        elif parent is not None:
-            result = reference(parent)
-        pending.remove(event.lineage_uuid)
-        resolved[event.lineage_uuid] = result
-        return result
-
     result = []
     for event in events:
         if "resolution_ref" not in event._recorded_omissions:
             result.append(event)
             continue
-        owner = reference(event)
+        owner = _recorded_resolution(event, by_lineage, resolved, pending)
         update: dict[str, Any] = {"resolution_ref": owner}
         if isinstance(event, ActionEvent) and event.application is not None and isinstance(owner, ApplicationResolutionRef):
             update["application"] = event.application.model_copy(update={"lineage_uuid": owner.lineage_uuid})

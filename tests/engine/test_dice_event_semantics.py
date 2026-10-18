@@ -7,6 +7,7 @@ import random
 
 import pytest
 
+from dnd.core.values import ValueRead, read_value, Channel, Kind, add_modifier, parts
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import (
@@ -47,10 +48,15 @@ from dnd.core.modifiers import (
     AdvantageModifier,
     AdvantageStatus,
 )
-from dnd.core.values import AutoHitStatus, BaseValue, CriticalStatus, ModifiableValue
+from dnd.core.values import AutoHitStatus, ModifiableValue, CriticalStatus
 from dnd.entity import Entity, EntityConfig, determine_attack_outcome
 from dnd.spells.spell_utils import fire_heal_roll_result
 from tests.engine.support import create_test_entity
+
+
+def reading(value, target_uuid=None):
+    """The value read by its owner against an optional target."""
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
 
 
 @contextmanager
@@ -79,7 +85,7 @@ def reset_dice_state() -> None:
     reset_map()
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     Dice._registry.clear()
     DiceRoll._registry.clear()
     Entity._entity_registry.clear()
@@ -91,11 +97,10 @@ def make_bonus(
     base_value: int = 0,
 ) -> ModifiableValue:
     """Create a ModifiableValue bonus for deterministic dice tests."""
-    return ModifiableValue.create(
+    return ModifiableValue(
         source_entity_uuid=source_uuid,
-        target_entity_uuid=target_uuid,
-        value_name="Dice Bonus",
-        base_value=base_value,
+        name="Dice Bonus",
+        base=base_value,
     )
 
 
@@ -133,7 +138,7 @@ def make_damage_packet(
         target_entity_uuid=target_uuid,
         damage_dice=6,
         dice_numbers=1,
-        damage_bonus=make_bonus(source_uuid, target_uuid),
+        damage_bonus=parts(make_bonus(source_uuid, target_uuid)),
         damage_type=damage_type,
     )
 
@@ -236,7 +241,7 @@ def test_eb_03_001_d20_advantage_and_disadvantage_select_rolls() -> None:
         normal_roll = Dice(
             count=1,
             value=20,
-            bonus=normal_bonus,
+            bonus=reading(normal_bonus, target_uuid),
             roll_type=RollType.ATTACK,
         ).roll
     assert normal_roll.results == [12]
@@ -245,19 +250,17 @@ def test_eb_03_001_d20_advantage_and_disadvantage_select_rolls() -> None:
     assert normal_roll.advantage_status == AdvantageStatus.NONE
 
     advantage_bonus = make_bonus(source_uuid, target_uuid, base_value=3)
-    advantage_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(advantage_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=target_uuid,
             name="High Ground",
             value=AdvantageStatus.ADVANTAGE,
-        )
-    )
+        ))
     with fixed_randint(4, 17):
         advantage_roll = Dice(
             count=1,
             value=20,
-            bonus=advantage_bonus,
+            bonus=reading(advantage_bonus, target_uuid),
             roll_type=RollType.ATTACK,
         ).roll
     assert advantage_roll.results == [4, 17]
@@ -265,19 +268,17 @@ def test_eb_03_001_d20_advantage_and_disadvantage_select_rolls() -> None:
     assert advantage_roll.advantage_status == AdvantageStatus.ADVANTAGE
 
     disadvantage_bonus = make_bonus(source_uuid, target_uuid, base_value=3)
-    disadvantage_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
+    add_modifier(disadvantage_bonus, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             source_entity_uuid=source_uuid,
             target_entity_uuid=target_uuid,
             name="Obscured",
             value=AdvantageStatus.DISADVANTAGE,
-        )
-    )
+        ))
     with fixed_randint(4, 17):
         disadvantage_roll = Dice(
             count=1,
             value=20,
-            bonus=disadvantage_bonus,
+            bonus=reading(disadvantage_bonus, target_uuid),
             roll_type=RollType.ATTACK,
         ).roll
     assert disadvantage_roll.results == [4, 17]
@@ -296,7 +297,7 @@ def test_eb_03_002_critical_damage_doubles_dice_and_adds_bonus_once() -> None:
         roll = Dice(
             count=2,
             value=6,
-            bonus=damage_bonus,
+            bonus=reading(damage_bonus, target_uuid),
             roll_type=RollType.DAMAGE,
             attack_outcome=AttackOutcome.CRIT,
             crit_extra_dice=1,
@@ -356,7 +357,7 @@ def test_eb_03_003_d20_result_event_handlers_replace_effective_roll() -> None:
         target_entity_uuid=target_uuid,
         roll_type=RollType.CHECK,
         original_roll=original_roll,
-        bonus=bonus,
+        bonus=reading(bonus, target_uuid),
         phase=EventPhase.DECLARATION,
     )
     event = event.phase_to(EventPhase.EFFECT)
@@ -426,7 +427,7 @@ def test_eb_03_005_dice_and_rolls_are_registered_by_uuid() -> None:
     bonus = make_bonus(source_uuid, base_value=0)
 
     with fixed_randint(9):
-        dice = Dice(count=1, value=20, bonus=bonus, roll_type=RollType.CHECK)
+        dice = Dice(count=1, value=20, bonus=reading(bonus), roll_type=RollType.CHECK)
         roll = dice.roll
 
     assert Dice.get(dice.uuid) is dice
@@ -443,7 +444,7 @@ def test_eb_03_006_dice_roll_is_cached_and_event_triggers_are_exact() -> None:
     bonus = make_bonus(source_uuid, target_uuid, base_value=0)
 
     with fixed_randint(9):
-        dice = Dice(count=1, value=20, bonus=bonus, roll_type=RollType.CHECK)
+        dice = Dice(count=1, value=20, bonus=reading(bonus, target_uuid), roll_type=RollType.CHECK)
         first_roll = dice.roll
         second_roll = dice.roll
 
@@ -496,7 +497,7 @@ def test_eb_03_006_dice_roll_is_cached_and_event_triggers_are_exact() -> None:
         source_entity_uuid=source_uuid,
         target_entity_uuid=target_uuid,
         original_roll=attack_roll,
-        bonus=bonus,
+        bonus=reading(bonus, target_uuid),
         phase=EventPhase.DECLARATION,
     )
     attack_event.phase_to(EventPhase.EFFECT)
@@ -566,7 +567,7 @@ def test_eb_03_008_entity_roll_d20_uses_specific_result_events() -> None:
 
     with fixed_randint(11):
         attack_roll, attack_event = actor.roll_d20_event(
-            bonus,
+            reading(bonus, target.uuid),
             RollType.ATTACK,
             weapon_slot=WeaponSlot.MELEE_MAIN,
         )
@@ -578,7 +579,7 @@ def test_eb_03_008_entity_roll_d20_uses_specific_result_events() -> None:
 
     with fixed_randint(12):
         save_roll, save_event = actor.roll_d20_event(
-            bonus,
+            reading(bonus, target.uuid),
             RollType.SAVE,
             ability_name="dexterity",
         )
@@ -589,7 +590,7 @@ def test_eb_03_008_entity_roll_d20_uses_specific_result_events() -> None:
 
     with fixed_randint(13):
         check_roll, check_event = actor.roll_d20_event(
-            bonus,
+            reading(bonus, target.uuid),
             RollType.CHECK,
             skill_name="athletics",
         )
@@ -600,7 +601,7 @@ def test_eb_03_008_entity_roll_d20_uses_specific_result_events() -> None:
 
     with fixed_randint(14):
         neutral_save_roll, neutral_save_event = actor.roll_d20_event(
-            bonus,
+            reading(bonus, target.uuid),
             RollType.SAVE,
         )
     assert isinstance(neutral_save_event, SavingThrowD20RollResultEvent)
@@ -640,7 +641,7 @@ def test_eb_03_008_entity_roll_d20_uses_specific_result_events() -> None:
 
     with fixed_randint(2):
         completed_roll = actor.roll_d20(
-            bonus,
+            reading(bonus, target.uuid),
             RollType.ATTACK,
             weapon_slot=WeaponSlot.MELEE_MAIN,
         )
@@ -774,7 +775,7 @@ def test_eb_03_019_d20_replacements_chain_after_simple_exact_handlers() -> None:
         target_entity_uuid=target_uuid,
         weapon_slot=WeaponSlot.MELEE_MAIN,
         original_roll=original_roll,
-        bonus=bonus,
+        bonus=reading(bonus, target_uuid),
         phase=EventPhase.DECLARATION,
     )
     effect_event = event.phase_to(EventPhase.EFFECT)
@@ -882,7 +883,7 @@ def test_eb_03_010_heal_roll_result_handlers_replace_final_roll() -> None:
         name="Engine Book Healing",
         healing_dice=8,
         dice_numbers=2,
-        healing_bonus=healing_bonus,
+        healing_bonus=parts(healing_bonus),
     )
     parent_event = Event(
         source_entity_uuid=caster_uuid,
@@ -968,7 +969,7 @@ def test_eb_03_011_lucky_processor_spends_and_replaces_d20_deterministically() -
 
     with fixed_randint(5, 18):
         improved_roll = actor.roll_d20(
-            bonus,
+            reading(bonus, target.uuid),
             RollType.CHECK,
             skill_name="athletics",
         )
@@ -988,7 +989,7 @@ def test_eb_03_011_lucky_processor_spends_and_replaces_d20_deterministically() -
 
     with fixed_randint(4, 1):
         worse_reroll = actor.roll_d20(
-            bonus,
+            reading(bonus, target.uuid),
             RollType.CHECK,
             skill_name="athletics",
         )
@@ -1006,7 +1007,7 @@ def test_eb_03_011_lucky_processor_spends_and_replaces_d20_deterministically() -
 
     with fixed_randint(10):
         good_roll = actor.roll_d20(
-            bonus,
+            reading(bonus, target.uuid),
             RollType.CHECK,
             skill_name="athletics",
         )
@@ -1279,7 +1280,7 @@ def test_eb_03_015_heal_roll_result_events_complete_after_handlers() -> None:
         name="Engine Book Healing Completion",
         healing_dice=4,
         dice_numbers=1,
-        healing_bonus=healing_bonus,
+        healing_bonus=parts(healing_bonus),
     )
     parent_event = Event(
         source_entity_uuid=caster_uuid,

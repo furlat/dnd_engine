@@ -15,10 +15,10 @@ from dnd.core.residue_geometry import ellipse_tiles, local_ellipse, place_ellips
 from dnd.entity import Entity
 from dnd.residues import (
     BLOOD_RESIDUE, BONE_RESIDUE, CORROSIVE_RESIDUE, DREAD_RESIDUE,
-    ResidueProfile, deposit_residue,
+    ResidueProfile, deposit_residues,
 )
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult, ResidueEllipse
-from dnd.types.world import OccupancyLayer
+from dnd.types.world import OccupancyLayer, WorldEdgeChannel
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +73,7 @@ def receiving_regions(position: tuple[int, int], shapes: tuple[ResidueEllipse, .
                 admitted[target] = all(
                     (tile := grid.get_tile(*cell)) is not None and tile.height == origin.height
                     for cell in supercover_line(position, target)
-                ) and grid.raycast_clear(position, target, "propagation")
+                ) and grid.raycast_clear(position, target, WorldEdgeChannel.PROPAGATION)
             if admitted[target]:
                 positions.append(target)
         if positions:
@@ -128,12 +128,10 @@ class BodyResponseProcessor:
             for region in regions:
                 for destination in region.positions:
                     footprints.setdefault(destination, []).append(local_ellipse(region.ellipse, destination))
-            deposited: set[tuple[int, int]] = set()
-            for destination, ellipses in footprints.items():
-                tile = get_map().get_tile(*destination)
-                assert tile is not None
-                if deposit_residue(tile, self.profile.residue, parent_event=event, ellipses=tuple(ellipses)) is not None:
-                    deposited.add(destination)
+            # One splatter is one deposit of its material: one field update, one fact (plan §5.9).
+            deposited = set(deposit_residues(self.profile.residue,
+                {destination: tuple(ellipses) for destination, ellipses in footprints.items()},
+                source_entity_uuid=owner.uuid, parent_event=event))
             regions = tuple(BodyReleaseRegion(ellipse=region.ellipse, elevation_steps=region.elevation_steps,
                 positions=tuple(cell for cell in region.positions if cell in deposited))
                 for region in regions if any(cell in deposited for cell in region.positions))

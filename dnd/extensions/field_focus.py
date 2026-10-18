@@ -7,6 +7,7 @@ from pydantic import Field
 
 from dnd.actions import entity_action_economy_cost_applier, entity_action_economy_cost_evaluator
 from dnd.blocks.base_item import UsableItem
+from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory
@@ -30,6 +31,8 @@ from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import Event, EventPhase
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity
+from dnd.types.discovery import ActorScan
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 class FieldFocus(BaseCondition):
@@ -71,7 +74,7 @@ class FieldFocus(BaseCondition):
             value=self.movement_bonus,
         )
         for speed in target.action_economy.speed_values:
-            movement_uuid = speed.self_static.add_value_modifier(movement_modifier)
+            movement_uuid = add_modifier(speed, Channel.SELF_STATIC, Kind.VALUE, movement_modifier)
             owned_modifiers.append((speed.uuid, movement_uuid))
 
         armor_modifier = NumericalModifier.create(
@@ -80,7 +83,7 @@ class FieldFocus(BaseCondition):
             name="Field Focus Armor",
             value=self.armor_bonus,
         )
-        armor_uuid = target.equipment.ac_bonus.self_static.add_value_modifier(armor_modifier)
+        armor_uuid = add_modifier(target.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, armor_modifier)
         owned_modifiers.append((target.equipment.ac_bonus.uuid, armor_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -126,6 +129,7 @@ class FieldFocus(BaseCondition):
 )
 class DeployFieldFocus(BaseAction):
     """Bonus action that applies Field Focus to the acting entity."""
+    creates = (FieldFocus,)
 
     name: str = Field(default="Deploy Field Focus", description="Action discovery label.")
     description: str = Field(default="Deploy a field kit for speed and defense.", description="Action summary.")
@@ -143,24 +147,12 @@ class DeployFieldFocus(BaseAction):
     )
     charge_cost: int = Field(default=1, description="Charges consumed when provided by an item.")
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        """Validate that the actor can deploy Field Focus.
-
-        Args:
-            declaration_event: Action declaration event.
-
-        Returns:
-            Execution event when valid, or a canceled declaration event.
-        """
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        """The actor does not already have Field Focus."""
         actor = Entity.get(self.source_entity_uuid)
-        if actor is None:
-            return declaration_event.cancel(status_message="Field Focus actor not found")
-        if "Field Focus" in actor.active_conditions:
-            return declaration_event.cancel(status_message="Field Focus is already active")
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message=f"{actor.name} can deploy Field Focus",
-        )
+        if actor is None or "Field Focus" in actor.active_conditions:
+            return "Field Focus is already active"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply Field Focus to the acting entity.

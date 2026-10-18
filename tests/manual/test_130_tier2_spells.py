@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 
 from dnd.actions import SpellEvent
-from dnd.core.aoe import Cone, Sphere
+from dnd.core.aoe import Cone, Sphere, objective_footprint
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.life_types import LifeState
@@ -39,9 +39,9 @@ def test_cone_of_cold_shape() -> None:
 
     assert isinstance(spell.aoe_shape, Cone)
     assert spell.aoe_shape.length_feet == 60
-    spell.aoe_shape.compute_objective(caster.position)
-    assert (8, 7) in spell.aoe_shape.affected_positions
-    assert (2, 12) not in spell.aoe_shape.affected_positions
+    area = objective_footprint(spell.aoe_shape, (14, 7), caster.position)
+    assert (8, 7) in area
+    assert (2, 12) not in area
 
 
 def test_cone_of_cold_damage_and_save() -> None:
@@ -136,9 +136,9 @@ def test_circle_of_death_radius() -> None:
 
     assert isinstance(spell.aoe_shape, Sphere)
     assert spell.aoe_shape.radius_feet == 60
-    spell.aoe_shape.compute_objective(caster.position)
-    assert (27, 15) in spell.aoe_shape.affected_positions
-    assert (28, 15) not in spell.aoe_shape.affected_positions
+    area = objective_footprint(spell.aoe_shape, (15, 15), caster.position)
+    assert (27, 15) in area
+    assert (28, 15) not in area
 
 
 @pytest.mark.parametrize(

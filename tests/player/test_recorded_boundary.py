@@ -33,14 +33,17 @@ def test_after_values_wait_for_all_disclosed_occurrences(native_order, expected)
     projection = ProjectionState(
         world=PresentationTarget(generation=generation, observer_uuid=observer), actors={},
         remembered=PlayerState(generation=generation, observer_uuid=observer, world=world),
-        public_cursors={native: local for local, native in enumerate(native_order)})
+        public_cursors={native: local for local, native in enumerate(native_order)}, next_occurrence=len(native_order))
     revisions = []
     for native_cursor in (0, 2, 3, 5, 8, 9):
+        before = projection.remembered.hud_snapshot
         hud, logs = project_after_values(projection, PlayerHUDSnapshot(
             generation=generation, observer_uuid=observer, revision=native_cursor,
             initiative=(), sheets=()), ())
-        assert hud is not None and logs == ()
-        revisions.append(hud.revision)
+        assert logs == ()
+        # An unchanged display is not sent again.
+        assert (hud is None) == (before is not None and before.revision == projection.remembered.hud_snapshot.revision)
+        revisions.append(projection.remembered.hud_snapshot.revision)
     assert tuple(revisions) == expected
 
 
@@ -75,7 +78,10 @@ def test_condition_remaining_duration_is_recorded_under_turn_and_private_to_owne
         duration=Duration(duration=3, duration_type=DurationType.ROUNDS))
     applied = owner.add_condition(condition, check_save_throw=False)
     assert applied is not None
-    applied.identified_entity_observer_uuids[str(owner.uuid)] = {str(witness.uuid)}
+    # Grant the witness identity at completion; grant mappings are shared frozen values, so the
+    # version gets a new mapping rather than an edited one.
+    applied.identified_entity_observer_uuids = {**applied.identified_entity_observer_uuids,
+        str(owner.uuid): frozenset({str(witness.uuid)})}
     roots = (applied, owner.on_turn_start(round_number=1))
     assert condition.duration.duration == 2
     for actor in (owner, witness):
@@ -94,9 +100,11 @@ def test_condition_remaining_duration_is_recorded_under_turn_and_private_to_owne
         if actor is owner:
             assert member.state.duration.remaining_rounds == 2
             changed = [node for node in delivered[-1].events if isinstance(node.fact, ConditionChangeFact)]
-            assert len(changed) == 1 and changed[0].parent_lineage == roots[-1].lineage_uuid
+            root = delivered[-1].root
+            assert root is not None
+            assert len(changed) == 1 and changed[0].parent_lineage == delivered[-1].events[root].lineage
             application = next(node for node in delivered[0].events if isinstance(node.fact, ConditionChangeFact))
-            origin = next(row.source_index for row in delivered[0].version_rows if row.event_uuid == application.uuid)
+            origin = application.occurrence
             assert member.state.applied_source_event_cursor == origin + 1
         else:
             assert member.state.duration is None

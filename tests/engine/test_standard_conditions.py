@@ -25,7 +25,7 @@ from dnd.core.modifiers import (
     CriticalStatus,
     ResistanceStatus,
 )
-from dnd.core.values import BaseValue
+from dnd.core.values import ModifiableValue, ValueRead, outgoing_of, read_value, parts
 from dnd.types.senses import SenseMode, SensesType
 from dnd.entity import Entity, EntityConfig
 from dnd.conditions import (
@@ -48,6 +48,17 @@ from dnd.conditions import (
     Unconscious,
 )
 from tests.engine.support import create_test_entity, get_max_hp, reset_combat_state
+
+
+def situated(value, target_uuid):
+    """The value read against a target."""
+    return read_value(parts(value), ValueRead(value.source_entity_uuid, target_uuid))
+
+
+def outgoing_read(value, reader_uuid):
+    """What a value's outgoing rows give a reader: an empty reader value read against the owner."""
+    probe = ModifiableValue(source_entity_uuid=reader_uuid, use_register=False)
+    return read_value(parts(probe), ValueRead(reader_uuid, value.source_entity_uuid, opponent=outgoing_of(parts(value), None)))
 
 
 @contextmanager
@@ -77,7 +88,7 @@ def reset_condition_state() -> None:
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
-    BaseValue._registry.clear()
+    ModifiableValue._registry.clear()
     get_map().create_rectangle(0, 0, 20, 20)
 
 
@@ -132,8 +143,7 @@ def test_eb_08_001_blinded_and_deafened_apply_sensory_failures() -> None:
     apply_to_target(Blinded, source, target)
 
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.DISADVANTAGE
-    target.equipment.ac_bonus.set_target_entity(attacker.uuid)
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, attacker.uuid).advantage == AdvantageStatus.ADVANTAGE
     assert target.skill_set.perception.skill_bonus.auto_hit == AutoHitStatus.AUTOMISS
     assert target.skill_set.investigation.skill_bonus.auto_hit == AutoHitStatus.AUTOMISS
     assert target.skill_set.stealth.skill_bonus.auto_hit == AutoHitStatus.AUTOMISS
@@ -157,11 +167,9 @@ def test_eb_08_002_charmed_blocks_attacks_and_helps_charmer_social_checks() -> N
 
     apply_to_target(Charmed, charmer, target)
 
-    target.equipment.attack_bonus.set_target_entity(charmer.uuid)
-    assert target.equipment.attack_bonus.auto_hit == AutoHitStatus.AUTOMISS
+    assert situated(target.equipment.attack_bonus, charmer.uuid).auto_hit == AutoHitStatus.AUTOMISS
 
-    target.equipment.attack_bonus.set_target_entity(bystander.uuid)
-    assert target.equipment.attack_bonus.auto_hit == AutoHitStatus.NONE
+    assert situated(target.equipment.attack_bonus, bystander.uuid).auto_hit == AutoHitStatus.NONE
 
     persuasion_against_target = charmer.skill_bonus(target.uuid, "persuasion")
     assert persuasion_against_target.advantage == AdvantageStatus.ADVANTAGE
@@ -214,7 +222,7 @@ def test_eb_08_004_incapacitated_and_restrained_limit_actions() -> None:
         target.saving_throws.get_saving_throw("dexterity").bonus.advantage
         == AdvantageStatus.DISADVANTAGE
     )
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, source.uuid).advantage == AdvantageStatus.ADVANTAGE
 
 
 def test_eb_08_005_prone_uses_distance_context_for_incoming_attacks() -> None:
@@ -229,11 +237,9 @@ def test_eb_08_005_prone_uses_distance_context_for_incoming_attacks() -> None:
 
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.DISADVANTAGE
 
-    target.equipment.ac_bonus.set_target_entity(adjacent_attacker.uuid)
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, adjacent_attacker.uuid).advantage == AdvantageStatus.ADVANTAGE
 
-    target.equipment.ac_bonus.set_target_entity(distant_attacker.uuid)
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.DISADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, distant_attacker.uuid).advantage == AdvantageStatus.DISADVANTAGE
 
 
 def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
@@ -257,12 +263,10 @@ def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
         target.saving_throws.get_saving_throw("dexterity").bonus.auto_hit
         == AutoHitStatus.AUTOMISS
     )
-    target.equipment.ac_bonus.set_target_entity(adjacent_attacker.uuid)
-    assert target.equipment.ac_bonus.outgoing_critical == CriticalStatus.AUTOCRIT
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
-    target.equipment.ac_bonus.set_target_entity(distant_attacker.uuid)
-    assert target.equipment.ac_bonus.outgoing_critical == CriticalStatus.NONE
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, adjacent_attacker.uuid).critical == CriticalStatus.AUTOCRIT
+    assert outgoing_read(target.equipment.ac_bonus, adjacent_attacker.uuid).advantage == AdvantageStatus.ADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, distant_attacker.uuid).critical == CriticalStatus.NONE
+    assert outgoing_read(target.equipment.ac_bonus, distant_attacker.uuid).advantage == AdvantageStatus.ADVANTAGE
 
     target.remove_condition("Paralyzed")
     assert "Incapacitated" not in target.active_conditions
@@ -285,7 +289,7 @@ def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
         target.saving_throws.get_saving_throw("dexterity").bonus.auto_hit
         == AutoHitStatus.AUTOMISS
     )
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, distant_attacker.uuid).advantage == AdvantageStatus.ADVANTAGE
 
     target.remove_condition("Stunned")
 
@@ -305,7 +309,7 @@ def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
         target.saving_throws.get_saving_throw("dexterity").bonus.auto_hit
         == AutoHitStatus.NONE
     )
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
+    assert outgoing_read(target.equipment.ac_bonus, distant_attacker.uuid).advantage == AdvantageStatus.NONE
 
     unconscious = apply_to_target(Unconscious, source, target)
     assert unconscious.sub_conditions == []
@@ -324,12 +328,10 @@ def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
         target.saving_throws.get_saving_throw("dexterity").bonus.auto_hit
         == AutoHitStatus.AUTOMISS
     )
-    target.equipment.ac_bonus.set_target_entity(adjacent_attacker.uuid)
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
-    assert target.equipment.ac_bonus.outgoing_critical == CriticalStatus.AUTOCRIT
-    target.equipment.ac_bonus.set_target_entity(distant_attacker.uuid)
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
-    assert target.equipment.ac_bonus.outgoing_critical == CriticalStatus.NONE
+    assert outgoing_read(target.equipment.ac_bonus, adjacent_attacker.uuid).advantage == AdvantageStatus.ADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, adjacent_attacker.uuid).critical == CriticalStatus.AUTOCRIT
+    assert outgoing_read(target.equipment.ac_bonus, distant_attacker.uuid).advantage == AdvantageStatus.NONE
+    assert outgoing_read(target.equipment.ac_bonus, distant_attacker.uuid).critical == CriticalStatus.NONE
 
     target.remove_condition("Unconscious")
 
@@ -350,8 +352,8 @@ def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
         target.saving_throws.get_saving_throw("dexterity").bonus.auto_hit
         == AutoHitStatus.NONE
     )
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
-    assert target.equipment.ac_bonus.outgoing_critical == CriticalStatus.NONE
+    assert outgoing_read(target.equipment.ac_bonus, distant_attacker.uuid).advantage == AdvantageStatus.NONE
+    assert outgoing_read(target.equipment.ac_bonus, distant_attacker.uuid).critical == CriticalStatus.NONE
 
 
 def test_eb_08_007_invisible_sets_perceivability_and_unseen_combat_modifiers() -> None:
@@ -364,17 +366,15 @@ def test_eb_08_007_invisible_sets_perceivability_and_unseen_combat_modifiers() -
     apply_to_target(Invisible, source, target)
 
     assert target.is_invisible is True
-    target.equipment.attack_bonus.set_target_entity(attacker.uuid)
-    assert target.equipment.attack_bonus.advantage == AdvantageStatus.ADVANTAGE
-    target.equipment.ac_bonus.set_target_entity(attacker.uuid)
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.DISADVANTAGE
+    assert situated(target.equipment.attack_bonus, attacker.uuid).advantage == AdvantageStatus.ADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, attacker.uuid).advantage == AdvantageStatus.DISADVANTAGE
 
     attacker.senses.sense_modes = [
         SenseMode(sense_type=SensesType.SEE_INVISIBLE, range_feet=20)
     ]
     attacker.update_entity_senses()
-    assert target.equipment.attack_bonus.advantage == AdvantageStatus.NONE
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
+    assert situated(target.equipment.attack_bonus, attacker.uuid).advantage == AdvantageStatus.NONE
+    assert outgoing_read(target.equipment.ac_bonus, attacker.uuid).advantage == AdvantageStatus.NONE
 
     target.remove_condition("Invisible")
     assert target.is_invisible is False
@@ -534,8 +534,6 @@ def test_eb_08_012_standard_condition_removal_cleans_owned_state() -> None:
             assert "Incapacitated" not in target.active_conditions
             assert target.action_economy.action_permission.normalized_score == 0
 
-        target.equipment.attack_bonus.set_target_entity(source.uuid)
-        target.equipment.ac_bonus.set_target_entity(adjacent_attacker.uuid)
         _ = source.skill_bonus(target.uuid, "persuasion")
 
         target.remove_condition(condition.name)
@@ -560,13 +558,11 @@ def test_eb_08_012_standard_condition_removal_cleans_owned_state() -> None:
         assert target.action_economy.action_permission.normalized_score == 1
         assert target.senses.visual_access.normalized_score == 1
 
-        target.equipment.attack_bonus.set_target_entity(source.uuid)
-        assert target.equipment.attack_bonus.advantage == AdvantageStatus.NONE
-        assert target.equipment.attack_bonus.auto_hit == AutoHitStatus.NONE
+        assert situated(target.equipment.attack_bonus, source.uuid).advantage == AdvantageStatus.NONE
+        assert situated(target.equipment.attack_bonus, source.uuid).auto_hit == AutoHitStatus.NONE
 
-        target.equipment.ac_bonus.set_target_entity(adjacent_attacker.uuid)
-        assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
-        assert target.equipment.ac_bonus.outgoing_critical == CriticalStatus.NONE
+        assert outgoing_read(target.equipment.ac_bonus, adjacent_attacker.uuid).advantage == AdvantageStatus.NONE
+        assert outgoing_read(target.equipment.ac_bonus, adjacent_attacker.uuid).critical == CriticalStatus.NONE
 
         skill_names: list[SkillName] = [
             "athletics",
@@ -617,10 +613,8 @@ def test_eb_08_013_greater_invisibility_uses_stealth_checks_instead_of_reveal() 
     assert target.is_invisible is True
     assert target.get_event_handler_by_name("Greater Invisibility: Stealth Check") is not None
 
-    target.equipment.attack_bonus.set_target_entity(attacker.uuid)
-    assert target.equipment.attack_bonus.advantage == AdvantageStatus.ADVANTAGE
-    target.equipment.ac_bonus.set_target_entity(attacker.uuid)
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.DISADVANTAGE
+    assert situated(target.equipment.attack_bonus, attacker.uuid).advantage == AdvantageStatus.ADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, attacker.uuid).advantage == AdvantageStatus.DISADVANTAGE
 
     ActionEvent(
         name="Dash",
@@ -706,10 +700,9 @@ def test_eb_08_014_petrified_composes_severe_control_and_all_damage_resistance()
         target.saving_throws.get_saving_throw("dexterity").bonus.auto_hit
         == AutoHitStatus.AUTOMISS
     )
-    target.equipment.ac_bonus.set_target_entity(attacker.uuid)
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
+    assert outgoing_read(target.equipment.ac_bonus, attacker.uuid).advantage == AdvantageStatus.ADVANTAGE
     for damage_type in DamageType:
-        assert target.health.get_resistance(damage_type) == ResistanceStatus.RESISTANCE
+        assert target.health.get_resistance(damage_type) == (ResistanceStatus.IMMUNITY if damage_type is DamageType.POISON else ResistanceStatus.RESISTANCE)
 
     assert target.check_condition_immunity("Poisoned")
     poison_event = target.add_condition(
@@ -727,7 +720,7 @@ def test_eb_08_014_petrified_composes_severe_control_and_all_damage_resistance()
     assert target.action_economy.actions.normalized_score == 1
     assert target.action_economy.movement_remaining() == 30
     assert not target.check_condition_immunity("Poisoned")
-    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
+    assert outgoing_read(target.equipment.ac_bonus, attacker.uuid).advantage == AdvantageStatus.NONE
     for damage_type in DamageType:
         assert target.health.get_resistance(damage_type) == ResistanceStatus.NONE
 

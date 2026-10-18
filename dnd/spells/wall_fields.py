@@ -1,12 +1,14 @@
 """Permeable wall fields composed from geometry, area triggers and damage facts."""
 
-from typing import ClassVar, Literal
+from dnd.core.spell_damage import roll_spell_damage, finalize_spell_damage_roll
+from typing import ClassVar, Literal, Optional, Tuple
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
-from dnd.core.action_types import ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection
-from dnd.core.base_actions import BaseAction, Cost, TargetType
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection, selection_facet
+from dnd.core.base_actions import Cost, TargetType
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
@@ -15,16 +17,18 @@ from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import Damage, Event, EventHandler, EventPhase, EventQueue, EventType, SpatialEffectChangeEvent, SpatialEffectInteractionEvent, Range, RangeType, SpatialChangeEvent, Trigger
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry, WallPolyline, WallRing, WallSegment
 from dnd.core.wall_geometry import wall_path_contact, wall_shell_cells
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
+from dnd.spatial.ignition import resolve_interaction
 from dnd.types.abilities import AbilityName
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectChangeOperation, SpatialEffectInteractionIntensity, SpatialEffectInteractionOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
-from dnd.types.world import MovementMode, OccupancyLayer
+from dnd.types.world import MovementMode, OccupancyLayer, WorldEdgeChannel
 
 
 def wall_condition_ref(identity: str) -> ContentRef:
@@ -36,7 +40,7 @@ def wall_condition_ref(identity: str) -> ContentRef:
 class WallDamageSpec(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     dice_count: int = Field(ge=1)
-    die: Literal[6, 8]
+    die: Literal[6, 8, 10]
     damage_type: DamageType
     save_ability: AbilityName
     effect_id: str
@@ -55,7 +59,7 @@ def apply_wall_damage(zone: AreaCondition, entity: Entity, spec: WallDamageSpec,
     damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=entity.uuid,
         damage_dice=spec.die, dice_numbers=spec.dice_count,
         damage_bonus=caster.get_spell_damage_bonus(), damage_type=spec.damage_type)
-    roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+    roll = roll_spell_damage(damage, parent_event=parent_event, effect_origin=zone.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
     entity.receive_damage(roll.total // 2 if success else roll.total, spec.damage_type, caster.uuid,
         damage_rolls=[roll], damages=[damage], parent_event=parent_event.uuid, effect_id=spec.effect_id,
         independent_resolution=not formation, effect_origin=zone.effect_origin,
@@ -124,7 +128,7 @@ class WallFieldZone(AreaCondition):
                     event, self.geometry.base_height_steps)
             return None
         return EventHandler(name=f"{self.name} turn end", source_entity_uuid=self.source_entity_uuid,
-            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT)],
+            trigger_conditions=[Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EXECUTION)],
             event_processor=process)
 
 
@@ -142,7 +146,7 @@ class WallOfThornsZone(WallFieldZone):
 
 class WindWallZone(WallFieldZone):
 
-    crossing_channels: ClassVar[frozenset[str] | None] = frozenset({"movement"})
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset({WorldEdgeChannel.MOVEMENT})
     name: str = "Wind Wall"
     description: str = "Transparent wind keeps gas and small flying bodies back and deflects ordinary missiles."
     content_ref: ContentRef = wall_condition_ref("spatial_effect.spell.wind_wall")
@@ -151,13 +155,14 @@ class WindWallZone(WallFieldZone):
 
 
     def blocks_crossing_between(self, start, end, channel, requester_uuid, mode, terminal_provider_uuid=None) -> bool:
-        if channel != "movement" or wall_path_contact(self.geometry, start, end,
+        if channel is not WorldEdgeChannel.MOVEMENT or wall_path_contact(self.geometry, start, end,
                 {cell for cell in self.affected_positions if self.allows_contribution_at(cell)}) is None:
             return False
         actor = Entity.get(requester_uuid) if requester_uuid is not None else None
         return actor is not None and (actor.gaseous_body
             or mode is MovementMode.FLYING and actor.size in {Size.TINY, Size.SMALL})
 
+    # Read uncached when a ranged attack resolves, so it adds no spatial channel.
     def missile_deflection_contact(self, start, end, missile_size) -> tuple[float, float] | None:
         return wall_path_contact(self.geometry, start, end,
                 {cell for cell in self.affected_positions if self.allows_contribution_at(cell)}) if missile_size == "ordinary" else None
@@ -167,10 +172,7 @@ class WindWallZone(WallFieldZone):
             source_entity_uuid=self.source_entity_uuid, operation=SpatialEffectInteractionOperation.DISPERSE,
             positions=tuple(sorted(cell for cell in self.affected_positions if self.allows_contribution_at(cell))), intensity=SpatialEffectInteractionIntensity.STRONG,
             parent_event=parent_event.uuid, phase=EventPhase.DECLARATION, use_register=False))
-        for phase in (EventPhase.EXECUTION, EventPhase.EFFECT, EventPhase.COMPLETION):
-            if interaction.canceled:
-                break
-            interaction = interaction.phase_to(phase)
+        resolve_interaction(interaction)
 
     def _apply(self, execution_event: Event):
         modifiers, handlers, children, spatial_handlers, effect = super()._apply(execution_event)
@@ -196,14 +198,21 @@ class WindWallZone(WallFieldZone):
 
 
 def field_geometry(action: SpellAction, *, form: str, height: int, width: int) -> WallAssemblyPresentationGeometry | None:
-    if action.end_position is None:
+    return selection_field_geometry(action, action.current_selection(), form=form, height=height, width=width)
+
+
+def selection_field_geometry(action: SpellAction, selection: ActionSelection, *, form: str, height: int,
+                             width: int) -> WallAssemblyPresentationGeometry | None:
+    """The field wall one selection places: a ring at its point, or a segment or path through its vertices."""
+    if not selection.positions:
         return None
-    points = action.get_selected_position_path()
+    end_position = selection.positions[0]
+    points = action._selected_position_path(selection)
     if points is not None and any(a == b for a, b in zip(points, points[1:])):
         return None
     if form == "ring":
-        path = WallRing(center=action.end_position, radius_feet=10)
-        anchor = action.end_position
+        path = WallRing(center=end_position, radius_feet=10)
+        anchor = end_position
     elif points is not None and len(points) >= 2:
         path = WallPolyline(points=tuple(points)) if form == "path" else WallSegment(start=points[0], end=points[-1])
         anchor = points[0]
@@ -216,10 +225,16 @@ def field_geometry(action: SpellAction, *, form: str, height: int, width: int) -
 
 def wall_support_error(action: SpellAction, geometry: WallAssemblyPresentationGeometry | None,
                        *, subjective: bool) -> str | None:
+    return selection_wall_support_error(action, action.current_selection(), geometry, subjective=subjective)
+
+
+def selection_wall_support_error(action: SpellAction, selection: ActionSelection,
+                                 geometry: WallAssemblyPresentationGeometry | None, *, subjective: bool) -> str | None:
+    """Range, one-level support and unbroken propagation of the wall one selection places."""
     caster = Entity.get(action.source_entity_uuid)
-    if caster is None or geometry is None or action.end_position is None:
+    if caster is None or geometry is None or not selection.positions:
         return "Select complete wall placement"
-    error = action.target_position_error(action.end_position)
+    error = action.target_position_error(selection.positions[0])
     if error is not None:
         return error
     grid = get_map()
@@ -229,7 +244,7 @@ def wall_support_error(action: SpellAction, geometry: WallAssemblyPresentationGe
             return "Wall requires a supported footprint on one level"
         if grid.is_blocking_propagation(*position, observer_uuid=caster.uuid if subjective else None):
             return "Existing solid geometry obstructs the wall"
-    points = action.get_selected_position_path()
+    points = action._selected_position_path(selection)
     if not isinstance(geometry.path, WallRing) and points is not None:
         for first, second in zip(points, points[1:]):
             if not grid.can_reach_between(first, second, PhysicalAccess.PROJECTILE,
@@ -247,6 +262,7 @@ def wall_support_error(action: SpellAction, geometry: WallAssemblyPresentationGe
 
 
 class WallOfThorns(SpellAction):
+    creates = (*SpellAction.creates, WallOfThornsZone)
     name: str = "Wall of Thorns"
     description: str = "Create an opaque, permeable straight or circular wall of cutting thorns."
     spell_level: int = 6
@@ -262,7 +278,10 @@ class WallOfThorns(SpellAction):
         cost=1, evaluator=entity_action_economy_cost_evaluator)])
 
     def wall_geometry(self) -> WallAssemblyPresentationGeometry | None:
-        return field_geometry(self, form=self.wall_form, height=10, width=5)
+        return self._wall_geometry(self.current_selection())
+
+    def _wall_geometry(self, selection: ActionSelection) -> WallAssemblyPresentationGeometry | None:
+        return selection_field_geometry(self, selection, form=self.wall_form, height=10, width=5)
 
     def get_position_selection(self) -> PositionSelection:
         return (SinglePositionSelection() if self.wall_form == "ring" else PositionPathSelection(
@@ -272,17 +291,21 @@ class WallOfThorns(SpellAction):
         event = super()._create_declaration_event(parent_event, use_register)
         return event.with_updates(area_geometry=self.wall_geometry()) if isinstance(event, SpellEvent) else event
 
-    def selection_preview_error(self) -> str | None:
-        return self.position_selection_error() or self.position_placement_error(subjective=True)
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=form, label=form.title()),) for form in ("segment", "ring"))
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        return {**super()._selection_overrides(selection), "wall_form": selection_facet(selection, "form")}
 
     def get_selection_geometry(self):
         return self.wall_geometry()
 
-    def position_placement_error(self, *, subjective=False) -> str | None:
-        return wall_support_error(self, self.wall_geometry(), subjective=subjective)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        return self._placement_error(selection, subjective=scan.subjective)
 
-    def _validate(self, declaration_event: SpellEvent) -> SpellEvent | None:
-        return declaration_event.phase_to(EventPhase.EXECUTION)
+    def _placement_error(self, selection: ActionSelection, *, subjective: bool) -> str | None:
+        return selection_wall_support_error(self, selection, self._wall_geometry(selection), subjective=subjective)
 
     def _apply(self, execution_event: SpellEvent) -> SpellEvent | None:
         caster = Entity.get(self.source_entity_uuid)
@@ -308,18 +331,9 @@ class WallOfThorns(SpellAction):
             return effect
         return effect.cancel(status_message="Thorn wall creation was canceled")
 
-    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
-        return (ActionVariantFacet(key="form", value=self.wall_form, label=self.wall_form.title()),)
-
-    def get_discovery_variants(self, entity) -> list[BaseAction]:
-        return [slot.model_copy(update={"wall_form": form}) for slot in super().get_discovery_variants(entity)
-                for form in ("segment", "ring")]
-
-    def get_discovery_template_name(self) -> str:
-        return f"{super().get_discovery_template_name()}__wall_{self.wall_form}"
-
 
 class WindWall(SpellAction):
+    creates = (*SpellAction.creates, WindWallZone)
     name: str = "Wind Wall"
     description: str = "Create a continuous ground path of wind, up to fifty feet long."
     spell_level: int = 3
@@ -334,7 +348,10 @@ class WindWall(SpellAction):
         cost=1, evaluator=entity_action_economy_cost_evaluator)])
 
     def wall_geometry(self) -> WallAssemblyPresentationGeometry | None:
-        return field_geometry(self, form="path", height=15, width=1)
+        return self._wall_geometry(self.current_selection())
+
+    def _wall_geometry(self, selection: ActionSelection) -> WallAssemblyPresentationGeometry | None:
+        return selection_field_geometry(self, selection, form="path", height=15, width=1)
 
     def get_position_selection(self) -> PositionSelection:
         return PositionPathSelection(max_length_feet=50, max_segments=10,
@@ -344,17 +361,14 @@ class WindWall(SpellAction):
         event = super()._create_declaration_event(parent_event, use_register)
         return event.with_updates(area_geometry=self.wall_geometry()) if isinstance(event, SpellEvent) else event
 
-    def selection_preview_error(self) -> str | None:
-        return self.position_selection_error() or self.position_placement_error(subjective=True)
-
     def get_selection_geometry(self):
         return self.wall_geometry()
 
-    def position_placement_error(self, *, subjective=False) -> str | None:
-        return wall_support_error(self, self.wall_geometry(), subjective=subjective)
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> str | None:
+        return self._placement_error(selection, subjective=scan.subjective)
 
-    def _validate(self, declaration_event: SpellEvent) -> SpellEvent | None:
-        return declaration_event.phase_to(EventPhase.EXECUTION)
+    def _placement_error(self, selection: ActionSelection, *, subjective: bool) -> str | None:
+        return selection_wall_support_error(self, selection, self._wall_geometry(selection), subjective=subjective)
 
     def _apply(self, execution_event: SpellEvent) -> SpellEvent | None:
         caster = Entity.get(self.source_entity_uuid)
@@ -375,3 +389,36 @@ class WindWall(SpellAction):
             self.ensure_concentration(effect).add_linked_condition(zone.uuid, zone.uuid)
             return effect
         return effect.cancel(status_message="Wind wall creation was canceled")
+
+
+class BladeBarrierZone(WallFieldZone):
+    defer_formation: bool = False
+    _formation_contacts: list[tuple[UUID,Event]] = PrivateAttr(default=[])
+    def _apply_appearance_effect(self,entity,*,parent_event):
+        if self.defer_formation: self._formation_contacts.append((entity.uuid,parent_event))
+        else: super()._apply_appearance_effect(entity,parent_event=parent_event)
+    def release_formation(self):
+        self.defer_formation=False
+        contacts,self._formation_contacts=self._formation_contacts,[]
+        for identity,event in contacts:
+            target=Entity.get(identity)
+            if target is not None and self.applied:super()._apply_appearance_effect(target,parent_event=event)
+
+    name: str = "Blade Barrier"
+    description: str = "Permeable difficult terrain; 6d10 slashing on formation, entry or turn start, once per recipient turn."
+    content_ref: ContentRef = wall_condition_ref("spatial_effect.spell.blade_barrier")
+    adds_difficult_terrain: bool = True
+    duration: Duration = Field(default_factory=lambda: Duration(duration=60, duration_type=DurationType.ROUNDS))
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.APPEAR,
+        SpatialEffectTriggerKind.ENTER, SpatialEffectTriggerKind.TURN_START})
+    first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.APPEAR,
+        SpatialEffectTriggerKind.ENTER, SpatialEffectTriggerKind.TURN_START})
+
+    def _create_zone_turn_start_handler(self) -> EventHandler:
+        def process(event: Event, _source):
+            entity = Entity.get(event.source_entity_uuid)
+            if entity is not None and self.contact_damage is not None:
+                apply_wall_damage(self, entity, self.contact_damage, self.spell_dc, event, self.geometry.base_height_steps)
+            return None
+        return EventHandler(name="Blade Barrier start-turn contact", source_entity_uuid=self.source_entity_uuid,
+            trigger_conditions=[Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EXECUTION)], event_processor=process)

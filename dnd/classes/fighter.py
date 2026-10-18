@@ -14,7 +14,9 @@ Level 18: Champion - Survivor (DEFERRED)
 """
 
 from typing import Any, ClassVar, Dict
-from dnd.core.action_types import RestrictedActionKind
+from dnd.core.geometry import grid_distance_feet
+from dnd.core.action_types import ActionSelection, ActionVariantFacet, RestrictedActionKind, selection_facet
+from dnd.types.discovery import ActorScan, ScanRecord
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.class_features import IndomitableReroll
 from dnd.core.condition_types import ConditionCategory, DurationType
@@ -27,9 +29,19 @@ from dnd.core.events import (
     Trigger, EventHandler, DamageRollResultEvent, RangeType, SavingThrowEvent
 )
 from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
-from dnd.core.dice import DiceRoll, Dice, RollType, AttackOutcome
+from dnd.core.dice import DiceRoll, Dice, RollType, AttackOutcome, roll_die_face
 from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, ContextualNumericalModifier
-from dnd.core.values import ModifiableValue
+from dnd.core.values import (
+    ModifiableValue,
+    ValueRead,
+    has_static_advantage_row,
+    read_value,
+    reading_with_advantage_row,
+    Channel,
+    Kind,
+    add_modifier,
+    parts,
+)
 from dnd.blocks.equipment import Weapon, Shield
 from dnd.blocks.action_economy import RechargeType, ResourceCapacityPolicy
 from dnd.core.feature_grants import AttackMultiplicityGrant
@@ -44,7 +56,6 @@ from dnd.actions import (
 from pydantic import Field
 from typing import Optional, List, Tuple
 from uuid import UUID, uuid4
-import random
 
 
 def create_modified_dice_roll(original: DiceRoll, new_results: List[int]) -> DiceRoll:
@@ -113,7 +124,7 @@ class FightingStyleArchery(BaseCondition):
             name="Archery",
             value=2
         )
-        mod_uuid = target.equipment.ranged_attack_bonus.self_static.add_value_modifier(archery_mod)
+        mod_uuid = add_modifier(target.equipment.ranged_attack_bonus, Channel.SELF_STATIC, Kind.VALUE, archery_mod)
         outs.append((target.equipment.ranged_attack_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -194,7 +205,7 @@ class FightingStyleDefense(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             callable=defense_ac_check
         )
-        mod_uuid = target.equipment.ac_bonus.self_contextual.add_value_modifier(defense_mod)
+        mod_uuid = add_modifier(target.equipment.ac_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, defense_mod)
         outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -290,7 +301,7 @@ class FightingStyleDueling(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             callable=dueling_damage_check
         )
-        mod_uuid = target.equipment.melee_damage_bonus.self_contextual.add_value_modifier(dueling_mod)
+        mod_uuid = add_modifier(target.equipment.melee_damage_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, dueling_mod)
         outs.append((target.equipment.melee_damage_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -315,7 +326,7 @@ def great_weapon_fighting_processor(
         Modified damage-roll event when primary weapon dice were rerolled, or
         ``None`` when the event is not eligible.
     """
-    if event.source_entity_uuid != source_entity_uuid:
+    if event.source_entity_uuid != source_entity_uuid or event.weapon_slot is None:
         return None
 
     entity = Entity.get(source_entity_uuid)
@@ -355,7 +366,7 @@ def great_weapon_fighting_processor(
         rerolled_dice = []
         for r in results:
             if r <= 2:
-                new_result = random.randint(1, weapon.damage_dice)
+                new_result = roll_die_face(weapon.damage_dice)
                 new_results.append(new_result)
                 rerolled_dice.append(f"{r}→{new_result}")
             else:
@@ -458,7 +469,7 @@ def protection_processor(
     target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
     if not target:
         return None
-    distance = protector.senses.get_feet_distance(target.senses.position)
+    distance = grid_distance_feet(protector.position, target.position)
     if distance > 5:
         return None
 
@@ -475,24 +486,20 @@ def protection_processor(
 
     if not isinstance(event, AttackEvent) or not event.attack_bonus:
         return None
-    attack_bonus = event.attack_bonus
+    if has_static_advantage_row(event.attack_bonus, "Protection"):
+        return None
 
-    for modifier in attack_bonus.self_static.advantage_modifiers.values():
-        if modifier.name == "Protection":
-            return None
-
-    attack_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
-            name="Protection",
-            value=AdvantageStatus.DISADVANTAGE,
-            source_entity_uuid=source_entity_uuid,
-            target_entity_uuid=event.target_entity_uuid
-        )
-    )
+    protected = reading_with_advantage_row(event.attack_bonus, AdvantageModifier(
+        name="Protection",
+        value=AdvantageStatus.DISADVANTAGE,
+        source_entity_uuid=source_entity_uuid,
+        target_entity_uuid=event.target_entity_uuid
+    ))
 
     protector.action_economy.consume("reactions", 1)
 
     return event.with_updates(
+        attack_bonus=protected,
         status_message=(
             f"{protector.name} uses Protection to impose disadvantage"
         ),
@@ -674,7 +681,7 @@ class FightingStyleTwoWeaponFighting(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             callable=twf_off_hand_melee_ability_bonus
         )
-        mod_uuid = target.equipment.off_hand_melee_ability_bonus.self_contextual.add_value_modifier(melee_mod)
+        mod_uuid = add_modifier(target.equipment.off_hand_melee_ability_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, melee_mod)
         outs.append((target.equipment.off_hand_melee_ability_bonus.uuid, mod_uuid))
 
         ranged_mod = ContextualNumericalModifier(
@@ -683,7 +690,7 @@ class FightingStyleTwoWeaponFighting(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             callable=twf_off_hand_ranged_ability_bonus
         )
-        mod_uuid = target.equipment.off_hand_ranged_ability_bonus.self_contextual.add_value_modifier(ranged_mod)
+        mod_uuid = add_modifier(target.equipment.off_hand_ranged_ability_bonus, Channel.SELF_CONTEXTUAL, Kind.VALUE, ranged_mod)
         outs.append((target.equipment.off_hand_ranged_ability_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -751,18 +758,11 @@ class SecondWind(BaseAction):
             source_entity_name=source_name
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if entity is None:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        if entity.health.damage_taken == 0:
-            return declaration_event.cancel(status_message="Already at full health")
-
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Second Wind ready"
-        )
+        if entity is None or entity.health.damage_taken == 0:
+            return "Already at full health"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -772,11 +772,11 @@ class SecondWind(BaseAction):
         healing_dice = Dice(
             count=1,
             value=10,
-            bonus=ModifiableValue.create(
+            bonus=read_value(parts(ModifiableValue(
                 source_entity_uuid=self.source_entity_uuid,
-                base_value=self.fighter_level,
-                value_name="Fighter Level"
-            ),
+                base=self.fighter_level,
+                name="Fighter Level"
+            )), ValueRead(self.source_entity_uuid)),
             roll_type=RollType.CHECK
         )
         healing_roll = healing_dice.roll
@@ -812,6 +812,7 @@ class SecondWindFeature(BaseCondition):
         description: Short rules-facing summary of the Second Wind feature.
         fighter_level: Fighter level passed into the registered Second Wind action.
     """
+    creates = (SecondWind,)
     name: str = Field(
         default="Second Wind Feature",
         description="Feature condition name for Second Wind lookup and cleanup.",
@@ -913,7 +914,7 @@ class ActionSurging(BaseCondition):
             source_entity_uuid=self.target_entity_uuid,
             target_entity_uuid=self.target_entity_uuid
         )
-        mod_uuid = target_entity.action_economy.actions.self_static.add_value_modifier(modifier)
+        mod_uuid = add_modifier(target_entity.action_economy.actions, Channel.SELF_STATIC, Kind.VALUE, modifier)
         outs.append((target_entity.action_economy.actions.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -934,6 +935,7 @@ class ActionSurge(BaseAction):
         target_type: Action Surge always targets the acting fighter.
         costs: Action-surge resource cost rebuilt after model initialization.
     """
+    creates = (ActionSurging,)
     name: str = Field(default="Action Surge", description="Action name displayed for Action Surge.")
     description: str = Field(
         default="Take one additional action on your turn",
@@ -979,19 +981,11 @@ class ActionSurge(BaseAction):
             source_entity_name=source_name
         )
 
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        """Validate Action Surge can be used."""
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        if "ActionSurging" in entity.active_conditions:
-            return declaration_event.cancel(status_message="Already used Action Surge this turn")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        if entity is None or "ActionSurging" in entity.active_conditions:
+            return "Already used Action Surge this turn"
+        return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply Action Surge - grant extra action."""
@@ -1023,6 +1017,7 @@ class ActionSurgeFeature(BaseCondition):
         description: Short rules-facing summary of the Action Surge feature.
         num_uses: Maximum Action Surge resource uses granted by this feature.
     """
+    creates = (ActionSurge,)
     name: str = Field(
         default="Action Surge Feature",
         description="Feature condition name for Action Surge lookup and cleanup.",
@@ -1131,7 +1126,7 @@ class ImprovedCritical(BaseCondition):
             name="Improved Critical",
             value=1
         )
-        mod_uuid = target.equipment.crit_threshold.self_static.add_value_modifier(crit_mod)
+        mod_uuid = add_modifier(target.equipment.crit_threshold, Channel.SELF_STATIC, Kind.VALUE, crit_mod)
         outs.append((target.equipment.crit_threshold.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
@@ -1172,54 +1167,31 @@ class ExtraAttack(Attack):
     ], description="One earned attack credit, without another action payment.")
     discover_equipped_weapon_slots: bool = Field(default=False, description="Whether discovery expands this template over equipped slots.")
 
-    def get_discovery_variants(self, entity: Any) -> List[BaseAction]:
-        """Expand a structural family template over the current weapon set."""
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        """A structural family template chooses among the current weapon set; a bound one has no choice."""
         if not self.discover_equipped_weapon_slots:
-            return super().get_discovery_variants(entity)
-        if not isinstance(entity, Entity):
-            return []
-        variants: List[Attack] = []
-        for slot in (
-            WeaponSlot.MELEE_MAIN,
-            WeaponSlot.MELEE_OFF,
-            WeaponSlot.RANGED_MAIN,
-            WeaponSlot.RANGED_OFF,
-        ):
-            weapon = entity.equipment._get_weapon_by_slot(slot)
-            if isinstance(weapon, Shield) or weapon is None and slot is not WeaponSlot.MELEE_MAIN:
-                continue
-            variants.append(
-                self.model_copy(
-                    deep=True,
-                    update={
-                        "uuid": uuid4(),
-                        "name": f"Extra Attack_{slot.value}",
-                        "weapon_slot": slot,
-                        "template": False,
-                        "use_register": False,
-                        "registered_template_uuid": (
-                            self.registered_template_uuid or self.uuid
-                        ),
-                    },
-                ),
-            )
-        return [candidate for variant in variants
-            for candidate in Attack.get_discovery_variants(variant, entity)]
+            return ((),)
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None:
+            return ()
+        return tuple((ActionVariantFacet(key="form", value=slot.value, label=slot.value.replace("_", " ").title()),)
+                     for slot in (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF)
+                     if not (isinstance(weapon := entity.equipment._get_weapon_by_slot(slot), Shield)
+                             or weapon is None and slot is not WeaponSlot.MELEE_MAIN))
 
-    def validate_source_requirements_for_discovery(self) -> bool:
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        overrides = super()._selection_overrides(selection)
+        if self.discover_equipped_weapon_slots:
+            overrides["weapon_slot"] = WeaponSlot(selection_facet(selection, "form"))
+        return overrides
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """Require a committed ordinary Attack before exposing the earned batch."""
         entity = Entity.get(self.source_entity_uuid)
-        return (
-            entity is not None
-            and "ExtraAttacksGranted" in entity.active_conditions
-            and super().validate_source_requirements_for_discovery()
-        )
-
-    def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
-        entity = Entity.get(self.source_entity_uuid)
         if entity is None or "ExtraAttacksGranted" not in entity.active_conditions:
-            return declaration_event.cancel(status_message="Must attack first before using Extra Attack")
-        return super()._validate(declaration_event)
+            return "Must attack first before using Extra Attack"
+        return Attack.rule_error(self, scan, selection)
 
 
 class ExtraAttackFeature(BaseCondition):
@@ -1230,6 +1202,7 @@ class ExtraAttackFeature(BaseCondition):
         description: Short rules-facing summary of the Extra Attack feature.
         extra_attacks: Number of extra attacks granted after each action-cost Attack action.
     """
+    creates = (ExtraAttack,)
     name: str = Field(default="Extra Attack", description="Feature condition name for Fighter Extra Attack.")
     description: str = Field(
         default="Can make additional attacks when taking the Attack action",
@@ -1351,7 +1324,7 @@ def indomitable_processor(
         return None
 
     ability_name = event.ability_name
-    save_bonus = entity.saving_throw_bonus(event.source_entity_uuid, ability_name)
+    save_bonus = entity.saving_throw_bonus(event.source_entity_uuid, ability_name, None)
     new_roll = entity.roll_d20(
         save_bonus,
         RollType.SAVE,
@@ -1502,7 +1475,7 @@ class SuperiorCritical(BaseCondition):
             name="Superior Critical",
             value=2
         )
-        mod_uuid = target.equipment.crit_threshold.self_static.add_value_modifier(crit_mod)
+        mod_uuid = add_modifier(target.equipment.crit_threshold, Channel.SELF_STATIC, Kind.VALUE, crit_mod)
         outs.append((target.equipment.crit_threshold.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(

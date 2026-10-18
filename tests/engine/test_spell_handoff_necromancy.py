@@ -7,7 +7,7 @@ from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import DurationType
 from dnd.core.gridmap import get_map
-from dnd.residues import DREAD_RESIDUE, deposit_residue
+from dnd.residues import DREAD_RESIDUE, deposit_residue, remove_tile_residue
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventQueue, EventPhase, EventType, SavingThrowEvent, TakeDamageEvent, EventHandler, Trigger
 from dnd.core.life_types import LifeState
@@ -17,12 +17,13 @@ from dnd.entity import Entity
 from dnd.monsters.traits import MagicResistance
 from dnd.spells.necromancy import Blight, Eyebite, FingerOfDeath, Harm, HarmSource
 from dnd.spells.evocation import CircleOfDeath
-from dnd.spells.abjuration import AntimagicField, GreaterRestoration, LesserRestoration, SanctuaryEffect
+from dnd.spells.abjuration import GreaterRestoration, LesserRestoration, SanctuaryEffect
 from dnd.spells.illusion import Silence
 from tests.engine.support import set_hp
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor, force_save_result, reset_spell_regression_arena,
 )
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 def scene(*, creature_type=CreatureType.HUMANOID):
@@ -73,7 +74,7 @@ def test_blight_plant_maximum_still_halves_on_a_save(slot, saved, expected):
     assert event is not None and not event.canceled
     assert target.get_normal_hp() == before - expected
     assert event.save_roll.advantage_status is AdvantageStatus.DISADVANTAGE
-    assert target.saving_throw_bonus(caster.uuid, "constitution").advantage is AdvantageStatus.NONE
+    assert target.saving_throw_bonus(caster.uuid, "constitution", None).advantage is AdvantageStatus.NONE
 
 
 @pytest.mark.parametrize("creature_type", [CreatureType.UNDEAD, CreatureType.CONSTRUCT])
@@ -154,21 +155,6 @@ def test_eyebite_respects_sanctuary_before_action_or_slot_payment(repeat):
     assert "Sickened" not in target.active_conditions
 
 
-def test_eyebite_repeat_cannot_apply_its_effect_inside_antimagic():
-    caster, target = scene()
-    cast_eyebite(caster, target)
-    target.remove_condition("Sickened")
-    shield = AntimagicField(source_entity_uuid=target.uuid,
-        target_entity_uuid=target.uuid, alt_skip_slot=True).apply()
-    assert shield is not None and not shield.canceled
-    caster.action_economy.reset_all_costs()
-    strike = caster.get_action_template("Eyebite Strike")
-    assert strike is not None
-    with fixed_dice_faces(*([2] * 10)):
-        event = strike.instantiate(target_entity_uuid=target.uuid).apply()
-    assert event is not None and event.canceled
-    assert "Sickened" not in target.active_conditions
-    assert caster.get_action_template("Eyebite Strike") is not None
 
 
 def test_eyebite_repeat_is_nonverbal_noncast_and_retains_its_exact_source():
@@ -259,7 +245,7 @@ def test_eyebite_sickened_disadvantages_attacks_and_checks_without_save_penalty(
     assert target.attack_bonus().advantage is AdvantageStatus.DISADVANTAGE
     assert target.skill_bonus(None, "athletics").advantage is AdvantageStatus.DISADVANTAGE
     assert target.ability_check_bonus(None, "strength").advantage is AdvantageStatus.DISADVANTAGE
-    assert target.saving_throw_bonus(None, "strength").advantage is AdvantageStatus.NONE
+    assert target.saving_throw_bonus(None, "strength", None).advantage is AdvantageStatus.NONE
 
 
 def test_eyebite_panicked_cleanup_preserves_independent_frightened():
@@ -311,7 +297,7 @@ def test_harm_caps_normal_hp_after_resistance_and_counts_temporary_hp(affinity, 
     maximum = target.get_max_hp()
     set_hp(target, 5)
     target.health.add_temporary_hit_points(10, target.uuid)
-    target.health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+    add_modifier(target.health.damage_reduction, Channel.SELF_STATIC, Kind.RESISTANCE, ResistanceModifier(
         name="Native affinity", source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
         damage_type=DamageType.NECROTIC, value=affinity))
     cast_harm(caster, target, face=6)
@@ -474,6 +460,38 @@ def test_harm_reduction_uses_committed_damage_before_reactive_healing():
     assert target.get_normal_hp() <= target.get_max_hp()
 
 
+def test_refused_harm_damage_does_not_reduce_maximum_hp():
+    caster, target = scene()
+    before = target.get_normal_hp(), target.get_max_hp()
+    target.add_event_handler(EventHandler(source_entity_uuid=target.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE,
+            event_phase=EventPhase.EFFECT, event_target_entity_uuid=target.uuid)],
+        event_processor=lambda event, _: event.cancel(status_message="Harm damage refused")))
+    result = cast_harm(caster, target)
+    after = target.get_normal_hp(), target.get_max_hp()
+    assert after == before and result.total_damage == 0
+    assert not any(isinstance(condition, HarmSource) for condition in target.active_conditions_by_uuid.values())
+
+
+def test_harm_admission_temp_hp_uses_completed_damage_for_its_reduction():
+    caster, target = scene()
+    maximum = target.get_max_hp()
+
+    def grant_during_admission(event, _):
+        target.health.add_temporary_hit_points(10, target.uuid)
+        return None
+
+    target.add_event_handler(EventHandler(source_entity_uuid=target.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE,
+            event_phase=EventPhase.EFFECT, event_target_entity_uuid=target.uuid)],
+        event_processor=grant_during_admission))
+    result = cast_harm(caster, target)
+    accepted = next(event.final_damage for event in result.get_children_events()
+        if isinstance(event, TakeDamageEvent) and event.phase is EventPhase.COMPLETION and not event.canceled)
+    reduction = maximum - target.get_max_hp()
+    assert reduction == accepted and result.total_damage == accepted
+
+
 
 def overlapping_panicked():
     first, target = scene()
@@ -496,7 +514,7 @@ def test_panicked_sources_keep_separate_visibility_and_cleanup():
     assert target.attack_bonus().advantage is AdvantageStatus.DISADVANTAGE
     assert target.skill_bonus(None, "athletics").advantage is AdvantageStatus.DISADVANTAGE
     assert target.ability_check_bonus(None, "strength").advantage is AdvantageStatus.DISADVANTAGE
-    assert target.saving_throw_bonus(None, "strength").advantage is AdvantageStatus.NONE
+    assert target.saving_throw_bonus(None, "strength", None).advantage is AdvantageStatus.NONE
     second.remove_condition("Concentrating")
     assert target.active_conditions["Frightened"].uuid == shared_uuid
     assert sum(condition.get_display_name() == "Eyebite Panicked"
@@ -623,7 +641,7 @@ def test_residue_fear_ending_does_not_remove_a_borrowing_eyebite_cast():
     assert target.position == (6, 2)
     fear_uuid = target.active_conditions["Frightened"].uuid
     cast_eyebite(caster, target, "panicked")
-    assert tile.remove_condition(DREAD_RESIDUE.name)
+    assert remove_tile_residue(tile, DREAD_RESIDUE.residue_id)
     assert target.active_conditions["Frightened"].uuid == fear_uuid
     assert any(condition.get_display_name() == "Eyebite Panicked" for condition in target.active_conditions.values())
     assert target.attack_bonus().advantage is AdvantageStatus.DISADVANTAGE

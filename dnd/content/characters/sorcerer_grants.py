@@ -9,6 +9,7 @@ from dnd.blocks.equipment import ArmorClassFormulaCandidate
 from dnd.blocks.saving_throws import SAVING_THROW_TO_ABILITY
 from dnd.blocks.health import HitDice, HitDiceConfig
 from dnd.classes import feats, sorcerer
+from dnd.content.characters.spellcasting_grants import reconcile_normal_spell_slots, validate_normal_spell_slots
 from dnd.content.characters.class_definitions import (
     ResolvedSorcererLevel,
     SORCERER_SPELL_RANKS,
@@ -31,6 +32,7 @@ from dnd.types.character_progression import (
     RitualPreparationPolicy,
 )
 from dnd.types.character_receipts import SorcererGrantReceipt
+from dnd.core.values import Channel, Kind, add_modifier, remove_modifier, modifier_of
 
 
 _SORCERY_POINTS = "class_feature.sorcerer.sorcery_points"
@@ -141,7 +143,7 @@ def _set_spellcasting_source(entity: Entity, class_level: int) -> None:
         caster_progression=CasterProgression.FULL_CASTER,
         provider_level=class_level,
         maximum_spell_rank=max(FULL_CASTER_SPELL_SLOTS[class_level], default=0),
-        ritual_policy=RitualPreparationPolicy.NONE,
+        ritual_policy=RitualPreparationPolicy.KNOWN,
     )
 
 
@@ -809,15 +811,13 @@ def _validate_sorcerer_receipt_ownership(
         if source_id not in entity.equipment.armor_class_formula_candidates:
             raise RuntimeError("Sorcerer armor formula ownership changed")
     for modifier_id in receipt.maximum_hit_point_modifier_ids:
-        modifiers = entity.health.max_hit_points_bonus.self_static.value_modifiers
-        modifier = modifiers.get(modifier_id)
+        modifier = modifier_of(entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, modifier_id)
         if modifier is None or NumericalModifier.get(modifier_id) is not modifier:
             raise RuntimeError("Sorcerer hit-point modifier ownership changed")
     for ability, modifier_id in receipt.ability_score_modifier_ids:
-        modifiers = entity.ability_scores.get_ability(
+        modifier = modifier_of(entity.ability_scores.get_ability(
             ability,
-        ).ability_score.self_static.value_modifiers
-        modifier = modifiers.get(modifier_id)
+        ).ability_score, Channel.SELF_STATIC, Kind.VALUE, modifier_id)
         if modifier is None or NumericalModifier.get(modifier_id) is not modifier:
             raise RuntimeError("Sorcerer ability modifier ownership changed")
     for feature_id, source_id in receipt.feature_sources:
@@ -845,10 +845,7 @@ def _validate_sorcerer_receipt_ownership(
         if source_id not in entity.spellcasting.sources:
             raise RuntimeError("Sorcerer spell source ownership changed")
     if require_normal_slot:
-        if receipt.normal_spell_slot_capacity_ids != (
-            entity.action_economy.get_normal_spell_slot_capacity_source(),
-        ):
-            raise RuntimeError("Sorcerer spell-slot capacity ownership changed")
+        validate_normal_spell_slots(entity)
     if receipt.replaced_spell_action_uuid is not None:
         if receipt.replaced_spell_action_uuid in actions:
             raise RuntimeError("replaced Sorcerer spell identity is unexpectedly live")
@@ -910,14 +907,12 @@ def _remove_sorcerer_receipt(
         if not entity.equipment.remove_armor_class_formula_candidate(source_id):
             raise RuntimeError("Sorcerer armor formula is missing")
     for modifier_id in reversed(receipt.maximum_hit_point_modifier_ids):
-        entity.health.max_hit_points_bonus.self_static.remove_value_modifier(
-            modifier_id,
-        )
+        remove_modifier(entity.health.max_hit_points_bonus, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for ability, modifier_id in reversed(receipt.ability_score_modifier_ids):
-        entity.ability_scores.get_ability(
+        remove_modifier(entity.ability_scores.get_ability(
             ability,
-        ).ability_score.self_static.remove_value_modifier(modifier_id)
+        ).ability_score, modifier_id, Channel.SELF_STATIC, Kind.VALUE)
         NumericalModifier.unregister(modifier_id)
     for feature_id, source_id in reversed(receipt.feature_sources):
         if not entity.remove_feature_source(feature_id, source_id):
@@ -949,7 +944,7 @@ def _update_spell_action_levels(entity: Entity, class_level: int) -> None:
             action.semantic_key in SORCERER_SPELL_RANKS
             and cast(SpellAction, action).spellcasting_source_id == source_id
         ):
-            cast(SpellAction, action).caster_level = class_level
+            cast(SpellAction, action).caster_level = max(1, len(entity.applied_class_levels)) if cast(SpellAction, action).spell_level == 0 else class_level
 
 
 def apply_sorcerer_level(
@@ -1064,9 +1059,9 @@ def apply_sorcerer_level(
 
         for ability, amount in resolved.ability_increases:
             modifier_id = _source(entity, f"{level.step_id}.asi.{ability}")
-            entity.ability_scores.get_ability(
+            add_modifier(entity.ability_scores.get_ability(
                 ability,
-            ).ability_score.self_static.add_value_modifier(NumericalModifier(
+            ).ability_score, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 uuid=modifier_id,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
@@ -1076,15 +1071,13 @@ def apply_sorcerer_level(
             ability_modifiers.append((ability, modifier_id))
 
         hp_modifier_id = _source(entity, f"{level.step_id}.draconic_resilience.hp")
-        entity.health.max_hit_points_bonus.self_static.add_value_modifier(
-            NumericalModifier(
+        add_modifier(entity.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
                 uuid=hp_modifier_id,
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid,
                 name="Draconic Resilience HP",
                 value=1,
-            ),
-        )
+            ))
         maximum_hp.append(hp_modifier_id)
 
         for feature_id in resolved.feature_ids:
@@ -1188,12 +1181,7 @@ def apply_sorcerer_level(
             draconic_presence_root_owners=draconic_presence_root_owners,
         )
 
-        slot_source = _source(entity, f"{level.step_id}.normal_spell_slots")
-        entity.action_economy.set_normal_spell_slot_capacity(
-            slot_source,
-            dict(resolved.normal_spell_slots),
-        )
-        slot_sources.append(slot_source)
+        reconcile_normal_spell_slots(entity,(*entity.applied_class_levels,level))
         slots_updated = True
 
         completed = receipt()
@@ -1209,17 +1197,7 @@ def apply_sorcerer_level(
         if receipt_stored:
             entity.remove_character_grant_receipt(level.step_id)
         if slots_updated:
-            entity.action_economy.remove_normal_spell_slot_capacity(
-                slot_sources[-1],
-            )
-            if previous_class_level > 0:
-                entity.action_economy.set_normal_spell_slot_capacity(
-                    _source(
-                        entity,
-                        f"class.sorcerer.level_{previous_class_level}.normal_spell_slots",
-                    ),
-                    FULL_CASTER_SPELL_SLOTS[previous_class_level],
-                )
+            reconcile_normal_spell_slots(entity)
         _remove_sorcerer_receipt(
             entity,
             receipt(),
@@ -1269,19 +1247,12 @@ def remove_last_sorcerer_level(
         SorcererGrantReceipt,
         entity.character_grant_receipt(level.step_id),
     )
-    if receipt.normal_spell_slot_capacity_ids != (
-        _source(entity, f"{level.step_id}.normal_spell_slots"),
-    ):
-        raise RuntimeError("Sorcerer spell-slot capacity receipt is inconsistent")
     _validate_sorcerer_receipt_ownership(
         entity,
         receipt,
         require_normal_slot=True,
     )
-    slot_source = receipt.normal_spell_slot_capacity_ids[0]
     _remove_owned_condition_rows(entity, receipt, parent_event)
-    if not entity.action_economy.remove_normal_spell_slot_capacity(slot_source):
-        raise RuntimeError("Sorcerer spell-slot capacity owner is missing")
 
     previous_class_level = level.resulting_class_level - 1
     _remove_sorcerer_receipt(
@@ -1294,18 +1265,13 @@ def remove_last_sorcerer_level(
     entity.applied_class_levels = entity.applied_class_levels[:-1]
     if previous_class_level > 0:
         _set_spellcasting_source(entity, previous_class_level)
-        entity.action_economy.set_normal_spell_slot_capacity(
-            _source(
-                entity,
-                f"class.sorcerer.level_{previous_class_level}.normal_spell_slots",
-            ),
-            FULL_CASTER_SPELL_SLOTS[previous_class_level],
-        )
+
         _update_spell_action_levels(entity, previous_class_level)
     else:
         if receipt.spell_source_ids != (_spellcasting_source(entity),):
             raise RuntimeError("Sorcerer spell source receipt is inconsistent")
         entity.spellcasting.remove_source(receipt.spell_source_ids[0])
+    reconcile_normal_spell_slots(entity)
     return level
 
 

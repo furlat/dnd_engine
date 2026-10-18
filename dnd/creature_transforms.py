@@ -7,6 +7,7 @@ the ordinary ``(modifiable_value_uuid, modifier_uuid)`` ownership rows used
 for exact, source-owned cleanup.
 """
 
+from dnd.core.geometry import grid_distance_feet
 from typing import Any, Optional, Protocol, runtime_checkable
 from uuid import UUID
 
@@ -27,7 +28,7 @@ from dnd.core.modifiers import (
     CriticalStatus,
     NumericalModifier,
 )
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, remove_modifier
 
 
 ModifierOwnership = list[tuple[UUID, UUID]]
@@ -38,6 +39,7 @@ class CreatureTransformTarget(Protocol):
     """Structural capability surface required by creature transforms."""
 
     uuid: UUID
+    position: tuple[int, int]
     action_economy: ActionEconomy
     equipment: Equipment
     saving_throws: SavingThrowSet
@@ -49,7 +51,7 @@ def remove_modifier_ownership(ownership: ModifierOwnership) -> None:
     for value_uuid, modifier_uuid in ownership:
         value = ModifiableValue.get(value_uuid)
         if value is not None:
-            value.remove_modifier(modifier_uuid)
+            remove_modifier(value, modifier_uuid)
 
 
 def _zero_max_constraint(
@@ -60,14 +62,12 @@ def _zero_max_constraint(
     effect_source_uuid: UUID,
 ) -> tuple[UUID, UUID]:
     """Install one source-owned zero cap and return its cleanup identity."""
-    modifier_uuid = value.self_static.add_max_constraint(
-        NumericalModifier(
+    modifier_uuid = add_modifier(value, Channel.SELF_STATIC, Kind.MAX, NumericalModifier(
             name=name,
             value=0,
             source_entity_uuid=target.uuid,
             target_entity_uuid=effect_source_uuid,
-        )
-    )
+        ))
     return value.uuid, modifier_uuid
 
 
@@ -168,14 +168,12 @@ def apply_failed_strength_dexterity_saves(
     ownership: ModifierOwnership = []
     for ability_name in ("strength", "dexterity"):
         save_bonus = target.saving_throws.get_saving_throw(ability_name).bonus
-        modifier_uuid = save_bonus.self_static.add_auto_hit_modifier(
-            AutoHitModifier(
+        modifier_uuid = add_modifier(save_bonus, Channel.SELF_STATIC, Kind.AUTO_HIT, AutoHitModifier(
                 name=name,
                 value=AutoHitStatus.AUTOMISS,
                 source_entity_uuid=target.uuid,
                 target_entity_uuid=effect_source_uuid,
-            )
-        )
+            ))
         ownership.append((save_bonus.uuid, modifier_uuid))
     return ownership
 
@@ -188,14 +186,12 @@ def apply_attacker_advantage_transform(
 ) -> ModifierOwnership:
     """Give attacks against the target advantage."""
     armor_class = target.equipment.ac_bonus
-    modifier_uuid = armor_class.to_target_static.add_advantage_modifier(
-        AdvantageModifier(
+    modifier_uuid = add_modifier(armor_class, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(
             name=name,
             value=AdvantageStatus.ADVANTAGE,
             source_entity_uuid=target.uuid,
             target_entity_uuid=effect_source_uuid,
-        )
-    )
+        ))
     return [(armor_class.uuid, modifier_uuid)]
 
 
@@ -211,14 +207,13 @@ def close_range_auto_critical(
     context: Optional[dict[str, Any]] = None,
 ) -> Optional[CriticalModifier]:
     """Return automatic critical status for an attacker within five feet."""
-    del context
     if target_entity_uuid is None:
         return None
     source = _transform_target(source_entity_uuid)
     attacker = _transform_target(target_entity_uuid)
     if source is None or attacker is None:
         return None
-    if source.senses.get_feet_distance(attacker.senses.position) > 5:
+    if grid_distance_feet(source.position,(context or {}).get("attack_origin_position",attacker.position)) > 5:
         return None
     return CriticalModifier(
         name="Close Range Auto-Critical",
@@ -234,7 +229,6 @@ def prone_distance_advantage(
     context: Optional[dict[str, Any]] = None,
 ) -> Optional[AdvantageModifier]:
     """Return prone-style advantage within five feet, else disadvantage."""
-    del context
     if target_entity_uuid is None:
         return None
     source = _transform_target(source_entity_uuid)
@@ -243,7 +237,7 @@ def prone_distance_advantage(
         return None
     status = (
         AdvantageStatus.ADVANTAGE
-        if source.senses.get_feet_distance(attacker.senses.position) <= 5
+        if grid_distance_feet(source.position,(context or {}).get("attack_origin_position",attacker.position)) <= 5
         else AdvantageStatus.DISADVANTAGE
     )
     return AdvantageModifier(
@@ -262,14 +256,12 @@ def apply_close_range_auto_critical_transform(
 ) -> ModifierOwnership:
     """Give close attackers automatic critical hits against the target."""
     armor_class = target.equipment.ac_bonus
-    modifier_uuid = armor_class.to_target_contextual.add_critical_modifier(
-        ContextualCriticalModifier(
+    modifier_uuid = add_modifier(armor_class, Channel.TO_TARGET_CONTEXTUAL, Kind.CRITICAL, ContextualCriticalModifier(
             name=name,
             source_entity_uuid=target.uuid,
             target_entity_uuid=effect_source_uuid,
             callable=close_range_auto_critical,
-        )
-    )
+        ))
     return [(armor_class.uuid, modifier_uuid)]
 
 
@@ -281,14 +273,12 @@ def apply_prone_geometry_transform(
 ) -> ModifierOwnership:
     """Apply distance-sensitive prone-style attack geometry."""
     armor_class = target.equipment.ac_bonus
-    modifier_uuid = armor_class.to_target_contextual.add_advantage_modifier(
-        ContextualAdvantageModifier(
+    modifier_uuid = add_modifier(armor_class, Channel.TO_TARGET_CONTEXTUAL, Kind.ADVANTAGE, ContextualAdvantageModifier(
             name=name,
             source_entity_uuid=target.uuid,
             target_entity_uuid=effect_source_uuid,
             callable=prone_distance_advantage,
-        )
-    )
+        ))
     return [(armor_class.uuid, modifier_uuid)]
 
 

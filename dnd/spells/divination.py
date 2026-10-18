@@ -1,13 +1,15 @@
 """Divination spells that reveal information or grant special senses."""
 
-import random
 from typing import Any, Optional, List, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.core.action_types import EntityTargetPerception
+from dnd.core.action_types import ActionSelection, EntityTargetPerception
+from dnd.core.dice import roll_die_face
+from dnd.spells.hit_effects import QuarrySustain, ReapplyQuarry, install_hit_rider
 from dnd.core.base_actions import (
+    Cost,
     ActionInformationOperation,
     ActionWorldEffectAnchor,
     ActionWorldEffectCertainty,
@@ -20,9 +22,16 @@ from dnd.core.base_actions import (
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.base_block import SensesType, SenseMode
+from dnd.types.discovery import ActorScan
 from dnd.core.events import Event, EventPhase, Range, RangeType, EventType, EventHandler, Trigger, D20RollResultEvent
 from dnd.entity import Entity
-from dnd.actions import SpellAction, SpellEvent
+from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
+from dnd.spells.content_metadata import srd_action_identity
+from dnd.spells.spell_utils import living_recipients_error, spell_condition_profile
+from dnd.core.base_conditions import Duration
+from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
+from dnd.blocks.skills import all_skills
+from dnd.core.values import Channel, Kind, add_modifier
 
 
 class SeeInvisibilityEffect(BaseCondition):
@@ -64,6 +73,7 @@ class SeeInvisibilityEffect(BaseCondition):
 
 class SeeInvisibility(SpellAction):
     """Second-level divination spell that grants see-invisible sense."""
+    creates = (*SpellAction.creates, SeeInvisibilityEffect)
 
     name: str = Field(default="See Invisibility", description="Spell name.")
     description: str = Field(default="See invisible creatures and objects", description="Spell description.")
@@ -73,7 +83,7 @@ class SeeInvisibility(SpellAction):
     target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Spell range.")
 
-    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+    def get_world_effect_profile(self) -> ActionWorldEffectProfile:
         """Declare the granted see-invisible sense and possible discoveries.
 
         Args:
@@ -122,6 +132,8 @@ class SeeInvisibility(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts See Invisibility"
         )
+        if effect_event.canceled:
+            return effect_event
 
         see_invis = SeeInvisibilityEffect(
             source_entity_uuid=caster.uuid,
@@ -129,7 +141,9 @@ class SeeInvisibility(SpellAction):
         )
         see_invis.duration.duration_type = DurationType.ROUNDS
         see_invis.duration.duration = 600
-        caster.add_condition(see_invis, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, see_invis)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{caster.name} can now see invisible creatures"
@@ -175,6 +189,7 @@ class TrueSeeingEffect(BaseCondition):
 
 class TrueSeeing(SpellAction):
     """Sixth-level divination spell that grants 120-foot truesight."""
+    creates = (*SpellAction.creates, TrueSeeingEffect)
 
     name: str = Field(default="True Seeing", description="Spell name.")
     description: str = Field(default="Grant truesight 120ft", description="Spell description.")
@@ -188,7 +203,7 @@ class TrueSeeing(SpellAction):
 
     entity_target_perception: EntityTargetPerception = EntityTargetPerception.TOUCH_CONTACT
 
-    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+    def get_world_effect_profile(self) -> ActionWorldEffectProfile:
         """Declare the granted truesight sense and possible discoveries.
 
         Args:
@@ -231,7 +246,7 @@ class TrueSeeing(SpellAction):
             missing.
         """
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
@@ -240,6 +255,8 @@ class TrueSeeing(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} grants True Seeing to {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         true_seeing = TrueSeeingEffect(
             source_entity_uuid=caster.uuid,
@@ -247,7 +264,9 @@ class TrueSeeing(SpellAction):
         )
         true_seeing.duration.duration_type = DurationType.ROUNDS
         true_seeing.duration.duration = 600
-        target.add_condition(true_seeing, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, true_seeing)
+        if effect_event.canceled:
+            return effect_event
 
         return effect_event.with_updates(
             status_message=f"{target.name} gains truesight (120ft)"
@@ -270,7 +289,7 @@ def _guidance_processor(
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
-    d4_value = random.randint(1, 4)
+    d4_value = roll_die_face(4)
     effective = event.get_effective_roll()
     new_total = effective.total + d4_value
     new_roll = effective.model_copy(update={"total": new_total})
@@ -348,6 +367,7 @@ class Guidance(SpellAction):
 
     Duration: Concentration, up to 1 minute (10 rounds).
     """
+    creates = (*SpellAction.creates, GuidanceEffect)
     name: str = Field(default="Guidance", description="Spell name.")
     description: str = Field(default="Touch: +1d4 to one ability check (concentration)", description="Spell description.")
     spell_level: int = Field(default=0, description="Cantrip spell level.")
@@ -367,7 +387,7 @@ class Guidance(SpellAction):
             Completed spell event, or a canceled event if the caster is missing.
         """
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
@@ -379,6 +399,8 @@ class Guidance(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Guidance on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         guidance_effect = GuidanceEffect(
             source_entity_uuid=caster.uuid,
@@ -386,12 +408,149 @@ class Guidance(SpellAction):
         )
         guidance_effect.duration.duration_type = DurationType.ROUNDS
         guidance_effect.duration.duration = 10
-        target.add_condition(guidance_effect, parent_event=effect_event)
+        effect_event = self.apply_owned_condition(effect_event, guidance_effect)
+        if effect_event.canceled:
+            return effect_event
 
-        concentration = self.ensure_concentration(effect_event)
-        if guidance_effect.applied:
-            concentration.add_linked_condition(target.uuid, guidance_effect.uuid)
 
         return effect_event.with_updates(
             status_message=f"{target.name} gains Guidance"
         )
+
+
+class HuntersMarkQuarry(BaseCondition):
+    name: str = "Hunter's Mark"
+    description: str = "This caster's weapon hits add 1d6 matching weapon damage."
+    tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
+
+    def model_post_init(self,context: object) -> None:
+        super().model_post_init(context)
+        self.name=f"Hunter's Mark:{self.source_entity_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Hunter's Mark"
+
+
+@srd_action_identity(content_id="action.spell.hunters_mark.reapply",display_name="Reapply Hunter's Mark",
+    description="Choose a new quarry after the previous quarry is defeated.",parent_spell_name="Hunter's Mark",source_page=156,sort_order=3000)
+class ReapplyHuntersMark(ReapplyQuarry):
+    name: str = "Reapply Hunter's Mark"
+    description: str = "Choose a new quarry after the previous quarry is defeated."
+
+
+class HuntersMarkEffect(QuarrySustain):
+    creates = (HuntersMarkQuarry, ReapplyHuntersMark)
+    name: str = "Hunter's Mark Sustain"
+    description: str = "Retains the caster's mark and free reapplication until rest."
+
+    def create_quarry_condition(self,target: Entity) -> BaseCondition:
+        return HuntersMarkQuarry(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=target.uuid)
+
+    def _apply(self,event: Event):
+        caster=Entity.get(self.source_entity_uuid)
+        target=Entity.get(self.quarry_uuid)
+        if caster is None or target is None or not self.set_quarry(target,event):
+            return [],[],[],[],event.cancel(status_message="Quarry cannot be marked")
+        handler=install_hit_rider(self,dice_count=1,die_size=6,damage_type=None,weapon_only=True,quarry=lambda:self.quarry_uuid)
+        action=ReapplyHuntersMark(source_entity_uuid=caster.uuid,sustain_uuid=self.uuid,template=True)
+        caster.register_action(action)
+        self.action_uuid=action.uuid
+        return [],[handler.uuid],[],[],event.phase_to(EventPhase.EFFECT)
+
+
+class HuntersMark(SpellAction):
+    creates = (*SpellAction.creates, HuntersMarkEffect)
+    name: str = "Hunter's Mark"
+    description: str = "Mark a quarry: weapon hits add 1d6 matching weapon damage; reapply after defeat."
+    spell_level: int = 1
+    spell_school: str = "divination"
+    target_type: TargetType = TargetType.ENTITY
+    spell_range: Range = Field(default_factory=lambda:Range(type=RangeType.RANGE,normal=60))
+    concentration: bool = True
+    harmful: bool = True
+    costs: list[Cost] = Field(default_factory=lambda:[Cost(name="Hunter's Mark",cost_type="bonus_actions",cost=1,
+        evaluator=entity_action_economy_cost_evaluator)])
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return self.single_recipient_error(scan, selection)
+
+    def _apply(self,event: SpellEvent):
+        if event.target_entity_uuid is None:
+            return event.cancel(status_message="Quarry is absent")
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),HuntersMarkEffect(
+            source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.source_entity_uuid,quarry_uuid=event.target_entity_uuid))
+
+
+class ForesightEffect(BaseCondition):
+    name: str = "Foresight"
+    description: str = "Advantage on attacks, checks and saves; incoming attacks have disadvantage; cannot be surprised."
+    prevents_surprise: bool = True
+    duration: Duration = Field(default_factory=lambda: Duration(duration=4800, duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        caster = Entity.get(self.source_entity_uuid)
+        if target is None or caster is None: return [], [], [], [], event.cancel(status_message="Foresight recipient absent")
+        modifiers = []
+        values = [target.equipment.attack_bonus]
+        for ability in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"):
+            values.extend((target.ability_scores.get_ability(ability).check_bonus,
+                target.saving_throws.get_saving_throw(ability).bonus))
+        values.extend(target.skill_set.get_skill(skill).skill_bonus for skill in all_skills)
+        for value in values:
+            ident = add_modifier(value, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
+                value=AdvantageStatus.ADVANTAGE, source_entity_uuid=target.uuid))
+            modifiers.append((value.uuid, ident))
+        value = target.equipment.ac_bonus
+        ident = add_modifier(value, Channel.TO_TARGET_STATIC, Kind.ADVANTAGE, AdvantageModifier(name=self.name,
+            value=AdvantageStatus.DISADVANTAGE, source_entity_uuid=target.uuid))
+        modifiers.append((value.uuid, ident))
+        return modifiers, [], [], [], event.phase_to(EventPhase.EFFECT)
+
+
+class ForesightOwner(BaseCondition):
+    creates = (ForesightEffect,)
+    name: str = "Foresight Owner"
+    description: str = "One same-caster Foresight lease, retained across target changes."
+    recipient_uuid: UUID
+    duration: Duration = Field(default_factory=lambda: Duration(duration=4800, duration_type=DurationType.ROUNDS))
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.recipient_uuid)
+        if target is None: return [], [], [], [], event.cancel(status_message="Foresight recipient absent")
+        child = ForesightEffect(name=f"Foresight:{self.source_entity_uuid}", source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=target.uuid, parent_condition=self.uuid, effect_origin=self.effect_origin,
+            duration=Duration(duration_type=DurationType.PERMANENT))
+        result = target.add_condition(child, parent_event=event)
+        if result is None or result.canceled: return [], [], [], [], event.cancel(status_message="Foresight was not admitted")
+        self.add_linked_condition(target.uuid, child.uuid)
+        return [], [], [], [], event.phase_to(EventPhase.EFFECT)
+
+
+class Foresight(SpellAction):
+    creates = (*SpellAction.creates, ForesightOwner)
+    name: str = "Foresight"
+    description: str = "Touch a willing creature for eight hours of foresight; tactical Action casting adaptation."
+    spell_level: int = 9
+    spell_school: str = "divination"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+    target_type: TargetType = TargetType.ENTITY
+    include_self: bool = True
+    valid_target_filter: str = "self_or_allies"
+
+    def get_target_effect_profile(self):
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return None
+        return spell_condition_profile(self, actor, key="foresight", condition_type=ForesightEffect, beneficial=True)
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        return living_recipients_error(self, scan, selection.target_uuids)
+
+    def _apply(self, event: SpellEvent):
+        if event.target_entity_uuid is None: return event.cancel(status_message="Recipient absent")
+        return self.apply_owned_condition(event.phase_to(EventPhase.EFFECT), ForesightOwner(
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.source_entity_uuid,
+            recipient_uuid=event.target_entity_uuid))

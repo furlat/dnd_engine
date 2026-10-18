@@ -223,7 +223,8 @@ def admitted_input(host: Host, seat: Seat, actor: UUID, revision: str) -> Public
         raise ApiFailure(wire.ErrorCatchUpRequired(required_cursor=cursor(host, seat, attachment.catch_up)))
     if publication.boundary.lifecycle == 'terminal':
         raise ApiFailure(wire.ErrorGameTerminal())
-    if not publication.audience.controls(actor) or publication.boundary.input_actor_uuid != actor:
+    if not publication.audience.controls(actor) or (
+            publication.boundary.lifecycle != 'outside_encounter' and publication.boundary.input_actor_uuid != actor):
         raise ApiFailure(wire.ErrorNotYourTurn())
     if publication.state_revision != revision:
         raise ApiFailure(wire.ErrorStaleState())
@@ -380,7 +381,8 @@ async def run(host: Host) -> None:
         _, host.content = await _exchange(host, Start(game_id=host.config.game_id, game_epoch=host.epoch,
             audience_ids={seat.seat_id: seat.audience_id for seat in host.seats.values()},
             encounter_id=host.config.encounter_id, recipe=host.config.recipe,
-            assignments=host.config.assignments, test_seed=host.config.test_seed))
+            assignments=host.config.assignments, test_seed=host.config.test_seed,
+            player_builds=host.config.player_builds))
         if host.content is not None and not reserve_delivery(host, len(host.content)):
             raise RuntimeError('Public content exceeded the delivery budget')
         while host.pending is not None or not (host.closing or host.ending):

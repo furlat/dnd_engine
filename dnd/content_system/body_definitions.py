@@ -8,16 +8,12 @@ from dnd.core.content.provenance import (
 )
 from dnd.core.content.registration import behavior_identity, get_content_declaration
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.residues import TileResidueCondition
 
 
 _BODY_BEHAVIORS = (
     (BodyResponseHandler, "trait.body_response", "Body Response",
      "Release authored body material after a qualifying physical injury.",
      ContentDefinitionKind.TRAIT, RuntimeBehaviorKind.TRAIT),
-    (TileResidueCondition, "condition.tile.residue", "Tile Residue",
-     "Persistent material deposited on a tile.",
-     ContentDefinitionKind.CONDITION, RuntimeBehaviorKind.CONDITION),
 )
 
 for behavior, content_id, name, description, definition_kind, runtime_kind in _BODY_BEHAVIORS:
