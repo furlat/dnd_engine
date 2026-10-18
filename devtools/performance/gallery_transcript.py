@@ -9,7 +9,13 @@ Identities the value layer mints (in dnd/core/values.py) come from a third gener
 entities, items and conditions by identity, so a change in how many identities values mint must not move them.
 
     PYTHONHASHSEED=0 PYTHONPATH=<tree> python devtools/performance/gallery_transcript.py record <tree> <out.json> \
-        --case fireball --mode ordinary --name <stem>
+        --case fireball --mode ordinary --name <stem> [--seats faction|character|batch:N]
+
+Every argument after the output path goes to the tree's own `gallery_crowd.py`, including its seat layout
+(`--seats`, default `faction`): record both trees of a comparison with the same layout. A tree whose harness
+predates the layouts (before E0 of the event-native publication plan) records `faction` and accepts no `--seats`.
+Its harness also published none of its own world edits, so its first operation's published updates differ from a
+later harness's even where the engine is identical; compare such trees on events and logs only.
 
 compare: report whether two recordings are equal after uuid (first appearance, in the engine's own order:
 dicts keep their insertion order, so identities the engine keys by never sort by their raw values) and timestamp
