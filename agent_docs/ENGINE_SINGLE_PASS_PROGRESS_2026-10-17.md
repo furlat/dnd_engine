@@ -381,3 +381,72 @@ Hard rules:
     - Sleet drop: cells 70 KB.
     - SG moves 3 of 6 at 101–107 KB.
   - Publication now: the slow drop and light ops are dominated by `_world_update`, the per-observer cell fold and `dataclasses.replace`, not by rows.
+- 2026-10-18: **PV1a-4 merged (7fde9516a; 275ae9057 … c5e588ed6).** The wall FOV is one array solve (`view.wall_visibility`) over per-channel `GridMap._transit` grids. The sparse and dense scalar solvers and their four dict memos are deleted.
+  - Re-gated on the merge with discovery and PV2:
+    - transcripts identical and updates byte-identical, merged vs pre-merge, on 9 cases;
+    - scalar-solver oracle: 0 mismatches over ~600 solves on 4 cases (the agent: 8 cases plus ~79K random-world queries);
+    - sweep: 63 failures, 0 new; test_gas_traps' shared-exposure test now passes.
+  - Logged for the human:
+    - edge answers are settled on first read inside GridMap, not written by the writers (eager writes measured +12 ms of unread predicates);
+    - a directional solve raises beyond 80 cells;
+    - shadowcast still serves maps without optical boundaries.
+  - Light-level resolution as arrays (item 2) is blocked: a Tile reading a GridMap grid inverts the import DAG (open in §6b).
+- 2026-10-18: **Close-out (integrator).**
+  - a2ff92854: blocks name their value fields explicitly. PH-2's getattr discovery is gone, and an architecture test guards the lists. d506a0d58: the four test-defined example blocks follow the new authoring rule (transcripts identical on 5 cases).
+  - e260e92e1: unused imports and a dead map lookup from the perception merges removed.
+  - agent_docs/RULE_VIOLATIONS_2026-10-18.md: the refactor's census against AGENTS.md and §6a.
+    - getattr +1 −2, now 0 added; isinstance net −123 (20 new call texts, classified); 0 in-function imports.
+    - Open: the union-field checks (`bonus: int | ValueReading`, `ac: int | value`), the target-kind checks, the modifier-kind filter.
+- 2026-10-18: **Final Exit re-time at d506a0d58** (same code as e260e92e1 apart from the unused imports).
+  - 29 gallery cases, 3 runs each; table in scratchpad `logs/exitF_table.md`.
+  - Load was 12.7 at the start and 4.9 at the end, from other sessions' git and IDE I/O: provisional by §6a.
+  - 0 GC passes inside any op. The post-reply collection is ≤8 ms, except the caster's Choices miss at ~68 ms.
+  - First Exit (b1ce2a00c) → final, median total ms (largest seat update):
+
+    | Op | ms | Bytes |
+    | --- | --- | --- |
+    | Wall of Stone | 225 → 159 | 223 → 94 KB |
+    | SG moves | 169–189 → 133–151 | 221–235 → 93–107 KB |
+    | Gust moves | ~75 → ~63 | 82–85 → 37–40 KB |
+    | Sleet cast | 172 → 164 | 321 → 142 KB |
+    | Sleet drop | 211 → 213 | 615 → 179 KB |
+    | Round-step Sleet | 183 → 152 | 321 → 142 KB |
+    | Fireball | 177 → 176 | 327 → 247 KB |
+    | CoD | 175 → 166 | 330 → 262 KB |
+    | Ice Storm | 111 → 106 | 188 → 123 KB |
+    | Cloudkill cast | 112 → 114 | 237 → 65 KB |
+    | Cloudkill drop | 188 → 191 | 484 → 139 KB |
+    | Darkness | 101 → 102 | 185 → 60 KB |
+    | Daylight | 210 → 220 | 502 → 203 KB |
+    | Chain Lightning | 89 → 94 | 143 → 98 KB |
+    | Portal move | 106 → 88 | — |
+    | Gas vent | 95 → 76 | — |
+    | Caster Choices miss / command | 168 / 195 → 154 / 176 | — |
+    | Fighter Choices miss | 98 → 70 | — |
+    | AI decisions | 144 / 100 / 98 / 262 → 116 / 78 / 67 / 210 | — |
+
+  - Everything else is ≤100 ms and ≤100 KB:
+    - single-target and small-area spells 20–71 ms;
+    - caster steps ~52, end turns 6–8.
+  - **Still over 100 ms:** Daylight 220, Sleet drop 213, AI decision 4 210, Cloudkill drop 191, Fireball 176, caster command 176, CoD 166, Sleet cast 164, Wall of Stone 159, caster Choices miss 154, round Sleet 152, SG moves 133–151, AI decision 1 116, Cloudkill cast 114, Ice Storm 106, Darkness 102.
+  - **Still over 100 KB:** CoD 262, Fireball 247, Daylight 203, Sleet drop 179, Sleet cast and round Sleet 142, Cloudkill drop 139, Ice Storm 123, SG moves (3 of 6) 101–107.
+  - **What dominates what is left** (measured this session), with the next owner of each:
+    1. **Publication on drops and light changes** (130–148 ms: Daylight, Sleet drop, Cloudkill drop) is `_world_update` per sensory event, the per-observer cell fold and `dataclasses.replace` of the view.
+    2. **Per-observer settlement fan-out on moves:** the same aura, torch and contact change built for 30 observers (~32 ms per SG move); 2-D batching.
+    3. **Fireball and CoD bytes:** world_updates ~70 KB, combat_log 41–57, resolution_ref and version_rows ~13 each.
+    4. **Discovery:**
+       - duplicate weapon-reach contacts (169 per fighter menu; entity.py:5842 repeats base_actions.py:1441);
+       - target HP reads through the value layer;
+       - AoE aims;
+       - free-aim legality per point, which changes the `get_valid_positions` contract (decision).
+    5. **Turn-start navigation** (~23 % of AI decision 1): PT's cost grid, not started.
+    6. **Light bookkeeping** (~30 ms of Wall of Stone): re-adding unchanged contributions. The exact skip is cheap; arrays need the DAG decision.
+    7. **Memory retention over a long game** (8.8 GB at 47 min): the next refactor, per the human.
+  - **Decisions for the human, collected:**
+    - PV2 one-observer seats use the shared-row shape (plan line 671);
+    - discovery's bound is named `manual_object_contact_origins` (§14.2 #4 says `contact_ring_cells`);
+    - PV1a-4's lazy edge answers, its 80-cell limit, and shadowcast as a second sight rule;
+    - the light-array DAG inversion;
+    - free-aim's `get_valid_positions` contract;
+    - the union fields in events and AC.
+  - The Godot client must follow schema 14: agent_docs/GODOT_CLIENT_FOLD_SCHEMA_14_2026-10-18.md.
