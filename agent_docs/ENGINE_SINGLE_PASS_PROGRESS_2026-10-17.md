@@ -450,3 +450,9 @@ Hard rules:
     - free-aim's `get_valid_positions` contract;
     - the union fields in events and AC.
   - The Godot client must follow schema 14: agent_docs/GODOT_CLIENT_FOLD_SCHEMA_14_2026-10-18.md.
+- 2026-10-18: **Next wave, after the stop-hook review: "the plan's Exit is not met".** The closed lanes stay closed. Four plan items that need no human decision were started from d6a5ba8e7. Each comes back to the single integration worktree.
+  - **S: PV1a-2's remaining items** (codex/single-pass-fanout): shared changes per settlement as arrays over observers, identity grants per settlement, volume and effect loops vectorized, area-independent emit.
+  - **W: the rest of PV2 plus the publication of drops and light changes** (codex/single-pass-wire2), schema 15: cells once per seat with per-observer bit lists, Fireball/CoD world_updates and combat log, `_world_update` once per group, the cell fold over arrays.
+  - **D: PD1b/PD2 and PV1a-4 leftovers** (codex/single-pass-leftovers): duplicate weapon-reach contacts, skipping an unchanged light contribution, discovery HP reads, a hoisted wall predicate set, and AoE footprints if exact.
+  - **N: PT navigation as a cost grid with a predecessor array** (codex/single-pass-nav): the same chosen paths, costs and safe sets, by oracle.
+  - Still parked on the human: free-aim's contract, light arrays (DAG), the union fields, and the Godot client (PC).
