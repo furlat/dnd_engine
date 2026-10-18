@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.cells import mask_positions
+from dnd.core.effect_types import ObservedChangeRef
 from dnd.core.events import EventPhase, SpatialChangeEvent, SpatialChangeType, WorldModifiedEvent
 from dnd.core.item_types import ItemConcentrationSlot, ItemRemnantState
 from dnd.player.audience import PlayerAudience
@@ -18,7 +19,7 @@ from dnd.player.facts import PlayerState
 from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.player.stamp_replay import replay_world_stamps
-from dnd.player.world_stamps import WorldStamps, unchanged_since
+from dnd.player.world_stamps import WorldStamps
 from dnd.player.world_columns import unpack_object_rows
 from dnd.types.residues import ObjectResidueState
 from dnd.types.senses import PerceivedContact
@@ -28,20 +29,25 @@ from dnd.types.materials import Material
 from tests.player.test_projection_local_world import initial, item, objective, placed, sensory
 
 
-def project(start, events, *, stamps=True):
-    """Each event projected as its own lineage: the seat's projection, its initialization, the client world after
-    each event, each packet's world updates and every update the seat received. Without `stamps` the seat holds
-    none at each event (a seat restored without them)."""
+def lineages_of(start, events):
+    """Each event its own lineage."""
+    return tuple(CompletedLineage(generation=start.generation, observer_uuid=start.observer_uuid, root=event,
+        events=(event,), objective_rows=(objective(index, event),), start_cursor=index, end_cursor=index + 1,
+        audience=start.audience) for index, event in enumerate(events, start=start.end_cursor))
+
+
+def project(start, lineages, *, stamps=True):
+    """The lineages projected: the seat's projection, its initialization, the client world after each, each
+    packet's world updates and every update the seat received. Without `stamps` the seat holds none at each
+    lineage (a seat restored without them)."""
     session = SessionProjection()
     projection, public = begin_projection(session, start)
     states, packets = [reduce_initialization(public)], []
     received = list(public.world_updates)
-    for index, event in enumerate(events, start=start.end_cursor):
+    for lineage in lineages:
         if not stamps:
             projection.world_stamps = WorldStamps()
-        packet = project_lineage(session, projection, CompletedLineage(generation=start.generation,
-            observer_uuid=start.observer_uuid, root=event, events=(event,), objective_rows=(objective(index, event),),
-            start_cursor=index, end_cursor=index + 1, audience=start.audience))
+        packet = project_lineage(session, projection, lineage)
         states.append(states[-1] if packet is None else reduce_lineage(states[-1], packet))
         packets.append(packet.world_updates if packet is not None else ())
         received.extend(packets[-1])
@@ -49,11 +55,16 @@ def project(start, events, *, stamps=True):
 
 
 def walk(start, events):
-    """The client worlds after each event and each packet's world updates. Every client world equals the one a
+    """`walk_lineages` of each event as its own lineage."""
+    return walk_lineages(start, lineages_of(start, events))
+
+
+def walk_lineages(start, lineages):
+    """The client worlds after each lineage and each packet's world updates. Every client world equals the one a
     seat without stamps (every re-entry whole) holds, and the stamps restored from the updates the seat received
     equal its live ones."""
-    projection, public, states, packets, received = project(start, events)
-    assert states == project(start, events, stamps=False)[2]
+    projection, public, states, packets, received = project(start, lineages)
+    assert states == project(start, lineages, stamps=False)[2]
     assert replay_world_stamps(PlayerState(generation=public.generation, observer_uuid=public.observer_uuid,
         world=public.world, audience=public.audience), received) == projection.world_stamps
     return states, packets
@@ -98,7 +109,7 @@ def test_an_unwritten_tile_and_object_reenter_kept_and_leave_the_client_as_a_who
     assert update.objects_unchanged == (identity,) and update.objects is None
     assert world(states[2]) == world(states[0])
     # A seat without stamps (restored without them) is sent both whole, as before stamps.
-    whole, = project(start, events, stamps=False)[3][1]
+    whole, = project(start, lineages_of(start, events), stamps=False)[3][1]
     assert whole.tile_columns is not None and [row.item_uuid for row in unpack_object_rows(whole.objects)] == [identity]
 
 
@@ -119,21 +130,64 @@ def test_a_record_written_while_unseen_reenters_whole():
     assert states[4].objects[identity].item.name == 'Crate'
 
 
-def test_a_change_seen_in_view_keeps_the_seats_stamp_current():
-    """A keyed change leaves the seat holding the record's value as of then: the record re-enters unchanged."""
+def test_a_change_seen_in_view_reenters_whole_and_one_that_leaves_the_value_does_not():
+    """A keyed change that alters the record drops its stamp (the seat holds the stamped value with the change); a
+    write that leaves the value as stamped keeps it."""
+    box, start = box_scene()
+    identity = box.item.item_uuid
+    observer = start.observer_uuid
+    states, packets = walk(start, (
+        light(observer, (1, 0), LightLevel.DIM_LIGHT),
+        light(observer, (2, 0), LightLevel.BRIGHT_LIGHT),
+        sensory(observer, visible_cells_removed=[(1, 0)], object_contacts_removed={identity}),
+        sensory(observer, visible_cells_added=[(1, 0)], object_contacts_changed={identity: seen((1, 0))}),
+    ))
+    update, = packets[3]
+    assert update.tile_columns is not None and not mask_positions(update.tiles_unchanged)
+    assert update.objects_unchanged == (identity,)
+    assert world(states[4]) == world(states[2])
+
+
+def test_a_change_seen_in_view_then_undone_unseen_reenters_whole():
+    """The seat holds the changed value: the record written back to its stamped value is not what the seat has."""
     box, start = box_scene()
     identity = box.item.item_uuid
     observer = start.observer_uuid
     states, packets = walk(start, (
         light(observer, (1, 0), LightLevel.DIM_LIGHT),
         sensory(observer, visible_cells_removed=[(1, 0)], object_contacts_removed={identity}),
+        light(observer, (1, 0), LightLevel.BRIGHT_LIGHT),
         sensory(observer, visible_cells_added=[(1, 0)], object_contacts_changed={identity: seen((1, 0))}),
     ))
-    assert [mask_positions(row.entered) for row in packets[0]] == [[]]
-    update, = packets[2]
-    assert update.tile_columns is None and mask_positions(update.tiles_unchanged) == [(1, 0)]
-    assert update.objects_unchanged == (identity,)
-    assert world(states[3]) == world(states[1])
+    update, = packets[3]
+    assert update.tile_columns is not None and not mask_positions(update.tiles_unchanged)
+    assert states[4].tiles[(1, 0)].resolved_light is LightLevel.BRIGHT_LIGHT
+
+
+def test_a_write_published_late_never_vouches_for_the_record():
+    """A version folded before the seat is told of it (an observed source, published at its member's sensory
+    child): a keyed change of another field in between leaves the seat without the earlier write, and the record
+    re-enters whole."""
+    start = initial((), ((1, 0),), {})
+    observer = start.observer_uuid
+    cost = SpatialChangeEvent.model_validate(dict(source_entity_uuid=observer, use_register=False,
+        phase=EventPhase.COMPLETION, change_type=SpatialChangeType.TILE_CHANGED, position=(1, 0),
+        tile_walking_cost=5), context=PASSIVE_EVENT_REPLAY)
+    dim = light(observer, (1, 0), LightLevel.DIM_LIGHT)
+    child = sensory(observer, visible_cells_removed=[(1, 0)]).model_copy(update={'observed_changes': (
+        ObservedChangeRef(source_event_uuid=cost.uuid, source_index=2, field='paths', owner_uuid=observer),),
+        'parent_lineage': dim.lineage_uuid, 'parent_event': dim.uuid})
+    dim = dim.model_copy(update={'children_lineages': [child.lineage_uuid]})
+    back = sensory(observer, visible_cells_added=[(1, 0)])
+    lineages = (CompletedLineage(generation=start.generation, observer_uuid=observer, root=dim, events=(dim, child),
+                    objective_rows=(objective(2, cost), objective(3, dim), objective(4, child)), start_cursor=2,
+                    end_cursor=5, observed_sources=(cost,)),
+                CompletedLineage(generation=start.generation, observer_uuid=observer, root=back, events=(back,),
+                    objective_rows=(objective(5, back),), start_cursor=5, end_cursor=6))
+    states, packets = walk_lineages(start, lineages)
+    update, = packets[1]
+    assert update.tile_columns is not None and not mask_positions(update.tiles_unchanged)
+    assert states[2].tiles[(1, 0)].walking_cost == 5
 
 
 def test_a_record_written_and_written_back_unseen_reenters_unchanged():
@@ -218,8 +272,3 @@ def test_a_face_newly_seen_or_a_view_disclosed_field_needs_the_object_whole():
     assert {row.item_uuid for row in unpack_object_rows(update.objects)} == {walls, altars}
     assert update.objects_unchanged == (ruins,)
     assert states[2].objects[walls].item.surface_residues == (soot,)
-
-
-def test_the_rule_is_the_seats_stamp_against_the_records_digest():
-    assert unchanged_since(7, 7)
-    assert not unchanged_since(7, 8) and not unchanged_since(None, 3)

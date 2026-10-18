@@ -120,10 +120,11 @@ def key(position: Position) -> str:
 def stamp_data(stamps: WorldStamps) -> dict[str, Any]:
     """A seat's digest stamps as JSON: tiles by cell as their digest, objects by uuid as [digest, faces, members,
     cells]."""
+    views = stamps.views
     return {'tiles': {key(position): digest for position, digest in sorted(stamps.tiles.items())},
-            'objects': {str(identity): [stamp.digest, sorted(face.value for face in stamp.faces), stamp.members,
-                                        sorted(key(cell) for cell in stamp.cells)]
-                        for identity, stamp in sorted(stamps.objects.items(), key=lambda row: str(row[0]))}}
+            'objects': {str(identity): [digest, sorted(face.value for face in views[identity].faces),
+                                        views[identity].members, sorted(key(cell) for cell in views[identity].cells)]
+                        for identity, digest in sorted(stamps.objects.items(), key=lambda row: str(row[0]))}}
 
 
 def canonical(value: Any) -> str:

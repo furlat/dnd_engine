@@ -1046,9 +1046,27 @@ def _rooted_at(node: ast.expr, name: str) -> bool:
     return isinstance(node, ast.Name) and node.id == name
 
 
+def test_the_client_fold_never_loads_the_session_fold() -> None:
+    """The client's reference fold, and the restore of digest stamps through it, import nothing of the session's
+    world fold (`dnd.world_facts`), directly or not."""
+    edges: dict[str, set[str]] = {}
+    for reference in _import_references():
+        edges.setdefault(reference.importer, set()).add(reference.target)
+    reached: set[str] = set(CLIENT_FOLD_MODULES)
+    frontier: list[str] = list(CLIENT_FOLD_MODULES)
+    while frontier:
+        for target in edges.get(frontier.pop(), ()):
+            if target not in reached:
+                reached.add(target)
+                frontier.append(target)
+    assert "dnd.world_facts" not in reached
+
+
 def test_world_publication_reads_the_world_as_of_the_occurrence_and_never_compares_it() -> None:
     """The seats' world publication reads one world (the session's, as of the occurrence) and what the occurrence
-    wrote: it takes no second world, reads no client memory and compares no world value with another."""
+    wrote: it takes no second world, reads no client memory and compares no two world values. A re-entering record's
+    value digest meets the seat's stamp only through `world_stamps.unchanged_since`, or becomes the stamp itself
+    (`stamp_world_update`)."""
     path = REPOSITORY_ROOT / "dnd" / "player" / "world_publication.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     imported = {alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) for alias in node.names}
@@ -1062,6 +1080,14 @@ def test_world_publication_reads_the_world_as_of_the_occurrence_and_never_compar
                 continue
             assert not any(_rooted_at(side, world) for side in (compare.left, *compare.comparators)
                            for world in worlds), f"{function.name} compares a world value (line {compare.lineno})"
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    for call in (node for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                 and node.func.id in {"object_digest", "cached_tile_digest"}):
+        node: ast.AST = call
+        while node in parents and not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                                       and node.func.id in {"unchanged_since", "stamp_world_update"}):
+            node = parents[node]
+        assert isinstance(node, ast.Call), f"a digest used outside the stamp rule (line {call.lineno})"
 
 
 def test_game_import_does_not_load_ai_or_server_packages() -> None:

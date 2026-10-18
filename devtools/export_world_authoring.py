@@ -17,7 +17,8 @@ from dnd.player.facts import (
     SensoryFact, SensoryRows, VersionRows,
 )
 from dnd.player.reduction import encode_player_sequence
-from dnd.player.world_stamps import SeatStamps, WorldDigests, WorldStamps
+from dnd.player.world_digests import TileDigests
+from dnd.player.world_stamps import SeatStamps, WorldStamps
 from dnd.player.static_sent import StaticSent
 from dnd.player.world_publication import seat_world_update
 from dnd.types.cells import EMPTY_CELLS
@@ -49,7 +50,7 @@ def main() -> None:
         passive_perception=0, sense_modes_hash=0, sense_modes=(), visual_access=1)
     update = seat_world_update(authored, 0, (), EMPTY_CELLS, view, AudiencePerception(members={observer: view}),
         audience, None, observed=set(), granted=set(), sent=StaticSent(), pending=StaticSent(),
-        digests=WorldDigests(), stamps=SeatStamps(WorldStamps()))
+        digests=TileDigests(), stamps=SeatStamps(WorldStamps()))
     cells, (visible, seen) = shared_cells((mask_from_positions(positions), mask_from_positions(positions)))
     light_levels, (light,) = shared_values((values_from_items({position: 3 for position in positions}),))
     rows = SensoryRows(uuids=(observer, *(o.item.item_uuid for o in objects)),

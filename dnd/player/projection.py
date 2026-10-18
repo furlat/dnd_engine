@@ -61,8 +61,8 @@ from dnd.player.capture import CompletedLineage, IntervalEnvelope, ObjectiveRow,
 from dnd.player.sheet_facts import sheet_fact
 from dnd.types.actor_sheet import PlayerResourceValue
 from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
-from dnd.player.world_stamps import (SeatStamps, StampChanges, WorldDigests, WorldStamps, forget_written,
-    merge_world_stamps)
+from dnd.player.world_digests import TileDigests, forget_written
+from dnd.player.world_stamps import SeatStamps, StampChanges, WorldStamps, merge_world_stamps
 from dnd.player.static_sent import StaticSent, merge_static_sent
 from dnd.player.reduction import commit_current, fold_senses
 from dnd.player.world_publication import (SensedWorld, disclosed_world_object, object_observed, observed_remnant,
@@ -1055,7 +1055,7 @@ def _fold_version(session: "SessionProjection", folded: dict[UUID, AppliedWorldF
         raise ValueError("A session folds each version once")
     folded[event.uuid] = applied = apply_world_fact(session.world, event, condition)
     if applied is not None:
-        forget_written(session.world_digests, applied)
+        forget_written(session.tile_digests, applied)
     return applied
 
 
@@ -1097,7 +1097,7 @@ def _enter_body(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", acto
 
 
 def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", world: WorldFacts,
-                   digests: WorldDigests, event: Event,
+                   digests: TileDigests, event: Event,
                    applied: AppliedWorldFact | None, folded: Mapping[UUID, AppliedWorldFact | None],
                    before: CellMask) -> None:
     """The seat's world update at an event (`before`: its composed view's visible cells before the event): what
@@ -1126,7 +1126,7 @@ def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", w
 
 
 def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", world: WorldFacts,
-                 digests: WorldDigests, actors: Mapping[UUID, ActorState], event: Event,
+                 digests: TileDigests, actors: Mapping[UUID, ActorState], event: Event,
                  applied: AppliedWorldFact | None,
                  folded: Mapping[UUID, AppliedWorldFact | None], step: BodiesStep) -> None:
     """A seat's part of an event after the session folds took its after-values (`applied`: what the world fold
@@ -1614,8 +1614,8 @@ class SessionProjection:
     versions: dict[UUID, int] = field(default_factory=dict)
     lineages: dict[UUID, int] = field(default_factory=dict)
     world: WorldFacts = field(default_factory=WorldFacts)
-    # The digest of each tile's current value, forgotten with each write by `_fold_version`.
-    world_digests: WorldDigests = field(default_factory=WorldDigests)
+    # The digest of each tile's current value, filled by the publications, forgotten by `_fold_version`'s writes.
+    tile_digests: TileDigests = field(default_factory=TileDigests)
     actors: dict[UUID, ActorState] = field(default_factory=dict)
     walked: set[UUID] = field(default_factory=set)
 
@@ -1899,7 +1899,7 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
         step = _fold_actors(session.actors, folded, event, changes, condition)
         applied = _fold_version(session, folded, event, condition)
         for seat, row in due:
-            _leave_event(walks[seat], group, states[seat], session.world, session.world_digests,
+            _leave_event(walks[seat], group, states[seat], session.world, session.tile_digests,
                          session.actors, row, applied, folded, step)
     return tuple(_emit_initialization(group, state, initialization, walk, world)
         for state, initialization, walk, world in zip(states, initializations, walks, worlds, strict=True))
@@ -1970,7 +1970,7 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
         step = _fold_actors(session.actors, folded, event, walks[0].actor_fact_changes, condition)
         applied = _fold_version(session, folded, event, condition)
         for walk, state in zip(walks, states):
-            _leave_event(walk, group, state, session.world, session.world_digests, session.actors,
+            _leave_event(walk, group, state, session.world, session.tile_digests, session.actors,
                          walk.events[position], applied, folded, step)
     return tuple(_emit_lineage(group, state, lineage, walk, start_cursor)
         for state, lineage, walk, start_cursor in zip(states, lineages, walks, start_cursors))
