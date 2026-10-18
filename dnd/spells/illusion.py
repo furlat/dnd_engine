@@ -1209,6 +1209,7 @@ class SilenceZone(MembershipAreaCondition):
     """
     name: str = Field(default="Silence Zone", description="Condition name.")
     description: str = Field(default="Area of magical silence - no sound, blocks verbal spells", description="Condition description.")
+    blocks_sound: bool = True
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
 
     content_ref: ContentRef = Field(default=SILENCE_ZONE_CONTENT_REF)

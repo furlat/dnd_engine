@@ -7,6 +7,8 @@ encoded JSON). Identities come from a seeded generator, dice faces from a dedica
 change in other random draws cannot move a die), and the process hash seed must be fixed by the caller.
 Identities the value layer mints (in dnd/core/values.py) come from a third generator: the engine orders
 entities, items and conditions by identity, so a change in how many identities values mint must not move them.
+Identities drawn by the standard action templates added after the E0 baselines (60adf05eb) come from a fourth
+(`_POST_BASELINE_TEMPLATES`): every creature registers them, so their draws would move every later identity.
 
     PYTHONHASHSEED=0 PYTHONPATH=<tree> python devtools/performance/gallery_transcript.py record <tree> <out.json> \
         --case fireball --mode ordinary --name <stem> [--seats faction|character|batch:N]
@@ -57,7 +59,11 @@ from pathlib import Path
 _IDENTITIES = random.Random(20261017)
 _VALUE_IDENTITIES = random.Random(20261018)
 _ORACLE_IDENTITIES = random.Random(20261019)
+_TEMPLATE_IDENTITIES = random.Random(20261020)
 _ORACLE = 'devtools/performance/seat_oracle.py'
+# Standard action templates every creature registers that the E0 baseline recordings (60adf05eb) predate, by class
+# name: the NPC lane's Help Attack (SRD Help, aiding an ally's attack), 2026-10-18.
+_POST_BASELINE_TEMPLATES = frozenset({'HelpAttack'})
 
 
 def _identity() -> uuid.UUID:
@@ -65,12 +71,17 @@ def _identity() -> uuid.UUID:
     default factory) come from their own generator, so a change in how many identities values mint does not
     shift entity, item or event identities, which the engine orders by. Identities minted while the seat oracle
     reads the live engine (`--oracle`: an unpublished birth fact per perceived body) come from a third one, so
-    an oracle run keeps the engine identities of a run without it."""
+    an oracle run keeps the engine identities of a run without it. Identities drawn while a post-baseline standard
+    template is constructed (pydantic's __init__ of a `_POST_BASELINE_TEMPLATES` instance) come from a fourth, so
+    adding such a template to every creature keeps the baseline's entity, item and event identities."""
     frame = sys._getframe(1)
     caller = frame
     while caller is not None:
         if caller.f_code.co_filename.endswith(_ORACLE):
             return uuid.UUID(int=_ORACLE_IDENTITIES.getrandbits(128), version=4)
+        if (caller.f_code.co_name == '__init__' and '/pydantic' in caller.f_code.co_filename
+                and type(caller.f_locals.get('self')).__name__ in _POST_BASELINE_TEMPLATES):
+            return uuid.UUID(int=_TEMPLATE_IDENTITIES.getrandbits(128), version=4)
         caller = caller.f_back
     while frame is not None and '/pydantic' in frame.f_code.co_filename:
         frame = frame.f_back

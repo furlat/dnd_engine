@@ -20,6 +20,7 @@ from dnd.core.events import Damage, Event, EventHandler, EventPhase, EventQueue,
 from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry, WallPolyline, WallRing, WallSegment
 from dnd.core.wall_geometry import wall_path_contact, wall_shell_cells
+from dnd.core.saving_throw_types import DamageSaveContext
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.ignition import resolve_interaction
@@ -63,6 +64,7 @@ def apply_wall_damage(zone: AreaCondition, entity: Entity, spec: WallDamageSpec,
     entity.receive_damage(roll.total // 2 if success else roll.total, spec.damage_type, caster.uuid,
         damage_rolls=[roll], damages=[damage], parent_event=parent_event.uuid, effect_id=spec.effect_id,
         independent_resolution=not formation, effect_origin=zone.effect_origin,
+        damage_save=DamageSaveContext(ability=spec.save_ability, success=success, success_fraction=0.5),
         spatial_source=SpatialDamageSource(spatial_effect_uuid=zone.uuid, position=contact_position or entity.position,
             target_position=entity.position, base_height_steps=base_height_steps, exposure="contact"))
 

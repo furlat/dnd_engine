@@ -73,7 +73,7 @@ class SpellcastingConfig(BaseModel):
 
 
 class SpellcastingSource(BaseModel):
-    """One exact class-owned or origin-owned spellcasting source."""
+    """One exact class, origin, or authored-creature spellcasting source."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -81,7 +81,7 @@ class SpellcastingSource(BaseModel):
     source_id: UUID = Field(description="Owning progression grant UUID.")
     ability: AbilityName = Field(description="Ability used by this source.")
     provider_id: str = Field(
-        description="Exact authored class or origin providing this source.",
+        description="Exact authored class, origin, or creature providing this source.",
     )
     caster_progression: CasterProgression | None = Field(
         default=None,
@@ -105,10 +105,10 @@ class SpellcastingSource(BaseModel):
     @model_validator(mode="after")
     def _validate_provider(self) -> Self:
         if self.source_kind == "innate":
-            if not self.provider_id.startswith(("species.", "species_variant.")):
+            if not self.provider_id.startswith(("species.", "species_variant.", "creature.")):
                 raise ValueError(
                     "innate spellcasting provider_id must identify a "
-                    "species or species variant",
+                    "species, species variant, or authored creature",
                 )
             if (
                 self.caster_progression is not None

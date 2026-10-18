@@ -11,6 +11,7 @@ from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, C
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
     ConditionCategory,
+    ConditionRemovalTrigger,
     ConditionTag,
     DurationType,
     InvoluntarySustainLoss,
@@ -39,7 +40,7 @@ from dnd.types.actor import ConditionState
 from dnd.blocks.base_item import BaseItem, ItemLocationStateEvent
 from dnd.core.item_types import ItemConcentrationSlot, ItemLocation
 from dnd.types.residue_fear import PaidEntryRetreat, ResidueFearOrigin
-from typing import Callable, Dict, Any, Optional, List, Literal, Set, Tuple, TypeVar
+from typing import Callable, Dict, Any, Optional, List, Literal, Set, Tuple, TypeVar, cast
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
@@ -971,6 +972,76 @@ class Dodging(BaseCondition):
             return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
+
+
+@_core_condition_identity(
+    content_id="condition.attack_assistance",
+    display_name="Attack Assistance",
+    description="One selected ally has advantage on its next attack against this creature.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Help",
+    sort_order=75,
+)
+class AttackAssistance(BaseCondition):
+    """One ally/enemy pair, consumed on a rolled attack or the helper's next turn."""
+
+    name: str = "Attack Assistance"
+    description: str = "Advantage for the selected ally's next attack before the helper's next turn."
+    condition_category: ConditionCategory = ConditionCategory.STATUS
+    assisted_ally_uuid: UUID
+    removal_triggers: frozenset[ConditionRemovalTrigger] = frozenset({ConditionRemovalTrigger.ENCOUNTER_END})
+
+    def model_post_init(self, context: object) -> None:
+        super().model_post_init(context)
+        self.name = f"Attack Assistance:{self.assisted_ally_uuid}"
+
+    def get_display_name(self) -> str:
+        return "Attack Assistance"
+
+    def _advantage(self, source_entity_uuid: UUID, target_entity_uuid: UUID | None,
+                   context: dict | None) -> AdvantageModifier | None:
+        if (source_entity_uuid != self.target_entity_uuid
+                or target_entity_uuid != self.assisted_ally_uuid):
+            return None
+        return AdvantageModifier(name="Help", value=AdvantageStatus.ADVANTAGE,
+            source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid,
+            use_register=False)
+
+    def _finish(self, event: Event, _source_entity_uuid: UUID) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None and self.uuid in target.active_conditions_by_uuid:
+            target.remove_condition_by_uuid(self.uuid, parent_event=event)
+        return None
+
+    def _deadline(self, event: Event, source_entity_uuid: UUID) -> None:
+        if event.event_type is EventType.SPATIAL_ENTITY_LEFT and cast(SpatialChangeEvent, event).old_position is not None:
+            return None
+        return self._finish(event, source_entity_uuid)
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Help enemy missing")
+        value = target.equipment.ac_bonus
+        modifier = ContextualAdvantageModifier(name="Help", source_entity_uuid=target.uuid,
+            target_entity_uuid=self.assisted_ally_uuid, callable=self._advantage)
+        handle = add_modifier(value, Channel.TO_TARGET_CONTEXTUAL, Kind.ADVANTAGE, modifier)
+        consume = EventHandler(name="Consume Attack Assistance", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.ATTACK_D20_ROLL_RESULT,
+                event_phase=EventPhase.EFFECT, event_source_entity_uuid=self.assisted_ally_uuid,
+                event_target_entity_uuid=target.uuid)], event_processor=self._finish)
+        deadline_triggers = [
+            Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EXECUTION,
+                event_source_entity_uuid=self.source_entity_uuid),
+            Trigger(event_type=EventType.DEATH, event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=self.source_entity_uuid),
+            Trigger(event_type=EventType.SPATIAL_ENTITY_LEFT, event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=self.source_entity_uuid),
+        ]
+        expire = EventHandler(name="Attack Assistance Deadline", source_entity_uuid=target.uuid,
+            trigger_conditions=deadline_triggers, event_processor=self._deadline)
+        target.add_event_handler(consume)
+        target.add_event_handler(expire)
+        return [(value.uuid, handle)], [consume.uuid, expire.uuid], [], [], event.phase_to(EventPhase.EFFECT)
 
 
 @_core_condition_identity(
@@ -2943,6 +3014,7 @@ _CORE_STANDARD_CONDITION_TYPES = (
         Deafened,
         Exhaustion,
         Dodging,
+        AttackAssistance,
         Disengaging,
         Frightened,
         Incapacitated,

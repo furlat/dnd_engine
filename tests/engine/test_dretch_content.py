@@ -85,7 +85,8 @@ def test_discovered_dretch_multiattack_spends_one_action_for_bite_then_claws() -
     Entity.update_all_entities_senses()
     available = get_available_actions(actor)
     attack = next(row for row in available.all_actions
-                  if row.template_name == "Dretch Multiattack")
+                  if row.behavior_id == "action.monster.multiattack")
+    assert attack.display_name == "Multiattack: 1 × Bite, 1 × Claws"
     destination = next(row for row in attack.valid_targets if row.position == target.position)
     cursor = EventQueue.event_cursor()
     # Two misses keep the target alive so both ordered native children run.

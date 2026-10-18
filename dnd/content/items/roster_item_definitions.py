@@ -65,6 +65,16 @@ ROSTER_MAUL_DEFINITION = WeaponDefinition(
  weapon_kind=WeaponKind.MAUL, material=Material.METAL)
 
 
+# Selected Witchdoctor possession. The material vocabulary groups metals;
+# silvering is disclosed authored identity, without an invented defense bypass.
+ROSTER_SILVER_LONGSWORD_DEFINITION = replace(named_item(
+    AUTHORED_WEAPON_DEFINITIONS["weapon.longsword"],
+    item_id="weapon.roster.silver_longsword",name="Silver Longsword"),
+    description="A silvered metal longsword. No additional damage or defense-bypass mechanic.",
+    material=Material.METAL,
+    tags=(*AUTHORED_WEAPON_DEFINITIONS["weapon.longsword"].tags,"silvered","roster"))
+
+
 # Ordinary carried gear uses the existing hand/attack path. Specialist focus,
 # ammunition, loading, tool checks and container contents are deliberately deferred.
 ROSTER_CARRIED_DEFINITIONS: Mapping[str, WeaponDefinition] = MappingProxyType({

@@ -99,7 +99,7 @@ from dnd.core.modifiers import (
     ResistanceModifier,
     ResistanceStatus,
 )
-from dnd.core.saving_throw_types import SavingThrowContext
+from dnd.core.saving_throw_types import DamageSaveContext, SavingThrowContext
 from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts
 from dnd.entity import Entity
 from dnd.monsters.traits import NaturalAttack
@@ -649,6 +649,8 @@ class NativeSaveBurst(BaseAction):
                 damages=damages,
                 damage_rolls=rolls,
                 component_amounts=tuple(amounts),
+                damage_save=DamageSaveContext(ability=self.save_ability, success=saved,
+                    success_fraction=0.5 if self.half_on_save else 0),
                 parent_event=effect.uuid,
                 effect_origin=origin,
                 independent_resolution=True,

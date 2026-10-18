@@ -10,7 +10,7 @@ from dnd.core.values import ModifiableValue, parts
 from collections.abc import Sequence
 from typing import Literal
 from dnd.core.creature_types import DamageType
-from dnd.core.saving_throw_types import SavingThrowEffectTag
+from dnd.core.saving_throw_types import DamageSaveContext, SavingThrowEffectTag
 
 from typing import Optional, Callable
 from dnd.core.base_conditions import BaseCondition
@@ -193,7 +193,8 @@ def source_turn_expiry_handler(owner: BaseCondition, application: Event, *,
 
 
 def deliver_spell_damage(event: SpellEvent,target: BaseBlock,damage: Damage,roll: DiceRoll,
-                         *,amount: int | None=None, on_resolved: Callable[[DamageResolution],None] | None=None) -> SpellEvent:
+                         *,amount: int | None=None, damage_save: DamageSaveContext | None=None,
+                         on_resolved: Callable[[DamageResolution],None] | None=None) -> SpellEvent:
     """Deliver a native spell component with its retained origin and exact critical."""
     if event.canceled:
         return event
@@ -221,6 +222,7 @@ def deliver_spell_damage(event: SpellEvent,target: BaseBlock,damage: Damage,roll
         target.receive_damage(total,damage.damage_type,damage.source_entity_uuid,
             parent_event=event.uuid,damages=damages,damage_rolls=rolls,
             critical_hit=event.attack_outcome is AttackOutcome.CRIT,effect_origin=event.get_effect_origin(),
+            damage_save=damage_save,
             on_resolved=on_resolved)
     return event.with_updates(damages=damages,damage_rolls=rolls,total_damage=total)
 

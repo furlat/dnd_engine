@@ -10,7 +10,7 @@ from dnd.core.content.identities import ContentRef
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import Damage, Event, EventPhase, EventQueue, EventType, ForcedMovementEvent, SpatialChangeEvent
 from dnd.core.gridmap import get_map
-from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
+from dnd.core.saving_throw_types import DamageSaveContext, SavingThrowContext, SavingThrowEffectTag
 from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.types.traps import TrapPayload
@@ -47,7 +47,8 @@ def retreat_after_saved_entry(entity: Entity, *, parent_event: Event) -> ForcedM
 
 def apply_trap_payload(entity: Entity, payload: TrapPayload, *, source_uuid: UUID,
                        content_ref: ContentRef, name: str, parent_event: Event,
-                       half_damage: bool = False, apply_condition: bool = True) -> None:
+                       half_damage: bool = False, apply_condition: bool = True,
+                       damage_save: DamageSaveContext | None = None) -> None:
     """Apply authored consequences after the owning mechanism resolves avoidance."""
     for component in payload.damages:
         bonus = ModifiableValue(source_entity_uuid=source_uuid,
@@ -60,7 +61,7 @@ def apply_trap_payload(entity: Entity, payload: TrapPayload, *, source_uuid: UUI
         if amount > 0:
             entity.receive_damage(amount, component.damage_type, source_uuid,
                 damage_rolls=[roll], damages=[damage], parent_event=parent_event.uuid,
-                effect_id=content_ref.identity_key, independent_resolution=True)
+                effect_id=content_ref.identity_key, independent_resolution=True, damage_save=damage_save)
     condition = payload.condition
     if not apply_condition or condition is None:
         return

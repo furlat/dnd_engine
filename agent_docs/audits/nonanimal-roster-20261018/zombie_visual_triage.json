@@ -1,0 +1,1110 @@
+{
+  "date": "2026-10-18",
+  "scope": "Read-only visual triage of all78 zombie source variants, using installed original combined PNGs; no production or design documents changed.",
+  "method": "Idle frame0 in East,South,West facings only. Classifications are cautious visual triage, not an approved roster change or animation/rules qualification. Fantasy adaptable means no decisive modern feature in selected samples; final clothing preference remains a human design choice.",
+  "totals": {
+    "clear modern": 24,
+    "ambiguous": 8,
+    "fantasy adaptable": 46
+  },
+  "rows": [
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieCop1",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieCop1/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieCop2",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieCop2/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieCop3",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "ambiguous",
+      "reason": "White short-sleeved uniform-like shirt with dark lower clothes; likely modern role, but no cap/firearm decisive in selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieCop3/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieCop4",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieCop4/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieFemale1",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieFemale1/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieFemale2",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieFemale2/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieFemale3",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieFemale3/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieFemale4",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieFemale4/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieFemale5",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieFemale5/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieFemale6",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieFemale6/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieFemale7",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieFemale7/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieGeneral1",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieGeneral1/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieGeneral2",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieGeneral2/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieHulk1",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieHulk1/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieHulk2",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieHulk2/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieMale1",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieMale1/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieMale2",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieMale2/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieMale3",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieMale3/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieMale4",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "ambiguous",
+      "reason": "Matching bright civilian outfit with cap/brim; looks modern casual/workwear, but selected pixels do not resolve a decisive exclusive feature.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieMale4/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieMale5",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "ambiguous",
+      "reason": "Matching bright civilian outfit with cap/brim; looks modern casual/workwear, but selected pixels do not resolve a decisive exclusive feature.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieMale5/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieMale6",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieMale6/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieMale7",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieMale7/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieMale8",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieMale8/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieMale9",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieMale9/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieMonster1",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieMonster1/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieMonster2",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieMonster2/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieMonster3",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieMonster3/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieRadioactive1",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Pale decayed body and green ooze/glow; no visibly modern occupational gear or firearm in these samples. Source label does not require radiation lore.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieRadioactive1/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieRadioactive2",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Pale decayed body and green ooze/glow; no visibly modern occupational gear or firearm in these samples. Source label does not require radiation lore.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieRadioactive2/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieRadioactive3",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Pale decayed body and green ooze/glow; no visibly modern occupational gear or firearm in these samples. Source label does not require radiation lore.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieRadioactive3/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieSoldier1",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieSoldier1/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieSoldier2",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieSoldier2/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieSoldier3",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieSoldier3/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieSoldier4",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "ambiguous",
+      "reason": "Dark buttoned suit/officer-like coat; likely modern, but selected idle facings do not clearly show gun or military helmet.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieSoldier4/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieSoldier5",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieSoldier5/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "hdz",
+      "source_variant": "ZombieSoldier6",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-hd/With shadow/ZombieSoldier6/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie 01",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie 01/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie 02",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie 02/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie 03",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie 03/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie 04",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie 04/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie 05",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "ambiguous",
+      "reason": "Tall pale cook/chef-like headwear and fitted pale work clothing. Could be food-service costume; do not infer laboratory occupation from prior name.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie 05/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie 06",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie 06/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie 07",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "ambiguous",
+      "reason": "Tall pale cook/chef-like headwear and fitted pale work clothing. Could be food-service costume; do not infer laboratory occupation from prior name.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie 07/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie 08",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie 08/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie 09",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie 09/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie 10",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie 10/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Cop 01",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Cop 01/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Cop 02",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Cop 02/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Cop 03",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Cop 03/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Cop 04",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Cop 04/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Decay 01",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Decay 01/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Decay 02",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Decay 02/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Decay 03",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Decay 03/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Decay 04",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Decay 04/Idle.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Decay 05",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Decay 05/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Fireman 01",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Fireman 01/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Fireman 02",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Fireman 02/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Radioactive 01",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Pale decayed body and green ooze/glow; no visibly modern occupational gear or firearm in these samples. Source label does not require radiation lore.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Radioactive 01/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Radioactive 02",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Pale decayed body and green ooze/glow; no visibly modern occupational gear or firearm in these samples. Source label does not require radiation lore.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Radioactive 02/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Radioactive 03",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Pale decayed body and green ooze/glow; no visibly modern occupational gear or firearm in these samples. Source label does not require radiation lore.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Radioactive 03/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Radioactive 04",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Pale decayed body and green ooze/glow; no visibly modern occupational gear or firearm in these samples. Source label does not require radiation lore.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Radioactive 04/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Soldier 01",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Soldier 01/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Soldier 02",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Soldier 02/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Soldier 03",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Soldier 03/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Soldier 04",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Soldier 04/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Soldier 05",
+      "prior_20260930_classification": "excluded modern",
+      "visual_triage": "clear modern",
+      "reason": "Recognizably modern police/military/protective uniform, matching cap/helmet and/or firearm/modern protective equipment in the selected idle facings.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Soldier 05/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Swamp 01",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Swamp 01/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Swamp 02",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Swamp 02/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Swamp 03",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "ambiguous",
+      "reason": "Collared coat/white-shirt and tie-like central silhouette; could read modern formal clothes or adaptable fantasy attire at this resolution.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Swamp 03/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Swamp 04",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Swamp 04/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Swamp 05",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Swamp 05/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Swamp 06",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "ambiguous",
+      "reason": "Collared coat/white-shirt and tie-like central silhouette; could read modern formal clothes or adaptable fantasy attire at this resolution.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Swamp 06/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Swamp 07",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Swamp 07/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Swamp 08",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Swamp 08/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Swamp 09",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "fantasy adaptable",
+      "reason": "Generic torn clothing, exposed decayed body or monstrous build; no decisive modern occupational prop in selected idle facings. Modern pack origin alone does not disqualify.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Swamp 09/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Worker 01",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "clear modern",
+      "reason": "Yellow construction hardhat, industrial jacket/vest and blue work trousers; Worker01 also carries red hooked tool.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Worker 01/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Worker 02",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "clear modern",
+      "reason": "Yellow construction hardhat, industrial jacket/vest and blue work trousers; Worker01 also carries red hooked tool.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Worker 02/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    },
+    {
+      "pack": "top",
+      "source_variant": "Zombie Worker 03",
+      "prior_20260930_classification": "retained fantasy candidate",
+      "visual_triage": "clear modern",
+      "reason": "Yellow construction hardhat, industrial jacket/vest and blue work trousers; Worker01 also carries red hooked tool.",
+      "source_png": "/home/tommaso/Dev/NDClient/.media/smallscale/authored/zombies-top-down/Zombies with shadow/Zombie Worker 03/Idle 1.png",
+      "sample_frame_zero": true,
+      "sample_direction_rows": [
+        0,
+        2,
+        4
+      ]
+    }
+  ],
+  "sheets": [
+    "/tmp/zombie-triage-hd-01-18-20261018.png",
+    "/tmp/zombie-triage-hd-19-36-20261018.png",
+    "/tmp/zombie-triage-top-01-21-20261018.png",
+    "/tmp/zombie-triage-top-22-42-20261018.png"
+  ]
+}
