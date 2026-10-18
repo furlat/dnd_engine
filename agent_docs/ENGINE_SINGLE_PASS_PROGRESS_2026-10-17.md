@@ -335,3 +335,30 @@ Hard rules:
     - Command 187 → 178 total.
   - **For the human (AGENTS.md "no getattr to cheat"):** `BaseBlock.value_fields()` reads value fields by `getattr` over names recorded per class from `model_fields`. That is narrower than the per-instance getattr + isinstance scan it replaces, which also remains for child blocks (base_block.py:405). The explicit alternative is a per-class `value_fields()` in ~14 classes. Merged as is, pending your ruling.
   - Left as is: transient records ("Object AC", dice bonuses) still register by default, as before.
+- 2026-10-18: **Discovery merged (8d1b1d78f; abf1918aa, 0472a895b).**
+  - Use-object contacts are traced only from origins within the object's reach: `GridMap.manual_object_contact_origins`, and one pure `contact_surface(placement)` shared with `attack_object_contact`.
+  - The plan's §14.2 #4 names this `contact_ring_cells`, with the intersection in Entity. Here the ring and the exact check are one GridMap query (same mechanism, different name and owner).
+  - Gates (agent, vs f908ec95e):
+    - every Choices/Preview/Command response and available-actions result identical;
+    - brute-force oracle: 0 mismatches over 2,024 queries / 253,725 origins;
+    - agreement cases identical;
+    - transcripts byte-identical; folded states equal;
+    - sweep 0 new vs r21; pyright 0 new.
+  - `manual_object_contact` calls: caster menu 2,943 → 34, AI decision 3,978 → 33.
+  - Time (median of 3, loaded machine):
+    - caster menu 160 → 148;
+    - fighter menu 85 → 75;
+    - AI decisions 2 / 3 / 4: 104 → 91, 104 → 82, 271 → 255;
+    - AI decision 1 flat at ~150.
+  - **Free-aim (A2): not changed; needs a decision.** The menu's only consumer of zone spells' `get_valid_positions` (`_aoe_aim_points`) needs the legality of at most C+1 aim points, but the whole legal region is enumerated (~8 ms). The exact fix is a per-point legality check, which changes the `get_valid_positions` contract.
+  - **Left (next owners):**
+    - per-template `attack_object_contact` from a single origin inside weapon or spell range: ~18 ms caster, ~30 ms fighter menu / AI. 169 per fighter menu are exact duplicates: entity.py:5842 repeats base_actions.py:1441's call.
+    - target HP reads through the value layer: ~21 % of the caster menu.
+    - AoE aims ~24 %; footprints ~10 %, which fall to ~22–25 ms with PV1a-4's arrays and ~4–10 ms with a per-cell PROPAGATION entry grid (A3 estimate).
+    - turn-start navigation: ~23 % of AI decision 1 (PT).
+- 2026-10-18: **PV2 progress (agent, not merged yet).** Shared rows per group, with removals in the same interning; folded client state strictly equal to 73c4fd0ea on 9 cases.
+  - Largest seat update: Sleet cast 321 → 149 KB, Sleet drop 615 → 186, SG moves ~230 → 114–127, Fireball 327 → 254, CoD 330 → 263.
+  - Integrator approved, within PV2: default-valued SensoryFact scalars left out of the dump by the cells' exclude_if rule (SG moves ~90 KB).
+  - Still over 100 KB:
+    - Fireball/CoD: world_updates ~70 KB, combat_log 41–57, resolution_ref ~14, version_rows ~13.
+    - Sleet drop: per-observer cells 70 KB.
