@@ -11,7 +11,7 @@ from dnd.entity import Entity
 from dnd.player.application import capture_application_operation, initialize_audiences, seat_content
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import PlayerUpdate
-from dnd.player.reduction import reduce_initialization, reduce_operation
+from dnd.player.reduction import node_lineages, parent_lineages, reduce_initialization, reduce_operation
 from dnd.player.session import Operation, close_session, create_session
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.enchantment import Bless
@@ -63,10 +63,10 @@ def test_immunity_log_belongs_to_its_canceled_condition_event_and_replays(nested
         assert node.combat_log.compact == canceled.combat_log.compact
         assert node.combat_log.target_uuid == str(target.uuid)
         if nested:
-            assert node.parent_lineage is not None
-            assert any(parent.lineage == node.parent_lineage
-                and node.lineage in parent.children_lineages
-                for lineage in update.lineages for parent in lineage.events)
+            # Its parent is the group's node listing it among its children (the edge is sent once).
+            group = next(lineage for lineage in update.lineages if node in lineage.events)
+            own = node_lineages((node,), group.version_rows)[0]
+            assert own in parent_lineages(group.events, group.version_rows)
         detached = PlayerUpdate.model_validate_json(update.model_dump_json())
         close_session(session)
         reset_engine_runtime()

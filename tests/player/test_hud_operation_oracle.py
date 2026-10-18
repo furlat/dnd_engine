@@ -36,7 +36,7 @@ def deliver(runtime, clients: dict[str, PlayerState], records) -> None:
                 content_additions=record.content_additions)
         elif isinstance(record, PlayerOperation):
             seat = seats[record.cursor.audience_id]
-            clients[seat] = reduce_operation(clients[seat], PlayerUpdate(audience=record.audience,
+            clients[seat] = reduce_operation(clients[seat], PlayerUpdate(generation=record.generation, observer_uuid=record.observer_uuid,
                 lineages=record.lineages, hud=record.hud, combat_log_appends=record.combat_log_appends,
                 content_additions=record.content_additions))
     for seat, client in clients.items():

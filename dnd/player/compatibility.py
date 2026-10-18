@@ -68,7 +68,8 @@ def recorded_area_policy(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def upgrade_spell_fact(value: object) -> object:
-    if isinstance(value, dict):
+    """A recorded cast without its area policy gets its behavior's; an application declares nothing."""
+    if isinstance(value, dict) and value.get("behavior_id") is not None:
         return recorded_area_policy(value)
     return value
 

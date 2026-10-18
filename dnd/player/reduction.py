@@ -26,6 +26,7 @@ from dnd.player.facts import (
     PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, SheetPatch, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialEffectSighting, SpatialFact, TurnFact,
     VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact, PlayerObject, StaticStore, PlayerLightSource,
+    PlayerResolution, SpellFact,
 )
 from dnd.player.sensory_facts import (LightPatch, LightRow as ComposedLightRow, SensoryFact as ComposedSensoryFact,
     SensoryRows as ComposedSensoryRows, SpatialEffectPatch, SpatialEffectSighting as ComposedSighting)
@@ -272,9 +273,6 @@ def stage_static(target: PlayerState, updates: tuple[WorldUpdate, ...]) -> None:
 
 def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
     """Supply absent binding contacts without advancing known world geometry."""
-    if (target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid
-            or target.viewing_audience != resolve_audience(lineage.observer_uuid, lineage.audience)):
-        raise ValueError("player lineage belongs to a different observer or generation")
     result = stage_actors(target, lineage.bodies)
     stage_static(result, lineage.world_updates)
     for update in lineage.world_updates:
@@ -583,10 +581,44 @@ def _apply_nodes(result: PlayerState, nodes: tuple[PlayerNode, ...], versions: V
                         occurrences=occurrences, audience_composition=audience_composition)
 
 
+def node_lineages(nodes: Sequence[PlayerNode], versions: VersionRows) -> tuple[int, ...]:
+    """Each received node's lineage: its version row's."""
+    owner = dict(zip(versions.occurrences, versions.lineages))
+    return tuple(owner[node.occurrence] for node in nodes)
+
+
+def parent_lineages(nodes: Sequence[PlayerNode], versions: VersionRows) -> dict[int, int]:
+    """Each lineage's parent in a received group: the lineage of the node listing it among its children, else
+    the parent its own node names (one its group does not carry)."""
+    lineages = node_lineages(nodes, versions)
+    parents: dict[int, int] = {}
+    for node, owner in zip(nodes, lineages):
+        for child in node.children_lineages:
+            parents.setdefault(child, owner)
+    for node, owner in zip(nodes, lineages):
+        if node.parent_lineage is not None:
+            parents.setdefault(owner, node.parent_lineage)
+    return parents
+
+
+def check_spell_declarations(nodes: Sequence[PlayerNode], versions: VersionRows,
+                             resolutions: Sequence[PlayerResolution]) -> None:
+    """A target's spell application carries no declaration: its cast's does, on a node of the cast's lineage in
+    the same group (plan §3.6). Raises ValueError when a group sends an application without its cast."""
+    declared = {owner for node, owner in zip(nodes, node_lineages(nodes, versions))
+                if isinstance(node.fact, SpellFact) and node.fact.source_entity_uuid is not None}
+    for node in nodes:
+        if (isinstance(node.fact, SpellFact) and node.fact.source_entity_uuid is None and node.resolution is not None
+                and resolutions[node.resolution].application_id is not None
+                and resolutions[node.resolution].lineage not in declared):
+            raise ValueError("A spell application's group carries its cast's declaration")
+
+
 def state_before_event(before: PlayerState, lineage: PlayerLineage, event: PlayerNode) -> PlayerState:
     """Retained subjective state just before a descendant's declaration."""
     versions = lineage.version_rows
-    first = min(occurrence for occurrence, owner in zip(versions.occurrences, versions.lineages) if owner == event.lineage)
+    own = node_lineages((event,), versions)[0]
+    first = min(occurrence for occurrence, owner in zip(versions.occurrences, versions.lineages) if owner == own)
     completed = {occurrence for occurrence in versions.occurrences if occurrence < first}
     events = tuple(row for row in lineage.events if row.occurrence in completed)
     if not events:
@@ -604,6 +636,7 @@ def reduce_initialization(initialization: PlayerInitialization, *,
     target = PlayerState(generation=initialization.generation, observer_uuid=initialization.observer_uuid,
                          world=initialization.world,
                          audience=resolve_audience(initialization.observer_uuid, initialization.audience))
+    check_spell_declarations(initialization.nodes, initialization.version_rows, initialization.resolutions)
     target = reduce_nodes(target, initialization.nodes, initialization.version_rows,
                      initialization.bodies, initialization.world_updates, initialization.sensory_rows)
     target.reducer_cursor = initialization.end_cursor
@@ -657,9 +690,6 @@ def reduce_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
 
 def _apply_lineage(target: PlayerState, lineage: PlayerLineage, *,
                    audience_composition: AudienceComposition | None = None) -> None:
-    if (target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid
-            or target.viewing_audience != resolve_audience(lineage.observer_uuid, lineage.audience)):
-        raise ValueError("player lineage belongs to a different observer or generation")
     if lineage.end_cursor <= target.reducer_cursor:
         raise ValueError("player lineage precedes this reduction position")
     result = target
@@ -670,28 +700,32 @@ def _apply_lineage(target: PlayerState, lineage: PlayerLineage, *,
 
 def lineage_branch(lineage: PlayerLineage, root: PlayerNode) -> PlayerLineage:
     """A root's branch of a received group; its folds first stage the group's statics (`stage_static`)."""
-    by_lineage = {node.lineage: node for node in lineage.events}
-    intervals: dict[int, tuple[int, int]] = {}
     versions = lineage.version_rows
+    owners = node_lineages(lineage.events, versions)
+    parents = parent_lineages(lineage.events, versions)
+    children: dict[int, list[int]] = {}
+    for node, owner in zip(lineage.events, owners):
+        children.setdefault(owner, []).extend(node.children_lineages)
+    intervals: dict[int, tuple[int, int]] = {}
     for occurrence, owner in zip(versions.occurrences, versions.lineages):
         first, last = intervals.get(owner, (occurrence, occurrence))
         intervals[owner] = min(first, occurrence), max(last, occurrence)
-    first, last = intervals[root.lineage]
+    root_lineage = node_lineages((root,), versions)[0]
+    first, last = intervals[root_lineage]
     selected: set[int] = set()
     # Privacy can remove an intermediate cause (for example a carried light's
     # update between a walking step and its sensory result). The received
     # occurrence interval still places that unparented result inside this step.
     # Keep its real wire ancestry absent; this is a chronological branch view.
-    pending = [root.lineage, *(node.lineage for node in lineage.events
-        if node.parent_lineage is None and first <= intervals[node.lineage][0]
-        and intervals[node.lineage][1] <= last)]
+    pending = [root_lineage, *(owner for owner in owners
+        if owner not in parents and first <= intervals[owner][0] and intervals[owner][1] <= last)]
     while pending:
         identity = pending.pop()
         if identity in selected:
             continue
         selected.add(identity)
-        pending.extend(by_lineage[identity].children_lineages)
-    nodes = tuple(node for node in lineage.events if node.lineage in selected)
+        pending.extend(children.get(identity, ()))
+    nodes = tuple(node for node, owner in zip(lineage.events, owners) if owner in selected)
     kept = [(occurrence, owner) for occurrence, owner in zip(versions.occurrences, versions.lineages) if owner in selected]
     identities = {occurrence for occurrence, _ in kept}
     return replace(lineage, root=next(index for index, node in enumerate(nodes) if node.occurrence == root.occurrence),
@@ -719,8 +753,8 @@ def decode_player_sequence(payload: bytes) -> tuple[PlayerState, tuple[PlayerLin
 def reduce_operation(target: PlayerState, update: PlayerUpdate) -> PlayerState:
     """The client fold of one received operation (live clients, probes and saved replay)."""
     result = copy_target(target)
-    if update.audience != target.viewing_audience:
-        raise ValueError("An operation cannot change its authorized audience")
+    if update.generation != target.generation or update.observer_uuid != target.observer_uuid:
+        raise ValueError("An operation belongs to another observer or generation")
     if update.content_additions:
         content = {row.ref.identity_key: row for row in result.content}
         for descriptor in update.content_additions:
@@ -733,6 +767,7 @@ def reduce_operation(target: PlayerState, update: PlayerUpdate) -> PlayerState:
     for lineage in update.lineages:
         if lineage.start_cursor != result.reducer_cursor:
             raise ValueError("Operation occurrence sequence has a gap")
+        check_spell_declarations(lineage.events, lineage.version_rows, lineage.resolutions)
         if composition is None and any(not node.canceled and isinstance(node.fact, SensoryFact)
                                        for node in lineage.events):
             composition = begin_audience_composition(result.perception, result.observer_uuid)

@@ -140,7 +140,8 @@ def capture_application_operation(runtimes: dict[str, AudienceRuntime], operatio
             observed_content_additions(runtime.content_catalog, known_content_keys, tuple(lineages[seat])))
         additions = tuple(added[key] for key in sorted(added))
         sent.content.update(added)
-        results[seat] = PlayerUpdate(audience=audience, lineages=tuple(lineages[seat]), hud=hud,
+        results[seat] = PlayerUpdate(generation=projection.generation, observer_uuid=projection.observer_uuid,
+            lineages=tuple(lineages[seat]), hud=hud,
             combat_log_appends=appends, content_additions=additions)
     return results
 

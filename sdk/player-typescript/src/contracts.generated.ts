@@ -176,7 +176,6 @@ export type Bounds = [number, number, number, number];
 export type Width = number;
 export type Height = number;
 export type Occurrence = number;
-export type Lineage = number;
 export type ParentEvent = number | null;
 export type ParentLineage = number | null;
 export type ChildrenLineages = number[];
@@ -267,15 +266,12 @@ export type TargetPosition = [number, number] | null;
 export type TargetBaseHeightSteps = number | null;
 export type AttackSourceKind = "equipped" | "unarmed" | "natural";
 export type Kind6 = "spell";
-export type SourceEntityUuid1 = string;
+export type SourceEntityUuid1 = string | null;
 export type TargetEntityUuid1 = string | null;
 export type BehaviorId2 = string | null;
 export type Name1 = string | null;
 export type SourcePosition = [number, number] | null;
 export type DeclaredTargetEntityUuids = string[];
-export type Lineage1 = number;
-export type ApplicationId = string;
-export type Index = number;
 export type Kind7 = "creature" | "object";
 export type Uuid = string;
 /**
@@ -284,8 +280,8 @@ export type Uuid = string;
  */
 export type Position = [number, number];
 export type BaseHeightSteps = number;
-export type ApplicationId1 = string;
-export type CastOrigin = "actor" | "source_item";
+export type ApplicationId = string;
+export type CastOrigin = ("actor" | "source_item") | null;
 export type SourceItemUuid1 = string | null;
 export type EffectId = string | null;
 export type AoePosition = [number, number] | null;
@@ -417,7 +413,7 @@ export type AreaGeometry1 =
   | null;
 export type AnchorElevationSteps = number | null;
 export type Suppressions = SpellSuppression[];
-export type AreaPropagation = "line_of_effect" | "connected" | "ignore_barriers";
+export type AreaPropagation = ("line_of_effect" | "connected" | "ignore_barriers") | null;
 export type TargetKind1 = "creature" | "object";
 export type TargetPosition1 = [number, number] | null;
 export type TargetBaseHeightSteps1 = number | null;
@@ -2200,7 +2196,7 @@ export type Position10 = [number, number];
 export type ResidueId2 = string;
 export type ConditionUuid6 = string | null;
 export type Amount1 = number | null;
-export type Index1 = number;
+export type Index = number;
 export type Ellipses = ResidueEllipse[];
 export type Amount2 = number;
 export type DepositUuid = string;
@@ -2491,8 +2487,8 @@ export type LightRemovalUuidIndex = number[];
 export type LightRemovalRevisions = number[];
 export type LightLevels = CellValues2[];
 export type Hazards = CellValues2[];
-export type Lineage2 = number;
-export type ApplicationId2 = string | null;
+export type Lineage = number;
+export type ApplicationId1 = string | null;
 export type Resolutions = PlayerResolution[];
 export type Kind61 = "ack";
 export type ActorUuid3 = string;
@@ -2511,7 +2507,7 @@ export type Kind63 = "creature" | "object";
 export type Name15 = string | null;
 export type Subjects = ChoiceSubject[];
 export type Positions3 = [number, number][];
-export type Index2 = number;
+export type Index1 = number;
 export type Distance = number | null;
 export type PathCost = number | null;
 export type ExtraTargetUuids = string[] | null;
@@ -2529,7 +2525,7 @@ export type SafePathOpportunityAttackExposures = ChoiceExposure[];
 export type Kind64 = "subject";
 export type Subject = number;
 export type Position15 = number | null;
-export type Index3 = number;
+export type Index2 = number;
 export type Distance1 = number | null;
 export type PathCost1 = number | null;
 export type ExtraTargetUuids1 = string[] | null;
@@ -2542,7 +2538,7 @@ export type OpportunityAttackExposures1 = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures1 = ChoiceExposure[];
 export type Kind65 = "position";
 export type Position16 = number;
-export type Index4 = number;
+export type Index3 = number;
 export type Distance2 = number | null;
 export type PathCost2 = number | null;
 export type ExtraTargetUuids2 = string[] | null;
@@ -3315,7 +3311,7 @@ export type Kind86 = "ready";
 export type Kind87 = "stream_status";
 export type Generation1 = string;
 export type ObserverUuid3 = string;
-export type Lineage3 = number;
+export type Lineage1 = number;
 export type Root = number | null;
 export type Events = PlayerNode[];
 export type StartCursor = number;
@@ -3649,11 +3645,12 @@ export interface PlayerWorld {
  *
  * Versions are identified by the seat's occurrence index (an entry of its
  * group's `version_rows.occurrences`), lineages by the occurrence index of their first
- * version the seat received.
+ * version the seat received. A node's lineage is its version row's (`node_lineages`); its parent lineage
+ * is the lineage of the group's node listing it in `children_lineages`, and is sent only where no such node
+ * is in its group (`parent_lineage`, e.g. a group root whose parent an earlier group carried).
  */
 export interface PlayerNode {
   occurrence: Occurrence;
-  lineage: Lineage;
   parent_event?: ParentEvent;
   parent_lineage?: ParentLineage;
   children_lineages?: ChildrenLineages;
@@ -3705,15 +3702,21 @@ export interface ConditionDurationSummary {
   duration_type: DurationType;
   remaining_rounds: RemainingRounds;
 }
+/**
+ * A spell's cast, or one target's application of it.
+ *
+ * The cast carries the declaration (source, behavior, name, declared targets, area, origin). An application
+ * (its node's resolution names an application of the cast's lineage) carries only its target, propagation and
+ * attack outcome: its declaration is the cast's, whose nodes its group carries (plan §3.6).
+ */
 export interface SpellFact {
   kind?: Kind6;
-  source_entity_uuid: SourceEntityUuid1;
+  source_entity_uuid?: SourceEntityUuid1;
   target_entity_uuid: TargetEntityUuid1;
-  behavior_id: BehaviorId2;
-  name: Name1;
-  source_position: SourcePosition;
-  declared_target_entity_uuids: DeclaredTargetEntityUuids;
-  application: SpellApplication | null;
+  behavior_id?: BehaviorId2;
+  name?: Name1;
+  source_position?: SourcePosition;
+  declared_target_entity_uuids?: DeclaredTargetEntityUuids;
   propagation?: EffectPropagationLink | null;
   attack_outcome?: AttackOutcome | null;
   cast_origin?: CastOrigin;
@@ -3728,18 +3731,10 @@ export interface SpellFact {
   target_position?: TargetPosition1;
   target_base_height_steps?: TargetBaseHeightSteps1;
 }
-/**
- * A spell application's membership: its owning lineage (the seat's lineage index), identity and order.
- */
-export interface SpellApplication {
-  lineage: Lineage1;
-  application_id: ApplicationId;
-  index: Index;
-}
 export interface EffectPropagationLink {
   source: EffectEndpoint;
   target: EffectEndpoint;
-  application_id: ApplicationId1;
+  application_id: ApplicationId;
 }
 /**
  * Actual contact retained before an application can remove its recipient.
@@ -4499,12 +4494,13 @@ export interface ItemChargeFact {
   resource_change?: ItemResourceChange | null;
 }
 /**
- * A witnessed mechanical transition, restricted to disclosed fixture cells.
+ * A witnessed mechanical transition, restricted to disclosed fixture cells. A removal names only the cells it
+ * removed (`removed_positions`); its `positions` are left out.
  */
 export interface SpatialEffectStateFact {
   kind?: Kind27;
   spatial_effect_uuid: SpatialEffectUuid1;
-  positions: Positions2;
+  positions?: Positions2;
   previous_state: TrapState | null;
   state: TrapState | null;
   previous_pressed?: PreviousPressed;
@@ -5476,7 +5472,7 @@ export interface ResidueRow {
  * One contribution of a residue, set at its index (the index after the last appends one).
  */
 export interface ContributionRow {
-  index: Index1;
+  index: Index;
   contribution: ResidueContribution;
 }
 /**
@@ -6028,8 +6024,8 @@ export interface CellValues2 {
  * A resolution nodes belong to: the resolved lineage (the seat's lineage index) and, for one application of it, its identity.
  */
 export interface PlayerResolution {
-  lineage: Lineage2;
-  application_id?: ApplicationId2;
+  lineage: Lineage;
+  application_id?: ApplicationId1;
 }
 export interface AckRequest {
   cursor: PlayerCursor;
@@ -6075,7 +6071,7 @@ export interface ChoiceSubject {
   name?: Name15;
 }
 export interface SubjectBinding {
-  index: Index2;
+  index: Index1;
   distance?: Distance;
   path_cost?: PathCost;
   extra_target_uuids?: ExtraTargetUuids;
@@ -6097,7 +6093,7 @@ export interface ChoiceExposure {
   to_position: ToPosition2;
 }
 export interface PositionBinding {
-  index: Index3;
+  index: Index2;
   distance?: Distance1;
   path_cost?: PathCost1;
   extra_target_uuids?: ExtraTargetUuids1;
@@ -6112,7 +6108,7 @@ export interface PositionBinding {
   position: Position16;
 }
 export interface SelfBinding {
-  index: Index4;
+  index: Index3;
   distance?: Distance2;
   path_cost?: PathCost2;
   extra_target_uuids?: ExtraTargetUuids2;
@@ -6638,7 +6634,8 @@ export interface StreamStatus {
   status: StatusSnapshot;
 }
 export interface PlayerOperation {
-  audience: PlayerAudience;
+  generation: Generation1;
+  observer_uuid: ObserverUuid3;
   lineages: Lineages1;
   hud: PlayerHUDPatch | null;
   combat_log_appends: CombatLogAppends;
@@ -6650,10 +6647,12 @@ export interface PlayerOperation {
   command_number: CommandNumber7;
   boundary: BoundaryState;
 }
+/**
+ * One emitted group. Its envelope (generation, observer, audience) is its update's or its sequence's
+ * (plan §3.6: the envelope once, the audience in the initialization).
+ */
 export interface PlayerLineage {
-  generation: Generation1;
-  observer_uuid: ObserverUuid3;
-  lineage: Lineage3;
+  lineage: Lineage1;
   root: Root;
   events: Events;
   version_rows: VersionRows;
@@ -6661,7 +6660,6 @@ export interface PlayerLineage {
   end_cursor: EndCursor1;
   bodies?: Bodies1;
   world_updates?: WorldUpdates1;
-  audience?: PlayerAudience | null;
   sensory_rows?: SensoryRows1;
   resolutions?: Resolutions1;
 }

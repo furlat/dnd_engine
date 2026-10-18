@@ -15636,17 +15636,8 @@
         "additionalProperties": false
       },
       "PlayerLineage": {
+        "description": "One emitted group. Its envelope (generation, observer, audience) is its update's or its sequence's\n(plan \u00a73.6: the envelope once, the audience in the initialization).",
         "properties": {
-          "generation": {
-            "format": "uuid",
-            "title": "Generation",
-            "type": "string"
-          },
-          "observer_uuid": {
-            "format": "uuid",
-            "title": "Observer Uuid",
-            "type": "string"
-          },
           "lineage": {
             "title": "Lineage",
             "type": "integer",
@@ -15704,17 +15695,6 @@
             "title": "World Updates",
             "type": "array"
           },
-          "audience": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlayerAudience"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
           "sensory_rows": {
             "$ref": "#/components/schemas/SensoryRows",
             "default": {
@@ -15752,8 +15732,6 @@
           }
         },
         "required": [
-          "generation",
-          "observer_uuid",
           "lineage",
           "root",
           "events",
@@ -15968,16 +15946,10 @@
         "additionalProperties": false
       },
       "PlayerNode": {
-        "description": "One disclosed event version.\n\nVersions are identified by the seat's occurrence index (an entry of its\ngroup's `version_rows.occurrences`), lineages by the occurrence index of their first\nversion the seat received.",
+        "description": "One disclosed event version.\n\nVersions are identified by the seat's occurrence index (an entry of its\ngroup's `version_rows.occurrences`), lineages by the occurrence index of their first\nversion the seat received. A node's lineage is its version row's (`node_lineages`); its parent lineage\nis the lineage of the group's node listing it in `children_lineages`, and is sent only where no such node\nis in its group (`parent_lineage`, e.g. a group root whose parent an earlier group carried).",
         "properties": {
           "occurrence": {
             "title": "Occurrence",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "lineage": {
-            "title": "Lineage",
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
@@ -16236,7 +16208,6 @@
         },
         "required": [
           "occurrence",
-          "lineage",
           "phase"
         ],
         "title": "PlayerNode",
@@ -16246,8 +16217,15 @@
       "PlayerOperation": {
         "additionalProperties": false,
         "properties": {
-          "audience": {
-            "$ref": "#/components/schemas/PlayerAudience"
+          "generation": {
+            "format": "uuid",
+            "title": "Generation",
+            "type": "string"
+          },
+          "observer_uuid": {
+            "format": "uuid",
+            "title": "Observer Uuid",
+            "type": "string"
           },
           "lineages": {
             "items": {
@@ -16316,7 +16294,8 @@
           }
         },
         "required": [
-          "audience",
+          "generation",
+          "observer_uuid",
           "lineages",
           "hud",
           "combat_log_appends",
@@ -19574,7 +19553,7 @@
         "additionalProperties": false
       },
       "SpatialEffectStateFact": {
-        "description": "A witnessed mechanical transition, restricted to disclosed fixture cells.",
+        "description": "A witnessed mechanical transition, restricted to disclosed fixture cells. A removal names only the cells it\nremoved (`removed_positions`); its `positions` are left out.",
         "properties": {
           "kind": {
             "const": "spatial_effect_state",
@@ -19588,6 +19567,7 @@
             "type": "string"
           },
           "positions": {
+            "default": [],
             "items": {
               "maxItems": 2,
               "minItems": 2,
@@ -19692,7 +19672,6 @@
         },
         "required": [
           "spatial_effect_uuid",
-          "positions",
           "previous_state",
           "state"
         ],
@@ -19915,36 +19894,6 @@
         "title": "SpeciesVariant",
         "type": "string"
       },
-      "SpellApplication": {
-        "description": "A spell application's membership: its owning lineage (the seat's lineage index), identity and order.",
-        "properties": {
-          "lineage": {
-            "title": "Lineage",
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "application_id": {
-            "format": "uuid",
-            "title": "Application Id",
-            "type": "string"
-          },
-          "index": {
-            "minimum": 0,
-            "title": "Index",
-            "type": "integer",
-            "maximum": 9007199254740991
-          }
-        },
-        "required": [
-          "lineage",
-          "application_id",
-          "index"
-        ],
-        "title": "SpellApplication",
-        "type": "object",
-        "additionalProperties": false
-      },
       "SpellDamageLogData": {
         "additionalProperties": false,
         "properties": {
@@ -19983,6 +19932,7 @@
         "type": "object"
       },
       "SpellFact": {
+        "description": "A spell's cast, or one target's application of it.\n\nThe cast carries the declaration (source, behavior, name, declared targets, area, origin). An application\n(its node's resolution names an application of the cast's lineage) carries only its target, propagation and\nattack outcome: its declaration is the cast's, whose nodes its group carries (plan \u00a73.6).",
         "properties": {
           "kind": {
             "const": "spell",
@@ -19991,9 +19941,17 @@
             "type": "string"
           },
           "source_entity_uuid": {
-            "format": "uuid",
-            "title": "Source Entity Uuid",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Entity Uuid"
           },
           "target_entity_uuid": {
             "anyOf": [
@@ -20016,6 +19974,7 @@
                 "type": "null"
               }
             ],
+            "default": null,
             "title": "Behavior Id"
           },
           "name": {
@@ -20027,6 +19986,7 @@
                 "type": "null"
               }
             ],
+            "default": null,
             "title": "Name"
           },
           "source_position": {
@@ -20052,25 +20012,17 @@
                 "type": "null"
               }
             ],
+            "default": null,
             "title": "Source Position"
           },
           "declared_target_entity_uuids": {
+            "default": [],
             "items": {
               "format": "uuid",
               "type": "string"
             },
             "title": "Declared Target Entity Uuids",
             "type": "array"
-          },
-          "application": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SpellApplication"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "propagation": {
             "anyOf": [
@@ -20095,13 +20047,20 @@
             "default": null
           },
           "cast_origin": {
-            "default": "actor",
-            "enum": [
-              "actor",
-              "source_item"
+            "anyOf": [
+              {
+                "enum": [
+                  "actor",
+                  "source_item"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Cast Origin",
-            "type": "string"
+            "default": null,
+            "title": "Cast Origin"
           },
           "source_item_uuid": {
             "anyOf": [
@@ -20238,14 +20197,21 @@
             "type": "array"
           },
           "area_propagation": {
-            "default": "line_of_effect",
-            "enum": [
-              "line_of_effect",
-              "connected",
-              "ignore_barriers"
+            "anyOf": [
+              {
+                "enum": [
+                  "line_of_effect",
+                  "connected",
+                  "ignore_barriers"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Area Propagation",
-            "type": "string"
+            "default": null,
+            "title": "Area Propagation"
           },
           "target_kind": {
             "default": "creature",
@@ -20298,13 +20264,7 @@
           }
         },
         "required": [
-          "source_entity_uuid",
-          "target_entity_uuid",
-          "behavior_id",
-          "name",
-          "source_position",
-          "declared_target_entity_uuids",
-          "application"
+          "target_entity_uuid"
         ],
         "title": "SpellFact",
         "type": "object",

@@ -24,7 +24,7 @@ from dnd.core.base_actions import ActionEvent
 from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.presentation_geometry import ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry
 from dnd.core.condition_types import ConditionCategory
-from dnd.core.effect_types import ApplicationMembership, ResolutionRef
+from dnd.core.effect_types import ResolutionRef
 from dnd.core.content.runtime import HandlerDispatchOutcome
 from dnd.core.events import (
     AreaReachEvent,
@@ -52,7 +52,7 @@ from dnd.player.facts import (
     MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerFact, PlayerInitialization, PlayerLineage,
     PlayerNode, PlayerObject, PlayerState, PlayerHUDPatch, CombatLogAppend,
     PlayerLogEntry, SheetChanges, SheetPatch, SpatialEffectContent, SpatialEffectSighting,
-    PlayerWorld, PlayerResolution, LightRow, SensoryFact, SensoryRows, ShoveFact, SpellApplication, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
+    PlayerWorld, PlayerResolution, LightRow, SensoryFact, SensoryRows, ShoveFact, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
     VersionRows, WorldUpdate, ItemRecord, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
     Column, ContainedItem, ObjectState,
 )
@@ -324,9 +324,8 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: Mapping[UUID, 
                     and (cell_in(declaration_senses.visible, position) or position in observed.visible_volume_positions)
                     and cell_in(senses.visible, position))
                 return SpatialEffectStateFact(spatial_effect_uuid=event.spatial_effect_uuid,
-                    positions=positions, previous_state=None, state=None,
-                    operation=event.operation, interaction_operation=interaction_operation,
-                    removed_positions=positions) if positions else None
+                    previous_state=None, state=None, operation=event.operation,
+                    interaction_operation=interaction_operation, removed_positions=positions) if positions else None
             observed = senses.spatial_effects.get(event.spatial_effect_uuid) if senses is not None else None
             if event.operation is SpatialEffectChangeOperation.FOOTPRINT_CHANGED:
                 prior = declaration_senses.spatial_effects.get(event.spatial_effect_uuid) if declaration_senses is not None else None
@@ -478,20 +477,25 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: Mapping[UUID, 
                     if _position_allowed(event, position, observer)
                     or senses is not None and cell_in(senses.visible, position)
                     or declaration_senses is not None and cell_in(declaration_senses.visible, position))
+            target_position = event.target_position if event.target_kind == "object" and (
+                observer.controls(source) or event.target_position is not None and (
+                    _position_allowed(event, event.target_position, observer)
+                    or declaration_senses is not None and cell_in(declaration_senses.visible, event.target_position))) else None
+            target_height = event.target_base_height_steps if event.target_kind == "object" else None
+            if event.application is not None:
+                # One target's application: its declaration is its cast's (the node's resolution lineage), whose
+                # nodes the same group carries (plan §3.6).
+                return SpellFact(target_entity_uuid=target, target_kind=event.target_kind,
+                    target_position=target_position, target_base_height_steps=target_height,
+                    propagation=event.propagation, attack_outcome=event.attack_outcome)
             return SpellFact(source_entity_uuid=source, target_entity_uuid=target,
-                target_kind=event.target_kind,
-                target_position=event.target_position if event.target_kind == "object" and (
-                    observer.controls(source) or event.target_position is not None and (
-                        _position_allowed(event, event.target_position, observer)
-                        or declaration_senses is not None and cell_in(declaration_senses.visible, event.target_position))) else None,
-                target_base_height_steps=event.target_base_height_steps if event.target_kind == "object" else None,
+                target_kind=event.target_kind, target_position=target_position, target_base_height_steps=target_height,
                 behavior_id=event.behavior_id, name=event.name, source_position=source_position,
                 cast_origin=event.cast_origin,
                 source_item_uuid=event.source_item_uuid if event.source_item_uuid in observed_objects else None,
                 declared_target_entity_uuids=tuple(identity for identity in event.declared_target_entity_uuids
                     if (not area and not propagated) or identity in observed_objects
                     or identity in known and _identified(event, identity, observer)),
-                application=_application(keys, event.application),
                 propagation=event.propagation,
                 attack_outcome=event.attack_outcome,
                 effect_id=event.effect_id,
@@ -772,14 +776,6 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: Mapping[UUID, 
                     if event.font_conversion is not None else None),
                 source_item_uuid=event.source_item_uuid if event.source_item_uuid in observed_objects else None))
     return None
-
-
-def _application(keys: "NativeKeys", application: ApplicationMembership | None) -> SpellApplication | None:
-    """A spell's application named by its owning lineage's native key; none without a key for that lineage."""
-    key = _lineage_key(keys, application.lineage_uuid) if application is not None else None
-    if application is None or key is None:
-        return None
-    return SpellApplication(lineage=key, application_id=application.application_id, index=application.index)
 
 
 def _resolution(keys: "NativeKeys", reference: ResolutionRef | None) -> tuple[int, UUID | None] | None:
@@ -1261,7 +1257,7 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
     walk.content_at_event[event.uuid] = (_held_content_at_event(event, observer,
         actors, known, view)
         if needs_held_content else frozenset())
-    walk.nodes.append(PlayerNode(occurrence=indexes[event.uuid], lineage=keys.lineages[event.lineage_uuid],
+    walk.nodes.append(PlayerNode(occurrence=indexes[event.uuid],
         parent_event=_version_key(keys, event.parent_event), parent_lineage=_lineage_key(keys, event.parent_lineage),
         children_lineages=tuple(key for identity in event.children_lineages
             if (key := _lineage_key(keys, identity)) is not None), phase=event.phase,
@@ -1273,9 +1269,10 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
 
 
 def _end_walk(walk: SeatWalk, group: WalkGroup, state: "ProjectionState"
-              ) -> tuple[tuple[PlayerNode, ...], tuple[BodyRecord, ...], tuple[WorldUpdate, ...],
+              ) -> tuple[tuple[PlayerNode, ...], tuple[int, ...], tuple[BodyRecord, ...], tuple[WorldUpdate, ...],
                          dict[int, tuple[int, UUID | None]]]:
-    """The walked group privately: nodes, the bodies entering the seat's view, world updates.
+    """The walked group privately: nodes and each one's lineage (native key), the bodies entering the seat's
+    view, world updates.
 
     Also returns each node's disclosed resolution (its lineage's native key
     and application) by the node's native occurrence. Versions and lineages
@@ -1284,16 +1281,14 @@ def _end_walk(walk: SeatWalk, group: WalkGroup, state: "ProjectionState"
     """
     keys, disclosed, observer = group.keys, state.disclosed_lineages, state.audience
     nodes, bodies, updates = walk.nodes, walk.bodies, walk.updates
+    lineages = tuple(keys.lineages[event.lineage_uuid] for event in walk.events)
     disclosure = LineageDisclosure(disclosed, keys)
-    disclosed.update(node.lineage for node in nodes if node.fact is not None)
+    disclosed.update(owner for node, owner in zip(nodes, lineages, strict=True) if node.fact is not None)
     disclosed_versions = {row.source_index for row in group.versions if keys.lineages[row.lineage_uuid] in disclosed}
     for index, node in enumerate(nodes):
         if isinstance(node.fact, SensoryFact):
             if node.fact.cause_occurrence is not None and node.fact.cause_occurrence not in disclosed_versions:
                 nodes[index] = replace(node, fact=replace(node.fact, cause_occurrence=None))
-        elif isinstance(node.fact, SpellFact) and node.fact.application is not None:
-            if node.fact.application.lineage not in disclosed:
-                nodes[index] = replace(node, fact=replace(node.fact, application=None))
         elif isinstance(node.fact, ActorChangeFact):
             nodes[index] = replace(node, fact=_disclosed_change(node.fact, disclosure))
         if isinstance(node.fact, AreaReachFact):
@@ -1316,7 +1311,7 @@ def _end_walk(walk: SeatWalk, group: WalkGroup, state: "ProjectionState"
         bodies[index] = _disclosed_body(row, disclosure)
     for index, row in enumerate(updates):
         updates[index] = _disclosed_update(row, disclosure)
-    return tuple(nodes), tuple(bodies), tuple(updates), resolutions
+    return tuple(nodes), lineages, tuple(bodies), tuple(updates), resolutions
 
 
 def _contained_states(rows: tuple[ContainedItem, ...], value_of: Callable[[ObjectState], ObjectState]
@@ -1451,7 +1446,7 @@ def _observe_spatial_revisions(state: "ProjectionState", nodes: tuple[PlayerNode
 
 
 def _public_occurrences(state: "ProjectionState", keys: NativeKeys, nodes: tuple[PlayerNode, ...],
-                        versions: tuple[ObjectiveRow, ...],
+                        node_lineages: tuple[int, ...], versions: tuple[ObjectiveRow, ...],
                         bodies: tuple[BodyRecord, ...], updates: tuple[WorldUpdate, ...], table: SensoryTable,
                         resolutions: Mapping[int, tuple[int, UUID | None]]
                         ) -> tuple[tuple[PlayerNode, ...], VersionRows, tuple[BodyRecord, ...], tuple[WorldUpdate, ...],
@@ -1462,7 +1457,10 @@ def _public_occurrences(state: "ProjectionState", keys: NativeKeys, nodes: tuple
     (assigned once, in native order), a lineage the occurrence index of its
     first admitted version. A sighting's seat value is a row of `table`. A
     node's resolution (`resolutions`, by native occurrence) becomes an index
-    into the group's resolutions, each distinct one once.
+    into the group's resolutions, each distinct one once. A node's lineage
+    (`node_lineages`) is its version row's; its parent lineage is sent only
+    where its group's nodes don't give it (no node of the parent's lineage
+    lists it among its children).
     """
     _map_sightings(table, nodes, lambda identity, effect: effect.model_copy(
         update={"duration": effect.duration if identity in state.owned_spatial_effects else None}))
@@ -1515,12 +1513,14 @@ def _public_occurrences(state: "ProjectionState", keys: NativeKeys, nodes: tuple
     observed_ids = {row.occurrence for row in (*bodies, *updates)}
     observed_ids.update(node.fact.creation.birth_occurrence for node in nodes
         if isinstance(node.fact, SpatialFact) and node.fact.creation is not None)
-    admitted_nodes = tuple(node for node in nodes if node.fact is not None or node.content_attributions
+    admitted = tuple((node, owner) for node, owner in zip(nodes, node_lineages, strict=True)
+        if node.fact is not None or node.content_attributions
         or node.occurrence in observed_ids or (node.combat_log is not None
             and not (node.combat_log.data.kind == "empty" and not node.combat_log.source_uuid
                 and node.combat_log.entry_type is CombatLogEntryType.ACTION
                 and node.combat_log.success is None)))
-    groups = {node.lineage for node in admitted_nodes}
+    admitted_nodes = tuple(node for node, _ in admitted)
+    groups = {owner for _, owner in admitted}
     state.disclosed_lineages.update(groups)
     occurrences, lineages = [], []
     for row in versions:
@@ -1562,7 +1562,9 @@ def _public_occurrences(state: "ProjectionState", keys: NativeKeys, nodes: tuple
     for node in admitted_nodes:
         if isinstance(node.fact, AreaReachFact):
             stages.setdefault(node.parent_lineage, []).append(node.fact.stage_index)
-    for node in admitted_nodes:
+    owners = []
+    for node, owner in admitted:
+        owners.append(state.public_lineages[owner])
         fact = node.fact
         if isinstance(fact, AreaReachFact):
             fact = replace(fact, stage_index=sorted(set(stages[node.parent_lineage])).index(fact.stage_index),
@@ -1571,9 +1573,6 @@ def _public_occurrences(state: "ProjectionState", keys: NativeKeys, nodes: tuple
                     if (public := lineage(key)) is not None))
         elif isinstance(fact, SensoryFact):
             fact = replace(fact, cause_occurrence=version(fact.cause_occurrence))
-        elif isinstance(fact, SpellFact) and fact.application is not None:
-            owner = lineage(fact.application.lineage)
-            fact = replace(fact, application=replace(fact.application, lineage=owner) if owner is not None else None)
         elif isinstance(fact, SpatialFact):
             fact = replace(fact, commit_occurrence=version(fact.commit_occurrence),
                 creation=replace(fact.creation, birth_occurrence=state.public_cursors[fact.creation.birth_occurrence])
@@ -1595,11 +1594,18 @@ def _public_occurrences(state: "ProjectionState", keys: NativeKeys, nodes: tuple
             dispatch_index=index if row.dispatch_index is not None else None)
             for index, row in enumerate(node.content_attributions))
         result.append(replace(node, fact=fact, occurrence=state.public_cursors[node.occurrence],
-            lineage=state.public_lineages[node.lineage], parent_event=version(node.parent_event),
+            parent_event=version(node.parent_event),
             parent_lineage=lineage(node.parent_lineage),
             children_lineages=tuple(state.public_lineages[key] for key in node.children_lineages if key in groups),
             turn_execution_id=node.turn_execution_id if node.turn_execution_id in state.disclosed_turns else None,
             content_attributions=attributions, resolution=resolution(node.occurrence)))
+    # A parent the group's own nodes give (the parent lists this lineage) is not restated.
+    children_of: dict[int, set[int]] = {}
+    for node, owner in zip(result, owners, strict=True):
+        children_of.setdefault(owner, set()).update(node.children_lineages)
+    result = [replace(node, parent_lineage=None) if node.parent_lineage is not None
+              and owner in children_of.get(node.parent_lineage, ()) else node
+              for node, owner in zip(result, owners, strict=True)]
     bodies = tuple(_public_body(row, state.public_cursors) for row in bodies)
     updates = tuple(_map_world_update(replace(row, occurrence=state.public_cursors[row.occurrence]),
         effects=lambda value: _public_item_effects(value, state.public_cursors)) for row in updates)
@@ -1901,10 +1907,10 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
 
 def _emit_initialization(group: WalkGroup, state: ProjectionState, initialization: IntervalEnvelope, walk: SeatWalk,
                          world: PlayerWorld) -> tuple[ProjectionState, PlayerInitialization]:
-    nodes, bodies, updates, resolutions = _end_walk(walk, group, state)
+    nodes, node_lineages, bodies, updates, resolutions = _end_walk(walk, group, state)
     state.owned_spatial_effects.update(event.spatial_effect_uuid for _, event in initialization.admitted
         if isinstance(event, SpatialEffectChangeEvent) and state.audience.controls(event.source_entity_uuid))
-    nodes, rows, bodies, updates, resolution_rows = _public_occurrences(state, group.keys, nodes,
+    nodes, rows, bodies, updates, resolution_rows = _public_occurrences(state, group.keys, nodes, node_lineages,
         group.versions, bodies, updates, walk.table, resolutions)
     nodes, sensory_rows, _ = _shared_rows(nodes, walk.table)
     nodes = _emit_content(state.remembered, nodes, sensory_rows)
@@ -1972,7 +1978,7 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
 
 def _emit_lineage(group: WalkGroup, state: ProjectionState, lineage: CompletedLineage, walk: SeatWalk,
                   start_cursor: int) -> PlayerLineage | None:
-    nodes, bodies, updates, resolutions = _end_walk(walk, group, state)
+    nodes, node_lineages, bodies, updates, resolutions = _end_walk(walk, group, state)
     # Settled initialization needs resulting state only. Presenting a damage
     # operation additionally requires recorded causal ownership, or an explicit
     # current-format unknown owner; old missing fields cannot establish either.
@@ -1985,7 +1991,7 @@ def _emit_lineage(group: WalkGroup, state: ProjectionState, lineage: CompletedLi
     if not bodies and not updates and not any(node.fact is not None or node.combat_log is not None
                                               or node.content_attributions for node in nodes):
         return None
-    nodes, rows, bodies, updates, resolution_rows = _public_occurrences(state, group.keys, nodes,
+    nodes, rows, bodies, updates, resolution_rows = _public_occurrences(state, group.keys, nodes, node_lineages,
         group.versions, bodies, updates, walk.table, resolutions)
     if not nodes and not bodies and not updates:
         return None
@@ -1994,10 +2000,10 @@ def _emit_lineage(group: WalkGroup, state: ProjectionState, lineage: CompletedLi
     _merge_sent(state, walk)
     root_occurrence = state.public_cursors.get(group.keys.versions[lineage.root.uuid])
     root = next((index for index, node in enumerate(nodes) if node.occurrence == root_occurrence), None)
-    return PlayerLineage(generation=lineage.generation, observer_uuid=lineage.observer_uuid,
-        lineage=nodes[root].lineage if root is not None else rows.lineages[0],
+    return PlayerLineage(lineage=rows.lineages[rows.occurrences.index(nodes[root].occurrence)] if root is not None
+        else rows.lineages[0],
         root=root, events=nodes, version_rows=rows, start_cursor=start_cursor,
-        end_cursor=state.next_occurrence, bodies=bodies, world_updates=updates, audience=state.audience,
+        end_cursor=state.next_occurrence, bodies=bodies, world_updates=updates,
         sensory_rows=sensory_rows, resolutions=resolution_rows)
 
 

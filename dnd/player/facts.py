@@ -356,27 +356,24 @@ class AttackFact:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SpellApplication:
-    """A spell application's membership: its owning lineage (the seat's lineage index), identity and order."""
-
-    lineage: int
-    application_id: UUID
-    index: Annotated[int, Field(ge=0)]
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class SpellFact:
+    """A spell's cast, or one target's application of it.
+
+    The cast carries the declaration (source, behavior, name, declared targets, area, origin). An application
+    (its node's resolution names an application of the cast's lineage) carries only its target, propagation and
+    attack outcome: its declaration is the cast's, whose nodes its group carries (plan §3.6).
+    """
+
     kind: Literal["spell"] = "spell"
-    source_entity_uuid: UUID
+    source_entity_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
     target_entity_uuid: UUID | None
-    behavior_id: str | None
-    name: str | None
-    source_position: tuple[int, int] | None
-    declared_target_entity_uuids: tuple[UUID, ...]
-    application: SpellApplication | None
+    behavior_id: Annotated[str | None, Field(exclude_if=_unset)] = None
+    name: Annotated[str | None, Field(exclude_if=_unset)] = None
+    source_position: Annotated[tuple[int, int] | None, Field(exclude_if=_unset)] = None
+    declared_target_entity_uuids: Annotated[tuple[UUID, ...], Field(exclude_if=_no_rows)] = ()
     propagation: Annotated[EffectPropagationLink | None, Field(exclude_if=_unset)] = None
     attack_outcome: Annotated[AttackOutcome | None, Field(exclude_if=_unset)] = None
-    cast_origin: Literal["actor", "source_item"] = "actor"
+    cast_origin: Annotated[Literal["actor", "source_item"] | None, Field(exclude_if=_unset)] = None
     source_item_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
     effect_id: Annotated[str | None, Field(exclude_if=_unset)] = None
     aoe_position: Annotated[tuple[int, int] | None, Field(exclude_if=_unset)] = None
@@ -385,18 +382,10 @@ class SpellFact:
     # None means no recorded result; () is a resolved result with no granted cells.
     resolved_area_positions: Annotated[tuple[tuple[int, int], ...] | None, Field(exclude_if=_unset)] = None
     suppressions: Annotated[tuple[SpellSuppression, ...], Field(exclude_if=_no_rows)] = ()
-    area_propagation: AreaPropagation = "line_of_effect"
+    area_propagation: Annotated[AreaPropagation | None, Field(exclude_if=_unset)] = None
     target_kind: Literal["creature", "object"] = "creature"
     target_position: Annotated[tuple[int, int] | None, Field(exclude_if=_unset)] = None
     target_base_height_steps: Annotated[int | None, Field(exclude_if=_unset)] = None
-
-    @property
-    def application_id(self) -> UUID | None:
-        return self.application.application_id if self.application is not None else None
-
-    @property
-    def application_index(self) -> int | None:
-        return self.application.index if self.application is not None else None
 
     @model_validator(mode="before")
     @classmethod
@@ -814,11 +803,12 @@ class SensoryFact:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SpatialEffectStateFact:
-    """A witnessed mechanical transition, restricted to disclosed fixture cells."""
+    """A witnessed mechanical transition, restricted to disclosed fixture cells. A removal names only the cells it
+    removed (`removed_positions`); its `positions` are left out."""
 
     kind: Literal["spatial_effect_state"] = "spatial_effect_state"
     spatial_effect_uuid: UUID
-    positions: tuple[tuple[int, int], ...]
+    positions: Annotated[tuple[tuple[int, int], ...], Field(exclude_if=_no_rows)] = ()
     previous_state: TrapState | None
     state: TrapState | None
     previous_pressed: Annotated[bool | None, Field(exclude_if=_unset)] = None
@@ -908,11 +898,12 @@ class PlayerNode:
 
     Versions are identified by the seat's occurrence index (an entry of its
     group's `version_rows.occurrences`), lineages by the occurrence index of their first
-    version the seat received.
+    version the seat received. A node's lineage is its version row's (`node_lineages`); its parent lineage
+    is the lineage of the group's node listing it in `children_lineages`, and is sent only where no such node
+    is in its group (`parent_lineage`, e.g. a group root whose parent an earlier group carried).
     """
 
     occurrence: int
-    lineage: int
     parent_event: Annotated[int | None, Field(exclude_if=_unset)] = None
     parent_lineage: Annotated[int | None, Field(exclude_if=_unset)] = None
     children_lineages: Annotated[tuple[int, ...], Field(exclude_if=_no_rows)] = ()
@@ -1354,8 +1345,9 @@ class PlayerWorld:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlayerLineage:
-    generation: UUID
-    observer_uuid: UUID
+    """One emitted group. Its envelope (generation, observer, audience) is its update's or its sequence's
+    (plan §3.6: the envelope once, the audience in the initialization)."""
+
     # The root's lineage, or for a group whose root is undisclosed the lineage of its first version.
     lineage: int
     # The root's index in `events`; None when the root itself is not disclosed.
@@ -1366,7 +1358,6 @@ class PlayerLineage:
     end_cursor: int
     bodies: Annotated[tuple[BodyRecord, ...], Field(exclude_if=_no_rows)] = ()
     world_updates: tuple[WorldUpdate, ...] = ()
-    audience: PlayerAudience | None = None
     # The perceived values its sensory facts name, each once.
     sensory_rows: SensoryRowsField = NO_SENSORY_ROWS
     # The resolutions its nodes belong to, each once.
@@ -1400,9 +1391,11 @@ class PlayerSequence(BaseModel):
 
 
 class PlayerUpdate(BaseModel):
-    """Atomic admitted after-values, independent of delivery/attachment metadata."""
+    """Atomic admitted after-values, independent of delivery/attachment metadata. Its envelope is stated once:
+    the generation and observer of its seat (the audience is the initialization's, fixed at Start)."""
     model_config = ConfigDict(extra="forbid", frozen=True)
-    audience: PlayerAudience
+    generation: UUID
+    observer_uuid: UUID
     lineages: tuple[PlayerLineage, ...]
     hud: PlayerHUDPatch | None
     combat_log_appends: tuple[CombatLogAppend, ...]

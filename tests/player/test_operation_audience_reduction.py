@@ -77,11 +77,10 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
                 temporary_hp=held.temporary_hp, life_state=held.life_state, armor_class=held.armor_class,
                 conditions=held.conditions, occupancy_layer=held.occupancy_layer, faction=held.faction,
                 resolved_size=held.resolved_size)),)
-        node = PlayerNode(occurrence=index, lineage=index, parent_event=None,
+        node = PlayerNode(occurrence=index, parent_event=None,
             parent_lineage=None, children_lineages=(), phase=EventPhase.COMPLETION,
             canceled=step == 'canceled', fact=fact)
-        lineages.append(PlayerLineage(generation=before.generation, observer_uuid=owner.uuid,
-            audience=audience, lineage=index, root=0, events=(node,),
+        lineages.append(PlayerLineage(lineage=index, root=0, events=(node,),
             version_rows=VersionRows(occurrences=(index,), lineages=(index,)),
             start_cursor=index, end_cursor=index + 1, bodies=bodies,
             # The template's light source indices name the initialization's rows.
@@ -92,7 +91,7 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
                 lineages=tuple(value for row in lineages for value in row.version_rows.lineages)),
             bodies=tuple(value for row in lineages for value in row.bodies),
             end_cursor=lineages[-1].end_cursor)]
-    update = PlayerUpdate(audience=audience, lineages=tuple(lineages), hud=None,
+    update = PlayerUpdate(generation=before.generation, observer_uuid=owner.uuid, lineages=tuple(lineages), hud=None,
         combat_log_appends=(), content_additions=())
     received = PlayerUpdate.model_validate_json(update.model_dump_json())
     expected = before

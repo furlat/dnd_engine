@@ -1695,12 +1695,6 @@ type SpeciesVariant = Literal[
 ]
 
 
-class SpellApplication(TypedDict):
-    lineage: int
-    application_id: str
-    index: int
-
-
 class SpellDamageLogData(TypedDict):
     kind: NotRequired[Literal['spell_damage']]
     spell_name: str
@@ -2784,7 +2778,7 @@ class SpatialChangeLogData(TypedDict):
 class SpatialEffectStateFact(TypedDict):
     kind: NotRequired[Literal['spatial_effect_state']]
     spatial_effect_uuid: str
-    positions: list[list[Position]]
+    positions: NotRequired[list[list[Position]]]
     previous_state: TrapState | None
     state: TrapState | None
     previous_pressed: NotRequired[bool | None]
@@ -3547,16 +3541,15 @@ class SpatialEffectSighting(TypedDict):
 
 class SpellFact(TypedDict):
     kind: NotRequired[Literal['spell']]
-    source_entity_uuid: str
+    source_entity_uuid: NotRequired[str | None]
     target_entity_uuid: str | None
-    behavior_id: str | None
-    name: str | None
-    source_position: list[SourcePositionItem] | None
-    declared_target_entity_uuids: list[str]
-    application: SpellApplication | None
+    behavior_id: NotRequired[str | None]
+    name: NotRequired[str | None]
+    source_position: NotRequired[list[SourcePositionItem] | None]
+    declared_target_entity_uuids: NotRequired[list[str]]
     propagation: NotRequired[EffectPropagationLink | None]
     attack_outcome: NotRequired[AttackOutcome | None]
-    cast_origin: NotRequired[Literal['actor', 'source_item']]
+    cast_origin: NotRequired[Literal['actor', 'source_item'] | None]
     source_item_uuid: NotRequired[str | None]
     effect_id: NotRequired[str | None]
     aoe_position: NotRequired[list[AoePositionItem] | None]
@@ -3573,7 +3566,7 @@ class SpellFact(TypedDict):
     resolved_area_positions: NotRequired[list[list[ResolvedAreaPosition]] | None]
     suppressions: NotRequired[list[SpellSuppression]]
     area_propagation: NotRequired[
-        Literal['line_of_effect', 'connected', 'ignore_barriers']
+        Literal['line_of_effect', 'connected', 'ignore_barriers'] | None
     ]
     target_kind: NotRequired[Literal['creature', 'object']]
     target_position: NotRequired[list[TargetPositionItem] | None]
@@ -3675,7 +3668,6 @@ class BodyRecord(TypedDict):
 
 class PlayerNode(TypedDict):
     occurrence: int
-    lineage: int
     parent_event: NotRequired[int | None]
     parent_lineage: NotRequired[int | None]
     children_lineages: NotRequired[list[int]]
@@ -3733,8 +3725,6 @@ class PlayerInitialization(TypedDict):
 
 
 class PlayerLineage(TypedDict):
-    generation: str
-    observer_uuid: str
     lineage: int
     root: int | None
     events: list[PlayerNode]
@@ -3743,13 +3733,13 @@ class PlayerLineage(TypedDict):
     end_cursor: int
     bodies: NotRequired[list[BodyRecord]]
     world_updates: NotRequired[list[WorldUpdate]]
-    audience: NotRequired[PlayerAudience | None]
     sensory_rows: NotRequired[SensoryRows]
     resolutions: NotRequired[list[PlayerResolution]]
 
 
 class PlayerOperation(TypedDict):
-    audience: PlayerAudience
+    generation: str
+    observer_uuid: str
     lineages: list[PlayerLineage]
     hud: PlayerHUDPatch | None
     combat_log_appends: list[CombatLogAppend]
