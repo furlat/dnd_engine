@@ -51,7 +51,7 @@ class PlayerAudience:
     def observes(self, identity: UUID | None) -> bool:
         return identity in self._observer_set
 
-    def granted(self, observers: set[str]) -> bool:
+    def granted(self, observers: Collection[str]) -> bool:
         return not self.observer_ids.isdisjoint(observers)
 
 
@@ -765,6 +765,14 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
         position=anchor.position, passive_perception=anchor.passive_perception,
         sense_modes_key=anchor.sense_modes_key, sense_modes=anchor.sense_modes,
         visual_access=anchor.visual_access, paths_dirty=bool(current.dirty_members))
+
+
+def depart_contact(current: AudienceComposition, identity: UUID) -> None:
+    """A witnessed terminal departure ends the view's contact; the next fold recomposes that identity."""
+    if current.view is None:
+        return
+    current.view.entities.pop(identity, None)
+    current.contact_overrides.add(identity)
 
 
 @dataclass(frozen=True, slots=True)

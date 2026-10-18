@@ -8,7 +8,7 @@ from dnd.core.events import Event, EventQueue, EventType
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.player.capture import capture_interval
-from dnd.player.projection import begin_projection
+from dnd.player.projection import SessionProjection, begin_projection
 from dnd.player.reduction import reduce_initialization
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
@@ -31,7 +31,7 @@ def test_initialization_retains_owned_spatial_duration() -> None:
         expected = owner.senses.spatial_effects[field.uuid].duration
         assert expected is not None and expected.remaining_rounds == 3
 
-        _, initialization = begin_projection(capture_interval(name="existing field", start_cursor=0,
+        _, initialization = begin_projection(SessionProjection(), capture_interval(name="existing field", start_cursor=0,
             end_cursor=EventQueue.event_cursor(), observer_uuid=owner.uuid,
             battlefield_id=battlefield.definition.battlefield_id))
         restored = reduce_initialization(initialization)

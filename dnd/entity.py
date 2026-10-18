@@ -4032,6 +4032,11 @@ class Entity(BaseBlock):
         con_modifier = self.ability_scores.get_ability("constitution").modifier_reading()
         return self.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
 
+    def jump_distance_feet(self) -> int:
+        """(15 ft + 5 ft per positive Strength modifier point + the additive jump value) x the multiplier jump value."""
+        base = 15 + max(0, self.ability_scores.strength.modifier) * 5
+        return (base + self.jump_distance_additive.normalized_score) * self.jump_distance_multiplier.normalized_score
+
     def get_weapon_range(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> Range:
         """
         Get the range of a weapon without calculating attack bonuses.
@@ -4421,6 +4426,7 @@ class Entity(BaseBlock):
             free_cast_grants=frozenset(self.spellcasting.free_cast_grants),
             source_item_charges={item.uuid: item.charges for item in carried if isinstance(item, UsableItem)},
             active_encounter_uuid=self.active_encounter_uuid,
+            jump_feet=self.jump_distance_feet(),
         )
 
     def perform(self, action: BaseAction, selection: ActionSelection,
@@ -5754,14 +5760,21 @@ class Entity(BaseBlock):
     def _with_object_targets(
         self, template: BaseAction, pool: Dict[UUID, Tuple[int, int]],
     ) -> Dict[UUID, Tuple[int, int]]:
-        """Merge perceived attackable items without changing cached creature pools."""
+        """Merge perceived attackable items without changing cached creature pools.
+
+        An item whose contact surface lies wholly beyond the action's reach
+        (`target_reach_feet`) is one its admission rejects, and is left out
+        before any admission.
+        """
         if (template.effective_target_type is not TargetType.CREATURE_OR_OBJECT
                 and not (template.effective_target_type is TargetType.MULTI_ENTITY and template.multi_target_objects)):
             return pool
+        reach, origin, grid = template.target_reach_feet(), template.get_target_origin(), get_map()
         result = dict(pool)
         result.update({identity: contact.position
             for identity, contact in self.senses.objects.items()
             if isinstance(item := BaseBlock.get(identity), BaseItem)
+            and (reach is None or origin is None or not grid.object_contact_beyond(identity, origin, reach))
             and (item.is_active if template.object_target_policy == "active" else item.is_breakable())})
         return result
 

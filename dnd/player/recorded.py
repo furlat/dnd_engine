@@ -13,14 +13,18 @@ from dnd.player.capture import (
     reduce_interval,
 )
 from dnd.player.facts import CombatLogAppend, PlayerSequence
-from dnd.player.projection import begin_projection, project_lineage, project_log_appends
+from dnd.player.projection import SessionProjection, begin_projection, project_lineage, project_log_appends
 
 
 class RecordedSequence(BaseModel):
-    """Private native event inputs, including local objective diagnostics."""
+    """Private native event inputs, including local objective diagnostics.
+
+    Version 6: the startup world interval carries the actor change record of each of its versions, which the
+    session's actor fold reads (engine-free replay builds bodies from births and records).
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schema_version: Literal[4] = 4
+    schema_version: Literal[6] = 6
     initialization: IntervalEnvelope
     lineages: tuple[CompletedLineage, ...]
     combat_log_appends: tuple[CombatLogAppend, ...] = ()
@@ -109,11 +113,13 @@ def project_sequence(native: RecordedSequence) -> PlayerSequence:
 
     A recorded experiment has no session, so no sheet publication and no HUD.
     """
-    state, initial = begin_projection(native.initialization)
+    session = SessionProjection()
+    state, initial = begin_projection(session, native.initialization)
     if any(row.generation != initial.generation or row.observer_uuid != initial.observer_uuid
            for row in native.combat_log_appends):
         raise ValueError("Combat log append belongs to a different observer or generation")
-    lineages = tuple(projected for row in native.lineages if (projected := project_lineage(state, row)) is not None)
+    lineages = tuple(projected for row in native.lineages
+        if (projected := project_lineage(session, state, row)) is not None)
     return PlayerSequence(initialization=initial, lineages=lineages,
         combat_log_appends=project_log_appends(state, native.combat_log_appends))
 

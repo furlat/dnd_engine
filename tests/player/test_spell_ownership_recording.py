@@ -11,9 +11,10 @@ from dnd.core.events import EventPhase, EventQueue
 from dnd.player.capture import capture_interval, capture_lineages
 from dnd.player.audience import PlayerAudience
 from dnd.player.event_record import decode_event, encode_event
-from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.recorded import encode_sequence, decode_sequence
-from dnd.player.facts import DamageResultFact, ConditionChangeFact
+from dnd.player.facts import ActorChangeFact, DamageResultFact
+from dnd.types.actor_facts import ConditionRow
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.spells.necromancy import Harm
 from tests.player.test_recorded_boundary import world as world
@@ -44,17 +45,19 @@ def test_real_harm_cast_and_reduction_admission_capture_project_and_replay(world
     audience = PlayerAudience(controlled=(caster.uuid,target.uuid),observers=(caster.uuid,))
     native_initial = capture_interval(name="Ownership facts",start_cursor=0,
         end_cursor=EventQueue.event_cursor(),observer_uuid=caster.uuid,battlefield_id=built.definition.battlefield_id,audience=audience)
-    projection, initialization = begin_projection(native_initial)
+    session = SessionProjection()
+    projection, initialization = begin_projection(session, native_initial)
     state = reduce_initialization(initialization)
     force_save_result(target, "constitution", succeeds=False)
     with fixed_dice_faces(*([2] * 40)):
         result = cast(Harm, caster, target)
     captured, = capture_lineages((result,),observer_uuid=caster.uuid,known_actor_uuids=frozenset(state.actors),audience=audience)
     _, (restored,) = decode_sequence(encode_sequence(native_initial,(captured,)))
-    public = project_lineage(projection, restored)
+    public = project_lineage(session, projection, restored)
     assert public is not None
     replayed = reduce_lineage(state, public)
     assert replayed.actors[target.uuid].normal_hp == target.get_normal_hp(), (replayed.actors[target.uuid].normal_hp,target.get_normal_hp())
     assert replayed.actors[target.uuid].maximum_hp == target.get_max_hp(), (replayed.actors[target.uuid].maximum_hp,target.get_max_hp())
     assert any(isinstance(node.fact,DamageResultFact) for node in public.events)
-    assert any(isinstance(node.fact,ConditionChangeFact) for node in public.events)
+    assert any(isinstance(node.fact, ActorChangeFact) and any(isinstance(row, ConditionRow)
+        for change in node.fact.actors for row in change.rows) for node in public.events)

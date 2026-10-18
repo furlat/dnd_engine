@@ -116,9 +116,9 @@ from dnd.core.combat_log import (
     format_attack_compact, format_attack_verbose, format_attack_detailed,
     md_color
 )
-from dnd.types.physical_access import PhysicalAccess
+from dnd.types.physical_access import ObjectContact, PhysicalAccess
 from pydantic import BaseModel, Field, StrictBool, StrictInt, model_validator
-from typing import AbstractSet, Any, Callable, ClassVar, Dict, Iterable, Literal, Optional, List, Set, TypeVar, Tuple, Self, cast
+from typing import AbstractSet, Any, Callable, ClassVar, Dict, Iterable, Literal, Optional, List, Set, TypeVar, Tuple, Self, cast, final
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.action_economy import (
@@ -1960,61 +1960,79 @@ def weapon_slot_is_eligible(source: Entity, weapon_slot: WeaponSlot, target_uuid
     return weapon is None or weapon_slot in source.equipment.compatible_slots_for_actor(weapon)
 
 
+def weapon_attack_range(source: Entity, weapon_slot: WeaponSlot, natural: Optional[NaturalWeaponSpec]) -> Range:
+    """The range one weapon attack is measured against: the natural weapon's, else the slot's weapon or unarmed reach."""
+    return natural.range if natural is not None else source.get_weapon_range(weapon_slot)
+
+
 def weapon_reach(
     source: Entity, weapon_slot: WeaponSlot, natural: Optional[NaturalWeaponSpec],
     target_uuid: Optional[UUID], name: str,
-) -> Tuple[Optional[str], Optional[Range], Optional[Tuple[int, int]], bool]:
-    """One weapon's reach to one target: (error, weapon range, attacked position, long range).
+) -> Tuple[Optional[str], Optional[Range], Optional[Tuple[int, int]], bool, Optional[ObjectContact]]:
+    """One weapon's reach to one target: (error, weapon range, attacked position, long range, object contact).
 
     Ranged attacks inside normal range are allowed; between normal and long
     range they are long-range attacks. Melee attacks require distance within
-    weapon reach. An object is attacked at its physical contact position.
+    weapon reach. An object is attacked at its physical contact position,
+    traced from the attacker's position with what it perceives; the trace is
+    returned with its query (None for a creature target).
     """
     creature = Entity.get(target_uuid) if target_uuid is not None else None
     target = BaseBlock.get(target_uuid) if target_uuid is not None else None
-    weapon_range = natural.range if natural is not None else source.get_weapon_range(weapon_slot)
+    weapon_range = weapon_attack_range(source, weapon_slot, natural)
     if weapon_range is None:
-        return f"Weapon range not found for {name}", None, None, False
+        return f"Weapon range not found for {name}", None, None, False, None
+    contact: Optional[ObjectContact] = None
     if creature is not None:
         target_position = creature.position
     elif isinstance(target, BaseItem):
         if not target.is_active or not target.is_targetable:
-            return "Object cannot be attacked", weapon_range, None, False
+            return "Object cannot be attacked", weapon_range, None, False, None
         access = ((PhysicalAccess.PROJECTILE if weapon_range.type is RangeType.RANGE else PhysicalAccess.NATURAL)
                   if natural is not None else source.get_weapon_physical_access(weapon_slot))
-        contact = get_map().attack_object_contact(source.uuid, target.uuid,
-            range_feet=weapon_range.long or weapon_range.normal, access=access, subjective=True)
-        if contact is None:
-            return "Object is out of physical reach", weapon_range, None, False
-        target_position = contact
+        range_feet, origin = weapon_range.long or weapon_range.normal, source.position
+        contact = ObjectContact(source.uuid, target.uuid, range_feet, access, True, origin, get_map().attack_object_contact(
+            source.uuid, target.uuid, range_feet=range_feet, access=access, subjective=True, origin=origin))
+        if contact.position is None:
+            return "Object is out of physical reach", weapon_range, None, False, contact
+        target_position = contact.position
     else:
-        return f"Target entity not found for {name}", weapon_range, None, False
+        return f"Target entity not found for {name}", weapon_range, None, False, None
     distance_feet = source.senses.get_feet_distance(target_position)
     if weapon_range.type == RangeType.RANGE:
         if distance_feet <= weapon_range.normal:
-            return None, weapon_range, target_position, False
+            return None, weapon_range, target_position, False, contact
         if weapon_range.long is not None and distance_feet <= weapon_range.long:
-            return None, weapon_range, target_position, True
-        return f"Target entity not in range for {name}", weapon_range, target_position, False
+            return None, weapon_range, target_position, True, contact
+        return f"Target entity not in range for {name}", weapon_range, target_position, False, contact
     if weapon_range.type == RangeType.REACH and distance_feet > weapon_range.normal:
-        return f"Target entity not in reach for {name}", weapon_range, target_position, False
-    return None, weapon_range, target_position, False
+        return f"Target entity not in reach for {name}", weapon_range, target_position, False, contact
+    return None, weapon_range, target_position, False, contact
+
+
+def weapon_attack_admission(
+    scan: ActorScan, source: Entity, weapon_slot: WeaponSlot, natural: Optional[NaturalWeaponSpec],
+    target_uuid: Optional[UUID], name: str,
+) -> Tuple[Optional[str], Optional[ObjectContact]]:
+    """Hand permission, range or reach, and sight of a creature target for one weapon attack,
+    with the object contact `weapon_reach` traced."""
+    if natural is None and not weapon_slot_is_eligible(source, weapon_slot, target_uuid):
+        return "Declared weapon or hand permission is unavailable", None
+    error, _, _, _, contact = weapon_reach(source, weapon_slot, natural, target_uuid, name)
+    if error is not None or target_uuid is None or Entity.get(target_uuid) is None:
+        return error, contact
+    record = scan.creatures.get(target_uuid)
+    if record is None or not record.visual:
+        return f"Target entity not in line of sight for {name}", None
+    return None, None
 
 
 def weapon_attack_error(
     scan: ActorScan, source: Entity, weapon_slot: WeaponSlot, natural: Optional[NaturalWeaponSpec],
     target_uuid: Optional[UUID], name: str,
 ) -> Optional[str]:
-    """Hand permission, range or reach, and sight of a creature target for one weapon attack."""
-    if natural is None and not weapon_slot_is_eligible(source, weapon_slot, target_uuid):
-        return "Declared weapon or hand permission is unavailable"
-    error = weapon_reach(source, weapon_slot, natural, target_uuid, name)[0]
-    if error is not None or target_uuid is None or Entity.get(target_uuid) is None:
-        return error
-    record = scan.creatures.get(target_uuid)
-    if record is None or not record.visual:
-        return f"Target entity not in line of sight for {name}"
-    return None
+    """The error of `weapon_attack_admission`."""
+    return weapon_attack_admission(scan, source, weapon_slot, natural, target_uuid, name)[0]
 
 
 def grant_weapon_attack_batch(source_uuid: UUID,declaration: ActionEvent,execution: ActionEvent) -> None:
@@ -2094,6 +2112,14 @@ class Attack(BaseAction):
     def get_range(self) -> Optional[Range]:
         source = Entity.get(self.source_entity_uuid)
         return source.get_weapon_range(self.weapon_slot) if source is not None else None
+
+    def target_reach_feet(self) -> Optional[int]:
+        """The larger of the weapon range's normal and long distances: `weapon_reach` admits no target beyond it."""
+        source = Entity.get(self.source_entity_uuid)
+        if source is None:
+            return None
+        weapon_range = weapon_attack_range(source, self.weapon_slot, self.get_natural_weapon())
+        return max(weapon_range.normal, weapon_range.long or 0)
 
     def get_physical_access(self) -> Optional[PhysicalAccess]:
         source = Entity.get(self.source_entity_uuid)
@@ -2532,18 +2558,24 @@ class Attack(BaseAction):
             "damage_types": list(dict.fromkeys([*event.damage_types, *(damage.damage_type for damage in self.additional_damages)]))}
         source = Entity.get(self.source_entity_uuid)
         if source is not None:
-            _, weapon_range, target_position, is_long_range = weapon_reach(source, self.weapon_slot, natural,
+            _, weapon_range, target_position, is_long_range, _ = weapon_reach(source, self.weapon_slot, natural,
                 event.target_entity_uuid, self.declaration_name or self.name)
             update.update(target_position=target_position, range=weapon_range, is_long_range=is_long_range,
                 is_threatened=weapon_range is not None and weapon_range.type == RangeType.RANGE and source.is_threatened())
         return event.model_copy(update=update)
 
+    @final
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        """Weapon and hand permission, range or reach, and sight of a creature target."""
+        """The error of `rule_admission`, which an attack form overrides instead."""
+        return self.rule_admission(scan, selection)[0]
+
+    def rule_admission(self, scan: ActorScan, selection: ActionSelection) -> Tuple[Optional[str], Optional[ObjectContact]]:
+        """Weapon and hand permission, range or reach, and sight of a creature target, with the object contact
+        the weapon's reach traced."""
         source = Entity.get(self.source_entity_uuid)
         if source is None:
-            return "Declared weapon or hand permission is unavailable"
-        return weapon_attack_error(scan, source, self.weapon_slot, self.get_natural_weapon(),
+            return "Declared weapon or hand permission is unavailable", None
+        return weapon_attack_admission(scan, source, self.weapon_slot, self.get_natural_weapon(),
             selection.target_uuids[0] if selection.target_uuids else None, self.declaration_name or self.name)
 
     def _apply(self, execution_event: AttackEvent) -> Optional[AttackEvent]:
@@ -3373,12 +3405,7 @@ class Jump(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
             return Range(type=RangeType.REACH, normal=15)
-
-        base = 15 + max(0, entity.ability_scores.strength.modifier) * 5
-        additive = entity.jump_distance_additive.normalized_score
-        multiplier = entity.jump_distance_multiplier.normalized_score
-        total_range = (base + additive) * multiplier
-        return Range(type=RangeType.REACH, normal=total_range)
+        return Range(type=RangeType.REACH, normal=entity.jump_distance_feet())
 
     def get_valid_positions(self) -> List[Tuple[int, int]]:
         """Get valid landing positions for jump.
@@ -3518,8 +3545,7 @@ class Jump(BaseAction):
         if end_pos not in scan.visible:
             return f"Position {end_pos} not visible"
 
-        action_range = self.get_range()
-        max_range = action_range.normal if action_range else 15
+        max_range = scan.jump_feet
         distance = source_entity.senses.get_feet_distance(end_pos)
         if distance > max_range:
             return f"Position {end_pos} out of jump range ({distance}ft > {max_range}ft)"

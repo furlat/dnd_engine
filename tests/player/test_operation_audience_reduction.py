@@ -11,13 +11,12 @@ from dnd.player.audience import PlayerAudience
 from dnd.player.capture import capture_interval
 from dnd.core.events import EventQueue
 from dnd.player.facts import (
-    PlayerLineage, PlayerNode, PlayerObservation, PlayerUpdate, SensoryFact,
+    BodyRecord, BodyState, PlayerLineage, PlayerNode, PlayerUpdate, SensoryFact,
     SpatialFact, VersionRows,
 )
-from dnd.player.projection import begin_projection
+from dnd.player.projection import SessionProjection, begin_projection
 from dnd.player.reduction import reduce_initialization, reduce_lineage, reduce_operation
 from dnd.types.event_facts import SpatialChangeType
-from dnd.types.senses import PerceivedContact
 from tests.player.test_recorded_boundary import world
 from dnd.types.cells import NO_ROWS
 
@@ -42,7 +41,7 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
     envelope = capture_interval(name='operation audience fold', start_cursor=0,
         end_cursor=EventQueue.event_cursor(), observer_uuid=owner.uuid, audience=audience,
         battlefield_id=built.definition.battlefield_id)
-    _, initial = begin_projection(envelope)
+    _, initial = begin_projection(SessionProjection(), envelope)
     before = reduce_initialization(initial)
     frozen = deepcopy(before)
     template = next(node.fact for node in initial.nodes
@@ -60,7 +59,7 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
     for index, step in enumerate(steps, start=before.reducer_cursor):
         # Each step is its own one-version lineage: its occurrence is its lineage's index.
         fact = None
-        observations = ()
+        bodies = ()
         if step in ('sensory', 'canceled'):
             fact = sensory
         elif step == 'entry':
@@ -71,23 +70,27 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
                 entity_uuid=witness.uuid, position=(6, 5), commit_occurrence=index,
                 terminal_departure=True)
         else:
-            # A re-observation of an unchanged body: an empty patch with its contact.
-            observations = (PlayerObservation(occurrence=index, actor_uuid=witness.uuid, changes={},
-                contact=PerceivedContact(position=(8, 5), visual=True)),)
+            # The witness's body entering view again, hurt: every changeable field, its birth held.
+            held = before.actors[witness.uuid]
+            bodies = (BodyRecord(occurrence=index, actor_uuid=witness.uuid, body=BodyState(
+                visual_loadout=held.visual_loadout, normal_hp=1, maximum_hp=held.maximum_hp,
+                temporary_hp=held.temporary_hp, life_state=held.life_state, armor_class=held.armor_class,
+                conditions=held.conditions, occupancy_layer=held.occupancy_layer, faction=held.faction,
+                resolved_size=held.resolved_size)),)
         node = PlayerNode(occurrence=index, lineage=index, parent_event=None,
             parent_lineage=None, children_lineages=(), phase=EventPhase.COMPLETION,
             canceled=step == 'canceled', fact=fact)
         lineages.append(PlayerLineage(generation=before.generation, observer_uuid=owner.uuid,
             audience=audience, lineage=index, root=0, events=(node,),
             version_rows=VersionRows(occurrences=(index,), lineages=(index,)),
-            start_cursor=index, end_cursor=index + 1, observations=observations,
+            start_cursor=index, end_cursor=index + 1, bodies=bodies,
             # The template's light source indices name the initialization's rows.
             sensory_rows=initial.sensory_rows))
     if together:
         lineages = [replace(lineages[0], events=tuple(node for row in lineages for node in row.events),
             version_rows=VersionRows(occurrences=tuple(value for row in lineages for value in row.version_rows.occurrences),
                 lineages=tuple(value for row in lineages for value in row.version_rows.lineages)),
-            observations=tuple(value for row in lineages for value in row.observations),
+            bodies=tuple(value for row in lineages for value in row.bodies),
             end_cursor=lineages[-1].end_cursor)]
     update = PlayerUpdate(audience=audience, lineages=tuple(lineages), hud=None,
         combat_log_appends=(), content_additions=())
@@ -102,7 +105,7 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
     if steps[-1] == 'entry':
         assert actual.senses.position == (7, 5)
     elif steps[-1] == 'observation':
-        assert actual.senses.entities[witness.uuid].position == (8, 5)
+        assert actual.actors[witness.uuid].normal_hp == 1
     elif steps[-1] == 'departure':
         assert witness.uuid not in actual.senses.entities
         assert not actual.actors[witness.uuid].present

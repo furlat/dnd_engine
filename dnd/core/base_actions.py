@@ -42,7 +42,7 @@ from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.geometry import bresenham_line, grid_distance_feet
 from dnd.core.gridmap import get_map
 from dnd.core.view import cell_visible, visible_positions
-from dnd.types.physical_access import PhysicalAccess
+from dnd.types.physical_access import ObjectContact, PhysicalAccess
 from dnd.core.item_types import (
     ItemPresentationProvider,
     ItemPresentationState,
@@ -1382,6 +1382,16 @@ class BaseAction(BaseObject):
         """
         return None
 
+    def target_reach_feet(self) -> Optional[int]:
+        """The farthest distance, from `get_target_origin`, at which this action's admission accepts a target.
+
+        Discovery lists no object whose contact surface lies wholly beyond it
+        (`GridMap.object_contact_beyond`) and runs no admission for it. An
+        override must bound every target its admission accepts; None (the
+        default) bounds nothing.
+        """
+        return None
+
     def get_target_origin(self) -> Optional[Tuple[int, int]]:
         """Return the grid origin used to measure this action's target range."""
         source = BaseBlock.get(self.source_entity_uuid)
@@ -1418,10 +1428,14 @@ class BaseAction(BaseObject):
             replace(self.current_selection(), target_uuids=(target_uuid,)))[0]
 
     @final
-    def _physical_access_contact(self, scan: ActorScan,
-                                 selection: ActionSelection) -> Tuple[Optional[str], Optional[Tuple[int, int]]]:
+    def _physical_access_contact(self, scan: ActorScan, selection: ActionSelection,
+                                 traced: Optional[ObjectContact] = None) -> Tuple[Optional[str], Optional[Tuple[int, int]]]:
         """(error, contact): physical access to the selection's targets, and the surface of a placed
-        object target that a creature-or-object action reaches (None for every other target)."""
+        object target that a creature-or-object action reaches (None for every other target).
+
+        ``traced`` is the object contact the action's rule already traced for this selection
+        (`rule_admission`); it is this check's contact when it was traced with this check's arguments.
+        """
         access = self.get_physical_access()
         if access is None:
             return None, None
@@ -1444,8 +1458,10 @@ class BaseAction(BaseObject):
             if identity is not None and grid.get_object_placement(identity) is not None:
                 action_range = self.get_range()
                 limit = (action_range.long or action_range.normal) if action_range else 5
-                contact = grid.attack_object_contact(self.source_entity_uuid, identity,
-                    range_feet=limit, access=access, subjective=scan.subjective, origin=origin)
+                arguments = ObjectContact(self.source_entity_uuid, identity, limit, access, scan.subjective, origin, None)
+                contact = (traced.position if traced is not None and replace(traced, position=None) == arguments
+                           else grid.attack_object_contact(self.source_entity_uuid, identity,
+                               range_feet=limit, access=access, subjective=scan.subjective, origin=origin))
                 return ("Object is out of physical reach", None) if contact is None else (None, contact)
         if self.effective_target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY, TargetType.CREATURE_OR_OBJECT):
             targets = [target for identity in self._selection_targets(selection)
@@ -1926,15 +1942,16 @@ class BaseAction(BaseObject):
         return overrides
 
     @final
-    def _admission_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        """The checks every action shares, then the action's own rule (plan §14.3b).
+    def _admission(self, scan: ActorScan, selection: ActionSelection) -> Tuple[Optional[str], Optional[ObjectContact]]:
+        """The checks every action shares, then the action's own rule (plan §14.3b), with the object
+        contact the rule traced.
 
         Targets and positions come only from ``selection``: discovery checks a
         candidate against the registered template itself, without a copy, and
         nothing here declares an event.
         """
         if not self.contributions_active():
-            return "This granted action's owner is suppressed or absent"
+            return "This granted action's owner is suppressed or absent", None
         targets = self._selection_targets(selection)
         position = selection.positions[0] if selection.positions else None
         error = (self._family_admission_error(scan, selection)
@@ -1942,7 +1959,7 @@ class BaseAction(BaseObject):
             or self._position_selection_error(selection)
             or self.source_item_error(subjective=scan.subjective)
             or self._recipient_error(scan, targets))
-        return error if error is not None else self.rule_error(scan, selection)
+        return (error, None) if error is not None else self.rule_admission(scan, selection)
 
     def _family_admission_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         """A check one action family shares (a spell's entitlement, origin and firing sector).
@@ -1990,8 +2007,8 @@ class BaseAction(BaseObject):
 
         The scan's knowledge decides what is read: perception in discovery, the world at execution.
         """
-        error = self._admission_error(scan, selection)
-        return (error, None) if error else self._physical_access_contact(scan, selection)
+        error, traced = self._admission(scan, selection)
+        return (error, None) if error else self._physical_access_contact(scan, selection, traced)
 
     def relocation_destinations(self, scan: ActorScan, selection: ActionSelection) -> Tuple[Tuple[int, int], ...]:
         """Destinations a relocation may choose: seen, unoccupied and in range (plan §14.1).
@@ -2061,6 +2078,14 @@ class BaseAction(BaseObject):
         mutate anything, and they do not call ``super()``.
         """
         return None
+
+    def rule_admission(self, scan: ActorScan,
+                       selection: ActionSelection) -> Tuple[Optional[str], Optional[ObjectContact]]:
+        """`rule_error`, with the object contact the rule traced for the selection's target (None: it traced none).
+
+        `_physical_access_contact` takes that contact instead of tracing the same query again.
+        """
+        return self.rule_error(scan, selection), None
 
     def facet_domain(self, scan: ActorScan, level: Optional[int],
                      target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:

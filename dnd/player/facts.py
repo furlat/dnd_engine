@@ -7,10 +7,12 @@ engine constructors, executable state, audience grant maps, or diagnostic rows.
 from dnd.core.content.descriptors import ContentDescriptor
 
 from dataclasses import dataclass, field
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Generic, Literal, TypedDict, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic.dataclasses import dataclass as packed_dataclass
+from pydantic.config import JsonDict
 from dnd.player.compatibility import upgrade_spell_fact
 from dnd.player.audience import AudiencePerception, PlayerAudience, resolve_audience
 
@@ -24,13 +26,14 @@ from dnd.core.creature_types import AttackOutcome
 from dnd.core.effect_types import ObjectSectionVolume, EffectPropagationLink
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.types.event_facts import EventPhase, EventType, LandingKind, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState, WorldTileChanges
-from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot, ItemResourceChange, ItemEffectPresentationState,
-    ItemIntegrity, ItemPresentationKind, ItemRarity, ItemRemnantState)
+from dnd.core.item_types import (DoorMechanism, DoorSwing, ItemConcentrationSlot, ItemResourceChange, ItemEffectPresentationState,
+    ItemIntegrity, ItemRemnantState)
 from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
 from dnd.core.presentation_geometry import AoEPresentationGeometry, WallAssemblyPresentationGeometry
-from dnd.types.residues import BodyReleaseResult, ObjectResidueState
-from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, NO_ROWS, CellMask, CellMaskField, CellValues, CellValuesField, RowBitsField
-from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect, SenseMode, SensesSnapshot, SensesType, VolumeSurfaceSight
+from dnd.types.residues import BodyReleaseResult, ObjectResidueState, ResidueContribution
+from dnd.types.materials import TileSurface
+from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, NO_ROWS, PACKED, CellMask, CellMaskField, CellValues, CellValuesField, RowBits, RowBitsField
+from dnd.types.senses import PerceivedSpatialEffect, SenseMode, SensesSnapshot, SensesType, VolumeSurfaceSight
 from dnd.core.condition_types import ConditionDurationSummary
 from dnd.types.class_features import DraconicPresenceMode
 from dnd.types.material_deposits import MaterialDepositSource
@@ -38,14 +41,16 @@ from dnd.types.spatial_effects import AreaPropagation, SpatialDamageSource, Spat
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.traps import TrapState
 from dnd.types.physical_access import ContactPassage
-from dnd.types.world import MovementMode, OccupancyLayer
-from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
+from dnd.types.world import CardinalDirection, MovementMode, OccupancyLayer
+from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement, WorldObjectSupport
 from dnd.types.character_progression import PreparedSpellSelection
 from dnd.types.abilities import AbilityName
 from dnd.types.actor import TemporaryHitPointsGrant, SpatialDisposition
 from dnd.types.actor_sheet import PlayerResource, PlayerResourceValue
 from dnd.types.class_features import FontConversion, IndomitableReroll, RelentlessRageIntervention
-from dnd.types.actor_facts import ConditionFact
+from dnd.types.actor_facts import ChangeRow, ConditionMember
+from dnd.types.item_parts import (ItemLook as ItemLook, ItemProfile as ItemProfile, ItemState as ItemState,
+    VisualItem as VisualItem)
 from dnd.types.summoning import SummonManifestation, SummonDepartureCause
 from dnd.types.character_progression import Species, SpeciesVariant, Background, AppliedOriginState, AppliedClassLevel
 
@@ -78,6 +83,9 @@ Revision = Annotated[int, Field(ge=0)]
 RowIndices = Annotated[tuple[RowIndex, ...], Field(exclude_if=_no_rows)]
 SensoryFlag = Annotated[bool, Field(exclude_if=_unflagged)]
 SensoryNumber = Annotated[int | None, Field(exclude_if=_unset)]
+Row = TypeVar("Row")
+# A row list holding no rows is left out of a dump.
+Rows = Annotated[tuple[Row, ...], Field(exclude_if=_no_rows)]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -199,112 +207,17 @@ class CombatLogAppend:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ItemLook:
-    """What any viewer of an equipped item sees of it; `is_lit` travels in its layer."""
-
-    item_id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")]
-    item_kind: ItemPresentationKind
-    visual_item_name: str
-    visual_variant_id: str | None
-    equipped_visual_policy: EquippedVisualPolicy
-    item_effects: tuple[ItemEffectPresentationState, ...]
-    very_bright_radius_feet: Annotated[int, Field(ge=0)] | None
-    bright_radius_feet: Annotated[int, Field(ge=0)] | None
-    dim_radius_feet: Annotated[int, Field(ge=0)] | None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ItemProfile:
-    """What a controlled item is: the fields its use does not change."""
-
-    name: str
-    description: str | None
-    rarity: ItemRarity
-    weight: float
-    value: int
-    tags: tuple[str, ...]
-    is_pickable: bool
-    is_equippable: bool
-    is_usable: bool
-    is_targetable: bool
-    door_mechanism: DoorMechanism | None
-    door_swing: DoorSwing | None
-    stack_id: str | None
-    damage_dice: str | None
-    damage_type: str | None
-    weapon_properties: tuple[str, ...]
-    armor_type: str | None
-    armor_ac: int | None
-    shield_ac_bonus: int | None
-    max_charges: Annotated[int, Field(ge=-1)] | None
-    max_stack: Annotated[int, Field(ge=1)]
-    is_consumable: bool
-    map_char: str
-    include_in_senses_objects: bool
-    include_in_adjacent_senses_objects: bool
-    include_in_available_object_actions: bool
-    maximum_hit_points: Annotated[int, Field(ge=0)] | None
-    concentration_capacity: Annotated[int, Field(ge=0)]
-    boundary_structure: BoundaryStructure | None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ItemState:
-    """What a controlled item's use and the world change."""
-
-    stack_count: Annotated[int, Field(ge=0)]
-    charges: Annotated[int, Field(ge=-1)] | None
-    integrity: ItemIntegrity
-    destruction_outcome: str | None
-    remnant_state: ItemRemnantState | None
-    current_hit_points: Annotated[int, Field(ge=0)] | None
-    concentration_slots: tuple[ItemConcentrationSlot, ...]
-    construction_owner_uuid: UUID | None
-    construction_geometry: AoEPresentationGeometry | None
-    construction_suppressions: tuple[SpellSuppression, ...]
-    known_to_creator: bool
-    supported_by_uuid: UUID | None
-    contact_passage: ContactPassage
-    surface_residues: tuple[ObjectResidueState, ...]
-    linked_spatial_condition_uuid: UUID | None
-    is_open: bool | None
-    is_engaged: bool | None
-    blocks_movement: bool
-    blocks_optics: bool
-    blocks_propagation: bool
-    is_lit: bool | None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class PlayerItem:
     """What a seat knows of one item instance: its look and, once it controlled the item, its profile and state.
 
-    The profile and state are current while the item is in a controlled inventory.
+    The profile and state are current while the item is in a controlled inventory; `effects` are the item's
+    effects as last shown. The seat never prunes its item records.
     """
 
     look: ItemLook
     profile: ItemProfile | None = None
     state: ItemState | None = None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ItemPatch:
-    """One item's components new to the seat: all it may know the first time, then the components that changed."""
-
-    item_uuid: UUID
-    look: ItemLook | None = None
-    profile: ItemProfile | None = None
-    state: ItemState | None = None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class VisualItem:
-    """One equipped layer; the item's look is in the seat's record of `item_uuid`."""
-
-    slot: str
-    item_uuid: UUID
-    item_id: str
-    is_lit: bool | None = None
+    effects: tuple[ItemEffectPresentationState, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -326,7 +239,7 @@ class PlayerActor:
     temporary_hp: int
     life_state: LifeState
     armor_class: int
-    conditions: tuple[ConditionFact, ...] = ()
+    conditions: tuple[ConditionMember, ...] = ()
     last_visual_position: tuple[int, int] | None = None
     # A controlled actor's inventory, in order; its records are in `PlayerState.items`.
     controlled_items: tuple[UUID, ...] | None = None
@@ -341,48 +254,77 @@ class PlayerActor:
     spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT
 
 
-class ActorChanges(TypedDict, total=False):
-    """Present fields replace the seat's known body values; omitted fields are unchanged.
-
-    Against an absent body (first acquisition) every field is present.
-    """
-
-    __pydantic_config__ = ConfigDict(extra="forbid")
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ActorBirth:
+    """A body's birth fields: no event changes them, so a seat receives them once."""
 
     name: str
     character_body_id: str | None
     creature_content_ref: str | None
     appearance: AppearanceConfig
+    structural_base_size: Annotated[Size | None, Field(exclude_if=_unset)] = None
+    manifestation: Annotated[SummonManifestation | None, Field(exclude_if=_unset)] = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BodyState:
+    """Every changeable field of a body, current at its record's occurrence."""
+
     visual_loadout: VisualLoadout
     normal_hp: int
     maximum_hp: int
     temporary_hp: int
     life_state: LifeState
     armor_class: int
-    conditions: tuple[ConditionFact, ...]
-    last_visual_position: tuple[int, int] | None
-    controlled_items: tuple[UUID, ...] | None
-    occupancy_layer: OccupancyLayer | None
-    temporary_hp_grant: TemporaryHitPointsGrant | None
-    resolved_size: Size | None
-    structural_base_size: Size | None
-    manifestation: SummonManifestation | None
-    faction: str | None
-    present: bool
-    remains_disposition: RemainsDisposition
-    spatial_disposition: SpatialDisposition
+    temporary_hp_grant: Annotated[TemporaryHitPointsGrant | None, Field(exclude_if=_unset)] = None
+    conditions: Annotated[tuple[ConditionMember, ...], Field(exclude_if=_no_rows)] = ()
+    # The controller's inventory, in order; None for any other seat.
+    controlled_items: Annotated[tuple[UUID, ...] | None, Field(exclude_if=_unset)] = None
+    occupancy_layer: Annotated[OccupancyLayer | None, Field(exclude_if=_unset)] = None
+    resolved_size: Annotated[Size | None, Field(exclude_if=_unset)] = None
+    faction: Annotated[str | None, Field(exclude_if=_unset)] = None
+    remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
+    spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PlayerObservation:
-    """One actor's observed body at an event, as a patch against what the seat holds,
-    with the patches of the items that body discloses."""
+class ItemRecord:
+    """An item entering a seat's view: its static parts if the seat lacks them, its dynamic parts current and whole."""
+
+    item_uuid: UUID
+    look: Annotated[ItemLook | None, Field(exclude_if=_unset)] = None
+    profile: Annotated[ItemProfile | None, Field(exclude_if=_unset)] = None
+    state: Annotated[ItemState | None, Field(exclude_if=_unset)] = None
+    effects: Annotated[tuple[ItemEffectPresentationState, ...], Field(exclude_if=_no_rows)] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BodyRecord:
+    """A body entering a seat's view at an occurrence: all its changeable fields, its birth the first time,
+    and the records of the items it shows."""
 
     occurrence: int
     actor_uuid: UUID
-    changes: Annotated[ActorChanges, Field(exclude_if=_no_rows)] = field(default_factory=ActorChanges)
-    contact: Annotated[PerceivedContact | None, Field(exclude_if=_unset)] = None
-    items: Annotated[tuple[ItemPatch, ...], Field(exclude_if=_no_rows)] = ()
+    birth: Annotated[ActorBirth | None, Field(exclude_if=_unset)] = None
+    body: BodyState
+    items: Annotated[tuple[ItemRecord, ...], Field(exclude_if=_no_rows)] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ActorRows:
+    """One actor's disclosed change rows, in the engine's order."""
+
+    actor_uuid: UUID
+    rows: tuple[ChangeRow, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ActorChangeFact:
+    """An event's change to the bodies a seat perceives: each actor's rows, after the items entering its view."""
+
+    kind: Literal["actor_change"] = "actor_change"
+    actors: tuple[ActorRows, ...]
+    items: Annotated[tuple[ItemRecord, ...], Field(exclude_if=_no_rows)] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -626,35 +568,6 @@ class DeathSaveFact:
     entity_uuid: UUID
     natural_roll: int | None
     succeeded: bool
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class EquipmentFact:
-    """A holder's equipment change: its body patch (loadout, armor class, inventory) and its items' patches."""
-
-    kind: Literal["equipment"] = "equipment"
-    source_entity_uuid: UUID
-    changes: ActorChanges
-    items: Annotated[tuple[ItemPatch, ...], Field(exclude_if=_no_rows)] = ()
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ConditionChangeFact:
-    kind: Literal["condition"] = "condition"
-    target_entity_uuid: UUID
-    event_type: EventType
-    condition: ConditionFact
-    consumed: Annotated[bool, Field(exclude_if=_unflagged)] = False
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ItemEffectChangeFact:
-    """Witnessed native item membership edge, without a creature condition."""
-
-    kind: Literal["item_effect"] = "item_effect"
-    item_uuid: UUID
-    effect_uuid: UUID
-    event_type: EventType
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -960,8 +873,8 @@ class ObjectDestroyedFact:
 
 PlayerFact = Annotated[
     AttackFact | SpellFact | AreaReachFact | MovementFact | StepFact | ForcedMovementFact | PortalTransferFact | ShoveFact
-    | Annotated[DamageFact, Field(discriminator="stage")] | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact | EquipmentFact
-    | ConditionChangeFact | ItemEffectChangeFact | SpatialFact | FactionFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
+    | Annotated[DamageFact, Field(discriminator="stage")] | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact
+    | ActorChangeFact | SpatialFact | FactionFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
     | ObjectDamageFact | ObjectDestroyedFact | MechanismActivationFact | SavingThrowFact,
     Field(discriminator="kind"),
 ]
@@ -1080,26 +993,354 @@ class PlayerObject:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class TileLook:
+    """A tile's surface and name, sent once per seat under its content id (a digest of the value)."""
+
+    look_id: str
+    surface: TileSurface
+    name: str
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TileStatic:
+    """A tile's fixed part, sent once per tile uuid: no writer changes it for one uuid (a replaced tile has a new
+    uuid). `look` is its surface and name's `TileLook` content id."""
+
+    position: tuple[int, int]
+    tile_uuid: UUID
+    look: str
+
+
+@packed_dataclass(frozen=True, slots=True, kw_only=True, config=PACKED)
+class TileColumns:
+    """The changeable scalars of the entered cells that hold a tile, one byte per cell per column in `cells` order
+    (x, then y: the `CellValues` order). `flags` holds blocks_optics (bit 0), blocks_propagation (bit 1), the
+    surface kind (bits 2-3: ordinary, stairs, ramp) and the slope axis (bits 4-5: none, north-south, east-west).
+    `elevation_steps` is empty when every cell is at 0."""
+
+    cells: CellMask
+    walking_cost: bytes
+    flying_cost: bytes
+    swimming_cost: bytes
+    burrowing_cost: bytes
+    flags: bytes
+    default_light: bytes
+    resolved_light: bytes
+    elevation_steps: Annotated[tuple[int, ...], Field(exclude_if=_no_rows)] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TileFieldUpdate:
+    """A perceived tile's changed scalars, each with its after-value; its conditions and residues change through
+    their own rows and its static part never changes."""
+
     position: tuple[int, int]
     changes: WorldTileChanges
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class WorldUpdate:
-    """The world values a seat observes at an occurrence: new tiles, known tiles' changed fields, objects, connectors.
+class TileConditions:
+    """A tile's own condition names after the occurrence (never its residues' names), in the tile's order."""
 
-    `resolved_light` is the changed resolved light of known tiles, as a value
-    per cell (a `LightLevel`); `tile_changes` carry their other changed fields.
+    position: tuple[int, int]
+    names: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResidueMaterial:
+    """A residue material's fixed part, sent once per residue id."""
+
+    residue_id: str
+    name: str
+    description: str
+    max_amount: int
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ContributionRow:
+    """One contribution of a residue, set at its index (the index after the last appends one)."""
+
+    index: Annotated[int, Field(ge=0)]
+    contribution: ResidueContribution
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResidueRow:
+    """One material on one tile: whole for a key the client does not hold (its condition uuid present), else the
+    occurrence's change (`amount` None: unchanged; the contributions it set)."""
+
+    position: tuple[int, int]
+    residue_id: str
+    condition_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    amount: Annotated[int | None, Field(exclude_if=_unset)] = None
+    contributions: Rows[ContributionRow] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResidueKey:
+    position: tuple[int, int]
+    residue_id: str
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ObjectLook:
+    """A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid
+    (`test_object_look_static` and a census of every gallery case's world fold; a broken object's visual name and a
+    cut construction's geometry change, so they are state)."""
+
+    item_uuid: UUID
+    item_id: str
+    visual_variant_id: Annotated[str | None, Field(exclude_if=_unset)] = None
+    contact_passage: ContactPassage = ContactPassage.STRUCTURAL
+    supported_by_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    door_mechanism: Annotated[DoorMechanism | None, Field(exclude_if=_unset)] = None
+    door_swing: Annotated[DoorSwing | None, Field(exclude_if=_unset)] = None
+    maximum_hit_points: Annotated[int | None, Field(exclude_if=_unset)] = None
+    concentration_capacity: Annotated[int, Field(exclude_if=_zero)] = 0
+    construction_owner_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    known_to_creator: Annotated[bool, Field(exclude_if=_unflagged)] = False
+
+
+def _one(count: int) -> bool:
+    return count == 1
+
+
+def _picked(flag: bool) -> bool:
+    return flag
+
+
+def _intact(integrity: ItemIntegrity) -> bool:
+    return integrity is ItemIntegrity.INTACT
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BoundaryStructureStatic:
+    """A boundary structure's value, sent once per seat under its content id (a digest of the value, so a
+    changed structure is another id)."""
+
+    structure_id: str
+    structure: BoundaryStructure
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ObjectState:
+    """A floor item's changeable part, its value at the occurrence; a field holding its default is left out.
+    `visual_item_name` is left out when it is the `name`; `boundary_structure` is a `BoundaryStructureStatic`'s
+    id."""
+
+    name: str
+    visual_item_name: Annotated[str | None, Field(exclude_if=_unset)] = None
+    map_char: str
+    boundary_structure: Annotated[str | None, Field(exclude_if=_unset)] = None
+    is_open: Annotated[bool | None, Field(exclude_if=_unset)] = None
+    is_lit: Annotated[bool | None, Field(exclude_if=_unset)] = None
+    very_bright_radius_feet: Annotated[int | None, Field(exclude_if=_unset)] = None
+    bright_radius_feet: Annotated[int | None, Field(exclude_if=_unset)] = None
+    dim_radius_feet: Annotated[int | None, Field(exclude_if=_unset)] = None
+    stack_count: Annotated[int, Field(exclude_if=_one)] = 1
+    is_pickable: Annotated[bool, Field(exclude_if=_picked)] = True
+    item_effects: Annotated[tuple[ItemEffectPresentationState, ...], Field(exclude_if=_no_rows)] = ()
+    blocks_propagation: Annotated[bool, Field(exclude_if=_unflagged)] = False
+    is_engaged: Annotated[bool | None, Field(exclude_if=_unset)] = None
+    surface_residues: Annotated[tuple[ObjectResidueState, ...], Field(exclude_if=_no_rows)] = ()
+    current_hit_points: Annotated[int | None, Field(exclude_if=_unset)] = None
+    concentration_slots: Annotated[tuple[ItemConcentrationSlot, ...], Field(exclude_if=_no_rows)] = ()
+    remnant_state: Annotated[ItemRemnantState | None, Field(exclude_if=_unset)] = None
+    integrity: Annotated[ItemIntegrity, Field(exclude_if=_intact)] = ItemIntegrity.INTACT
+    destruction_outcome: Annotated[str | None, Field(exclude_if=_unset)] = None
+    construction_geometry: Annotated[AoEPresentationGeometry | None, Field(exclude_if=_unset)] = None
+    construction_suppressions: Annotated[tuple[SpellSuppression, ...], Field(exclude_if=_no_rows)] = ()
+
+
+def _single_anchor(supports: tuple[WorldObjectSupport, ...]) -> bool:
+    return not supports
+
+
+def _bands(occupies: bool) -> bool:
+    return occupies
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ObjectPlacement:
+    """An object's placement on the wire: every field its `WorldObjectPlacement` holds that is neither derivable
+    nor its default. The object is the row's `item_uuid`; its kind is a boundary exactly when it has a boundary
+    direction; `tile_uuid`, left out, is the client's static tile row at `position`; `covered_supports`, left
+    out, is that anchor support alone."""
+
+    position: tuple[int, int]
+    top_height_steps: int
+    boundary_direction: Annotated[CardinalDirection | None, Field(exclude_if=_unset)] = None
+    tile_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    covered_supports: Annotated[tuple[WorldObjectSupport, ...], Field(exclude_if=_single_anchor)] = ()
+    occupies_bands: Annotated[bool, Field(exclude_if=_bands)] = True
+    base_height_steps: Annotated[int, Field(exclude_if=_zero)] = 0
+    orientation: Annotated[CardinalDirection | None, Field(exclude_if=_unset)] = None
+    removed_bands: Annotated[tuple[tuple[int, int, int], ...], Field(exclude_if=_no_rows)] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ObjectRow:
+    """A world object the seat observes, at an occurrence.
+
+    An entering row carries its state, placement and the faces its residues are authoritative for (those whose
+    viewing cell some member sees); a perceived object's change carries its state, and its placement when the
+    occurrence wrote one. `members`: bit i is the audience's `observers[i]`, exact as of this row; a seat with one
+    observer leaves it out.
+    """
+
+    item_uuid: UUID
+    members: Annotated[int | None, Field(ge=1, exclude_if=_unset)] = None
+    state: ObjectState
+    placement: Annotated[ObjectPlacement | None, Field(exclude_if=_unset)] = None
+    observed_faces: Annotated[tuple[CardinalDirection, ...], Field(exclude_if=_no_rows)] = ()
+
+
+Value = TypeVar("Value")
+
+
+def _named_by_its_definition(schema: JsonDict) -> None:
+    """A column's schema is named by its definition (`Column_<value type>_`), not by a title every column
+    shares (an SDK generator would number the columns by order)."""
+    del schema["title"]
+
+
+# The rows a group's column selects; left out, every row.
+SelectedRows = Annotated[RowBits | None, Field(exclude_if=_unset)]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Column(Generic[Value]):
+    """One field of a group of rows: the values of the rows `rows` selects, in row order. `rows` left out selects
+    every row; a column with no value is left out of its group, and each row it skips holds the field's default."""
+
+    __pydantic_config__ = ConfigDict(json_schema_extra=_named_by_its_definition)
+
+    rows: SelectedRows = None
+    values: tuple[Value, ...]
+
+
+# A column of non-default values, left out when no row holds one.
+Sparse = Annotated[Column[Value] | None, Field(exclude_if=_unset)]
+# Value types named so the schema names their columns.
+type ConstructionGeometry = AoEPresentationGeometry
+type MemberBits = Annotated[int, Field(ge=1)]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlacementColumns:
+    """The `ObjectPlacement`s of an update's object rows, as columns over the rows `rows` selects (left out:
+    every row)."""
+
+    rows: SelectedRows = None
+    position: tuple[tuple[int, int], ...]
+    top_height_steps: tuple[int, ...]
+    boundary_direction: Sparse[CardinalDirection] = None
+    tile_uuid: Sparse[UUID] = None
+    covered_supports: Sparse[tuple[WorldObjectSupport, ...]] = None
+    occupies_bands: Sparse[bool] = None
+    base_height_steps: Sparse[int] = None
+    orientation: Sparse[CardinalDirection] = None
+    removed_bands: Sparse[tuple[tuple[int, int, int], ...]] = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ObjectColumns:
+    """An update's `ObjectRow`s as columns, one entry per row in row order (field names once per update): the
+    rows' uuids, members, observed faces, every `ObjectState` field and their placements. A sparse column holds
+    the rows whose value is not the field's default."""
+
+    item_uuids: tuple[UUID, ...]
+    members: Sparse[MemberBits] = None
+    observed_faces: Sparse[tuple[CardinalDirection, ...]] = None
+    name: tuple[str, ...]
+    visual_item_name: Sparse[str] = None
+    map_char: tuple[str, ...]
+    boundary_structure: Sparse[str] = None
+    is_open: Sparse[bool] = None
+    is_lit: Sparse[bool] = None
+    very_bright_radius_feet: Sparse[int] = None
+    bright_radius_feet: Sparse[int] = None
+    dim_radius_feet: Sparse[int] = None
+    stack_count: Sparse[int] = None
+    is_pickable: Sparse[bool] = None
+    item_effects: Sparse[tuple[ItemEffectPresentationState, ...]] = None
+    blocks_propagation: Sparse[bool] = None
+    is_engaged: Sparse[bool] = None
+    surface_residues: Sparse[tuple[ObjectResidueState, ...]] = None
+    current_hit_points: Sparse[int] = None
+    concentration_slots: Sparse[tuple[ItemConcentrationSlot, ...]] = None
+    remnant_state: Sparse[ItemRemnantState] = None
+    integrity: Sparse[ItemIntegrity] = None
+    destruction_outcome: Sparse[str] = None
+    construction_geometry: Sparse[ConstructionGeometry] = None
+    construction_suppressions: Sparse[tuple[SpellSuppression, ...]] = None
+    placements: Annotated[PlacementColumns | None, Field(exclude_if=_unset)] = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ContainedItem:
+    item_uuid: UUID
+    state: ObjectState
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ContainerContents:
+    """A container's whole contents, on gaining sight of them (looks once, through `object_looks`)."""
+
+    container_uuid: UUID
+    items: Rows[ContainedItem] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ContentsChange:
+    """A seen container's contents changing while the seat sees them."""
+
+    container_uuid: UUID
+    upserted: Rows[ContainedItem] = ()
+    removed: Rows[UUID] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorldUpdate:
+    """The world a seat perceives change at one occurrence.
+
+    `entered` is the update's authoritative scope: for those cells the client drops everything it holds and keeps
+    only what this update carries, their tiles, every object touching them (`placement_support_cells`) and every
+    connector with an endpoint there; no object or connector there means none. Every other row is the keyed change
+    of a record the seat perceived before and after the occurrence. Static rows come once per (kind, id) per seat.
     """
 
     occurrence: int
-    tiles: tuple[WorldTileState, ...]
-    objects: tuple[PlayerObject, ...]
-    objects_removed: tuple[UUID, ...]
-    connectors: tuple[WorldConnectorState, ...]
-    tile_changes: tuple[TileFieldUpdate, ...] = ()
+    entered: CellMaskField = EMPTY_CELLS
+    tile_looks: Rows[TileLook] = ()
+    tile_statics: Rows[TileStatic] = ()
+    tile_columns: Annotated[TileColumns | None, Field(exclude_if=_unset)] = None
+    tile_conditions: Rows[TileConditions] = ()
+    tile_changes: Rows[TileFieldUpdate] = ()
     resolved_light: CellValuesField = EMPTY_VALUES
+    residue_materials: Rows[ResidueMaterial] = ()
+    boundary_structures: Rows[BoundaryStructureStatic] = ()
+    residues: Rows[ResidueRow] = ()
+    residues_removed: Rows[ResidueKey] = ()
+    object_looks: Rows[ObjectLook] = ()
+    objects: Annotated[ObjectColumns | None, Field(exclude_if=_unset)] = None
+    objects_removed: Rows[UUID] = ()
+    contents: Rows[ContainerContents] = ()
+    contents_changed: Rows[ContentsChange] = ()
+    connectors: Rows[WorldConnectorState] = ()
+    connectors_removed: Rows[UUID] = ()
+
+
+@dataclass(slots=True, kw_only=True)
+class StaticStore:
+    """The static rows the client was sent, never pruned: tiles by cell (the latest uuid there), tile looks and
+    boundary structures by content id, residue materials by id, object looks by item uuid."""
+
+    tiles: dict[tuple[int, int], TileStatic] = field(default_factory=dict)
+    tile_looks: dict[str, TileLook] = field(default_factory=dict)
+    residues: dict[str, ResidueMaterial] = field(default_factory=dict)
+    object_looks: dict[UUID, ObjectLook] = field(default_factory=dict)
+    boundary_structures: dict[str, BoundaryStructure] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -1123,7 +1364,7 @@ class PlayerLineage:
     version_rows: VersionRows
     start_cursor: int
     end_cursor: int
-    observations: tuple[PlayerObservation, ...] = ()
+    bodies: Annotated[tuple[BodyRecord, ...], Field(exclude_if=_no_rows)] = ()
     world_updates: tuple[WorldUpdate, ...] = ()
     audience: PlayerAudience | None = None
     # The perceived values its sensory facts name, each once.
@@ -1140,7 +1381,7 @@ class PlayerInitialization:
     nodes: tuple[PlayerNode, ...]
     version_rows: VersionRows
     end_cursor: int
-    observations: tuple[PlayerObservation, ...]
+    bodies: Annotated[tuple[BodyRecord, ...], Field(exclude_if=_no_rows)] = ()
     world_updates: tuple[WorldUpdate, ...]
     hud: PlayerHUDPatch | None = None
     audience: PlayerAudience | None = None
@@ -1191,7 +1432,10 @@ class PlayerState:
     world: PlayerWorld
     tiles: dict[tuple[int, int], WorldTileState] = field(default_factory=dict)
     objects: dict[UUID, PlayerObject] = field(default_factory=dict)
-    connectors: tuple[WorldConnectorState, ...] = ()
+    # Which of the audience's observers observe each held object (bit i: `observers[i]`), as last sent.
+    object_members: dict[UUID, int] = field(default_factory=dict)
+    connectors: dict[UUID, WorldConnectorState] = field(default_factory=dict)
+    static: StaticStore = field(default_factory=StaticStore)
     senses: SensesSnapshot | None = None
     reducer_cursor: int = 0
     # Local reduction bookkeeping, reconstructed from saved version rows.

@@ -1,0 +1,674 @@
+{
+ "name": "w11_placements_and_structures_decode_exactly",
+ "rule": "A placement leaves out its object, its anchor tile when the client holds that cell's static row, its lone anchor support, its kind and its defaults; anything else travels. A boundary structure is a static row under its content id, once; a visual name equal to the name is left out.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "update": {
+    "occurrence": 0,
+    "entered": {
+     "x0": 0,
+     "y0": 0,
+     "width": 4,
+     "height": 1,
+     "bits": "Dw=="
+    },
+    "tile_looks": [
+     {
+      "look_id": "652de935c25693e0",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     }
+    ],
+    "tile_statics": [
+     {
+      "position": [
+       0,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100000000",
+      "look": "652de935c25693e0"
+     },
+     {
+      "position": [
+       1,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100001000",
+      "look": "652de935c25693e0"
+     },
+     {
+      "position": [
+       2,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100002000",
+      "look": "652de935c25693e0"
+     },
+     {
+      "position": [
+       3,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100003000",
+      "look": "652de935c25693e0"
+     }
+    ],
+    "tile_columns": {
+     "cells": {
+      "x0": 0,
+      "y0": 0,
+      "width": 4,
+      "height": 1,
+      "bits": "Dw=="
+     },
+     "walking_cost": "AQEBAQ==",
+     "flying_cost": "AQEBAQ==",
+     "swimming_cost": "AAAAAA==",
+     "burrowing_cost": "AAAAAA==",
+     "flags": "AAAAAA==",
+     "default_light": "AwMDAw==",
+     "resolved_light": "AwMDAw=="
+    },
+    "boundary_structures": [
+     {
+      "structure_id": "9c913ae0f79397b1",
+      "structure": {
+       "structure": "wall",
+       "material": "stone",
+       "blocked_channels": [
+        "movement",
+        "optical"
+       ],
+       "contact_passage": "structural"
+      }
+     }
+    ],
+    "object_looks": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000007001",
+      "item_id": "item.fold_vectors.crate",
+      "contact_passage": "structural"
+     },
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000007002",
+      "item_id": "item.fold_vectors.cart",
+      "contact_passage": "structural"
+     },
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000007003",
+      "item_id": "item.fold_vectors.sign",
+      "contact_passage": "structural"
+     },
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000007004",
+      "item_id": "item.fold_vectors.banner",
+      "contact_passage": "structural"
+     },
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000002003",
+      "item_id": "item.fold_vectors.wall",
+      "contact_passage": "structural",
+      "maximum_hit_points": 30
+     },
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000007005",
+      "item_id": "item.fold_vectors.wall",
+      "contact_passage": "structural",
+      "maximum_hit_points": 30
+     }
+    ],
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000002003",
+      "00000000-0000-4000-8000-000000007001",
+      "00000000-0000-4000-8000-000000007002",
+      "00000000-0000-4000-8000-000000007003",
+      "00000000-0000-4000-8000-000000007004",
+      "00000000-0000-4000-8000-000000007005"
+     ],
+     "name": [
+      "Wall",
+      "Crate",
+      "Cart",
+      "Sign",
+      "Banner",
+      "Wall"
+     ],
+     "visual_item_name": {
+      "rows": {
+       "start": 0,
+       "bits": "Nw=="
+      },
+      "values": [
+       "wall",
+       "crate",
+       "cart",
+       "banner",
+       "wall"
+      ]
+     },
+     "map_char": [
+      "W",
+      "C",
+      "C",
+      "S",
+      "B",
+      "W"
+     ],
+     "boundary_structure": {
+      "rows": {
+       "start": 0,
+       "bits": "IQ=="
+      },
+      "values": [
+       "9c913ae0f79397b1",
+       "9c913ae0f79397b1"
+      ]
+     },
+     "current_hit_points": {
+      "rows": {
+       "start": 0,
+       "bits": "IQ=="
+      },
+      "values": [
+       30,
+       30
+      ]
+     },
+     "placements": {
+      "position": [
+       [
+        0,
+        0
+       ],
+       [
+        1,
+        0
+       ],
+       [
+        2,
+        0
+       ],
+       [
+        3,
+        0
+       ],
+       [
+        0,
+        0
+       ],
+       [
+        2,
+        0
+       ]
+      ],
+      "top_height_steps": [
+       2,
+       2,
+       3,
+       2,
+       2,
+       2
+      ],
+      "boundary_direction": {
+       "rows": {
+        "start": 0,
+        "bits": "KQ=="
+       },
+       "values": [
+        "north",
+        "east",
+        "east"
+       ]
+      },
+      "tile_uuid": {
+       "rows": {
+        "start": 0,
+        "bits": "EA=="
+       },
+       "values": [
+        "00000000-0000-4000-8000-000107000000"
+       ]
+      },
+      "covered_supports": {
+       "rows": {
+        "start": 0,
+        "bits": "BA=="
+       },
+       "values": [
+        [
+         {
+          "position": [
+           2,
+           0
+          ],
+          "tile_uuid": "00000000-0000-4000-8000-000100002000"
+         },
+         {
+          "position": [
+           3,
+           0
+          ],
+          "tile_uuid": "00000000-0000-4000-8000-000100003000"
+         }
+        ]
+       ]
+      },
+      "occupies_bands": {
+       "rows": {
+        "start": 0,
+        "bits": "LQ=="
+       },
+       "values": [
+        false,
+        false,
+        false,
+        false
+       ]
+      },
+      "base_height_steps": {
+       "rows": {
+        "start": 0,
+        "bits": "BA=="
+       },
+       "values": [
+        1
+       ]
+      },
+      "orientation": {
+       "rows": {
+        "start": 0,
+        "bits": "CA=="
+       },
+       "values": [
+        "north"
+       ]
+      },
+      "removed_bands": {
+       "rows": {
+        "start": 0,
+        "bits": "BA=="
+       },
+       "values": [
+        [
+         [
+          3,
+          0,
+          2
+         ]
+        ]
+       ]
+      }
+     }
+    }
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100002000",
+       "position": [
+        2,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100003000",
+       "position": [
+        3,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000007001": {
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000007001",
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          1,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100001000"
+        }
+       ],
+       "removed_bands": []
+      },
+      "members": 1,
+      "name": "Crate",
+      "visual_item_name": "crate",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {},
+      "contents": null,
+      "structure": null
+     },
+     "00000000-0000-4000-8000-000000007002": {
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000007002",
+       "tile_uuid": "00000000-0000-4000-8000-000100002000",
+       "position": [
+        2,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": false,
+       "boundary_direction": null,
+       "base_height_steps": 1,
+       "top_height_steps": 3,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          2,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100002000"
+        },
+        {
+         "position": [
+          3,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100003000"
+        }
+       ],
+       "removed_bands": [
+        [
+         3,
+         0,
+         2
+        ]
+       ]
+      },
+      "members": 1,
+      "name": "Cart",
+      "visual_item_name": "cart",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {},
+      "contents": null,
+      "structure": null
+     },
+     "00000000-0000-4000-8000-000000007003": {
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000007003",
+       "tile_uuid": "00000000-0000-4000-8000-000100003000",
+       "position": [
+        3,
+        0
+       ],
+       "kind": "boundary",
+       "occupies_bands": false,
+       "boundary_direction": "east",
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": "north",
+       "covered_supports": [
+        {
+         "position": [
+          3,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100003000"
+        }
+       ],
+       "removed_bands": []
+      },
+      "members": 1,
+      "name": "Sign",
+      "visual_item_name": "Sign",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {},
+      "contents": null,
+      "structure": null
+     },
+     "00000000-0000-4000-8000-000000007004": {
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000007004",
+       "tile_uuid": "00000000-0000-4000-8000-000107000000",
+       "position": [
+        0,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          0,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000107000000"
+        }
+       ],
+       "removed_bands": []
+      },
+      "members": 1,
+      "name": "Banner",
+      "visual_item_name": "banner",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {},
+      "contents": null,
+      "structure": null
+     },
+     "00000000-0000-4000-8000-000000002003": {
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002003",
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "kind": "boundary",
+       "occupies_bands": false,
+       "boundary_direction": "north",
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          0,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100000000"
+        }
+       ],
+       "removed_bands": []
+      },
+      "members": 1,
+      "name": "Wall",
+      "visual_item_name": "wall",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {},
+      "contents": null,
+      "structure": {
+       "structure": "wall",
+       "material": "stone",
+       "blocked_channels": [
+        "movement",
+        "optical"
+       ],
+       "contact_passage": "structural"
+      }
+     },
+     "00000000-0000-4000-8000-000000007005": {
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000007005",
+       "tile_uuid": "00000000-0000-4000-8000-000100002000",
+       "position": [
+        2,
+        0
+       ],
+       "kind": "boundary",
+       "occupies_bands": false,
+       "boundary_direction": "east",
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          2,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100002000"
+        }
+       ],
+       "removed_bands": []
+      },
+      "members": 1,
+      "name": "Wall",
+      "visual_item_name": "wall",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {},
+      "contents": null,
+      "structure": {
+       "structure": "wall",
+       "material": "stone",
+       "blocked_channels": [
+        "movement",
+        "optical"
+       ],
+       "contact_passage": "structural"
+      }
+     }
+    },
+    "connectors": []
+   }
+  }
+ ]
+}

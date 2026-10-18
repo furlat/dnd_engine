@@ -8,7 +8,7 @@ from dnd.conditions import Invisible, Poisoned
 from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.events import EventPhase, EventQueue
 from dnd.entity import Entity
-from dnd.player.application import capture_application_operation, initialize_audiences
+from dnd.player.application import capture_application_operation, initialize_audiences, seat_content
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import PlayerUpdate
 from dnd.player.reduction import reduce_initialization, reduce_operation
@@ -33,7 +33,7 @@ def test_immunity_log_belongs_to_its_canceled_condition_event_and_replays(nested
         catalog = ui_content_manifest()
         audiences, initializations = initialize_audiences(session, catalog)
         before = reduce_initialization(initializations["party"],
-            content_additions=audiences["party"].projection.remembered.content)
+            content_additions=seat_content(audiences["party"]))
         start = EventQueue.event_cursor()
         native_log_start = len(session.encounter.combat_log)
         if nested:
@@ -98,7 +98,7 @@ def test_unidentified_immunity_requires_native_occurrence_perception(perceived):
         audiences, initializations = initialize_audiences(session, catalog)
         seat = next(iter(audiences))
         before = reduce_initialization(initializations[seat],
-            content_additions=audiences[seat].projection.remembered.content)
+            content_additions=seat_content(audiences[seat]))
         start = EventQueue.event_cursor()
         canceled = source.add_condition(Poisoned(source_entity_uuid=source.uuid, target_entity_uuid=source.uuid))
         assert canceled.canceled and canceled.combat_log is not None

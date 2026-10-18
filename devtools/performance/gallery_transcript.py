@@ -9,7 +9,14 @@ Identities the value layer mints (in dnd/core/values.py) come from a third gener
 entities, items and conditions by identity, so a change in how many identities values mint must not move them.
 
     PYTHONHASHSEED=0 PYTHONPATH=<tree> python devtools/performance/gallery_transcript.py record <tree> <out.json> \
-        --case fireball --mode ordinary --name <stem>
+        --case fireball --mode ordinary --name <stem> [--seats faction|character|batch:N]
+
+Every argument after the output path goes to the tree's own `gallery_crowd.py`, including its seat layout
+(`--seats`, default `faction`): record both trees of a comparison with the same layout. With `--oracle DIR` the
+recording is also the oracle run whose O3 views later runs compare against: its identities repeat across runs. A tree whose harness
+predates the layouts (before E0 of the event-native publication plan) records `faction` and accepts no `--seats`.
+Its harness also published none of its own world edits, so its first operation's published updates differ from a
+later harness's even where the engine is identical; compare such trees on events and logs only.
 
 compare: report whether two recordings are equal after uuid (first appearance, in the engine's own order:
 dicts keep their insertion order, so identities the engine keys by never sort by their raw values) and timestamp
@@ -17,7 +24,7 @@ normalization, after projecting both onto a named representation. Published seat
 byte for byte after uuid normalization. The engine on PYTHONPATH is imported but not run.
 
     PYTHONPATH=<tree> python devtools/performance/gallery_transcript.py compare <base.json> <new.json> \
-        [--representation value-read|value-record]
+        [--representation value-read|value-record|world-16]
 
 The `value-read` representation (value read context as data, PR 2026-10-17) projects the d20, attack and
 contest bonus fields that became evaluated readings onto their normalized score, advantage, critical and
@@ -29,11 +36,16 @@ The `value-record` representation (value layer as data, PH-2 2026-10-18) project
 channel graph, a value record, or a composed read in a damage or healing packet) onto the read it gives with no
 target or context: name, owner, score, normalized score, advantage, critical and auto-hit states. Block dumps
 lose their `values` dict: a block's values are its value fields (still dumped, and named by `values_dict_*`).
+
+The `world-16` representation (the schema-16 world wire, E3-world 2026-10-18) drops every lineage's
+`world_updates` from both sides' published seat updates before their uuid normalization; the rest of each update
+(nodes, occurrence numbering, version rows, bodies, sensory rows, HUD, combat log, content) must stay equal.
 """
 
 import argparse
 import importlib.util
 import json
+import os
 import random
 import re
 import sys
@@ -44,13 +56,22 @@ from pathlib import Path
 # a dedicated one (`dnd.core.dice` draws faces through `random.randint`), other draws from the seeded module RNG.
 _IDENTITIES = random.Random(20261017)
 _VALUE_IDENTITIES = random.Random(20261018)
+_ORACLE_IDENTITIES = random.Random(20261019)
+_ORACLE = 'devtools/performance/seat_oracle.py'
 
 
 def _identity() -> uuid.UUID:
     """A seeded identity; those the value layer mints (in dnd/core/values.py, directly or through a pydantic
     default factory) come from their own generator, so a change in how many identities values mint does not
-    shift entity, item or event identities, which the engine orders by."""
+    shift entity, item or event identities, which the engine orders by. Identities minted while the seat oracle
+    reads the live engine (`--oracle`: an unpublished birth fact per perceived body) come from a third one, so
+    an oracle run keeps the engine identities of a run without it."""
     frame = sys._getframe(1)
+    caller = frame
+    while caller is not None:
+        if caller.f_code.co_filename.endswith(_ORACLE):
+            return uuid.UUID(int=_ORACLE_IDENTITIES.getrandbits(128), version=4)
+        caller = caller.f_back
     while frame is not None and '/pydantic' in frame.f_code.co_filename:
         frame = frame.f_back
     minted_by_values = frame is not None and frame.f_code.co_filename.endswith('dnd/core/values.py')
@@ -134,6 +155,7 @@ def record(tree: Path, out: Path) -> None:
             })
 
     gallery.Measurement.run = measured
+    os.environ['GALLERY_IDENTITIES'] = 'seeded'  # an oracle run's manifest: its identities repeat across recordings
     try:
         gallery.entry()
     finally:
@@ -220,6 +242,14 @@ def _first_differences(a, b, path='', limit=12, found=None):
     return found
 
 
+def _without_world_updates(update: str) -> str:
+    """A published seat update without its lineages' world updates (`world-16`)."""
+    value = json.loads(update)
+    for lineage in value.get('lineages', ()):
+        lineage.pop('world_updates', None)
+    return json.dumps(value)
+
+
 def compare(base_path: Path, new_path: Path, representation: str | None) -> int:
     loaded = []
     for path in (base_path, new_path):
@@ -231,6 +261,9 @@ def compare(base_path: Path, new_path: Path, representation: str | None) -> int:
             body = _project_value_read(body)
         elif representation == 'value-record':
             body = _project_value_record(body)
+        if representation == 'world-16':
+            published = [[{seat: _without_world_updates(update) for seat, update in seats.items()} for seats in op]
+                         for op in published]
         loaded.append((json.loads(_normalized(json.dumps(body))),
                        [[{seat: _normalized(update) for seat, update in seats.items()} for seats in op]
                         for op in published]))
@@ -254,7 +287,7 @@ def main() -> None:
     parser.add_argument('command', choices=('compare',))
     parser.add_argument('base', type=Path)
     parser.add_argument('new', type=Path)
-    parser.add_argument('--representation', choices=('value-read', 'value-record'), default=None)
+    parser.add_argument('--representation', choices=('value-read', 'value-record', 'world-16'), default=None)
     args = parser.parse_args()
     sys.exit(compare(args.base, args.new, args.representation))
 

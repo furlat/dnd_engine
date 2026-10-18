@@ -1,0 +1,597 @@
+{
+ "name": "w1_an_object_moved_unseen_is_dropped_when_its_cell_reenters",
+ "rule": "Entered cells are authoritative: an object the client holds on a cell entering view without it is gone.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "update": {
+    "occurrence": 0,
+    "entered": {
+     "x0": 0,
+     "y0": 0,
+     "width": 4,
+     "height": 1,
+     "bits": "Dw=="
+    },
+    "tile_looks": [
+     {
+      "look_id": "652de935c25693e0",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     }
+    ],
+    "tile_statics": [
+     {
+      "position": [
+       0,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100000000",
+      "look": "652de935c25693e0"
+     },
+     {
+      "position": [
+       1,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100001000",
+      "look": "652de935c25693e0"
+     },
+     {
+      "position": [
+       2,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100002000",
+      "look": "652de935c25693e0"
+     },
+     {
+      "position": [
+       3,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100003000",
+      "look": "652de935c25693e0"
+     }
+    ],
+    "tile_columns": {
+     "cells": {
+      "x0": 0,
+      "y0": 0,
+      "width": 4,
+      "height": 1,
+      "bits": "Dw=="
+     },
+     "walking_cost": "AQEBAQ==",
+     "flying_cost": "AQEBAQ==",
+     "swimming_cost": "AAAAAA==",
+     "burrowing_cost": "AAAAAA==",
+     "flags": "AAAAAA==",
+     "default_light": "AwMDAw==",
+     "resolved_light": "AwMDAw=="
+    },
+    "object_looks": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000002001",
+      "item_id": "item.fold_vectors.box",
+      "contact_passage": "structural"
+     }
+    ],
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000002001"
+     ],
+     "name": [
+      "Box"
+     ],
+     "visual_item_name": {
+      "values": [
+       "box"
+      ]
+     },
+     "map_char": [
+      "B"
+     ],
+     "placements": {
+      "position": [
+       [
+        1,
+        0
+       ]
+      ],
+      "top_height_steps": [
+       2
+      ]
+     }
+    }
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100002000",
+       "position": [
+        2,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100003000",
+       "position": [
+        3,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000002001": {
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002001",
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          1,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100001000"
+        }
+       ],
+       "removed_bands": []
+      },
+      "members": 1,
+      "name": "Box",
+      "visual_item_name": "box",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {},
+      "contents": null,
+      "structure": null
+     }
+    },
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 1
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100002000",
+       "position": [
+        2,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100003000",
+       "position": [
+        3,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000002001": {
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002001",
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "kind": "center",
+       "occupies_bands": true,
+       "boundary_direction": null,
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          1,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100001000"
+        }
+       ],
+       "removed_bands": []
+      },
+      "members": 1,
+      "name": "Box",
+      "visual_item_name": "box",
+      "is_open": null,
+      "faces": {},
+      "suppressions": {},
+      "contents": null,
+      "structure": null
+     }
+    },
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 2,
+    "entered": {
+     "x0": 1,
+     "y0": 0,
+     "width": 1,
+     "height": 1,
+     "bits": "AQ=="
+    },
+    "tile_columns": {
+     "cells": {
+      "x0": 1,
+      "y0": 0,
+      "width": 1,
+      "height": 1,
+      "bits": "AQ=="
+     },
+     "walking_cost": "AQ==",
+     "flying_cost": "AQ==",
+     "swimming_cost": "AA==",
+     "burrowing_cost": "AA==",
+     "flags": "AA==",
+     "default_light": "Aw==",
+     "resolved_light": "Aw=="
+    }
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100002000",
+       "position": [
+        2,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "3,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100003000",
+       "position": [
+        3,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {},
+    "connectors": []
+   }
+  }
+ ]
+}

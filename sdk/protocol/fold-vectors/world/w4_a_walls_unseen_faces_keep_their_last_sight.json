@@ -1,0 +1,545 @@
+{
+ "name": "w4_a_walls_unseen_faces_keep_their_last_sight",
+ "rule": "A wall's residues are authoritative for the faces seen now; the others keep their last sight, and a face cleaned in view goes.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "update": {
+    "occurrence": 0,
+    "entered": {
+     "x0": 0,
+     "y0": 0,
+     "width": 1,
+     "height": 1,
+     "bits": "AQ=="
+    },
+    "tile_looks": [
+     {
+      "look_id": "652de935c25693e0",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     }
+    ],
+    "tile_statics": [
+     {
+      "position": [
+       0,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100000000",
+      "look": "652de935c25693e0"
+     }
+    ],
+    "tile_columns": {
+     "cells": {
+      "x0": 0,
+      "y0": 0,
+      "width": 1,
+      "height": 1,
+      "bits": "AQ=="
+     },
+     "walking_cost": "AQ==",
+     "flying_cost": "AQ==",
+     "swimming_cost": "AA==",
+     "burrowing_cost": "AA==",
+     "flags": "AA==",
+     "default_light": "Aw==",
+     "resolved_light": "Aw=="
+    },
+    "object_looks": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000002003",
+      "item_id": "item.fold_vectors.wall",
+      "contact_passage": "structural",
+      "maximum_hit_points": 30
+     }
+    ],
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000002003"
+     ],
+     "observed_faces": {
+      "values": [
+       [
+        "south"
+       ]
+      ]
+     },
+     "name": [
+      "Wall"
+     ],
+     "visual_item_name": {
+      "values": [
+       "wall"
+      ]
+     },
+     "map_char": [
+      "W"
+     ],
+     "surface_residues": {
+      "values": [
+       [
+        {
+         "condition_uuid": "00000000-0000-4000-8000-000000005001",
+         "residue_id": "residue.blood",
+         "description": "residue.blood",
+         "faces": [
+          "south"
+         ]
+        }
+       ]
+      ]
+     },
+     "current_hit_points": {
+      "values": [
+       30
+      ]
+     },
+     "placements": {
+      "position": [
+       [
+        0,
+        0
+       ]
+      ],
+      "top_height_steps": [
+       2
+      ],
+      "boundary_direction": {
+       "values": [
+        "north"
+       ]
+      },
+      "occupies_bands": {
+       "values": [
+        false
+       ]
+      }
+     }
+    }
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000002003": {
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002003",
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "kind": "boundary",
+       "occupies_bands": false,
+       "boundary_direction": "north",
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          0,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100000000"
+        }
+       ],
+       "removed_bands": []
+      },
+      "members": 1,
+      "name": "Wall",
+      "visual_item_name": "wall",
+      "is_open": null,
+      "faces": {
+       "00000000-0000-4000-8000-000000005001": [
+        "south"
+       ]
+      },
+      "suppressions": {},
+      "contents": null,
+      "structure": null
+     }
+    },
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 1,
+    "entered": {
+     "x0": 0,
+     "y0": 1,
+     "width": 1,
+     "height": 1,
+     "bits": "AQ=="
+    },
+    "tile_statics": [
+     {
+      "position": [
+       0,
+       1
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100000001",
+      "look": "652de935c25693e0"
+     }
+    ],
+    "tile_columns": {
+     "cells": {
+      "x0": 0,
+      "y0": 1,
+      "width": 1,
+      "height": 1,
+      "bits": "AQ=="
+     },
+     "walking_cost": "AQ==",
+     "flying_cost": "AQ==",
+     "swimming_cost": "AA==",
+     "burrowing_cost": "AA==",
+     "flags": "AA==",
+     "default_light": "Aw==",
+     "resolved_light": "Aw=="
+    },
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000002003"
+     ],
+     "observed_faces": {
+      "values": [
+       [
+        "north"
+       ]
+      ]
+     },
+     "name": [
+      "Wall"
+     ],
+     "visual_item_name": {
+      "values": [
+       "wall"
+      ]
+     },
+     "map_char": [
+      "W"
+     ],
+     "surface_residues": {
+      "values": [
+       [
+        {
+         "condition_uuid": "00000000-0000-4000-8000-000000005002",
+         "residue_id": "residue.soot",
+         "description": "residue.soot",
+         "faces": [
+          "north"
+         ]
+        }
+       ]
+      ]
+     },
+     "current_hit_points": {
+      "values": [
+       30
+      ]
+     }
+    }
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "0,1": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100000001",
+       "position": [
+        0,
+        1
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000002003": {
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002003",
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "kind": "boundary",
+       "occupies_bands": false,
+       "boundary_direction": "north",
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          0,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100000000"
+        }
+       ],
+       "removed_bands": []
+      },
+      "members": 1,
+      "name": "Wall",
+      "visual_item_name": "wall",
+      "is_open": null,
+      "faces": {
+       "00000000-0000-4000-8000-000000005001": [
+        "south"
+       ],
+       "00000000-0000-4000-8000-000000005002": [
+        "north"
+       ]
+      },
+      "suppressions": {},
+      "contents": null,
+      "structure": null
+     }
+    },
+    "connectors": []
+   }
+  },
+  {
+   "update": {
+    "occurrence": 2,
+    "objects": {
+     "item_uuids": [
+      "00000000-0000-4000-8000-000000002003"
+     ],
+     "observed_faces": {
+      "values": [
+       [
+        "north",
+        "south"
+       ]
+      ]
+     },
+     "name": [
+      "Wall"
+     ],
+     "visual_item_name": {
+      "values": [
+       "wall"
+      ]
+     },
+     "map_char": [
+      "W"
+     ],
+     "surface_residues": {
+      "values": [
+       [
+        {
+         "condition_uuid": "00000000-0000-4000-8000-000000005002",
+         "residue_id": "residue.soot",
+         "description": "residue.soot",
+         "faces": [
+          "north"
+         ]
+        }
+       ]
+      ]
+     },
+     "current_hit_points": {
+      "values": [
+       30
+      ]
+     }
+    }
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "0,1": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100000001",
+       "position": [
+        0,
+        1
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {
+     "00000000-0000-4000-8000-000000002003": {
+      "placement": {
+       "object_uuid": "00000000-0000-4000-8000-000000002003",
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "kind": "boundary",
+       "occupies_bands": false,
+       "boundary_direction": "north",
+       "base_height_steps": 0,
+       "top_height_steps": 2,
+       "orientation": null,
+       "covered_supports": [
+        {
+         "position": [
+          0,
+          0
+         ],
+         "tile_uuid": "00000000-0000-4000-8000-000100000000"
+        }
+       ],
+       "removed_bands": []
+      },
+      "members": 1,
+      "name": "Wall",
+      "visual_item_name": "wall",
+      "is_open": null,
+      "faces": {
+       "00000000-0000-4000-8000-000000005002": [
+        "north"
+       ]
+      },
+      "suppressions": {},
+      "contents": null,
+      "structure": null
+     }
+    },
+    "connectors": []
+   }
+  }
+ ]
+}

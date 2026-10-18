@@ -8,18 +8,20 @@ import pytest
 from dnd.actions_functional import execute_use_action
 from dnd.content.items.environment_item_builders import build_wall_torch
 from dnd.core.base_actions import ActionEvent
-from dnd.core.events import EventPhase, EventQueue, EventType, SensoryUpdateEvent
+from dnd.core.events import EntityCreatedEvent, EventPhase, EventQueue, EventType, SensoryUpdateEvent
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.items.torches import build_torch
 from dnd.player.capture import CompletedLineage, ObjectiveRow, capture_interval, capture_lineages
+from dnd.types.actor_facts import HeldItem
 from dnd.player.audience import PlayerAudience
-from dnd.player.projection import begin_projection, project_lineage
+from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.event_record import RecordedEvent, encode_event
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.player.recorded import RecordedSequence, project_sequence
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
+from dnd.core.cells import mask_positions
 from dnd.types.cells import cell_in
 from dnd.types.world import LightLevel
 from dnd.runtime_reset import reset_engine_runtime
@@ -51,6 +53,20 @@ def capture(built, observer):
         battlefield_id=built.definition.battlefield_id)
 
 
+def with_recorded_holdings(envelope, actor_uuid, item, slot):
+    """The recorded startup with the actor holding this item value, worn in `slot`, from its birth on (a value
+    boundary: the session's actors fold the recorded births and actor changes)."""
+    interval = envelope.world_interval
+    equipment = ((slot, item.item_uuid),) if slot is not None else ()
+    events = tuple((index, event.model_copy(update={"items": (item,), "equipment": equipment}))
+        if isinstance(event, EntityCreatedEvent) and event.entity_uuid == actor_uuid else (index, event)
+        for index, event in interval.events)
+    changes = {identity: replace(change, held_item=HeldItem(item, slot))
+               if change.held_item is not None and change.held_item.item.item_uuid == item.item_uuid else change
+               for identity, change in interval.actor_fact_changes.items()}
+    return replace(envelope, world_interval=replace(interval, events=events, actor_fact_changes=changes))
+
+
 def test_fixed_source_overrides_and_native_activation_survive_reduction(world):
     built, (owner, _) = world
     torch = build_wall_torch()
@@ -59,7 +75,8 @@ def test_fixed_source_overrides_and_native_activation_survive_reduction(world):
     torch.dim_radius_feet = 23
     torch.place_on_grid((5, 6))
     owner.update_entity_senses(max_distance=8)
-    projection, initial = begin_projection(capture(built, owner))
+    session = SessionProjection()
+    projection, initial = begin_projection(session, capture(built, owner))
     state = reduce_initialization(initial)
     assert state.objects[torch.uuid].item.is_lit is False
     for lit in (True, False, True):
@@ -70,7 +87,7 @@ def test_fixed_source_overrides_and_native_activation_survive_reduction(world):
         for native in capture_lineages((root,), observer_uuid=owner.uuid,
                 known_actor_uuids=frozenset(state.actors)):
             assert not native.dispositions
-            packet = project_lineage(projection, native)
+            packet = project_lineage(session, projection, native)
             if packet is not None:
                 state = reduce_lineage(state, packet)
         item = state.objects[torch.uuid].item
@@ -87,23 +104,24 @@ def test_carried_source_keeps_inventory_private_to_controller(world):
     views = {}
     for observer in (owner, witness):
         observer.update_entity_senses(max_distance=8)
-        projection, initial = begin_projection(capture(built, observer))
-        views[observer.uuid] = projection, reduce_initialization(initial)
+        session = SessionProjection()
+        projection, initial = begin_projection(session, capture(built, observer))
+        views[observer.uuid] = session, projection, reduce_initialization(initial)
     for lit in (True, False, True):
         root = execute_use_action(owner, torch.uuid, "Ignite Torch" if lit else "Extinguish Torch")
         assert root is not None and not root.canceled
         for observer in (owner, witness):
-            projection, state = views[observer.uuid]
+            session, projection, state = views[observer.uuid]
             for native in capture_lineages((root,), observer_uuid=observer.uuid,
                     known_actor_uuids=frozenset(state.actors)):
                 assert not native.dispositions
                 codec = TypeAdapter(tuple[RecordedEvent, ...])
                 restored = codec.validate_json(codec.dump_json(native.events))
                 assert tuple(type(row) for row in restored) == tuple(type(row) for row in native.events)
-                packet = project_lineage(projection, native)
+                packet = project_lineage(session, projection, native)
                 if packet is not None:
                     state = reduce_lineage(state, packet)
-            views[observer.uuid] = projection, state
+            views[observer.uuid] = session, projection, state
             actor = state.actors[owner.uuid]
             assert not any(row.item_uuid == torch.uuid for row in actor.visual_loadout.layers)
             if observer is owner:
@@ -127,16 +145,10 @@ def test_disclosed_equipment_source_after_values_preserve_activation(world, lit)
     assert owner.loot_item(torch)
     witness.update_entity_senses(max_distance=8)
     captured = capture(built, witness)
-    admitted = []
-    for row in captured.admissions:
-        if row.actor.uuid == owner.uuid:
-            item = torch.to_item_presentation_state().model_copy(update={
-                "is_lit": lit, "very_bright_radius_feet": 6,
-                "bright_radius_feet": 19, "dim_radius_feet": 31})
-            row = replace(row, actor=replace(row.actor, items=(item,),
-                equipment=(("weapon_melee_off", torch.uuid),)))
-        admitted.append(row)
-    _, initial = begin_projection(replace(captured, admissions=tuple(admitted)))
+    item = torch.to_item_presentation_state().model_copy(update={
+        "is_lit": lit, "very_bright_radius_feet": 6, "bright_radius_feet": 19, "dim_radius_feet": 31})
+    _, initial = begin_projection(SessionProjection(), with_recorded_holdings(captured, owner.uuid, item,
+        "weapon_melee_off"))
     state = reduce_initialization(initial)
     actor = state.actors[owner.uuid]
     source, = actor.visual_loadout.layers
@@ -159,9 +171,7 @@ def test_recorded_content_attribution_uses_foreign_equipment_grants(world, equip
     witness.update_entity_senses(max_distance=8)
     initial = capture(built, witness)
     item = torch.to_item_presentation_state()
-    initial = replace(initial, admissions=tuple(replace(row, actor=replace(row.actor,
-        items=(item,), equipment=(("weapon_melee_off", torch.uuid),) if equipped else ()))
-        if row.actor.uuid == owner.uuid else row for row in initial.admissions))
+    initial = with_recorded_holdings(initial, owner.uuid, item, "weapon_melee_off" if equipped else None)
     source = witness.uuid if foreign_handler else owner.uuid
     event = ActionEvent.model_validate(dict(name='Use recorded equipment', use_register=False,
         source_entity_uuid=source, phase=EventPhase.COMPLETION,
@@ -188,8 +198,9 @@ def test_recorded_content_attribution_uses_foreign_equipment_grants(world, equip
         canceled=False, modified=False)
     lineage = CompletedLineage(generation=initial.generation, observer_uuid=witness.uuid,
         root=event, events=(event,), objective_rows=(row,), start_cursor=index, end_cursor=index+1)
-    projection, _ = begin_projection(initial)
-    packet = project_lineage(projection, lineage)
+    session = SessionProjection()
+    projection, _ = begin_projection(session, initial)
+    packet = project_lineage(session, projection, lineage)
     assert packet is not None
     assert packet.root is not None
     node = packet.events[packet.root]
@@ -213,7 +224,8 @@ def test_shared_light_tile_after_values_precede_parent_completion_and_survive_co
     initial = capture_interval(name="shared light", start_cursor=0,
         end_cursor=EventQueue.event_cursor(), observer_uuid=first.uuid, audience=audience,
         battlefield_id=built.definition.battlefield_id)
-    projection, public = begin_projection(initial)
+    session = SessionProjection()
+    projection, public = begin_projection(session, initial)
     state = reduce_initialization(public)
     position, neighbor = (5, 6), (5, 7)
     unchanged = state.tiles[neighbor]
@@ -231,20 +243,23 @@ def test_shared_light_tile_after_values_precede_parent_completion_and_survive_co
         assert {event.observer_uuid for event in children} == {first.uuid, second.uuid}
         for native in captured:
             assert not native.dispositions
-            packet = project_lineage(projection, native)
+            packet = project_lineage(session, projection, native)
             assert packet is not None
             packets.append(packet)
             lineages.append(native)
+            indexes = {row.event_uuid: row.source_index for row in native.objective_rows}
+            light_completion = next(event for event in native.events
+                if event.event_type is EventType.SPATIAL_LIGHT_CHANGED
+                and event.phase is EventPhase.COMPLETION)
             for update in packet.world_updates:
-                assert {tile.position for tile in update.tiles} <= {position}
+                assert set(mask_positions(update.entered)) <= {position}
                 assert {row.position for row in update.tile_changes} <= {position}
                 assert not update.objects and not update.objects_removed
-                indexes = {row.event_uuid: row.source_index for row in native.objective_rows}
-                light_completion = next(event for event in native.events
-                    if event.event_type is EventType.SPATIAL_LIGHT_CHANGED
-                    and event.phase is EventPhase.COMPLETION)
-                native = next(cursor for cursor, public in projection.public_cursors.items() if public == update.occurrence)
-                assert native < indexes[light_completion.uuid]
+            # The light's after-value reaches the seat at the first observer's sight of it, before the light's
+            # completion (which carries the same after-value again).
+            earliest = min(cursor for cursor, public in projection.public_cursors.items()
+                if public == packet.world_updates[0].occurrence)
+            assert earliest < indexes[light_completion.uuid]
             state = reduce_lineage(state, packet)
         # The first observer's source after-value is projected while the other
         # observer still grants this cell. Darkness is remembered at that prefix

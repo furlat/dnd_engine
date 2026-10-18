@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field, replace
 from collections.abc import Iterable, Set as AbstractSet
+import heapq
 from typing import TypeVar
 from uuid import UUID
 
@@ -108,6 +109,15 @@ def _observer_view(senses: SensesSnapshot, view: str) -> list:
     raise ValueError(f"Unknown observer view {view}")
 
 
+def _cells_after(cells: list[tuple[int, int]], before: CellMask, after: CellMask) -> list[tuple[int, int]]:
+    """`mask_positions(after)` from ``cells``, which is `mask_positions(before)`: the cells that left are
+    dropped and those that came are merged in, in cell order."""
+    left = set(mask_positions(mask_difference(before, after)))
+    came = mask_positions(mask_difference(after, before))
+    kept = [cell for cell in cells if cell not in left] if left else cells
+    return list(heapq.merge(kept, came)) if came else kept
+
+
 def _cell_observers(senses: dict[UUID, SensesSnapshot], positions: Iterable[tuple[int, int]], *,
                     seen: bool) -> dict[tuple[int, int], list[str]]:
     """Per position, the observers (sorted uuid strings) whose visible (or seen) cells hold it."""
@@ -169,6 +179,11 @@ class AIKnowledge:
     # Visible tiles touched since their last projection; projected once, when they stop
     # being visible or when consumption ends (a visible tile's row is a pure projection).
     dirty_tiles: set[tuple[int, int]] = field(default_factory=set)
+    # The actor fact (frozen, replaced on change) each visible entity row was projected from:
+    # a row is a pure function of it, its observers, control and position (`project_actor`).
+    projected_actors: dict[UUID, ActorState] = field(default_factory=dict)
+    # The visible and seen cells each observer row's cell lists were built from.
+    projected_cells: dict[UUID, tuple[CellMask, CellMask]] = field(default_factory=dict)
 
     def consume(self, rows: Iterable[tuple[int, Event, ConditionFact | None]]) -> None:
         """Apply an exact recorded prefix; context/decision authority stays outside.
@@ -219,7 +234,7 @@ class AIKnowledge:
 
         positions = world_event_positions(self.world, event, condition)
         objects = self._event_objects(event)
-        if apply_world_fact(self.world, event, condition):
+        if apply_world_fact(self.world, event, condition) is not None:
             self._refresh_world(positions, objects)
 
         if isinstance(event, SensoryUpdateEvent) and event.observer_uuid in self.controlled_entity_uuids:
@@ -246,7 +261,7 @@ class AIKnowledge:
                 if isinstance(ancestor, SpatialChangeEvent) and ancestor.change_type is SpatialChangeType.OBJECT_CHANGED:
                     affected = world_event_positions(self.world, ancestor)
                     changed_objects = self._event_objects(ancestor)
-                    if apply_world_fact(self.world, ancestor):
+                    if apply_world_fact(self.world, ancestor) is not None:
                         positions.update(affected)
                         objects.update(changed_objects)
                 parent = ancestor.parent_lineage
@@ -305,12 +320,21 @@ class AIKnowledge:
             else:
                 position = next((self.senses[UUID(observer)].entities[identity].position
                                  for observer in observer_ids if identity in self.senses[UUID(observer)].entities), None)
-            self.known_entities[str(identity)] = project_actor(actor, observer_ids, controlled=controlled, position=position)
+            previous = self.known_entities.get(str(identity))
+            if not (previous is not None and self.projected_actors.get(identity) is actor
+                    and previous.observer_uuids == observer_ids and previous.controlled == controlled
+                    and previous.position == position):
+                self.known_entities[str(identity)] = project_actor(actor, observer_ids, controlled=controlled,
+                                                                   position=position)
+                self.projected_actors[identity] = actor
         elif (previous := self.known_entities.get(str(identity))) is not None and previous.knowledge_state is KnowledgeState.VISIBLE:
             self.known_entities[str(identity)] = remember_entity(previous)
+            del self.projected_actors[identity]
 
     def _refresh_observer(self, identity: UUID) -> None:
-        """Project the observer row; a view list is re-sorted only when its keys changed."""
+        """Project the observer row; a view list is rebuilt only when its keys changed (a cell list from
+        the cells that left and came since it was built), and a row whose views and values are all
+        unchanged is kept."""
         actor = self.actors.get(identity)
         if actor is None:
             return
@@ -325,8 +349,21 @@ class AIKnowledge:
         if previous is None:
             self.observers[key] = ObservationObserverState(observer_uuid=key,
                 **values, **{view: _observer_view(senses, view) for view in OBSERVER_VIEWS})
-        else:
-            values.update((view, _observer_view(senses, view)) for view in changes)
+            self.projected_cells[identity] = (senses.visible, senses.seen)
+        elif changes or (previous.entity_name, previous.position, previous.passive_perception, previous.sense_modes) != (
+                values["entity_name"], values["position"], values["passive_perception"], values["sense_modes"]):
+            visible, seen = self.projected_cells[identity]
+            for view in changes:
+                match view:
+                    case "visible_cells":
+                        values[view] = _cells_after(previous.visible_cells, visible, senses.visible)
+                        visible = senses.visible
+                    case "seen_cells":
+                        values[view] = _cells_after(previous.seen_cells, seen, senses.seen)
+                        seen = senses.seen
+                    case _:
+                        values[view] = _observer_view(senses, view)
+            self.projected_cells[identity] = (visible, seen)
             self.observers[key] = previous.model_copy(update=values)
 
     def _refresh_world(self, positions: set[tuple[int, int]], objects: set[UUID]) -> None:

@@ -1,0 +1,364 @@
+{
+ "name": "v6_scalar_and_item_rows_replace_their_field",
+ "rule": "Scalar rows replace their field; item rows change the seat's record of that item: its state fields, its effects whole, an effect's or a condition's duration.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "controlled": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "body": {
+    "occurrence": 0,
+    "actor_uuid": "00000000-0000-4000-8000-00000000000a",
+    "birth": {
+     "name": "Hero",
+     "character_body_id": null,
+     "creature_content_ref": null,
+     "appearance": {
+      "portrait_key": null,
+      "presentation_kind": "layered",
+      "visual_scale": 1.0,
+      "visual_scale_x": 1.0,
+      "placeholder_tint": 3604322,
+      "body_category": "NakedBody",
+      "skin_tint": 14527112,
+      "head_category": null,
+      "hair_tint": 0,
+      "has_beard": false,
+      "beard_tint": 0
+     },
+     "structural_base_size": "Medium"
+    },
+    "body": {
+     "visual_loadout": {
+      "active_weapon_set": "melee",
+      "layers": [
+       {
+        "slot": "MELEE_OFF",
+        "item_uuid": "00000000-0000-4000-8000-000000002001",
+        "item_id": "light.torch",
+        "is_lit": false
+       }
+      ]
+     },
+     "normal_hp": 10,
+     "maximum_hp": 10,
+     "temporary_hp": 0,
+     "life_state": "alive",
+     "armor_class": 12,
+     "conditions": [
+      {
+       "condition_uuid": "00000000-0000-4000-8000-000000003002",
+       "name": "Blessed",
+       "category": "status",
+       "behavior_id": null,
+       "state": {
+        "duration": {
+         "duration_type": "rounds",
+         "remaining_rounds": 3
+        },
+        "condition_uuid": "00000000-0000-4000-8000-000000003002",
+        "name": "Blessed",
+        "category": "status",
+        "semantic_key": "condition.fold_vectors.blessed",
+        "behavior_id": null,
+        "tags": [],
+        "removal_triggers": [],
+        "agency_denial": "none",
+        "outcome_protections": [],
+        "applied_source_event_cursor": null,
+        "duplicate_count": null,
+        "size_change": null,
+        "energy_type": null,
+        "metamagic_mode": null,
+        "affected_item_uuid": null,
+        "enhanced_ability": null,
+        "concentration_slots": []
+       }
+      }
+     ],
+     "controlled_items": [
+      "00000000-0000-4000-8000-000000002001"
+     ],
+     "remains_disposition": "intact",
+     "spatial_disposition": "present"
+    },
+    "items": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000002001",
+      "look": {
+       "item_id": "light.torch",
+       "item_kind": "item",
+       "visual_item_name": "torch",
+       "visual_variant_id": null,
+       "equipped_visual_policy": "visible",
+       "very_bright_radius_feet": null,
+       "bright_radius_feet": null,
+       "dim_radius_feet": null
+      },
+      "profile": {
+       "name": "Item",
+       "description": null,
+       "rarity": "common",
+       "weight": 1.0,
+       "value": 0,
+       "tags": [],
+       "is_pickable": true,
+       "is_equippable": true,
+       "is_usable": false,
+       "is_targetable": false,
+       "door_mechanism": null,
+       "door_swing": null,
+       "stack_id": null,
+       "damage_dice": null,
+       "damage_type": null,
+       "weapon_properties": [],
+       "armor_type": null,
+       "armor_ac": null,
+       "shield_ac_bonus": null,
+       "max_charges": null,
+       "max_stack": 1,
+       "is_consumable": false,
+       "map_char": "i",
+       "include_in_senses_objects": true,
+       "include_in_adjacent_senses_objects": false,
+       "include_in_available_object_actions": true,
+       "maximum_hit_points": null,
+       "concentration_capacity": 0,
+       "boundary_structure": null
+      },
+      "state": {
+       "stack_count": 1,
+       "charges": 5,
+       "integrity": "intact",
+       "destruction_outcome": null,
+       "remnant_state": null,
+       "current_hit_points": null,
+       "concentration_slots": [],
+       "construction_owner_uuid": null,
+       "construction_geometry": null,
+       "construction_suppressions": [],
+       "known_to_creator": false,
+       "supported_by_uuid": null,
+       "contact_passage": "structural",
+       "surface_residues": [],
+       "linked_spatial_condition_uuid": null,
+       "is_open": null,
+       "is_engaged": null,
+       "blocks_movement": false,
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "is_lit": false
+      }
+     }
+    ]
+   },
+   "expected": {
+    "actors": {
+     "00000000-0000-4000-8000-00000000000a": {
+      "name": "Hero",
+      "hp": [
+       10,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": null,
+      "conditions": [
+       [
+        "00000000-0000-4000-8000-000000003002",
+        "Blessed",
+        3
+       ]
+      ],
+      "weapon_set": "melee",
+      "layers": [
+       [
+        "MELEE_OFF",
+        "00000000-0000-4000-8000-000000002001",
+        false
+       ]
+      ],
+      "inventory": [
+       "00000000-0000-4000-8000-000000002001"
+      ],
+      "size": null,
+      "disposition": "present"
+     }
+    },
+    "items": {
+     "00000000-0000-4000-8000-000000002001": {
+      "item_id": "light.torch",
+      "profile": true,
+      "state": {
+       "charges": 5,
+       "stack_count": 1,
+       "is_lit": false
+      },
+      "effects": []
+     }
+    }
+   }
+  },
+  {
+   "change": {
+    "kind": "actor_change",
+    "actors": [
+     {
+      "actor_uuid": "00000000-0000-4000-8000-00000000000a",
+      "rows": [
+       {
+        "field": "normal_hp",
+        "value": 6
+       },
+       {
+        "field": "maximum_hp",
+        "value": 12
+       },
+       {
+        "field": "temporary_hp",
+        "value": 4
+       },
+       {
+        "field": "temporary_hp_grant",
+        "value": {
+         "instance_uuid": "00000000-0000-4000-8000-000000005001",
+         "source_id": "condition.fold_vectors.ward"
+        }
+       },
+       {
+        "field": "armor_class",
+        "value": 15
+       },
+       {
+        "field": "resolved_size",
+        "value": "Large"
+       },
+       {
+        "field": "spatial_disposition",
+        "value": "absent"
+       },
+       {
+        "field": "active_weapon_set",
+        "value": "ranged"
+       },
+       {
+        "field": "condition_duration",
+        "key": "00000000-0000-4000-8000-000000003002",
+        "duration": {
+         "duration_type": "rounds",
+         "remaining_rounds": 2
+        }
+       },
+       {
+        "field": "layer",
+        "slot": "MELEE_OFF",
+        "layer": {
+         "slot": "MELEE_OFF",
+         "item_uuid": "00000000-0000-4000-8000-000000002001",
+         "item_id": "light.torch",
+         "is_lit": true
+        }
+       },
+       {
+        "field": "item_state",
+        "item_uuid": "00000000-0000-4000-8000-000000002001",
+        "changes": {
+         "charges": 4,
+         "is_lit": true
+        }
+       },
+       {
+        "field": "item_effects",
+        "item_uuid": "00000000-0000-4000-8000-000000002001",
+        "effects": [
+         {
+          "duration": {
+           "duration_type": "rounds",
+           "remaining_rounds": 5
+          },
+          "effect_uuid": "00000000-0000-4000-8000-000000004001",
+          "contribution_uuid": null,
+          "behavior_id": "condition.fold_vectors.flame",
+          "display_name": "Flame",
+          "description": "",
+          "damage_type": null,
+          "applied_source_event_cursor": null
+         }
+        ]
+       },
+       {
+        "field": "item_effect_duration",
+        "key": "00000000-0000-4000-8000-000000004001",
+        "item_uuid": "00000000-0000-4000-8000-000000002001",
+        "duration": {
+         "duration_type": "rounds",
+         "remaining_rounds": 4
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "actors": {
+     "00000000-0000-4000-8000-00000000000a": {
+      "name": "Hero",
+      "hp": [
+       6,
+       12,
+       4
+      ],
+      "grant": "00000000-0000-4000-8000-000000005001",
+      "armor_class": 15,
+      "life": "alive",
+      "present": true,
+      "position": null,
+      "conditions": [
+       [
+        "00000000-0000-4000-8000-000000003002",
+        "Blessed",
+        2
+       ]
+      ],
+      "weapon_set": "ranged",
+      "layers": [
+       [
+        "MELEE_OFF",
+        "00000000-0000-4000-8000-000000002001",
+        true
+       ]
+      ],
+      "inventory": [
+       "00000000-0000-4000-8000-000000002001"
+      ],
+      "size": "Large",
+      "disposition": "absent"
+     }
+    },
+    "items": {
+     "00000000-0000-4000-8000-000000002001": {
+      "item_id": "light.torch",
+      "profile": true,
+      "state": {
+       "charges": 4,
+       "stack_count": 1,
+       "is_lit": true
+      },
+      "effects": [
+       [
+        "00000000-0000-4000-8000-000000004001",
+        4
+       ]
+      ]
+     }
+    }
+   }
+  }
+ ]
+}

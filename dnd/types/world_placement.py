@@ -11,6 +11,18 @@ from dnd.types.physical_access import ContactPassage
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 
 
+CARDINAL_DELTAS = {
+    CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
+    CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0),
+}
+OPPOSITE_DIRECTION = {
+    CardinalDirection.NORTH: CardinalDirection.SOUTH,
+    CardinalDirection.SOUTH: CardinalDirection.NORTH,
+    CardinalDirection.EAST: CardinalDirection.WEST,
+    CardinalDirection.WEST: CardinalDirection.EAST,
+}
+
+
 class WorldPlacementKind(StrEnum):
     """Whether a world object is placed at a Tile center or boundary."""
 
@@ -110,6 +122,32 @@ class WorldObjectPlacement(BaseModel):
         elif len(self.covered_supports) != 1:
             raise ValueError("boundary placement has one owner Tile")
         return self
+
+
+def boundary_sides(placement: WorldObjectPlacement) -> tuple[tuple[CardinalDirection, tuple[int, int]], ...]:
+    """A boundary's two faces, each with the cell it is seen from: the face opposite its direction from its own
+    cell, and its direction's face from the opposite incident cell. A center object has none.
+
+    The one rule for a boundary's incident cells: the cells it touches, the faces a seat sees, and whether a seat
+    sees it through a cell.
+    """
+    direction = placement.boundary_direction
+    if direction is None:
+        return ()
+    x, y = placement.position
+    dx, dy = CARDINAL_DELTAS[direction]
+    return ((OPPOSITE_DIRECTION[direction], (x, y)), (direction, (x + dx, y + dy)))
+
+
+def placement_support_cells(placement: WorldObjectPlacement) -> frozenset[tuple[int, int]]:
+    """The cells an object touches: its banded supports and, for a boundary, the opposite incident support
+    (its far side's cell in `boundary_sides`).
+
+    The one rule for the world fold's membership index, the seat's entering snapshot, the client's reset of
+    entered cells and the seat oracle.
+    """
+    far = (cell for _, cell in boundary_sides(placement) if cell != placement.position)
+    return frozenset((*placement.positions, *far))
 
 
 class BoundaryStructureKind(StrEnum):

@@ -11,7 +11,7 @@ __all__ = [
     "Event", "Trigger", "BaseHandler", "EventHandler", "SpatialHandler", "EventQueue",
     "SensoryUpdateReason", "SensoryUpdateEvent",
     "WorldTileState", "WorldObjectState", "WorldConnectorState",
-    "WorldMaterializedState", "WorldInitializedEvent", "WorldModifiedEvent",
+    "WorldMaterializedState", "WorldInitializedEvent", "WorldModifiedEvent", "MechanismInstallEvent",
     "EntityCreatedEvent", "EntityLevelAddedEvent",
     "EntityLevelRemovedEvent",
     "SpatialEffectChangeEvent", "SpatialEffectInteractionEvent", "AreaReachEvent",
@@ -803,6 +803,14 @@ class WorldInitializedEvent(Event):
     tiles: Tuple[WorldTileState, ...]
     objects: Tuple[WorldObjectState, ...] = ()
     connectors: Tuple[WorldConnectorState, ...] = ()
+
+
+class MechanismInstallEvent(Event):
+    """The root of installing a spatial mechanism (a portal, a pressure plate, a gas vent) into a running world:
+    its spatial effect and every fact the installation causes are its descendants."""
+
+    name: str = Field(default="Install Mechanism")
+    event_type: EventType = Field(default=EventType.BASE_ACTION)
 
 
 class WorldModifiedEvent(Event):
