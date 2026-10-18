@@ -11,14 +11,57 @@ from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.descriptors import ContentDescriptor
+from dnd.types.cells import CellMask, CellValues
 from dnd.types.event_facts import EventType, SpatialChangeType
+from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensoryDelta
 from dnd.player.audience import (AudienceComposition, apply_current_audience, audience_view,
     begin_audience_composition, observe_audience, resolve_audience)
 from dnd.player.facts import (
     AttackFact, ConditionChangeFact, ConditionFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
     ActorChanges, PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
-    PlayerState, PlayerUpdate, SensoryFact, SpatialFact, TurnFact, VersionRow, WorldUpdate, TemporaryHitPointsFact, FactionFact,
+    PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialFact, TurnFact, VersionRow,
+    WorldUpdate, TemporaryHitPointsFact, FactionFact, joined_effect,
 )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SensoryChanges:
+    """A received sensory fact with its group's rows resolved: the client's `SensoryDelta`.
+
+    Not a wire value and never stored; `sensory_changes` builds it once per
+    folded fact. (The projector folds the native event it projects.)
+    """
+
+    observer_uuid: UUID
+    initial: bool
+    observer_position: tuple[int, int]
+    observer_position_changed: bool
+    visible_cells_added: CellMask
+    visible_cells_removed: CellMask
+    seen_cells_added: CellMask
+    effective_light_levels_changed: CellValues
+    hazardous_cells_changed: CellValues
+    entity_contacts_changed: Mapping[UUID, PerceivedContact]
+    entity_contacts_removed: frozenset[UUID]
+    object_contacts_changed: Mapping[UUID, PerceivedContact]
+    object_contacts_removed: frozenset[UUID]
+    spatial_effects_changed: Mapping[UUID, PerceivedSpatialEffect]
+    spatial_effects_removed: frozenset[UUID]
+    # The static content this fact delivers; the seat holds every other changed effect's.
+    spatial_effect_content: Mapping[UUID, SpatialEffectContent]
+    light_sources_changed: Mapping[UUID, PerceivedLightSource]
+    light_sources_removed: Mapping[UUID, int]
+    sense_modes_changed: bool
+    sense_modes: tuple[SenseMode, ...] | None
+    passive_perception_changed: bool
+    passive_perception: int | None
+    visual_access_changed: bool
+    visual_access: int | None
+    paths_dirty: bool
+
+
+# What the fold applies: a received fact, a sensory fact with its group's rows resolved.
+FoldedFact = PlayerFact | SensoryChanges
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,7 +212,48 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
     return result
 
 
-def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int | None = None,
+def _unique(values: dict, indices: tuple[int, ...]) -> dict:
+    if len(values) != len(indices):
+        raise ValueError("A sensory fact names two rows of one identity in one list")
+    return values
+
+
+def sensory_changes(fact: SensoryFact, rows: SensoryRows, held: Mapping[UUID, SpatialEffectContent]) -> SensoryChanges:
+    """A received sensory fact with its group's rows resolved; a sighting's content is the fact's, else the seat's (`held`)."""
+    uuids = rows.uuids
+
+    def contacts(indices: tuple[int, ...]) -> dict[UUID, PerceivedContact]:
+        return _unique({uuids[rows.contact_uuid_index[index]]: rows.contacts[index] for index in indices}, indices)
+
+    def identities(indices: tuple[int, ...]) -> frozenset[UUID]:
+        return frozenset(_unique(dict.fromkeys(uuids[index] for index in indices), indices))
+    effects = {}
+    for index in fact.spatial_effect_sightings:
+        identity = uuids[rows.sighting_uuid_index[index]]
+        content = fact.spatial_effect_content[identity] if identity in fact.spatial_effect_content else held[identity]
+        effects[identity] = joined_effect(rows.sightings[index], content)
+    return SensoryChanges(observer_uuid=fact.observer_uuid, initial=fact.initial,
+        observer_position=fact.observer_position, observer_position_changed=fact.observer_position_changed,
+        visible_cells_added=fact.visible_cells_added, visible_cells_removed=fact.visible_cells_removed,
+        seen_cells_added=fact.seen_cells_added, effective_light_levels_changed=fact.effective_light_levels_changed,
+        hazardous_cells_changed=fact.hazardous_cells_changed,
+        entity_contacts_changed=contacts(fact.entity_contacts_changed),
+        entity_contacts_removed=identities(fact.entity_contacts_removed),
+        object_contacts_changed=contacts(fact.object_contacts_changed),
+        object_contacts_removed=identities(fact.object_contacts_removed),
+        spatial_effects_changed=_unique(effects, fact.spatial_effect_sightings),
+        spatial_effects_removed=identities(fact.spatial_effects_removed),
+        spatial_effect_content=fact.spatial_effect_content,
+        light_sources_changed=_unique({rows.light_sources[index].source_uuid: rows.light_sources[index]
+            for index in fact.light_sources_changed}, fact.light_sources_changed),
+        light_sources_removed=_unique({uuids[rows.light_removal_uuid_index[index]]: rows.light_removal_revisions[index]
+            for index in fact.light_sources_removed}, fact.light_sources_removed),
+        sense_modes_changed=fact.sense_modes_changed, sense_modes=fact.sense_modes,
+        passive_perception_changed=fact.passive_perception_changed, passive_perception=fact.passive_perception,
+        visual_access_changed=fact.visual_access_changed, visual_access=fact.visual_access, paths_dirty=fact.paths_dirty)
+
+
+def apply_player_fact(target: PlayerState, fact: FoldedFact, *, source_cursor: int | None = None,
                       audience_composition: AudienceComposition | None = None) -> None:
     """Fold an already-disclosed committed fact into player memory: its senses and turn part, then its bodies' part."""
     apply_sensed_fact(target, fact, target.actors, source_cursor=source_cursor,
@@ -177,7 +261,7 @@ def apply_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: i
     apply_record_fact(target, fact)
 
 
-def apply_sensed_fact(target: PlayerState, fact: PlayerFact, known: Collection[UUID], *,
+def apply_sensed_fact(target: PlayerState, fact: FoldedFact, known: Collection[UUID], *,
                       source_cursor: int | None = None,
                       audience_composition: AudienceComposition | None = None) -> None:
     """The senses and turn part of a committed fact; `known` are the actors the fold has bodies for."""
@@ -194,19 +278,11 @@ def apply_sensed_fact(target: PlayerState, fact: PlayerFact, known: Collection[U
                 # Own entry is an explicit permitted contact even when one
                 # sensory batch folds an arrival and return to the same cell.
                 target.senses = replace(target.senses, position=fact.position)
+        case SensoryChanges():
+            fold_senses(target, fact, cursor=target.reducer_cursor if source_cursor is None else source_cursor,
+                audience_composition=audience_composition)
         case SensoryFact():
-            cursor = target.reducer_cursor if source_cursor is None else source_cursor
-            # A sighting of an effect the seat already knows carries no content: take the seat's.
-            fact = replace(fact, spatial_effect_content={identity: fact.spatial_effect_content[identity]
-                if identity in fact.spatial_effect_content else target.spatial_content[identity]
-                for identity in fact.spatial_effect_sightings})
-            if audience_composition is None:
-                target.perception = observe_audience(target.perception, target.viewing_audience, fact, cursor)
-                target.senses = audience_view(target.perception, target.observer_uuid)
-            else:
-                apply_current_audience(audience_composition, target.viewing_audience,
-                    target.observer_uuid, fact, cursor)
-                target.perception, target.senses = audience_composition.perception, audience_composition.view
+            raise ValueError("A sensory fact is folded with its group's rows resolved (sensory_changes)")
         case TurnFact():
             if fact.round_number is not None:
                 target.round_number = fact.round_number
@@ -214,7 +290,18 @@ def apply_sensed_fact(target: PlayerState, fact: PlayerFact, known: Collection[U
                 target.current_actor_uuid = fact.entity_uuid if fact.event_type is EventType.TURN_START else None
 
 
-def apply_record_fact(target: PlayerState, fact: PlayerFact) -> None:
+def fold_senses(target: PlayerState, delta: SensoryDelta, *, cursor: int,
+                audience_composition: AudienceComposition | None) -> None:
+    """Fold one member's sensory after-values into the seat's perception and its composed view."""
+    if audience_composition is None:
+        target.perception = observe_audience(target.perception, target.viewing_audience, delta, cursor)
+        target.senses = audience_view(target.perception, target.observer_uuid)
+    else:
+        apply_current_audience(audience_composition, target.viewing_audience, target.observer_uuid, delta, cursor)
+        target.perception, target.senses = audience_composition.perception, audience_composition.view
+
+
+def apply_record_fact(target: PlayerState, fact: FoldedFact) -> None:
     """The records' part of a committed fact: it changes `target.actors`, `target.items` and `target.spatial_content` only."""
     match fact:
         case FactionFact():
@@ -253,6 +340,8 @@ def apply_record_fact(target: PlayerState, fact: PlayerFact) -> None:
                 target.items[fact.item_uuid] = replace(record, state=replace(record.state,
                     charges=fact.charges_after, stack_count=fact.stack_count_after))
         case SensoryFact():
+            raise ValueError("A sensory fact is folded with its group's rows resolved (sensory_changes)")
+        case SensoryChanges():
             target.spatial_content.update(fact.spatial_effect_content)
             if fact.observer_position_changed and fact.observer_uuid in target.actors:
                 target.actors[fact.observer_uuid] = replace(target.actors[fact.observer_uuid], last_visual_position=fact.observer_position)
@@ -306,7 +395,7 @@ def apply_record_fact(target: PlayerState, fact: PlayerFact) -> None:
                     else actor.resolved_size))
 
 
-def commit_current(target: PlayerState, fact: PlayerFact, *, source_cursor: int,
+def commit_current(target: PlayerState, fact: FoldedFact, *, source_cursor: int,
                    occurrences: Collection[int]) -> bool:
     """Record a spatial transition's commit; False if a nested commit supersedes it (it is then not folded)."""
     if (isinstance(fact, SpatialFact) and fact.entity_uuid is not None
@@ -330,7 +419,7 @@ def change_membership(members: dict[UUID, ConditionFact], fact: ConditionChangeF
         members[fact.condition.condition_uuid] = fact.condition
 
 
-def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, *, source_cursor: int,
+def apply_committed_player_fact(target: PlayerState, fact: FoldedFact, *, source_cursor: int,
                                occurrences: Collection[int],
                                audience_composition: AudienceComposition | None = None) -> None:
     """Fold a committed fact without letting an outer move undo nested arrival."""
@@ -339,10 +428,10 @@ def apply_committed_player_fact(target: PlayerState, fact: PlayerFact, *, source
 
 
 def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
-            observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...]) -> PlayerState:
+            observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...], rows: SensoryRows) -> PlayerState:
     """Fold received values in source order, including a timed partial group."""
     result = copy_target(target)
-    _apply_nodes(result, nodes, versions, observations, updates)
+    _apply_nodes(result, nodes, versions, observations, updates, rows)
     return result
 
 
@@ -362,7 +451,7 @@ def occurrence_order(nodes: tuple[PlayerNode, ...],
 
 
 def _apply_nodes(result: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
-                 observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...], *,
+                 observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...], rows: SensoryRows, *,
                  audience_composition: AudienceComposition | None = None) -> None:
     occurrences = {row.source_index for row in versions}
     world_updates = {row.occurrence: row for row in updates}
@@ -374,7 +463,9 @@ def _apply_nodes(result: PlayerState, nodes: tuple[PlayerNode, ...], versions: t
                 if row.occurrence in world_updates:
                     apply_world_update(result, world_updates[row.occurrence])
                 if not row.canceled and row.fact is not None:
-                    apply_committed_player_fact(result, row.fact, source_cursor=row.occurrence,
+                    fact = (sensory_changes(row.fact, rows, result.spatial_content)
+                        if isinstance(row.fact, SensoryFact) else row.fact)
+                    apply_committed_player_fact(result, fact, source_cursor=row.occurrence,
                         occurrences=occurrences, audience_composition=audience_composition)
 
 
@@ -396,7 +487,7 @@ def reduce_initialization(initialization: PlayerInitialization, *,
                          world=initialization.world,
                          audience=resolve_audience(initialization.observer_uuid, initialization.audience))
     target = reduce_nodes(target, initialization.nodes, initialization.version_rows,
-                     initialization.observations, initialization.world_updates)
+                     initialization.observations, initialization.world_updates, initialization.sensory_rows)
     target.reducer_cursor = initialization.end_cursor
     if initialization.hud is not None:
         apply_hud(target, initialization.hud, end_cursor=initialization.end_cursor)
@@ -441,7 +532,7 @@ def _apply_lineage(target: PlayerState, lineage: PlayerLineage, *,
         raise ValueError("player lineage precedes this reduction position")
     result = target
     _apply_nodes(result, lineage.events, lineage.version_rows, lineage.observations, lineage.world_updates,
-        audience_composition=audience_composition)
+        lineage.sensory_rows, audience_composition=audience_composition)
     result.reducer_cursor = lineage.end_cursor
 
 

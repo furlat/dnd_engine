@@ -50,12 +50,12 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
     sensory = replace(template, initial=False, observer_position_changed=False,
         effective_light_levels_changed=EMPTY_VALUES, cause_occurrence=None,
         visible_cells_added=EMPTY_CELLS, visible_cells_removed=EMPTY_CELLS, seen_cells_added=EMPTY_CELLS,
-        entity_contacts_changed={}, entity_contacts_removed=frozenset(),
-        object_contacts_changed={}, object_contacts_removed=frozenset(),
+        entity_contacts_changed=(), entity_contacts_removed=(),
+        object_contacts_changed=(), object_contacts_removed=(),
         sense_modes_changed=False, sense_modes=None, passive_perception_changed=False,
         passive_perception=None, visual_access_changed=False, visual_access=None,
-        hazardous_cells_changed=EMPTY_VALUES, spatial_effect_sightings={}, spatial_effect_content={},
-            spatial_effects_removed=frozenset())
+        hazardous_cells_changed=EMPTY_VALUES, spatial_effect_sightings=(), spatial_effect_content={},
+            spatial_effects_removed=())
     lineages = []
     for index, step in enumerate(steps, start=before.reducer_cursor):
         # Each step is its own one-version lineage: its occurrence is its lineage's index.
@@ -80,7 +80,8 @@ def test_operation_view_matches_ordered_lineage_replay_without_mutating_history(
         lineages.append(PlayerLineage(generation=before.generation, observer_uuid=owner.uuid,
             audience=audience, lineage=index, root=0, events=(node,),
             version_rows=(VersionRow(source_index=index, lineage=index),),
-            start_cursor=index, end_cursor=index + 1, observations=observations))
+            start_cursor=index, end_cursor=index + 1, observations=observations,
+            sensory_rows=initial.sensory_rows))
     if together:
         lineages = [replace(lineages[0], events=tuple(node for row in lineages for node in row.events),
             version_rows=tuple(version for row in lineages for version in row.version_rows),

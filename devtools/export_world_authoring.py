@@ -15,7 +15,7 @@ from dnd.scenarios.battlefield_catalog import build_battlefield, _world_initiali
 from dnd.player.audience import PlayerAudience
 from dnd.player.facts import (
     PlayerInitialization, PlayerNode, PlayerObject, PlayerSequence, PlayerWorld,
-    SensoryFact, VersionRow, WorldUpdate,
+    SensoryFact, SensoryRows, VersionRow, WorldUpdate,
 )
 from dnd.player.projection import _floor_item
 from dnd.player.reduction import encode_player_sequence
@@ -35,13 +35,13 @@ def main() -> None:
     objects = tuple(PlayerObject(placement=o.placement, item=_floor_item(o.item, ())) for o in world.objects)
     observer, generation = uuid4(), uuid4()
     positions = tuple(t.position for t in tiles)
+    rows = SensoryRows(uuids=tuple(o.item.item_uuid for o in objects), contact_uuids=tuple(range(len(objects))),
+        contacts=tuple(PerceivedContact(position=o.placement.position, visual=True) for o in objects))
     sensory = SensoryFact(observer_uuid=observer, initial=True, observer_position=positions[0],
         observer_position_changed=True, effective_light_levels_changed=values_from_items({position: 3 for position in positions}),
         cause_occurrence=None, visible_cells_added=mask_from_positions(positions), visible_cells_removed=EMPTY_CELLS,
         seen_cells_added=mask_from_positions(positions),
-        entity_contacts_changed={}, entity_contacts_removed=frozenset(),
-        object_contacts_changed={o.item.item_uuid: PerceivedContact(position=o.placement.position, visual=True) for o in objects},
-        object_contacts_removed=frozenset(), sense_modes_changed=True, sense_modes=(),
+        object_contacts_changed=tuple(range(len(objects))), sense_modes_changed=True, sense_modes=(),
         passive_perception_changed=True, passive_perception=0, visual_access_changed=True, visual_access=1, paths_dirty=False)
     sequence = PlayerSequence(initialization=PlayerInitialization(generation=generation, observer_uuid=observer,
         world=PlayerWorld(battlefield_id=world.battlefield_id, battlefield_name=world.battlefield_name,
@@ -51,7 +51,7 @@ def main() -> None:
         version_rows=(VersionRow(source_index=0, lineage=0),), end_cursor=0,
         observations=(), world_updates=(WorldUpdate(occurrence=0, tiles=tiles, objects=objects,
                                                    objects_removed=(), connectors=world.connectors),),
-        audience=PlayerAudience(controlled=(), observers=(observer,), revision=0)), lineages=())
+        audience=PlayerAudience(controlled=(), observers=(observer,), revision=0), sensory_rows=rows), lineages=())
     args.output.mkdir(parents=True, exist_ok=True)
     name = args.battlefield.removeprefix("battlefield.").replace("_", "-") + "-authoring"
     (args.output / f"{name}.json").write_bytes(encode_player_sequence(sequence))
