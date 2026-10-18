@@ -1412,44 +1412,46 @@ class BaseAction(BaseObject):
         source = BaseBlock.get(self.source_entity_uuid)
         if source is None:
             return "Action origin is not placed"
-        return self._physical_access_error(source.action_scan(subjective=False),
-            replace(self.current_selection(), target_uuids=(target_uuid,)))
+        return self._physical_access_contact(source.action_scan(subjective=False),
+            replace(self.current_selection(), target_uuids=(target_uuid,)))[0]
 
-    def _physical_access_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+    @final
+    def _physical_access_contact(self, scan: ActorScan,
+                                 selection: ActionSelection) -> Tuple[Optional[str], Optional[Tuple[int, int]]]:
+        """(error, contact): physical access to the selection's targets, and the surface of a placed
+        object target that a creature-or-object action reaches (None for every other target)."""
         access = self.get_physical_access()
         if access is None:
-            return None
+            return None, None
         origin = self.get_target_origin()
         if origin is None:
-            return "Action origin is not placed"
+            return "Action origin is not placed", None
         grid = get_map()
         primary = selection.target_uuids[0] if selection.target_uuids else None
         if primary is not None and primary in scan.carried_items:
-            return None  # An item the actor carries is always within its reach.
+            return None, None  # An item the actor carries is always within its reach.
         if self.effective_target_type is TargetType.OBJECT:
             if primary is not None and grid.manual_object_contact(
                 self.source_entity_uuid, primary,
                 access=access, subjective=scan.subjective,
             ) is None:
-                return "Object is out of physical reach"
-            return None
+                return "Object is out of physical reach", None
+            return None, None
         if self.effective_target_type is TargetType.CREATURE_OR_OBJECT:
             identity = primary
             if identity is not None and grid.get_object_placement(identity) is not None:
                 action_range = self.get_range()
                 limit = (action_range.long or action_range.normal) if action_range else 5
-                if grid.attack_object_contact(self.source_entity_uuid, identity,
-                        range_feet=limit, access=access, subjective=scan.subjective,
-                        origin=origin) is None:
-                    return "Object is out of physical reach"
-                return None
+                contact = grid.attack_object_contact(self.source_entity_uuid, identity,
+                    range_feet=limit, access=access, subjective=scan.subjective, origin=origin)
+                return ("Object is out of physical reach", None) if contact is None else (None, contact)
         if self.effective_target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY, TargetType.CREATURE_OR_OBJECT):
             targets = [target for identity in self._selection_targets(selection)
                        if (target := BaseBlock.get(identity)) is not None]
             if not self.is_spell and any(target.uuid != self.source_entity_uuid and any(
                     condition.blocks_external_contact and condition.contributions_active()
                     for condition in target.active_conditions_by_uuid.values()) for target in targets):
-                return "An active boundary prevents physical contact"
+                return "An active boundary prevents physical contact", None
             positions = [target.position for target in targets]
         elif self.effective_target_type in (TargetType.POSITION, TargetType.POSITION_LOS,
                                            TargetType.POSITION_PATH, TargetType.POSITION_AOE):
@@ -1459,8 +1461,8 @@ class BaseAction(BaseObject):
         for position in positions:
             if not grid.can_reach_between(origin, position, access,
                     self.source_entity_uuid, subjective=scan.subjective):
-                return "A physical barrier blocks this action"
-        return None
+                return "A physical barrier blocks this action", None
+        return None, None
 
     def get_position_selection(self) -> Optional[PositionSelection]:
         """Selection requirements of this exact authored action variant."""
@@ -1934,7 +1936,13 @@ class BaseAction(BaseObject):
 
     @final
     def discovery_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        """Discovery's admission of one candidate: the shared path plus physical access, without a copy or an event.
+        """The error of `discovery_admission`."""
+        return self.discovery_admission(scan, selection)[0]
+
+    @final
+    def discovery_admission(self, scan: ActorScan,
+                            selection: ActionSelection) -> Tuple[Optional[str], Optional[Tuple[int, int]]]:
+        """Discovery's admission of one candidate, without a copy or an event: (error, physical-access contact).
 
         A creature-and-destination action lists a creature when one of its
         destinations (plan §14.1) passes the rule; the first that does ends the
@@ -1948,8 +1956,9 @@ class BaseAction(BaseObject):
                 error = self.requirements_error(scan, replace(selection, positions=(destination,)))
                 if error is None:
                     break
-            return error
-        return self.requirements_error(scan, selection)
+            return error, None
+        error = self._admission_error(scan, selection)
+        return (error, None) if error else self._physical_access_contact(scan, selection)
 
     @final
     def requirements_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
@@ -1957,7 +1966,7 @@ class BaseAction(BaseObject):
 
         The scan's knowledge decides what is read: perception in discovery, the world at execution.
         """
-        return self._admission_error(scan, selection) or self._physical_access_error(scan, selection)
+        return self._admission_error(scan, selection) or self._physical_access_contact(scan, selection)[0]
 
     def relocation_destinations(self, scan: ActorScan, selection: ActionSelection) -> Tuple[Tuple[int, int], ...]:
         """Destinations a relocation may choose: seen, unoccupied and in range (plan §14.1).
@@ -2678,7 +2687,7 @@ class BaseAction(BaseObject):
             access_error = (self._source_condition_error(self._selection_targets(selection),
                                 selection.positions[0] if selection.positions else None)
                             or self.source_item_contact_error() or self._position_selection_error(selection)
-                            or self._physical_access_error(scan, selection))
+                            or self._physical_access_contact(scan, selection)[0])
             if access_error is not None:
                 record_total()
                 return execution_event.cancel(status_message=access_error)

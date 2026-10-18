@@ -3377,12 +3377,12 @@ class ChainLightning(SpellAction):
                  subjective: bool) -> EffectEndpoint | None:
         caster = Entity.get(self.source_entity_uuid)
         target = BaseBlock.get(identity)
-        if caster is None or target is None or not target.is_active:
+        if caster is None or target is None:
             return None
         grid = get_map()
         if isinstance(target, BaseItem):
             seen = caster.senses.objects.get(identity)
-            if seen is None or not seen.visual or not target.is_targetable or not target.is_breakable():
+            if seen is None or not seen.visual or not target.is_breakable():  # Breakable: active and targetable.
                 return None
             position = grid.attack_object_contact(caster.uuid, identity, range_feet=distance,
                 access=PhysicalAccess.PROJECTILE, subjective=subjective, origin=origin)
@@ -3391,6 +3391,8 @@ class ChainLightning(SpellAction):
                 return None
             return EffectEndpoint(kind="object", uuid=identity, position=position,
                                   base_height_steps=placement.base_height_steps)
+        if not target.is_active:
+            return None
         seen = caster.senses.entities.get(identity)
         if identity != caster.uuid and (seen is None or not seen.visual):
             return None

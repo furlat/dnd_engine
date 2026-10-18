@@ -239,8 +239,8 @@ class SolidWallZone(AreaCondition):
             return False
         if channel is WorldEdgeChannel.MOVEMENT and mode is MovementMode.BURROWING and self.material != "force":
             return False
-        return any(identity != terminal_provider_uuid and wall_path_contact(geometry, start, end,
-                   {p for p in self.affected_positions if self.allows_contribution_at(p)}) is not None
+        admitted = {p for p in self.affected_positions if self.allows_contribution_at(p)}
+        return any(identity != terminal_provider_uuid and wall_path_contact(geometry, start, end, admitted) is not None
                    for identity, geometry in self.sections.items())
 
     def blocks_physical_optics_at(self, position: tuple[int, int]) -> bool:

@@ -884,6 +884,8 @@ class Health(BaseBlock):
         Returns:
             int: The maximum hit points.
         """
+        if not constitution_modifier:
+            return self.hit_dices_total_hit_points  # A zero modifier adds nothing per hit die.
         return self.hit_dices_total_hit_points + constitution_modifier * self.total_hit_dices_number
 
     def get_total_hit_points(self, constitution_modifier: int) -> int:
