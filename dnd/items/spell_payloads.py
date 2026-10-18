@@ -42,7 +42,7 @@ from dnd.core.events import (
 )
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.gridmap import PreparedObjectPlacement, get_map
-from dnd.core.saving_throw_types import SavingThrowContext
+from dnd.core.saving_throw_types import DamageSaveContext, SavingThrowContext
 from dnd.core.values import ModifiableValue, parts
 from dnd.core.spell_damage import roll_spell_damage
 from dnd.core.effect_applications import admit_effect_application
@@ -157,6 +157,8 @@ def payload_blast(
                     damage_rolls=[roll],
                     parent_event=effect.uuid,
                     effect_origin=emitted,
+                    damage_save=DamageSaveContext(ability="constitution" if kind == "freezing" else "dexterity",
+                        success=success, success_fraction=0.5),
                     independent_resolution=True,
                 )
             elif isinstance(target, BaseItem):

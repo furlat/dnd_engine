@@ -1,0 +1,2290 @@
+{
+  "date": "2026-10-18",
+  "scope": "34 source fiend variants: 28 new native kits, 6 retained identities; no art/client integration.",
+  "source": "Authored Devils draft, later dispositions and accepted item crosswalk; source CR targets are provisional, never validated encounter ratings.",
+  "new_native_kits": 28,
+  "retained_native_identities": 6,
+  "older_mapped_reconciliations": 3,
+  "rows": [
+    {
+      "source_id": "C01",
+      "source_variant": "Demon Beast 1",
+      "name": "Dretch",
+      "status": "retained_canonical_demon",
+      "native_ref": "content.srd_5_1_cc:creature:creature.dretch@1",
+      "hp": 22,
+      "ac": 11,
+      "size": "Small",
+      "abilities": {
+        "strength": 11,
+        "dexterity": 11,
+        "constitution": 12,
+        "intelligence": 5,
+        "wisdom": 8,
+        "charisma": 3
+      },
+      "proficiency": 2,
+      "walking_feet": 20,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.creature.dretch_bite",
+          "intrinsic": true
+        },
+        {
+          "item_id": "weapon.creature.dretch_claws",
+          "intrinsic": true
+        },
+        {
+          "item_id": "armor.creature.dretch_natural",
+          "intrinsic": true
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Cold",
+          "Resistance"
+        ],
+        [
+          "Fire",
+          "Resistance"
+        ],
+        [
+          "Lightning",
+          "Resistance"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "Not reassigned; retained canonical Dretch foundation.",
+      "adaptations": [
+        "Existing canonical creature and recipe preserved.",
+        "Older Thornback/Hookclaw/Ironhide proposal reconciled to retained Demon Beast mapping; no duplicate creature authored."
+      ],
+      "superseded_proposal_target_cr": "3"
+    },
+    {
+      "source_id": "C02",
+      "source_variant": "Demon Beast 2",
+      "name": "Corrosive Demon",
+      "status": "retained_canonical_demon",
+      "native_ref": "content.neurodragon:creature:creature.corrosive_demon@1",
+      "hp": 22,
+      "ac": 11,
+      "size": "Small",
+      "abilities": {
+        "strength": 11,
+        "dexterity": 11,
+        "constitution": 12,
+        "intelligence": 5,
+        "wisdom": 8,
+        "charisma": 3
+      },
+      "proficiency": 2,
+      "walking_feet": 20,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.creature.dretch_bite",
+          "intrinsic": true
+        },
+        {
+          "item_id": "weapon.creature.dretch_claws",
+          "intrinsic": true
+        },
+        {
+          "item_id": "armor.creature.dretch_natural",
+          "intrinsic": true
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Cold",
+          "Resistance"
+        ],
+        [
+          "Fire",
+          "Resistance"
+        ],
+        [
+          "Lightning",
+          "Resistance"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "Not reassigned; retained canonical Dretch foundation.",
+      "adaptations": [
+        "Existing canonical creature and recipe preserved.",
+        "Older Thornback/Hookclaw/Ironhide proposal reconciled to retained Demon Beast mapping; no duplicate creature authored."
+      ],
+      "superseded_proposal_target_cr": "4"
+    },
+    {
+      "source_id": "C03",
+      "source_variant": "Demon Beast 3",
+      "name": "Dread Demon",
+      "status": "retained_canonical_demon",
+      "native_ref": "content.neurodragon:creature:creature.dread_demon@1",
+      "hp": 22,
+      "ac": 11,
+      "size": "Small",
+      "abilities": {
+        "strength": 11,
+        "dexterity": 11,
+        "constitution": 12,
+        "intelligence": 5,
+        "wisdom": 8,
+        "charisma": 3
+      },
+      "proficiency": 2,
+      "walking_feet": 20,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.creature.dretch_bite",
+          "intrinsic": true
+        },
+        {
+          "item_id": "weapon.creature.dretch_claws",
+          "intrinsic": true
+        },
+        {
+          "item_id": "armor.creature.dretch_natural",
+          "intrinsic": true
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Cold",
+          "Resistance"
+        ],
+        [
+          "Fire",
+          "Resistance"
+        ],
+        [
+          "Lightning",
+          "Resistance"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "Not reassigned; retained canonical Dretch foundation.",
+      "adaptations": [
+        "Existing canonical creature and recipe preserved.",
+        "Older Thornback/Hookclaw/Ironhide proposal reconciled to retained Demon Beast mapping; no duplicate creature authored."
+      ],
+      "superseded_proposal_target_cr": "5"
+    },
+    {
+      "source_id": "C04",
+      "source_variant": "Demon Beast 4",
+      "name": "Fellwing Devil",
+      "status": "existing_authored_devil",
+      "native_ref": "content.neurodragon:creature:creature.fellwing_devil@1",
+      "hp": 136,
+      "ac": 16,
+      "size": "Large",
+      "abilities": {
+        "strength": 20,
+        "dexterity": 14,
+        "constitution": 20,
+        "intelligence": 12,
+        "wisdom": 14,
+        "charisma": 14
+      },
+      "proficiency": 3,
+      "walking_feet": 30,
+      "flight_feet": 50,
+      "gear": [
+        {
+          "item_id": "weapon.creature.fellwing_devil_claws",
+          "intrinsic": true
+        },
+        {
+          "item_id": "weapon.creature.fellwing_devil_gore",
+          "intrinsic": true
+        },
+        {
+          "item_id": "armor.creature.fellwing_devil_natural",
+          "intrinsic": true
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [
+        "Innate Flight",
+        "Magic Resistance"
+      ],
+      "source_cr_target_provisional": "6",
+      "adaptations": [
+        "Existing canonical creature and recipe preserved."
+      ]
+    },
+    {
+      "source_id": "C05",
+      "source_variant": "Demon Beast 5",
+      "name": "Huntsman Wing Devil",
+      "status": "existing_authored_devil",
+      "native_ref": "content.neurodragon:creature:creature.huntsman_wing_devil@1",
+      "hp": 93,
+      "ac": 16,
+      "size": "Medium",
+      "abilities": {
+        "strength": 18,
+        "dexterity": 16,
+        "constitution": 18,
+        "intelligence": 12,
+        "wisdom": 14,
+        "charisma": 12
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 40,
+      "gear": [
+        {
+          "item_id": "weapon.creature.huntsman_wing_devil_claws",
+          "intrinsic": true
+        },
+        {
+          "item_id": "armor.creature.huntsman_wing_devil_natural",
+          "intrinsic": true
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [
+        "Innate Flight"
+      ],
+      "source_cr_target_provisional": "4",
+      "adaptations": [
+        "Existing canonical creature and recipe preserved."
+      ]
+    },
+    {
+      "source_id": "C06",
+      "source_variant": "Demon Elite 1",
+      "name": "Oathblade Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.oathblade_devil@1",
+      "hp": 119,
+      "ac": 17,
+      "size": "Medium",
+      "abilities": {
+        "strength": 18,
+        "dexterity": 18,
+        "constitution": 18,
+        "intelligence": 14,
+        "wisdom": 14,
+        "charisma": 16
+      },
+      "proficiency": 3,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.roster.psychic_scimitar",
+          "intrinsic": false
+        },
+        {
+          "item_id": "weapon.roster.psychic_scimitar",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.half_plate",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [
+        "Magic Resistance",
+        "Parry"
+      ],
+      "source_cr_target_provisional": "6",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 2
+        },
+        {
+          "slot": "MELEE_OFF",
+          "count": 1
+        }
+      ],
+      "adaptations": [
+        "Full offhand ability uses existing native contextual callback; ordinary paid bonus attack remains independently available; selected Multiattack adds no free strike."
+      ]
+    },
+    {
+      "source_id": "C07",
+      "source_variant": "Demon Elite 2",
+      "name": "Blade Marshal Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.blade_marshal_devil@1",
+      "hp": 142,
+      "ac": 18,
+      "size": "Medium",
+      "abilities": {
+        "strength": 20,
+        "dexterity": 12,
+        "constitution": 20,
+        "intelligence": 14,
+        "wisdom": 14,
+        "charisma": 16
+      },
+      "proficiency": 3,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.roster.psychic_greataxe",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.plate",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [
+        {
+          "spell_ids": [
+            "spell.command"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 1,
+          "provider": "creature.blade_marshal_devil"
+        }
+      ],
+      "resources": {
+        "innate.spell.command.1": {
+          "current": 3,
+          "maximum": 3,
+          "recharge": "long_rest"
+        }
+      },
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [
+        "Magic Resistance",
+        "Parry"
+      ],
+      "source_cr_target_provisional": "7",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 3
+        }
+      ],
+      "adaptations": []
+    },
+    {
+      "source_id": "C08",
+      "source_variant": "Demon Elite 3",
+      "name": "Wing Regent Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.wing_regent_devil@1",
+      "hp": 207,
+      "ac": 17,
+      "size": "Large",
+      "abilities": {
+        "strength": 22,
+        "dexterity": 14,
+        "constitution": 22,
+        "intelligence": 18,
+        "wisdom": 16,
+        "charisma": 20
+      },
+      "proficiency": 4,
+      "walking_feet": 30,
+      "flight_feet": 60,
+      "gear": [
+        {
+          "item_id": "weapon.creature.wing_regent_devil_claws",
+          "intrinsic": true
+        },
+        {
+          "item_id": "armor.half_plate",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [
+        {
+          "spell_ids": [
+            "spell.slow"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 3,
+          "provider": "creature.wing_regent_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.counterspell"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 3,
+          "provider": "creature.wing_regent_devil"
+        }
+      ],
+      "resources": {
+        "innate.spell.slow.3": {
+          "current": 1,
+          "maximum": 1,
+          "recharge": "long_rest"
+        },
+        "innate.spell.counterspell.3": {
+          "current": 3,
+          "maximum": 3,
+          "recharge": "long_rest"
+        }
+      },
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [
+        "Innate Flight",
+        "Magic Resistance"
+      ],
+      "source_cr_target_provisional": "12",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 3
+        }
+      ],
+      "adaptations": [
+        "Legendary actions and Legendary Resistance deferred; selected native body attack, flight, senses and finite spells retained."
+      ]
+    },
+    {
+      "source_id": "C09",
+      "source_variant": "Demon Elite 4",
+      "name": "Glaive Warden Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.glaive_warden_devil@1",
+      "hp": 110,
+      "ac": 17,
+      "size": "Medium",
+      "abilities": {
+        "strength": 18,
+        "dexterity": 14,
+        "constitution": 18,
+        "intelligence": 12,
+        "wisdom": 14,
+        "charisma": 14
+      },
+      "proficiency": 3,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.roster.psychic_trident",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.half_plate",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [
+        "Magic Resistance"
+      ],
+      "source_cr_target_provisional": "5",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 2
+        }
+      ],
+      "adaptations": []
+    },
+    {
+      "source_id": "C10",
+      "source_variant": "Demon Elite 5",
+      "name": "Oath Captain Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.oath_captain_devil@1",
+      "hp": 152,
+      "ac": 20,
+      "size": "Medium",
+      "abilities": {
+        "strength": 20,
+        "dexterity": 12,
+        "constitution": 20,
+        "intelligence": 16,
+        "wisdom": 16,
+        "charisma": 18
+      },
+      "proficiency": 3,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.longsword",
+          "intrinsic": false
+        },
+        {
+          "item_id": "shield.shield",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.plate",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [
+        {
+          "spell_ids": [
+            "spell.bless"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 1,
+          "provider": "creature.oath_captain_devil"
+        }
+      ],
+      "resources": {
+        "innate.spell.bless.1": {
+          "current": 3,
+          "maximum": 3,
+          "recharge": "long_rest"
+        }
+      },
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [
+        "Magic Resistance"
+      ],
+      "source_cr_target_provisional": "8",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 3
+        }
+      ],
+      "adaptations": [
+        "Dispel Magic and old inferred weapon necrotic rider omitted by later disposition."
+      ]
+    },
+    {
+      "source_id": "C11",
+      "source_variant": "Demon Elite 6",
+      "name": "Gate Tyrant Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.gate_tyrant_devil@1",
+      "hp": 199,
+      "ac": 20,
+      "size": "Medium",
+      "abilities": {
+        "strength": 22,
+        "dexterity": 12,
+        "constitution": 22,
+        "intelligence": 12,
+        "wisdom": 14,
+        "charisma": 18
+      },
+      "proficiency": 4,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.battleaxe",
+          "intrinsic": false
+        },
+        {
+          "item_id": "shield.shield",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.plate",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [
+        {
+          "spell_ids": [
+            "spell.thunderwave"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 3,
+          "provider": "creature.gate_tyrant_devil"
+        }
+      ],
+      "resources": {
+        "innate.spell.thunderwave.3": {
+          "current": 3,
+          "maximum": 3,
+          "recharge": "long_rest"
+        }
+      },
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [
+        "Magic Resistance",
+        "Parry"
+      ],
+      "source_cr_target_provisional": "10",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 3
+        }
+      ],
+      "adaptations": [
+        "Dispel Magic and old inferred weapon necrotic rider omitted by later disposition.",
+        "Shove uses independent native action budget, not a free Multiattack replacement."
+      ]
+    },
+    {
+      "source_id": "C12",
+      "source_variant": "Demon spawn 1",
+      "name": "Ash Scribe Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.ash_scribe_devil@1",
+      "hp": 45,
+      "ac": 12,
+      "size": "Medium",
+      "abilities": {
+        "strength": 8,
+        "dexterity": 14,
+        "constitution": 14,
+        "intelligence": 14,
+        "wisdom": 12,
+        "charisma": 16
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "focus.wand",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [
+        {
+          "spell_ids": [
+            "spell.eldritch_blast"
+          ],
+          "ability": "charisma",
+          "caster_level": 5,
+          "maximum_rank": 0,
+          "provider": "creature.ash_scribe_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.web"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 2,
+          "provider": "creature.ash_scribe_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.grease"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 1,
+          "provider": "creature.ash_scribe_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.bless"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 1,
+          "provider": "creature.ash_scribe_devil"
+        }
+      ],
+      "resources": {
+        "innate.spell.web.2": {
+          "current": 3,
+          "maximum": 3,
+          "recharge": "long_rest"
+        },
+        "innate.spell.grease.1": {
+          "current": 3,
+          "maximum": 3,
+          "recharge": "long_rest"
+        },
+        "innate.spell.bless.1": {
+          "current": 1,
+          "maximum": 1,
+          "recharge": "long_rest"
+        }
+      },
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "2",
+      "selected_multiattack": [],
+      "adaptations": [
+        "Old authored Bolt replaced with native Eldritch Blast at explicitly selected caster level; no Bolt Multiattack."
+      ]
+    },
+    {
+      "source_id": "C13",
+      "source_variant": "Demon Spawn 2",
+      "name": "Debt Collector Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.debt_collector_devil@1",
+      "hp": 39,
+      "ac": 14,
+      "size": "Medium",
+      "abilities": {
+        "strength": 14,
+        "dexterity": 14,
+        "constitution": 14,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.mace",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.studded_leather",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "1",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 2
+        }
+      ],
+      "adaptations": []
+    },
+    {
+      "source_id": "C14",
+      "source_variant": "Demon Spawn 4",
+      "name": "Wardblade Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.wardblade_devil@1",
+      "hp": 52,
+      "ac": 17,
+      "size": "Medium",
+      "abilities": {
+        "strength": 16,
+        "dexterity": 12,
+        "constitution": 14,
+        "intelligence": 10,
+        "wisdom": 12,
+        "charisma": 10
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.roster.psychic_longsword",
+          "intrinsic": false
+        },
+        {
+          "item_id": "shield.shield",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.scale_mail",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "2",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 2
+        }
+      ],
+      "adaptations": []
+    },
+    {
+      "source_id": "C15",
+      "source_variant": "Demon Spawn 5",
+      "name": "Contract Cutter Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.contract_cutter_devil@1",
+      "hp": 45,
+      "ac": 15,
+      "size": "Medium",
+      "abilities": {
+        "strength": 12,
+        "dexterity": 16,
+        "constitution": 14,
+        "intelligence": 12,
+        "wisdom": 12,
+        "charisma": 12
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.scimitar",
+          "intrinsic": false
+        },
+        {
+          "item_id": "weapon.scimitar",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.studded_leather",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [
+        "Parry"
+      ],
+      "source_cr_target_provisional": "2",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 1
+        },
+        {
+          "slot": "MELEE_OFF",
+          "count": 1
+        }
+      ],
+      "adaptations": [
+        "Full offhand ability uses existing native contextual callback; ordinary paid bonus attack remains independently available; selected Multiattack adds no free strike."
+      ]
+    },
+    {
+      "source_id": "C16",
+      "source_variant": "Demon Spawn 6",
+      "name": "Bow Harrier Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.bow_harrier_devil@1",
+      "hp": 27,
+      "ac": 14,
+      "size": "Medium",
+      "abilities": {
+        "strength": 12,
+        "dexterity": 16,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 12,
+        "charisma": 10
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.shortbow",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.leather",
+          "intrinsic": false
+        },
+        {
+          "item_id": "gear.quiver",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "1",
+      "selected_multiattack": [
+        {
+          "slot": "RANGED_MAIN",
+          "count": 2
+        }
+      ],
+      "adaptations": []
+    },
+    {
+      "source_id": "C17",
+      "source_variant": "Demon Spawn 7",
+      "name": "Night Archer Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.night_archer_devil@1",
+      "hp": 52,
+      "ac": 16,
+      "size": "Medium",
+      "abilities": {
+        "strength": 12,
+        "dexterity": 18,
+        "constitution": 14,
+        "intelligence": 12,
+        "wisdom": 14,
+        "charisma": 12
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.shortbow",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.studded_leather",
+          "intrinsic": false
+        },
+        {
+          "item_id": "gear.quiver",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "2",
+      "selected_multiattack": [
+        {
+          "slot": "RANGED_MAIN",
+          "count": 2
+        }
+      ],
+      "adaptations": []
+    },
+    {
+      "source_id": "C18",
+      "source_variant": "Demon Spawn 8",
+      "name": "Night Notary Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.night_notary_devil@1",
+      "hp": 90,
+      "ac": 12,
+      "size": "Medium",
+      "abilities": {
+        "strength": 10,
+        "dexterity": 14,
+        "constitution": 16,
+        "intelligence": 16,
+        "wisdom": 14,
+        "charisma": 18
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.quarterstaff",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [
+        {
+          "spell_ids": [
+            "spell.eldritch_blast"
+          ],
+          "ability": "charisma",
+          "caster_level": 11,
+          "maximum_rank": 0,
+          "provider": "creature.night_notary_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.darkness"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 2,
+          "provider": "creature.night_notary_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.web"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 2,
+          "provider": "creature.night_notary_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.slow"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 3,
+          "provider": "creature.night_notary_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.counterspell"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 3,
+          "provider": "creature.night_notary_devil"
+        }
+      ],
+      "resources": {
+        "innate.spell.darkness.2": {
+          "current": 3,
+          "maximum": 3,
+          "recharge": "long_rest"
+        },
+        "innate.spell.web.2": {
+          "current": 3,
+          "maximum": 3,
+          "recharge": "long_rest"
+        },
+        "innate.spell.slow.3": {
+          "current": 1,
+          "maximum": 1,
+          "recharge": "long_rest"
+        },
+        "innate.spell.counterspell.3": {
+          "current": 1,
+          "maximum": 1,
+          "recharge": "long_rest"
+        }
+      },
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [
+        "Magic Resistance"
+      ],
+      "source_cr_target_provisional": "4",
+      "selected_multiattack": [],
+      "adaptations": [
+        "Old authored Bolt replaced with native Eldritch Blast at explicitly selected caster level; no Bolt Multiattack."
+      ]
+    },
+    {
+      "source_id": "C19",
+      "source_variant": "Demon Spawn 9",
+      "name": "Gate Guard Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.gate_guard_devil@1",
+      "hp": 75,
+      "ac": 17,
+      "size": "Medium",
+      "abilities": {
+        "strength": 12,
+        "dexterity": 16,
+        "constitution": 16,
+        "intelligence": 10,
+        "wisdom": 12,
+        "charisma": 10
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.scimitar",
+          "intrinsic": false
+        },
+        {
+          "item_id": "shield.shield",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.studded_leather",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "2",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 2
+        }
+      ],
+      "adaptations": []
+    },
+    {
+      "source_id": "C20",
+      "source_variant": "Demon Spawn 10",
+      "name": "Ivory Marksman Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.ivory_marksman_devil@1",
+      "hp": 90,
+      "ac": 17,
+      "size": "Medium",
+      "abilities": {
+        "strength": 12,
+        "dexterity": 18,
+        "constitution": 16,
+        "intelligence": 12,
+        "wisdom": 14,
+        "charisma": 12
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.longbow",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.half_plate",
+          "intrinsic": false
+        },
+        {
+          "item_id": "gear.quiver",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "3",
+      "selected_multiattack": [
+        {
+          "slot": "RANGED_MAIN",
+          "count": 2
+        }
+      ],
+      "adaptations": [
+        "Old inferred weapon necrotic rider omitted; ordinary real weapon damage retained."
+      ]
+    },
+    {
+      "source_id": "C21",
+      "source_variant": "Demon Spawn 11",
+      "name": "Bastion Magus Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.bastion_magus_devil@1",
+      "hp": 75,
+      "ac": 17,
+      "size": "Medium",
+      "abilities": {
+        "strength": 12,
+        "dexterity": 14,
+        "constitution": 16,
+        "intelligence": 14,
+        "wisdom": 12,
+        "charisma": 16
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "focus.wand",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.half_plate",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [
+        {
+          "spell_ids": [
+            "spell.eldritch_blast"
+          ],
+          "ability": "charisma",
+          "caster_level": 5,
+          "maximum_rank": 0,
+          "provider": "creature.bastion_magus_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.bless"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 1,
+          "provider": "creature.bastion_magus_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.web"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 2,
+          "provider": "creature.bastion_magus_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.shield"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 1,
+          "provider": "creature.bastion_magus_devil"
+        }
+      ],
+      "resources": {
+        "innate.spell.bless.1": {
+          "current": 3,
+          "maximum": 3,
+          "recharge": "long_rest"
+        },
+        "innate.spell.web.2": {
+          "current": 3,
+          "maximum": 3,
+          "recharge": "long_rest"
+        },
+        "innate.spell.shield.1": {
+          "current": 3,
+          "maximum": 3,
+          "recharge": "long_rest"
+        }
+      },
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "3",
+      "selected_multiattack": [],
+      "adaptations": [
+        "Old authored Bolt replaced with native Eldritch Blast at explicitly selected caster level; no Bolt Multiattack."
+      ]
+    },
+    {
+      "source_id": "C22",
+      "source_variant": "Demon Spawn 12",
+      "name": "Bulwark Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.bulwark_devil@1",
+      "hp": 85,
+      "ac": 18,
+      "size": "Medium",
+      "abilities": {
+        "strength": 18,
+        "dexterity": 12,
+        "constitution": 18,
+        "intelligence": 10,
+        "wisdom": 12,
+        "charisma": 12
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.shortsword",
+          "intrinsic": false
+        },
+        {
+          "item_id": "shield.shield",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.half_plate",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "4",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 2
+        }
+      ],
+      "adaptations": [
+        "Old inferred weapon necrotic rider omitted; ordinary real weapon damage retained."
+      ]
+    },
+    {
+      "source_id": "C23",
+      "source_variant": "Demon Spawn 13",
+      "name": "Tollbreaker Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.tollbreaker_devil@1",
+      "hp": 90,
+      "ac": 14,
+      "size": "Medium",
+      "abilities": {
+        "strength": 18,
+        "dexterity": 14,
+        "constitution": 16,
+        "intelligence": 10,
+        "wisdom": 12,
+        "charisma": 10
+      },
+      "proficiency": 2,
+      "walking_feet": 30,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.handaxe",
+          "intrinsic": false
+        },
+        {
+          "item_id": "weapon.longsword",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.studded_leather",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "3",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 1
+        },
+        {
+          "slot": "MELEE_OFF",
+          "count": 1
+        }
+      ],
+      "adaptations": [
+        "Full offhand ability uses existing native contextual callback; ordinary paid bonus attack remains independently available; selected Multiattack adds no free strike.",
+        "Old inferred weapon necrotic rider omitted; ordinary real weapon damage retained.",
+        "Shove uses independent native action budget, not a free Multiattack replacement."
+      ]
+    },
+    {
+      "source_id": "C24",
+      "source_variant": "Imp 2",
+      "name": "Club Mote Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.club_mote_devil@1",
+      "hp": 7,
+      "ac": 12,
+      "size": "Small",
+      "abilities": {
+        "strength": 10,
+        "dexterity": 14,
+        "constitution": 10,
+        "intelligence": 8,
+        "wisdom": 10,
+        "charisma": 8
+      },
+      "proficiency": 2,
+      "walking_feet": 25,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.club",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "1/8",
+      "selected_multiattack": [],
+      "adaptations": []
+    },
+    {
+      "source_id": "C25",
+      "source_variant": "Imp 3",
+      "name": "Standard Mote Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.standard_mote_devil@1",
+      "hp": 13,
+      "ac": 13,
+      "size": "Small",
+      "abilities": {
+        "strength": 10,
+        "dexterity": 14,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 12
+      },
+      "proficiency": 2,
+      "walking_feet": 25,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.scimitar",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.leather",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [
+        "tool.banner"
+      ],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "1/4",
+      "selected_multiattack": [],
+      "adaptations": [
+        "Ordinary real two-handed Banner carried in inventory beside selected Scimitar; no extra hand, flight or passive Help aura."
+      ]
+    },
+    {
+      "source_id": "C26",
+      "source_variant": "Imp 4",
+      "name": "Needle Mote Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.needle_mote_devil@1",
+      "hp": 7,
+      "ac": 12,
+      "size": "Small",
+      "abilities": {
+        "strength": 10,
+        "dexterity": 14,
+        "constitution": 10,
+        "intelligence": 8,
+        "wisdom": 10,
+        "charisma": 8
+      },
+      "proficiency": 2,
+      "walking_feet": 25,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.dagger",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "1/8",
+      "selected_multiattack": [],
+      "adaptations": []
+    },
+    {
+      "source_id": "C27",
+      "source_variant": "Imp 5",
+      "name": "Claw Mote Devil",
+      "status": "existing_authored_devil",
+      "native_ref": "content.neurodragon:creature:creature.claw_mote_devil@1",
+      "hp": 7,
+      "ac": 11,
+      "size": "Small",
+      "abilities": {
+        "strength": 12,
+        "dexterity": 12,
+        "constitution": 10,
+        "intelligence": 6,
+        "wisdom": 10,
+        "charisma": 6
+      },
+      "proficiency": 2,
+      "walking_feet": 25,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.creature.claw_mote_devil_claws",
+          "intrinsic": true
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "1/8",
+      "adaptations": [
+        "Existing canonical creature and recipe preserved."
+      ]
+    },
+    {
+      "source_id": "C28",
+      "source_variant": "Imp 6",
+      "name": "Spear Mote Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.spear_mote_devil@1",
+      "hp": 9,
+      "ac": 12,
+      "size": "Small",
+      "abilities": {
+        "strength": 12,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 8,
+        "wisdom": 10,
+        "charisma": 8
+      },
+      "proficiency": 2,
+      "walking_feet": 25,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.spear",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.leather",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "1/8",
+      "selected_multiattack": [],
+      "adaptations": []
+    },
+    {
+      "source_id": "C29",
+      "source_variant": "Imp 7",
+      "name": "Bow Mote Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.bow_mote_devil@1",
+      "hp": 18,
+      "ac": 13,
+      "size": "Small",
+      "abilities": {
+        "strength": 10,
+        "dexterity": 14,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 12,
+        "charisma": 10
+      },
+      "proficiency": 2,
+      "walking_feet": 25,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.shortbow",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.leather",
+          "intrinsic": false
+        },
+        {
+          "item_id": "gear.quiver",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "1/4",
+      "selected_multiattack": [],
+      "adaptations": []
+    },
+    {
+      "source_id": "C30",
+      "source_variant": "Imp 8",
+      "name": "Buckler Mote Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.buckler_mote_devil@1",
+      "hp": 27,
+      "ac": 15,
+      "size": "Small",
+      "abilities": {
+        "strength": 12,
+        "dexterity": 14,
+        "constitution": 14,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      },
+      "proficiency": 2,
+      "walking_feet": 25,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.scimitar",
+          "intrinsic": false
+        },
+        {
+          "item_id": "shield.shield",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.leather",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "1/2",
+      "selected_multiattack": [],
+      "adaptations": []
+    },
+    {
+      "source_id": "C31",
+      "source_variant": "Imp 9",
+      "name": "Rod Mote Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.rod_mote_devil@1",
+      "hp": 18,
+      "ac": 12,
+      "size": "Small",
+      "abilities": {
+        "strength": 8,
+        "dexterity": 14,
+        "constitution": 12,
+        "intelligence": 12,
+        "wisdom": 10,
+        "charisma": 14
+      },
+      "proficiency": 2,
+      "walking_feet": 25,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.quarterstaff",
+          "intrinsic": false
+        },
+        {
+          "item_id": "weapon.dagger",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [
+        {
+          "spell_ids": [
+            "spell.eldritch_blast"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 0,
+          "provider": "creature.rod_mote_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.grease"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 1,
+          "provider": "creature.rod_mote_devil"
+        },
+        {
+          "spell_ids": [
+            "spell.bane"
+          ],
+          "ability": "charisma",
+          "caster_level": 1,
+          "maximum_rank": 1,
+          "provider": "creature.rod_mote_devil"
+        }
+      ],
+      "resources": {
+        "innate.spell.grease.1": {
+          "current": 3,
+          "maximum": 3,
+          "recharge": "long_rest"
+        },
+        "innate.spell.bane.1": {
+          "current": 1,
+          "maximum": 1,
+          "recharge": "long_rest"
+        }
+      },
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "1/2",
+      "selected_multiattack": [],
+      "adaptations": [
+        "Old authored Bolt replaced with native Eldritch Blast at explicitly selected caster level; no Bolt Multiattack."
+      ]
+    },
+    {
+      "source_id": "C32",
+      "source_variant": "Imp 10",
+      "name": "Twinhaft Mote Devil",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.twinhaft_mote_devil@1",
+      "hp": 27,
+      "ac": 16,
+      "size": "Small",
+      "abilities": {
+        "strength": 12,
+        "dexterity": 14,
+        "constitution": 14,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      },
+      "proficiency": 2,
+      "walking_feet": 25,
+      "flight_feet": 0,
+      "gear": [
+        {
+          "item_id": "weapon.shortsword",
+          "intrinsic": false
+        },
+        {
+          "item_id": "weapon.dagger",
+          "intrinsic": false
+        },
+        {
+          "item_id": "armor.scale_mail",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [],
+      "source_cr_target_provisional": "1/2",
+      "selected_multiattack": [
+        {
+          "slot": "MELEE_MAIN",
+          "count": 1
+        },
+        {
+          "slot": "MELEE_OFF",
+          "count": 1
+        }
+      ],
+      "adaptations": [
+        "Full offhand ability uses existing native contextual callback; ordinary paid bonus attack remains independently available; selected Multiattack adds no free strike."
+      ]
+    },
+    {
+      "source_id": "I01",
+      "source_variant": "Imp 1",
+      "name": "Shieldwing Imp",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.shieldwing_imp@1",
+      "hp": 10,
+      "ac": 15,
+      "size": "Tiny",
+      "abilities": {
+        "strength": 6,
+        "dexterity": 17,
+        "constitution": 13,
+        "intelligence": 11,
+        "wisdom": 12,
+        "charisma": 14
+      },
+      "proficiency": 2,
+      "walking_feet": 20,
+      "flight_feet": 40,
+      "gear": [
+        {
+          "item_id": "weapon.handaxe",
+          "intrinsic": false
+        },
+        {
+          "item_id": "shield.shield",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Cold",
+          "Resistance"
+        ],
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [
+        "Innate Flight",
+        "Magic Resistance"
+      ],
+      "source_cr_target_provisional": "1, SRD Imp benchmark",
+      "selected_multiattack": [],
+      "adaptations": [
+        "Armed Imp: Sting and Shapechanger omitted by disposition; nonsilvered physical resistance omitted because no silver bypass provenance is implemented."
+      ]
+    },
+    {
+      "source_id": "I02",
+      "source_variant": "Demon Spawn 3",
+      "name": "Reaping Imp",
+      "status": "new_native_kit",
+      "native_ref": "content.neurodragon:creature:creature.reaping_imp@1",
+      "hp": 10,
+      "ac": 13,
+      "size": "Tiny",
+      "abilities": {
+        "strength": 6,
+        "dexterity": 17,
+        "constitution": 13,
+        "intelligence": 11,
+        "wisdom": 12,
+        "charisma": 14
+      },
+      "proficiency": 2,
+      "walking_feet": 20,
+      "flight_feet": 40,
+      "gear": [
+        {
+          "item_id": "weapon.sickle",
+          "intrinsic": false
+        }
+      ],
+      "inventory": [],
+      "innate_sources": [],
+      "resources": {},
+      "condition_immunities": [
+        "Poisoned"
+      ],
+      "damage_affinities": [
+        [
+          "Cold",
+          "Resistance"
+        ],
+        [
+          "Fire",
+          "Immunity"
+        ],
+        [
+          "Poison",
+          "Immunity"
+        ]
+      ],
+      "conditions": [
+        "Innate Flight",
+        "Magic Resistance"
+      ],
+      "source_cr_target_provisional": "1, SRD Imp benchmark",
+      "selected_multiattack": [],
+      "adaptations": [
+        "Armed Imp: Sting and Shapechanger omitted by disposition; nonsilvered physical resistance omitted because no silver bypass provenance is implemented."
+      ]
+    }
+  ]
+}

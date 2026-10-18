@@ -6,6 +6,7 @@ from pydantic import Field
 
 from dnd.actions import (
     AllyHelp,
+    HelpAttack,
     Attack,
     Dash,
     Disengage,
@@ -86,7 +87,7 @@ from dnd.spells.necromancy import Revivify
 
 # What a summoned creature is composed with (its form's factory and the creature composer). The
 # creature is created in the cast, so its content is built with the spell, at the caster's creation.
-_CREATURE_CORE = (AllyHelp, Attack, Dash, Disengage, Dodge, Drop, DropConcentration, Hide, Jump, Move, PickUp,
+_CREATURE_CORE = (AllyHelp, HelpAttack, Attack, Dash, Disengage, Dodge, Drop, DropConcentration, Hide, Jump, Move, PickUp,
     ShakeAwake, Shove, Swim, TraverseConnector, HasAttackedTracker, HasTakenDamageTracker, DismissSummon)
 _BEAST_FORMS = (*_CREATURE_CORE, HitSaveRiderFeature, KeenHearingAndSmellFeature, KeenPerceptionFeature,
     MultiattackAction, PackTacticsFeature, WolfBiteProneRiderFeature)

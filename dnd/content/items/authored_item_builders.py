@@ -63,6 +63,7 @@ from dnd.spells.transmutation import Longstrider
 from dnd.spells.abjuration import Resistance
 from dnd.content.items.roster_item_definitions import ROSTER_EMBER_DEFINITIONS, ROSTER_MAUL_DEFINITION, ROSTER_WEAPON_DEFINITIONS, ROSTER_GEAR_DEFINITIONS, ROSTER_CARRIED_DEFINITIONS, ROSTER_INVENTORY_DEFINITIONS
 from dnd.content.items.roster_item_definitions import ROSTER_WEAPON_APPEARANCE_DEFINITIONS, ROSTER_WEARABLE_APPEARANCE_DEFINITIONS
+from dnd.content.items.roster_item_definitions import ROSTER_SILVER_LONGSWORD_DEFINITION
 from dnd.content.items.window_definitions import WINDOW_DEFINITIONS
 from dnd.content.items.window_builders import build_window_component
 from dnd.content.items.trap_hardware_builders import TRAP_HARDWARE_PROFILES, build_trap_hardware
@@ -72,6 +73,7 @@ from dnd.extensions.field_focus import build_field_kit
 from dnd.items.created_items import build_goodberry
 from dnd.items.divine_rewards import build_devotees_mace
 from dnd.items.consumables import (
+    build_assassin_poison_weapon_coat,
     build_basic_poison_weapon_coat,
     build_concentration_fire_weapon_coat,
     build_fire_weapon_coat,
@@ -349,6 +351,17 @@ def _single_item_builder(
     return build
 
 
+def _poison_stack_builder(builder: Callable[[UUID], BaseItem]) -> ItemBuilder:
+    """Initial finite poison supplies use the item's existing stack lifecycle."""
+    def build(source_entity_uuid: UUID, quantity: int = 1) -> BaseItem:
+        item = builder(source_entity_uuid)
+        if not 1 <= quantity <= item.max_stack:
+            raise ValueError(f"{item.item_id} quantity must be between 1 and {item.max_stack}")
+        item.stack_count = quantity
+        return item
+    return build
+
+
 def _build_goodberry(source_entity_uuid: UUID,quantity: int=1) -> BaseItem:
     if quantity!=1:
         raise ValueError("Individual goodberries retain exact UUIDs")
@@ -460,6 +473,7 @@ def _spell_wearable_builder(definition: SpellWearableDefinition) -> ItemBuilder:
 
 
 DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
+    ROSTER_SILVER_LONGSWORD_DEFINITION.item_id: _weapon_definition_builder(ROSTER_SILVER_LONGSWORD_DEFINITION),
     **{item_id: _solid_wall_builder(item_id) for item_id in SOLID_WALL_MATERIALS},
     **{item_id: _weapon_definition_builder(definition) for item_id, definition in ROSTER_WEAPON_APPEARANCE_DEFINITIONS.items()},
     **{item_id: _wearable_definition_builder(definition) for item_id, definition in ROSTER_WEARABLE_APPEARANCE_DEFINITIONS.items()},
@@ -510,9 +524,8 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
     "consumable.potion_true_seeing": _single_item_builder(
         "consumable.potion_true_seeing", build_true_seeing_potion,
     ),
-    "consumable.weapon_coat.basic_poison": _single_item_builder(
-        "consumable.weapon_coat.basic_poison", build_basic_poison_weapon_coat,
-    ),
+    "consumable.weapon_coat.basic_poison": _poison_stack_builder(build_basic_poison_weapon_coat),
+    "consumable.weapon_coat.assassin_poison": _poison_stack_builder(build_assassin_poison_weapon_coat),
     "consumable.weapon_coat.fire": _single_item_builder(
         "consumable.weapon_coat.fire", build_fire_weapon_coat,
     ),

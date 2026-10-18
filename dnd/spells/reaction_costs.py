@@ -29,7 +29,8 @@ def choose_reaction_spell_cost(
 ) -> ReactionSpellCost | None:
     if not actor.action_economy.can_afford("reactions", 1):
         return None
-    sources = actor.spellcasting.learned_reaction_spell_source_ids(spell_id)
+    source_options = actor.spellcasting.learned_reaction_spell_sources(spell_id)
+    sources = tuple(source.source_id for source in source_options)
     grants = [
         grant
         for grant in actor.spellcasting.free_cast_grants.values()
@@ -55,13 +56,25 @@ def choose_reaction_spell_cost(
             grant.grant_id,
             grant.resource_name,
         )
+    innate_source = next((source for source in source_options
+        if source.source_id in actor.spellcasting.sources
+        and source.fixed_cast_rank is not None and source.fixed_cast_rank >= base_rank
+        and source.resource_name is not None
+        and actor.action_economy.can_afford_resource(source.resource_name, 1)), None)
+    if innate_source is not None and innate_source.fixed_cast_rank is not None:
+        return ReactionSpellCost(spell_id, base_rank, innate_source.fixed_cast_rank,
+            innate_source.source_id, resource_name=innate_source.resource_name)
+    slot_sources = tuple(source.source_id for source in source_options
+        if source.source_id in actor.spellcasting.sources and source.fixed_cast_rank is None)
+    if source_options and not slot_sources:
+        return None
     rank = actor.get_lowest_spell_slot(
         preferred_rank or base_rank
     ) or actor.get_lowest_spell_slot(base_rank)
     if rank is None:
         return None
     source_id = max(
-        sources,
+        slot_sources,
         key=lambda identity: (
             actor.ability_scores.get_ability(
                 actor.spellcasting.resolve_spellcasting_ability(identity)
@@ -93,8 +106,19 @@ def commit_reaction_spell_cost(
             not in actor.spellcasting.spell_entitlements.get(cost.source_id, ())
         ):
             return False
+    elif cost.source_id is not None:
+        source = next((source for source in actor.spellcasting.learned_reaction_spell_sources(cost.spell_id)
+            if source.source_id == cost.source_id), None)
+        if source is None or source.source_id not in actor.spellcasting.sources:
+            return False
+        if cost.resource_name is not None:
+            if (source.resource_name != cost.resource_name
+                    or source.fixed_cast_rank != cost.cast_rank):
+                return False
+        elif source.fixed_cast_rank is not None:
+            return False
     channels = [ActionEconomyChannelCost(cost_type="reactions", amount=1)]
-    if cost.free_grant_id is None:
+    if cost.free_grant_id is None and cost.resource_name is None:
         channels.append(
             ActionEconomyChannelCost(
                 cost_type=spell_slot_cost_type(cost.cast_rank), amount=1

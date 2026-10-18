@@ -313,6 +313,7 @@ class FireSurface(AreaCondition):
             dice_numbers=2,
             damage_bonus=parts(damage_bonus),
             damage_type=DamageType.FIRE,
+            effect_origin=self.effect_origin,
         )
         damage_roll = damage.get_dice(AttackOutcome.HIT).roll
         entity.receive_damage(
@@ -323,6 +324,7 @@ class FireSurface(AreaCondition):
             damages=[damage],
             parent_event=parent_event.uuid,
             effect_id=self.content_ref.identity_key, independent_resolution=True,
+            effect_origin=self.effect_origin,
         )
 
     def _create_zone_entry_handler(self) -> EventHandler:
@@ -761,6 +763,7 @@ class ElectrifiedWater(WetAreaCondition):
             dice_numbers=1,
             damage_bonus=parts(damage_bonus),
             damage_type=DamageType.LIGHTNING,
+            effect_origin=self.effect_origin,
         )
         damage_roll = damage.get_dice(AttackOutcome.HIT).roll
         entity.receive_damage(
@@ -771,6 +774,7 @@ class ElectrifiedWater(WetAreaCondition):
             damages=[damage],
             parent_event=parent_event.uuid,
             effect_id=self.content_ref.identity_key, independent_resolution=True,
+            effect_origin=self.effect_origin,
         )
 
     def _apply_appearance_effect(

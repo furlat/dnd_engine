@@ -23,12 +23,9 @@ from dnd.core.content.registration import ContentDeclaration, creature_factory, 
 from dnd.core.creature_types import CreatureType, Size
 from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.entity import Entity
-from dnd.monsters.multiattack_definitions import (
-    BODY_MULTIATTACK_CONFIGURATIONS_BY_ID, MultiattackConfigurationDefinition,
-)
 from dnd.monsters.srd_roster import HitDieValue, create_creature_entity
 from dnd.monsters.traits import (
-    HitSaveRiderFeature, KeenPerceptionFeature, MultiattackAction, PackTacticsFeature,
+    HitSaveRiderFeature, KeenPerceptionFeature, MultiattackAction, MultiattackSteps, PackTacticsFeature,
     register_multiattack, register_pack_tactics,
 )
 
@@ -64,6 +61,7 @@ class BeastDefinition:
     visual_scale: float | None = None
     source_id: str = "wotc.srd_5_1_cc"
     adaptation: str = "Ordinary listed attack only; no charge dice, movement tracker or bonus follow-up."
+    multiattack: MultiattackSteps = ()
 
 
 BEAST_DEFINITIONS = (
@@ -85,7 +83,8 @@ BEAST_DEFINITIONS = (
         "ostrich_beak", adaptation="Ostrich artwork over Axe Beak's ground movement and Beak.", visual_scale=1.5),
     BeastDefinition("brown_bear", "Brown Bear", "SRD 5.1 p.369 Brown Bear", (19,10,16,2,13,7), Size.LARGE, 34,10,4,40,
         "brown_bear_claws", "brown_bear_bite", natural_armor=True, perception=True, keen_modes=("smell",),
-        adaptation="Bite then Claws Multiattack; printed +5 attack retained with explicit -1 item accuracy; climbing deferred.", visual_scale=1.7),
+        adaptation="Bite then Claws Multiattack; printed +5 attack retained with explicit -1 item accuracy; climbing deferred.", visual_scale=1.7,
+        multiattack=((WeaponSlot.MELEE_OFF, 1), (WeaponSlot.MELEE_MAIN, 1))),
     BeastDefinition("lion", "Lion", "SRD 5.1 p.383 Lion", (17,15,13,3,12,8), Size.LARGE, 26,10,4,50,
         "lion_claws", "lion_bite", perception=True, stealth_expertise=True, keen_modes=("smell",),
         knockdown_dc=13, pack_tactics=True,
@@ -95,7 +94,8 @@ BEAST_DEFINITIONS = (
         keen_modes=("smell",), knockdown_dc=13, darkvision=True, visual_scale=1.55),
     BeastDefinition("polar_bear", "Polar Bear", "SRD 5.1 p.386 Polar Bear", (20,10,16,2,13,7), Size.LARGE, 42,10,5,40,
         "polar_bear_claws", "polar_bear_bite", natural_armor=True, perception=True, keen_modes=("smell",),
-        adaptation="Bite then Claws Multiattack; swimming deferred, no invented cold resistance.", visual_scale=1.8),
+        adaptation="Bite then Claws Multiattack; swimming deferred, no invented cold resistance.", visual_scale=1.8,
+        multiattack=((WeaponSlot.MELEE_OFF, 1), (WeaponSlot.MELEE_MAIN, 1))),
     BeastDefinition("rhinoceros", "Rhinoceros", "SRD 5.1 p.388 Rhinoceros", (21,8,15,2,12,6), Size.LARGE, 45,10,6,40,
         "rhinoceros_gore", natural_armor=True, knockdown_dc=15, visual_scale=1.85),
     BeastDefinition("blue_raptor", "Blue Raptor", "SRD 5.2 p.341 Allosaurus", (19,13,17,2,12,5), Size.LARGE, 51,10,6,60,
@@ -104,7 +104,8 @@ BEAST_DEFINITIONS = (
         adaptation="5.2 numerical baseline; ordinary Claw hit DC14 STR Prone under 5.1 semantics, no run-up or bonus Bite.", visual_scale=1.8),
     BeastDefinition("stegosaurus", "Stegosaurus", "SRD 5.2 p.341 Ankylosaurus", (19,11,15,2,12,5), Size.HUGE, 68,12,8,30,
         "stegosaurus_tail", natural_armor=True, source_id="wotc.srd_5_2_cc",
-        adaptation="Two reach10 1d10+4 piercing Tail attacks; no automatic 5.2 prone rider.", visual_scale=2.35),
+        adaptation="Two reach10 1d10+4 piercing Tail attacks; no automatic 5.2 prone rider.", visual_scale=2.35,
+        multiattack=((WeaponSlot.MELEE_MAIN, 2),)),
     BeastDefinition("elephant", "Elephant", "SRD 5.1 pp.371–372 Elephant", (22,9,17,3,11,6), Size.HUGE, 76,12,8,40,
         "elephant_trunk", natural_armor=True, proficiency=2, knockdown_dc=12,
         adaptation="Gore's 3d8+6 becomes depicted bludgeoning Trunk Sweep with DC12 Prone; no Stomp/Charge chain.", visual_scale=2.4),
@@ -120,7 +121,6 @@ BEAST_DEFINITIONS = (
 
 
 def _declare_beast(definition: BeastDefinition) -> ContentDeclaration:
-    multiattack = BODY_MULTIATTACK_CONFIGURATIONS_BY_ID.get(definition.key)
     grants = tuple(CreaturePossessionGrant(
         item_id=f"weapon.creature.{key}", disposition=CreaturePossessionDisposition.INTRINSIC,
         equipment_slot=slot,
@@ -158,10 +158,8 @@ def _declare_beast(definition: BeastDefinition) -> ContentDeclaration:
             entity.add_condition(HitSaveRiderFeature(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid,
                 weapon_item_ids=(f"weapon.creature.{definition.primary}",),
                 save_dc=definition.knockdown_dc, condition_name="Prone"))
-        if multiattack is not None:
-            config = MultiattackConfigurationDefinition.model_validate(multiattack.definition_payload)
-            register_multiattack(entity, multiattack.descriptor.display_name,
-                tuple((step.weapon_slot, step.count) for step in config.steps), configured_action_ref=multiattack.ref)
+        if definition.multiattack:
+            register_multiattack(entity, definition.multiattack)
         return entity
 
     factory.__name__ = f"build_{definition.key}"
@@ -175,9 +173,9 @@ def _declare_beast(definition: BeastDefinition) -> ContentDeclaration:
     ) if enabled)
     dependencies += tuple(ContentDependency(relation=ContentDependencyRelation.GRANTS_FEATURE,
         target_ref=CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[feature].ref) for feature in feature_types)
-    if multiattack is not None:
-        dependencies += tuple(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION, target_ref=row.ref)
-            for row in (ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[MultiattackAction], multiattack))
+    if definition.multiattack:
+        dependencies += (ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,
+            target_ref=ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[MultiattackAction].ref),)
     declared = creature_factory(
         pack_id="content.neurodragon", content_id=f"creature.{definition.key}", version=1,
         parameters=BeastParameters,
