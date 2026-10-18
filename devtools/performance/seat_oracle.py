@@ -100,8 +100,10 @@ SPATIAL_CONTENT = TypeAdapter(SpatialEffectContent)
 SHEET = TypeAdapter(PlayerCharacterSheet)
 
 # Categories of a view, in report order.
+# An object's members are exact only when its row is sent (D2): the client's `object_members` is "as of the
+# last row", so they are no current perceived value here.
 CATEGORIES = ('cells', 'member_cells', 'entities', 'object_contacts', 'effects', 'lights', 'tiles', 'objects',
-              'object_members', 'connectors', 'actors')
+              'connectors', 'actors')
 # Values as of an event, not current state: what the client folds them into (the body) is compared instead.
 EVENT_TIME_CONDITION_FIELDS = ('event_uuid', 'resulting_max_hp', 'resulting_ac', 'resulting_stats',
                                'resulting_tile', 'resulting_item', 'consumed')
@@ -301,10 +303,6 @@ def client_view(state: PlayerState) -> View:
                   if position in state.tiles else None for position in sorted(visible)},
         'objects': {str(identity): OBJECT.dump_python(_perceived_object(state.objects[identity], visible, in_view,
             senses.spatial_effects, senses.objects), mode='json') for identity in sorted(in_view, key=str)},
-        # Members observing each object in contact (D2: bits of a boundary seen through its cells refresh with
-        # its rows, and E3-sensory keeps them exact between rows).
-        'object_members': {str(identity): state.object_members.get(identity)
-                           for identity in sorted(in_view & senses.objects.keys(), key=str)},
         'connectors': {str(row.connector_uuid): CONNECTOR.dump_python(row, mode='json')
                        for row in state.connectors.values() if all(tuple(point) in visible for point in row.endpoints)},
         'actors': actors,
@@ -464,9 +462,6 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
                   for position in sorted(visible)},
         'objects': {str(identity): OBJECT.dump_python(disclosed_world_object(world.objects, senses, identity, observed),
                                                       mode='json') for identity in sorted(observed, key=str)},
-        'object_members': {str(identity): sum(1 << index for index, member in enumerate(audience.observers)
-                               if object_observed(world.objects, members.get(member), identity))
-                           for identity in sorted(observed & senses.objects.keys(), key=str)},
         'connectors': {str(row.connector_uuid): CONNECTOR.dump_python(row, mode='json')
                        for row in map(project_world_connector, get_map().get_all_connectors())
                        if all(tuple(point) in visible for point in row.endpoints)},

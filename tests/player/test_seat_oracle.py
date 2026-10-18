@@ -128,13 +128,6 @@ def stale_connector(client: PlayerState) -> tuple[str, str, str | None]:
     return 'connectors', str(identity), None
 
 
-def wrong_members(client: PlayerState) -> tuple[str, str, str | None]:
-    """An object in contact attributed to members that do not observe it."""
-    identity = next(identity for identity in senses(client).objects if identity in client.objects)
-    client.object_members[identity] = client.object_members.get(identity, 1) << 1
-    return 'object_members', str(identity), ''
-
-
 @dataclass(frozen=True)
 class Fault:
     name: str
@@ -143,8 +136,7 @@ class Fault:
 
 FAULTS = (Fault('ghost body', ghost), Fault('drifted hit points', drifted_hit_points),
           Fault('lost body', lost_body), Fault('lost tile', lost_tile), Fault('ghost object', ghost_object),
-          Fault('stale effect', stale_effect), Fault('stale connector', stale_connector),
-          Fault('wrong object members', wrong_members))
+          Fault('stale effect', stale_effect), Fault('stale connector', stale_connector))
 
 
 @pytest.mark.parametrize('fault', FAULTS, ids=lambda fault: fault.name)

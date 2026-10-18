@@ -17,7 +17,7 @@ static rows it was sent). The client's memory is never read: what it holds follo
 - static rows (a tile's surface and name, a residue material, an object's look) travel once per seat.
 """
 
-from collections.abc import Collection, Iterable, Mapping
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -149,7 +149,10 @@ def disclosed_world_object(world: WorldFacts, view: SensesSnapshot, identity: UU
 
 def object_members(world: WorldFacts, perception: AudiencePerception, audience: PlayerAudience,
                    identity: UUID) -> int | None:
-    """Which observers observe the object (bit i: `audience.observers[i]`); None for a one-observer seat."""
+    """Which observers observe the object (bit i: `audience.observers[i]`); None for a one-observer seat.
+
+    Exact whenever an object row is sent; between rows the client holds the bits of its last row (D2), and a
+    contact's members are the sensory contact rows' (`object_contact_members`, E3-sensory)."""
     if len(audience.observers) == 1:
         return None
     return sum(1 << index for index, observer in enumerate(audience.observers)
@@ -159,11 +162,10 @@ def object_members(world: WorldFacts, perception: AudiencePerception, audience: 
 @dataclass(frozen=True, slots=True)
 class SensedWorld:
     """A member's sensory occurrence, as the seat's world publication reads it: the object contacts and spatial
-    effects it changed or removed, and the members observing each of those objects before it."""
+    effects it changed or removed."""
 
     contacts: frozenset[UUID]
     effects: frozenset[UUID]
-    members_before: Mapping[UUID, int | None]
 
 
 def _tile_part(tile: WorldTileState) -> tuple[str, ...]:
@@ -304,13 +306,6 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
         if identity in written or identity not in world.objects
         or any(cell_in(visible, cell) for cell in placement_support_cells(world.objects[identity].placement))),
         key=str)
-    if sensed is not None and len(audience.observers) > 1:
-        sent_rows = whole | changed
-        for identity in sorted(contacts & after - sent_rows, key=str):
-            members = object_members(world, perception, audience, identity)
-            if members != sensed.members_before.get(identity):
-                object_rows.append(ObjectRow(item_uuid=identity, members=members))
-        object_rows.sort(key=lambda row: str(row.item_uuid))
     observed.difference_update(candidates)
     observed.update(after)
 

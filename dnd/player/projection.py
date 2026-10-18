@@ -63,8 +63,8 @@ from dnd.player.event_record import upgrade_recorded_resolutions, upgrade_record
 from dnd.player.static_sent import StaticSent, merge_static_sent
 from dnd.player.reduction import (apply_record_fact, change_membership,
     commit_current, fold_senses, observe_body, observed_actor, occurrence_order)
-from dnd.player.world_publication import (SensedWorld, disclosed_world_object, object_members, object_observed,
-    observed_remnant, seat_world_update)
+from dnd.player.world_publication import (SensedWorld, disclosed_world_object, object_observed, observed_remnant,
+    seat_world_update)
 from dnd.player.compatibility import legacy_damage_reference
 from dnd.world_facts import WorldFacts, apply_world_fact
 
@@ -1232,12 +1232,9 @@ def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", w
             if source not in walk.published_sources)
         walk.published_sources.update(sources)
         records = tuple(record for source in sources if (record := folded.get(source)) is not None)
-        contacts = frozenset(event.object_contacts_changed) | event.object_contacts_removed
-        members_before = {identity: object_members(world, composition.perception, audience, identity)
-            for identity in contacts if identity in state.observed_objects and identity in world.objects}
         fold_senses(state.remembered, event, cursor=group.indexes[event.uuid], audience_composition=composition)
-        sensed = SensedWorld(contacts, frozenset(event.spatial_effects_changed) | event.spatial_effects_removed,
-            members_before)
+        sensed = SensedWorld(frozenset(event.object_contacts_changed) | event.object_contacts_removed,
+            frozenset(event.spatial_effects_changed) | event.spatial_effects_removed)
     view = composition.view
     if view is None:
         return
