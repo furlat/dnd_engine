@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Annotated, Tuple, Optional, TypedDict
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, with_config
 from dnd.types.materials import TileSurface
 from dnd.types.world import LightLevel
 from dnd.types.residues import TileResidueState
@@ -248,6 +248,7 @@ class WorldTileChanges(TypedDict, total=False):
     residues: tuple[TileResidueState, ...]
 
 
+@with_config(ConfigDict(extra="forbid"))
 class KeyedTileFields(TypedDict, total=False):
     """The Tile fields a keyed change can carry: present fields replace the recorded values."""
 
@@ -261,7 +262,8 @@ class KeyedResidueChange(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     residue_id: str
-    # The contribution row the deposit appended or grew; None when no contribution row changed.
+    # The contribution row the deposit appended or grew; None when no contribution row changed. The fold
+    # applies the whole material `state`; the key is for E3-world's per-contribution disclosure.
     contribution_index: Optional[StrictInt] = Field(default=None, ge=0)
     # The material's after-value on the tile; None once it is removed.
     state: Optional[TileResidueState] = None

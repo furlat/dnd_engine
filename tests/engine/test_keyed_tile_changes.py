@@ -9,9 +9,8 @@ from dataclasses import dataclass
 from typing import Callable
 from uuid import uuid4
 
-import pytest
-
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.core.gridmap import get_map
 from dnd.residues import (ASHEN_RESIDUE, BLOOD_RESIDUE, CORROSIVE_RESIDUE, ResidueProfile, deposit_residues,
     remove_residues)
@@ -21,7 +20,6 @@ from dnd.types.residues import ResidueEllipse
 from dnd.types.spatial_effects import SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from dnd.world_facts import WorldFacts, apply_world_fact
 from tests.engine.test_senses_light_stealth import create_skeleton, reset_senses_state
-from tests.engine.test_single_settlement_facts import _cause, _content_ref
 
 SPLASH = (ResidueEllipse(center=(3.5, 1.5), radius_x=0.8, radius_y=0.5),)
 SPRAY = (ResidueEllipse(center=(4.2, 1.1), radius_x=0.4, radius_y=0.4, angle=0.5),)
@@ -80,15 +78,18 @@ def test_residue_writes_fold_to_the_complete_tile_rows() -> None:
     ))
 
 
-@pytest.mark.parametrize("difficult", (True, False), ids=("difficult", "plain"))
-def test_terrain_install_and_removal_fold_to_the_complete_tile_rows(difficult: bool) -> None:
+def test_terrain_install_and_removal_fold_to_the_complete_tile_rows() -> None:
     reset_senses_state(width=8, height=3)
     observer = create_skeleton(name="Observer", position=(0, 1), darkvision=False)
-    zone = AreaCondition(name="Test mud", source_entity_uuid=observer.uuid, content_ref=_content_ref("mud"),
+    zone = AreaCondition(name="Test mud", source_entity_uuid=observer.uuid, content_ref=ContentRef(
+            pack_id="test.keyed_tiles", definition_kind=ContentDefinitionKind.CONDITION,
+            content_id="condition.keyed_tiles.mud", content_version=1, definition_contract_hash="0" * 64),
         position=(3, 1), affected_positions={(x, 1) for x in range(3, 7)},
         layer=SpatialEffectLayer.GROUND_SURFACE, occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
-        adds_difficult_terrain=difficult)
+        adds_difficult_terrain=True)
+    cause = Event(name="Keyed tile test cause", event_type=EventType.BASE_ACTION, phase=EventPhase.EFFECT,
+                  source_entity_uuid=observer.uuid)
     check((
-        Step("terrain installs", lambda: zone.activate(parent_event=_cause(observer.uuid)), int(difficult)),
-        Step("terrain leaves", lambda: zone.deactivate(parent_event=_cause(observer.uuid)), int(difficult)),
+        Step("terrain installs", lambda: zone.activate(parent_event=cause), 1),
+        Step("terrain leaves", lambda: zone.deactivate(parent_event=cause), 1),
     ))

@@ -94,7 +94,7 @@ def actor_fact_change(event: Event, condition: ConditionFact | None = None) -> A
         case EntityFactionChangedEvent():
             return ActorFactChange(owner, {"faction": event.faction_after})
         case ItemHoldingsReleasedEvent():
-            return ActorFactChange(owner, dropped_item=event.item_uuid)
+            return ActorFactChange(owner, released_by_owner=event.item_uuid)
         case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT):
             slot: str | None = None
             if event.location is ItemLocation.EQUIPMENT:
@@ -106,9 +106,9 @@ def actor_fact_change(event: Event, condition: ConditionFact | None = None) -> A
                 values["armor_class"] = event.entity_armor_class_after
             # One location has one holder: the item leaves every other holder.
             return ActorFactChange(owner, values, held_item=HeldItem(event.item_state, slot),
-                                   released_item=event.item_state.item_uuid)
+                                   released_by_others=event.item_state.item_uuid)
         case ItemLocationStateEvent():
-            return ActorFactChange(None, released_item=event.item_state.item_uuid)
+            return ActorFactChange(None, released_by_others=event.item_state.item_uuid)
         case SpatialChangeEvent(change_type=SpatialChangeType.ENTITY_ENTERED | SpatialChangeType.ENTITY_LEFT):
             values = {}
             if event.change_type is SpatialChangeType.ENTITY_ENTERED:
@@ -177,8 +177,8 @@ def _owner_after(actor: ActorState, change: ActorFactChange) -> ActorState:
             members[member.condition_uuid] = member
         conditions = tuple(members.values())
     items, equipment = actor.items, actor.equipment
-    if change.dropped_item is not None:
-        items, equipment = _without_item(items, equipment, change.dropped_item)
+    if change.released_by_owner is not None:
+        items, equipment = _without_item(items, equipment, change.released_by_owner)
     if (used := change.used_item) is not None:
         if used.destroyed:
             items, equipment = _without_item(items, equipment, used.item_uuid)
@@ -204,7 +204,7 @@ def apply_actor_fact_change(actors: dict[UUID, ActorState], change: ActorFactCha
     replaced item takes its copy. Holders are those of this set: each fold's own holdings decide.
     """
     written: list[UUID] = []
-    if (released := change.released_item) is not None:
+    if (released := change.released_by_others) is not None:
         for identity, actor in tuple(actors.items()):
             if identity != change.owner_uuid and any(item.item_uuid == released for item in actor.items):
                 items, equipment = _without_item(actor.items, actor.equipment, released)

@@ -108,10 +108,10 @@ class ActorFactChange:
     """One committed event's actor change (plan §4): what it writes to its owner, and how the item it moves
     or changes leaves or changes in the actors holding it. Data only; `apply_actor_fact_change` folds it.
 
-    Item operations. The owner's: `held_item` upserts the item, takes its layers off and puts it on its slot;
-    `used_item` writes charges and stack only, to the copy the owner holds; `dropped_item` leaves the
-    owner's inventory and layers. Other holders': `released_item` leaves every holder but the owner;
-    `replaced_item` replaces the copy of every actor holding it.
+    Item operations. The owner's: `held_item` upserts the item, takes it out of every equipment slot and
+    equips it on its slot; `used_item` writes charges and stack only, to the copy the owner holds;
+    `released_by_owner` leaves the owner's inventory and equipment. Other holders': `released_by_others`
+    leaves every holder but the owner; `replaced_item` replaces the copy of every actor holding it.
     """
 
     owner_uuid: UUID | None
@@ -120,6 +120,6 @@ class ActorFactChange:
     conditions_removed: tuple[UUID, ...] = ()
     held_item: HeldItem | None = None
     used_item: ItemResources | None = None
-    dropped_item: UUID | None = None
-    released_item: UUID | None = None
+    released_by_owner: UUID | None = None
+    released_by_others: UUID | None = None
     replaced_item: ItemPresentationState | None = None

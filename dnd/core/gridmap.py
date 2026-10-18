@@ -2013,6 +2013,8 @@ class GridMap:
 
     def _keyed_tile_change_after(self, change: KeyedTileChange) -> KeyedTileChange:
         """The same keys, with the tile's after-values read now (plan Q4 (W))."""
+        if change.fields.keys() - {"walking_cost", "condition_names"}:
+            raise ValueError(f"No completion reader for tile fields {sorted(change.fields)}")
         tile = self._tiles[change.position]
         fields: KeyedTileFields = {}
         if "walking_cost" in change.fields:
