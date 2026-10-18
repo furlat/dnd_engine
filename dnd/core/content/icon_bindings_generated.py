@@ -1020,6 +1020,12 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'action.extra-attack',
         '6e5987a53a1f60dfe730d9748a36a4a0a50e54f93c682ea5048d18280ee29353',
     ),
+    'content.srd_5_1_cc:action:action.monster.multiattack@1#b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0': (
+        'b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0',
+        'bind',
+        'ui.filter-attacks',
+        '00b85f45f2ecb784e0fb1c79b00a01fee95bbc537fe1689260d29ac862f61bbc',
+    ),
     'content.srd_5_1_cc:action:action.monster.natural_attack@1#b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0': (
         'b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0',
         'bind',

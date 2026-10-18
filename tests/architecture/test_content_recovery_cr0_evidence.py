@@ -1401,8 +1401,9 @@ def test_frozen_icon_snapshot_differs_only_by_explicit_retirements() -> None:
     assert len(retired) == 3 + len(retired_multiattacks)
     retained = [row for row in frozen["definitions"] if row not in retired]
     added = [row for row in current["definitions"]
-             if row["content_ref"]["content_id"] == "condition.spell.charm_person.effect"]
-    assert len(added) == 1 and added[0]["icon_key"] == "spell.charm-person"
+             if row["content_ref"]["content_id"] in {"condition.spell.charm_person.effect", "action.monster.multiattack"}]
+    assert [(row["content_ref"]["content_id"], row["icon_key"]) for row in added] == [
+        ("action.monster.multiattack", "ui.filter-attacks"), ("condition.spell.charm_person.effect", "spell.charm-person")]
     assert [row for row in current["definitions"] if row not in added] == retained
     assert {key: value for key, value in current.items() if key not in ("definitions", "binding_digest")} == {
         key: value for key, value in frozen.items() if key not in ("definitions", "binding_digest")}

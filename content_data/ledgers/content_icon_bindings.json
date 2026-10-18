@@ -1,6 +1,6 @@
 {
   "asset_index_digest": "3bd799f4ad12eb9d097f1a9c44790a2d0d0e75a8ee8b83e85ababce79aada632",
-  "binding_digest": "37699cd835a59af99e3288b74d4547b578fc8980a88df00241b15a7b214302fd",
+  "binding_digest": "20d4f07d7d49d0c518f57f6a79935429fa7812dc9550fdc43282bae00e3f6f0a",
   "definitions": [
     {
       "asset_sha256": "540da9d7cb94419501c0c8c47d73ca05d826d8d70e2f18c6adae5e13e4c92892",
@@ -2353,6 +2353,20 @@
       "evidence_kind": "runtime_action_class",
       "evidence_token": "dnd.classes.fighter.ExtraAttack",
       "icon_key": "action.extra-attack"
+    },
+    {
+      "asset_sha256": "00b85f45f2ecb784e0fb1c79b00a01fee95bbc537fe1689260d29ac862f61bbc",
+      "content_ref": {
+        "content_id": "action.monster.multiattack",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "authored_presentation",
+      "evidence_token": "catalog:content.srd_5_1_cc:action:action.monster.multiattack@1",
+      "icon_key": "ui.filter-attacks"
     },
     {
       "asset_sha256": "08586fb57222f0d99a818fcf6cb3f8ffc1f5bd7dc6c0f46b08855d4aff10b30f",

@@ -182,9 +182,9 @@ _MULTIATTACK_SLOT_LABELS = {
 
 
 def multiattack_template_name(attacks: MultiattackSteps) -> str:
-    """The template's stable identity: its step list by slot, so a creature's Multiattacks stay distinct
-    whatever it holds."""
-    return "Multiattack: " + ", ".join(f"{count} × {_MULTIATTACK_SLOT_LABELS[slot]}" for slot, count in attacks)
+    """The template's stable identity, an ASCII command token: its step list by slot, so a creature's
+    Multiattacks stay distinct whatever it holds."""
+    return "Multiattack: " + ", ".join(f"{count} x {_MULTIATTACK_SLOT_LABELS[slot]}" for slot, count in attacks)
 
 
 def register_multiattack(
@@ -628,14 +628,14 @@ class MultiattackAction(BaseAction):
                 "use_attack_substitution": any(facet.key == "form" for facet in selection.facets)}
 
     def discovery_label(self) -> str:
-        """The menu label: each step's count and what the actor now holds in that slot."""
+        """The menu label: each step's count and what the actor now holds in that slot (the slot when empty)."""
         actor = Entity.get(self.source_entity_uuid)
         if actor is None:
             return self.name
         steps = []
         for slot, count in self.attack_sequence:
             weapon = actor.equipment.get_weapon(slot)
-            steps.append(f"{count} × {weapon.name if weapon is not None else 'Unarmed Strike'}")
+            steps.append(f"{count} × {weapon.name if weapon is not None else _MULTIATTACK_SLOT_LABELS[slot]}")
         return "Multiattack: " + ", ".join(steps)
 
     def _selected_attacks(self, target_uuid: Optional[UUID]) -> list[Attack]:
@@ -1877,14 +1877,6 @@ class WightLifeDrain(NaturalAttack):
                 victim.add_condition(LifeDrainReduction(source_entity_uuid=owner.uuid,
                     target_entity_uuid=victim.uuid,amount=result.total_damage),parent_event=result)
         return result
-
-
-def wight_melee_multiattack(owner_uuid: UUID) -> MultiattackAction:
-    """Author the SRD two-longsword action with its one Life Drain choice."""
-    return MultiattackAction(source_entity_uuid=owner_uuid,
-        attack_sequence=((WeaponSlot.MELEE_MAIN,2),),
-        attack_replacement=AttackReplacement(sequence_index=0, weapon_kind=WeaponKind.LONGSWORD,
-            action=WightLifeDrain(source_entity_uuid=owner_uuid)))
 
 
 def register_assassinate(entity: Entity) -> None:

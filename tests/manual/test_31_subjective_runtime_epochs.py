@@ -912,11 +912,11 @@ def test_srd_uniform_multiattack_epoch_exposes_repeated_profile() -> None:
         scout.get_available_actions(),
         42,
     )
-    longbow = next(row for row in affordances.entity_actions if row.template_name == "Multiattack: 2 × ranged")
+    longbow = next(row for row in affordances.entity_actions if row.template_name == "Multiattack: 2 x ranged")
     semantics = affordances.semantics_for(longbow)
 
     assert longbow.outcome_profile is not None
-    assert longbow.outcome_profile.effect_id == "multiattack.multiattack_2_ranged"
+    assert longbow.outcome_profile.effect_id == "multiattack.multiattack_2_x_ranged"
     assert longbow.outcome_profile.applications == 2
     assert longbow.outcome_profile.damage_rolls[0].die_size == 8
     assert ActionTag.ATTACK_WEAPON in semantics.tags
