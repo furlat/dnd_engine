@@ -73,7 +73,7 @@ Its condition names start empty, and its rows in the same update fill them.
 
 ## 3. Fold order of one update
 
-1. **Static rows.** Store `tile_statics` by position (the latest one wins), and `residue_materials` and `object_looks` by id. They are never pruned. A look or a material never changes for its id.
+1. **Static rows.** Store `tile_statics` by position (the latest one wins), `residue_materials` and `object_looks` by id, and `boundary_structures` by content id. They are never pruned. A look, a material or a structure never changes for its id (an id naming another value is an error).
 2. **Removals.** Pop `objects_removed` (with their members) and `connectors_removed`. Each names something the client holds.
 3. **Reset `entered`.** For every entered cell:
    - drop its tile and rebuild it from the columns;
@@ -81,7 +81,6 @@ Its condition names start empty, and its rows in the same update fill them.
    - remove the cell from every kept object's `construction_suppressions` positions;
    - drop every connector with an endpoint there.
 4. **Object rows, in order.**
-   - A row without `state` must name a held object; it sets only `members`.
    - Otherwise the item is the look joined with the state. The placement is the row's, or the held one.
    - Residues: the row's residues lie on its `observed_faces`. Held faces outside `observed_faces` are kept, and residues are united by `condition_uuid`. Drop empty ones and sort by `condition_uuid` as a string.
    - Suppressions: the row's providers replace the held rows of those providers, and the other held rows stay after them.
@@ -118,7 +117,6 @@ bits of the last row. The members holding a contact come from the sensory contac
 
 ## 6. Walk groups
 
-Roots whose versions interleave arrive as one `PlayerLineage`. A root that completes inside another
-root's execution is a parentless lineage inside that root's interval, and the group's nodes are in native
-order. Fold a group's nodes in occurrence order (as for any lineage). A branch of the root keeps the
+Roots whose versions interleave arrive as one `PlayerLineage`, named by the root completing last: the other
+roots are parentless lineages inside the group, whose nodes are in native order. Fold a group's nodes in occurrence order (as for any lineage). A branch of the root keeps the
 parentless lineages inside its interval (`lineage_branch`). Vector: `groups/g1_*.json`.

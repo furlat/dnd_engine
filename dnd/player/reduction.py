@@ -24,7 +24,7 @@ from dnd.player.facts import (
     VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact, PlayerObject, StaticStore,
 )
 from dnd.player.world_columns import join_floor_item, unpack_placement, unpack_tile_columns
-from dnd.player.world_reduction import fold_world_update
+from dnd.player.world_reduction import fold_static_rows, fold_world_update
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -145,10 +145,7 @@ def stage_actors(target: PlayerState, observations: tuple[PlayerObservation, ...
 def stage_static(target: PlayerState, updates: tuple[WorldUpdate, ...]) -> None:
     """The updates' static rows, which never change for their id: a partial fold of a group reads them."""
     for update in updates:
-        target.static.tiles.update((row.position, row) for row in update.tile_statics)
-        target.static.residues.update((row.residue_id, row) for row in update.residue_materials)
-        target.static.object_looks.update((row.item_uuid, row) for row in update.object_looks)
-        target.static.boundary_structures.update((row.structure_id, row.structure) for row in update.boundary_structures)
+        fold_static_rows(target.static, update)
 
 
 def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:

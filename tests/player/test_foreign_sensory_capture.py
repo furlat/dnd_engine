@@ -232,7 +232,7 @@ def test_split_seat_application_lineages_equal_independent_full_capture(session)
             if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)))
     actual = capture_application_operation(runtimes, operation, catalog)
     context = capture_context(next(iter(references.values())).capture, operation.roots)
-    # The reference captures every seat's full payloads, then projects each root for all seats of its session.
+    # The reference captures every seat's full payloads, then projects each walk group for all seats of its session.
     captured = {}
     for seat, reference in references.items():
         known = seat_capture_inputs(reference)
@@ -241,10 +241,10 @@ def test_split_seat_application_lineages_equal_independent_full_capture(session)
             known_connector_uuids=known.connectors, known_content_ids=known.content_ids, context=context)
     shared = next(iter(references.values())).session
     expected = {seat: [] for seat in references}
-    for root in range(len(operation.roots)):
+    for group in range(len(context.groups)):
         for seat, packet in zip(references, project_lineages(shared,
                 tuple(reference.projection for reference in references.values()),
-                tuple(rows[root] for rows in captured.values())), strict=True):
+                tuple(rows[group] for rows in captured.values())), strict=True):
             if packet is not None:
                 expected[seat].append(packet)
     for seat in references:

@@ -1,10 +1,11 @@
 """A seat's world publication (player schema 16): what it perceives of tiles, objects, contents and connectors
 change at one occurrence.
 
-Stateless functions of the session world as of the occurrence (`WorldFacts`), what the occurrence wrote
-(`AppliedWorldFact`, read as it is: this module never compares world states), the seat's composed view before
-and after it and the seat's knowledge (the objects it observes, the containers whose contents it sees and the
-static rows it was sent). The client's memory is never read: what it holds follows from the rules
+Functions of the session world as of the occurrence (`WorldFacts`), what the occurrence wrote (`AppliedWorldFact`,
+which names the records: this module never compares world states), the seat's composed view before and after it
+and the seat's knowledge (the objects it observes, the containers whose contents it sees and the static rows it
+was sent), which `seat_world_update` advances. The client's memory is never read: what it holds follows from the
+rules
 (EVENT_NATIVE_PUBLICATION_PLAN_2026-10-18 §3.2-§3.5; world brief §2-§3):
 
 - a record perceived before and after the occurrence travels as its keyed change;
@@ -31,7 +32,8 @@ from dnd.player.facts import (BoundaryStructureStatic, ContainedItem, ContainerC
 from dnd.player.static_sent import StaticSent
 from dnd.player.world_columns import pack_placement, pack_tile_columns, split_floor_item
 from dnd.types.cells import EMPTY_CELLS, CellMask, cell_in
-from dnd.types.event_facts import AppliedWorldFact, WorldConnectorState, WorldTileChanges, WorldTileState
+from dnd.types.event_facts import (AppliedWorldFact, WorldConnectorState, WorldTileChanges, WorldTileState,
+    tile_own_condition_names, tile_residue_names)
 from dnd.types.residues import ObjectResidueState, TileResidueState
 from dnd.types.senses import SensesSnapshot
 from dnd.types.world import CardinalDirection
@@ -159,11 +161,6 @@ class SensedWorld:
     effects: frozenset[UUID]
 
 
-def _tile_part(tile: WorldTileState) -> tuple[str, ...]:
-    """A tile's own condition names: its residues' names follow them (`Tile.condition_names`)."""
-    return tile.condition_names[:len(tile.condition_names) - len(tile.residues)]
-
-
 def _whole_residue(position: Position, residue: TileResidueState) -> ResidueRow:
     return ResidueRow(position=position, residue_id=residue.residue_id, condition_uuid=residue.condition_uuid,
         amount=residue.amount, contributions=tuple(ContributionRow(index=index, contribution=row)
@@ -188,9 +185,8 @@ def _material(rows: _Rows, tile: WorldTileState, residue_id: str, sent: StaticSe
     if index is None:
         raise ValueError(f"A residue material's static row is read from a tile holding it ({residue_id})")
     residue = tile.residues[index]
-    rows.residue_materials.append(ResidueMaterial(residue_id=residue_id,
-        name=tile.condition_names[len(_tile_part(tile)) + index], description=residue.description,
-        max_amount=residue.max_amount))
+    rows.residue_materials.append(ResidueMaterial(residue_id=residue_id, name=tile_residue_names(tile)[index],
+        description=residue.description, max_amount=residue.max_amount))
     pending.residues.add(residue_id)
 
 
@@ -253,15 +249,16 @@ def _scalars(changes: WorldTileChanges, keys: Iterable[str], tile: WorldTileStat
 
 def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[AppliedWorldFact, ...], before: CellMask,
                       view: SensesSnapshot, perception: AudiencePerception, audience: PlayerAudience,
-                      sensed: SensedWorld | None, observed: set[UUID], granted: set[UUID], sent: StaticSent,
+                      sensed: SensedWorld | None, *, observed: set[UUID], granted: set[UUID], sent: StaticSent,
                       pending: StaticSent) -> WorldUpdate | None:
     """One seat's world update at an occurrence, or None when it perceives no world change there.
 
     `applied` is what the occurrence wrote (for a member's sensory occurrence, what the changes it saw happen
     wrote, folded at their own versions): it names the records written, whose values are read from `world` as
     of the occurrence. `before` is the composed view's visible cells before it, `view` the composed view after
-    it. `observed` and `granted` (the seat's observed objects and seen contents) become the seat's perception
-    after it; static rows sent here join `pending` (the walk's, merged into `sent` once its group is emitted).
+    it. It writes the seat knowledge it is given: `observed` and `granted` (the seat's observed objects and seen
+    contents) become the seat's perception after it, and the static rows sent here join `pending` (the walk's,
+    merged into `sent` once its group is emitted, never mid-walk: plan §3.5).
     """
     visible = view.visible
     replaced = set().union(*(row.replaced for row in applied))
@@ -283,8 +280,8 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
             rows.tile_statics.append(TileStatic(position=position, tile_uuid=tile.tile_uuid, surface=tile.surface,
                 name=tile.name))
             pending.tiles.add(tile.tile_uuid)
-        if _tile_part(tile):
-            tile_conditions[position] = _tile_part(tile)
+        if own := tile_own_condition_names(tile):
+            tile_conditions[position] = own
         for residue in tile.residues:
             _material(rows, tile, residue.residue_id, sent, pending)
             residues[(position, residue.residue_id)] = _whole_residue(position, residue)
@@ -363,12 +360,12 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
                 connectors[row.connector_uuid] = row
     connectors_removed = []
     for record in applied:
-        for identity, previous, _ in record.connectors:
+        for identity, previous in record.connectors:
             current = world.connectors.get(identity)
             if current is not None and all(cell_in(visible, point) for point in current.endpoints):
                 connectors[identity] = current
             elif (previous is not None and identity not in connectors_removed
-                  and all(cell_in(before, point) for point in previous.endpoints)):
+                  and all(cell_in(before, point) and cell_in(visible, point) for point in previous.endpoints)):
                 connectors.pop(identity, None)
                 connectors_removed.append(identity)
 
@@ -377,8 +374,9 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
     light: dict[Position, int] = {}
 
     def perceived(position: Position) -> WorldTileState | None:
-        """A tile the client holds as of the change (seen before the occurrence, not entering), as of now."""
-        return world.tiles.get(position) if position not in entered and cell_in(before, position) else None
+        """A tile seen before and after the occurrence (and not entering), as of now; leaving sends nothing."""
+        return (world.tiles.get(position) if position not in entered and cell_in(before, position)
+                and cell_in(visible, position) else None)
 
     # Each touched material: whether the client held it before this update (its first change here is not a new
     # deposit) and whether it was removed in between.
@@ -394,15 +392,15 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
                 if residue.contribution_index is not None:
                     indexes.add(residue.contribution_index)
                 materials[key] = (held, indexes, removed_between or residue.state is None)
-        for position, fields in record.tile_fields:
+        for position, keys in record.tile_fields:
             if (tile := perceived(position)) is not None:
-                _scalars(tile_changes.setdefault(position, WorldTileChanges()), fields, tile)
-        for position, _ in record.light:
+                _scalars(tile_changes.setdefault(position, WorldTileChanges()), keys, tile)
+        for position in record.light:
             if (tile := perceived(position)) is not None:
                 light[position] = tile.resolved_light.value
-        for position, _ in record.tile_conditions:
+        for position in record.tile_conditions:
             if (tile := perceived(position)) is not None:
-                tile_conditions[position] = _tile_part(tile)
+                tile_conditions[position] = tile_own_condition_names(tile)
     for (position, residue_id), (held, indexes, removed_between) in materials.items():
         tile = world.tiles[position]
         now = next((row for row in tile.residues if row.residue_id == residue_id), None)

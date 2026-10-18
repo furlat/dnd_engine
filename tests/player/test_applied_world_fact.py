@@ -37,8 +37,9 @@ def test_a_light_fact_records_every_after_value_it_carries_on_a_tile():
         light_level_map={"1,0": LightLevel.DIM_LIGHT.value, "2,0": LightLevel.BRIGHT_LIGHT.value,
                          "99,0": LightLevel.DIM_LIGHT.value})
     applied = apply_world_fact(world, light)
-    # (2, 0) already held bright light: the fact's own after-value is still recorded; (99, 0) is no tile.
-    assert applied == AppliedWorldFact(light=(((1, 0), LightLevel.DIM_LIGHT), ((2, 0), LightLevel.BRIGHT_LIGHT)))
+    # (2, 0) already held bright light: the fact still wrote it; (99, 0) is no tile.
+    assert applied == AppliedWorldFact(light=frozenset({(1, 0), (2, 0)}))
+    assert world.tiles[(1, 0)].resolved_light is LightLevel.DIM_LIGHT
     assert apply_world_fact(world, light) == applied
 
 
@@ -46,7 +47,8 @@ def test_tile_scalars_replacements_and_their_static_part():
     world = folded()
     cost = spatial(event_type=EventType.SPATIAL_TILE_CHANGED, change_type=SpatialChangeType.TILE_CHANGED,
         position=(1, 0), tile_walking_cost=3)
-    assert apply_world_fact(world, cost) == AppliedWorldFact(tile_fields=(((1, 0), {"walking_cost": 3}),))
+    assert apply_world_fact(world, cost) == AppliedWorldFact(tile_fields=(((1, 0), frozenset({"walking_cost"})),))
+    assert world.tiles[(1, 0)].walking_cost == 3
     replacement = world.tiles[(2, 0)].model_copy(update={"tile_uuid": uuid4(), "name": "Rubble",
         "surface": TileSurface(base_material=Material.WOOD)})
     whole = spatial(event_type=EventType.SPATIAL_TILE_CHANGED, change_type=SpatialChangeType.TILE_CHANGED,

@@ -83,23 +83,29 @@ class _Written:
     """One fold's writes as it makes them: the parts of its `AppliedWorldFact` a case fills."""
 
     tiles: list[KeyedTileChange] = field(default_factory=list)
-    tile_fields: list[tuple[tuple[int, int], KeyedTileFields]] = field(default_factory=list)
+    tile_fields: list[tuple[tuple[int, int], frozenset[str]]] = field(default_factory=list)
     new_residues: set[tuple[tuple[int, int], str]] = field(default_factory=set)
-    light: dict[tuple[int, int], LightLevel] = field(default_factory=dict)
-    tile_conditions: dict[tuple[int, int], tuple[str, ...]] = field(default_factory=dict)
+    light: set[tuple[int, int]] = field(default_factory=set)
+    tile_conditions: set[tuple[int, int]] = field(default_factory=set)
     replaced: set[tuple[int, int]] = field(default_factory=set)
     objects: set[UUID] = field(default_factory=set)
     moved: set[UUID] = field(default_factory=set)
     contents: dict[UUID, tuple[list[UUID], list[UUID]]] = field(default_factory=dict)
-    connectors: list[tuple[UUID, WorldConnectorState | None, WorldConnectorState | None]] = field(default_factory=list)
+    connectors: list[tuple[UUID, WorldConnectorState | None]] = field(default_factory=list)
 
-    def applied(self) -> AppliedWorldFact:
-        return AppliedWorldFact(tiles=tuple(self.tiles), tile_fields=tuple(self.tile_fields),
-            new_residues=frozenset(self.new_residues),
-            light=tuple(self.light.items()), tile_conditions=tuple(self.tile_conditions.items()),
-            replaced=frozenset(self.replaced), objects=frozenset(self.objects), moved=frozenset(self.moved),
-            contents=tuple((owner, tuple(added), tuple(removed)) for owner, (added, removed) in self.contents.items()),
-            connectors=tuple(self.connectors))
+
+# The changeable scalars a condition's tile after-value carries.
+_TILE_SCALARS = frozenset({"walking_cost", "flying_cost", "swimming_cost", "burrowing_cost", "blocks_optics",
+    "blocks_propagation", "elevation_steps", "surface_kind", "slope_axis", "default_light"})
+
+
+def _applied(written: _Written) -> AppliedWorldFact:
+    return AppliedWorldFact(tiles=tuple(written.tiles), tile_fields=tuple(written.tile_fields),
+        new_residues=frozenset(written.new_residues), light=frozenset(written.light),
+        tile_conditions=frozenset(written.tile_conditions), replaced=frozenset(written.replaced),
+        objects=frozenset(written.objects), moved=frozenset(written.moved),
+        contents=tuple((owner, tuple(added), tuple(removed)) for owner, (added, removed) in written.contents.items()),
+        connectors=tuple(written.connectors))
 
 
 def _put_object(world: WorldFacts, identity: UUID, value: WorldObjectState | None, written: _Written, *,
@@ -220,14 +226,14 @@ def apply_world_fact(
     written = _Written()
     if condition is not None and condition.resulting_tile is not None:
         _resulting_tile(world, condition.resulting_tile, written)
-        return written.applied()
+        return _applied(written)
     if condition is not None and condition.resulting_item is not None:
         previous = world.objects.get(condition.resulting_item.item_uuid)
         if previous is None:
             return None
         _put_object(world, condition.resulting_item.item_uuid,
                     previous.model_copy(update={"item": condition.resulting_item}), written)
-        return written.applied()
+        return _applied(written)
     match event:
         case WorldInitializedEvent():
             world.world = event
@@ -243,7 +249,7 @@ def apply_world_fact(
             for obj in event.objects:
                 _put_object(world, obj.item.item_uuid, obj, written)
             world.connectors = {row.connector_uuid: row for row in event.connectors}
-            written.connectors.extend((row.connector_uuid, None, row) for row in event.connectors)
+            written.connectors.extend((row.connector_uuid, None) for row in event.connectors)
         case WorldModifiedEvent():
             if event.tile_position is not None:
                 if isinstance(event.after, WorldTileState):
@@ -258,13 +264,12 @@ def apply_world_fact(
                 if isinstance(event.after, WorldConnectorState):
                     world.connectors[event.connector_uuid] = event.after
                     written.connectors.append((event.connector_uuid, event.before
-                        if isinstance(event.before, WorldConnectorState) else None, event.after))
-                elif event.after is None:
-                    world.connectors.pop(event.connector_uuid, None)
+                        if isinstance(event.before, WorldConnectorState) else None))
+                elif event.after is None and world.connectors.pop(event.connector_uuid, None) is not None:
                     written.connectors.append((event.connector_uuid, event.before
-                        if isinstance(event.before, WorldConnectorState) else None, None))
+                        if isinstance(event.before, WorldConnectorState) else None))
         case ItemHoldingsReleasedEvent():
-            return written.applied() if _remove_contained_item(world, event.item_uuid, written) else None
+            return _applied(written) if _remove_contained_item(world, event.item_uuid, written) else None
         case ItemLocationStateEvent():
             identity = event.item_state.item_uuid
             _remove_contained_item(world, identity, written)
@@ -314,7 +319,7 @@ def apply_world_fact(
             fields = KeyedTileFields(elevation_steps=event.new_height_steps, surface_kind=event.new_surface_kind,
                 slope_axis=event.new_slope_axis)
             world.tiles[event.position] = previous.model_copy(update=dict(fields))
-            written.tile_fields.append((event.position, fields))
+            written.tile_fields.append((event.position, frozenset(fields)))
         case SpatialChangeEvent():
             if event.change_type is SpatialChangeType.TILES_CHANGED:
                 if not event.keyed_tile_changes:
@@ -351,10 +356,10 @@ def apply_world_fact(
                     tile_updates: dict[str, object] = dict(fields)
                     if event.new_light_level is not None:
                         tile_updates["resolved_light"] = LightLevel(event.new_light_level)
-                        written.light[event.position] = LightLevel(event.new_light_level)
+                        written.light.add(event.position)
                     world.tiles[event.position] = previous.model_copy(update=tile_updates)
                     if fields:
-                        written.tile_fields.append((event.position, fields))
+                        written.tile_fields.append((event.position, frozenset(fields)))
                 else:
                     return None
             elif event.change_type is SpatialChangeType.TILE_REMOVED:
@@ -372,7 +377,7 @@ def apply_world_fact(
                         if previous.resolved_light is not resolved:
                             world.tiles[position] = previous.model_copy(update={"resolved_light": resolved})
                         # The event's after-value, whether or not an earlier version already wrote it.
-                        written.light[position] = resolved
+                        written.light.add(position)
             elif event.change_type is SpatialChangeType.OBJECT_REMOVED and event.object_uuid is not None:
                 _put_object(world, event.object_uuid, None, written)
             elif event.change_type in (SpatialChangeType.OBJECT_PLACED, SpatialChangeType.OBJECT_CHANGED):
@@ -402,7 +407,7 @@ def apply_world_fact(
                 return None
         case _:
             return None
-    return written.applied()
+    return _applied(written)
 
 
 def _put_tile(world: WorldFacts, tile: WorldTileState, written: _Written) -> None:
@@ -420,10 +425,6 @@ def _resulting_tile(world: WorldFacts, tile: WorldTileState, written: _Written) 
     """A condition fact's tile after-value: the tile's own condition names (its residues' follow them) and every
     changeable scalar it carries (a tile condition may change its costs or optics)."""
     world.tiles[tile.position] = tile
-    written.tile_conditions[tile.position] = tile.condition_names[:len(tile.condition_names) - len(tile.residues)]
-    written.tile_fields.append((tile.position, KeyedTileFields(walking_cost=tile.walking_cost,
-        flying_cost=tile.flying_cost, swimming_cost=tile.swimming_cost, burrowing_cost=tile.burrowing_cost,
-        blocks_optics=tile.blocks_optics, blocks_propagation=tile.blocks_propagation,
-        elevation_steps=tile.elevation_steps, surface_kind=tile.surface_kind, slope_axis=tile.slope_axis,
-        default_light=tile.default_light)))
-    written.light[tile.position] = tile.resolved_light
+    written.tile_conditions.add(tile.position)
+    written.tile_fields.append((tile.position, _TILE_SCALARS))
+    written.light.add(tile.position)

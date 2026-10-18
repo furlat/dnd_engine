@@ -73,8 +73,7 @@ def _witnessed_content(observations: tuple[PlayerObservation, ...], world_update
     for update in world_updates:
         # An object's item id travels with its look (once per seat), its effects with each state sent.
         known.update(row.item_id for row in update.object_looks)
-        known.update(effect.behavior_id for row in update.objects if row.state is not None
-            for effect in row.state.item_effects)
+        known.update(effect.behavior_id for row in update.objects for effect in row.state.item_effects)
         known.update(effect.behavior_id for row in update.contents for item in row.items
             for effect in item.state.item_effects)
         known.update(effect.behavior_id for row in update.contents_changed for item in row.upserted

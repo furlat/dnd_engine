@@ -20,7 +20,7 @@ from dnd.core.cells import mask_positions, values_items
 from dnd.player.facts import (ContainedItem, FloorItem, ObjectRow, PlayerObject, PlayerState, StaticStore,
     WorldUpdate)
 from dnd.player.world_columns import join_floor_item, unpack_placement, unpack_tile_columns
-from dnd.types.event_facts import WorldTileState
+from dnd.types.event_facts import WorldTileState, tile_own_condition_names
 from dnd.types.residues import ObjectResidueState, TileResidueState
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.world import LightLevel
@@ -35,8 +35,9 @@ def _members(row: ObjectRow, observers: int) -> int:
     return 1
 
 
-def _static(static: StaticStore, update: WorldUpdate) -> None:
-    """The update's static rows; a static row never changes for its id."""
+def fold_static_rows(static: StaticStore, update: WorldUpdate) -> None:
+    """The update's static rows into the client's store, which never prunes them; a static row never changes for
+    its id (a tile's static row is the latest for its cell)."""
     for row in update.tile_statics:
         static.tiles[row.position] = row
     for row in update.residue_materials:
@@ -151,11 +152,6 @@ def _contents(memory: PlayerState, update: WorldUpdate) -> None:
             items[identity] for identity in sorted(items, key=str)))
 
 
-def _tile_part(tile: WorldTileState) -> tuple[str, ...]:
-    """A tile's own condition names: its names before its residues' (which follow in residue order)."""
-    return tile.condition_names[:len(tile.condition_names) - len(tile.residues)]
-
-
 def _tiles(memory: PlayerState, update: WorldUpdate) -> None:
     """The keyed tile rows: scalars, objective light, the tile's own conditions, its residues."""
     tiles = memory.tiles
@@ -177,7 +173,7 @@ def _tiles(memory: PlayerState, update: WorldUpdate) -> None:
     def residues(position: tuple[int, int]) -> dict[str, TileResidueState]:
         if position not in materials:
             tile = held(position)
-            parts.setdefault(position, _tile_part(tile))
+            parts.setdefault(position, tile_own_condition_names(tile))
             materials[position] = {row.residue_id: row for row in tile.residues}
         return materials[position]
 
@@ -220,7 +216,7 @@ def _tiles(memory: PlayerState, update: WorldUpdate) -> None:
 
 def fold_world_update(memory: PlayerState, update: WorldUpdate) -> None:
     """Fold one occurrence's world update into the client's world."""
-    _static(memory.static, update)
+    fold_static_rows(memory.static, update)
     for identity in update.objects_removed:
         if memory.objects.pop(identity, None) is None:
             raise ValueError("An object removal names an object the client holds")

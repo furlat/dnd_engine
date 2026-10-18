@@ -1085,7 +1085,6 @@ class SeatWalk:
     # The shared fold's actor change of each event that has one (E2's record), by event uuid.
     actor_fact_changes: Mapping[UUID, ActorFactChange]
     logs: Mapping[UUID, PlayerLogEntry]
-    by_version: dict[UUID, Event]
     by_lineage: dict[UUID, Event]
     # Before each walk event (by uuid): the actors admitted, the deliveries whose entry sight is kept, and
     # the objects whose removal starts.
@@ -1108,8 +1107,8 @@ class SeatWalk:
     updates: list[WorldUpdate] = field(default_factory=list)
     # The static rows this walk's updates carry, joining the seat's sent set once the group is emitted.
     pending: StaticSent = field(default_factory=StaticSent)
-    # The observed changes (source versions) the seat's world updates carried: each once per seat, though several
-    # members saw it happen.
+    # The versions whose records the seat's world updates carried: each once per seat (a walked event's own, or a
+    # change several members saw happen).
     published_sources: set[UUID] = field(default_factory=set)
     superseded: set[int] = field(default_factory=set)
     known_removals: set[int] = field(default_factory=set)
@@ -1119,7 +1118,7 @@ class SeatWalk:
 def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event, ...],
                 admissions: tuple[ActorAdmission, ...], conditions: tuple[ConditionFact, ...],
                 actor_fact_changes: Mapping[UUID, ActorFactChange], logs: Mapping[UUID, PlayerLogEntry],
-                observed_sources: tuple[Event, ...] = ()) -> SeatWalk:
+                ) -> SeatWalk:
     """A seat's walk over a group: its events (old recordings upgraded) and their schedules."""
     events = upgrade_recorded_spatial_commits(events, tuple(
         (row.lineage_uuid, row.event_uuid) for row in sorted(group.versions, key=lambda row: row.source_index)))
@@ -1155,7 +1154,7 @@ def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event,
             assert removed.object_uuid is not None
             removal_starts.setdefault(removed.object_uuid, version.source_index)
     return SeatWalk(events=events, admissions=admissions, facts={row.event_uuid: row for row in conditions},
-        actor_fact_changes=actor_fact_changes, logs=logs, by_version={event.uuid: event for event in (*observed_sources, *events)}, by_lineage=by_lineage,
+        actor_fact_changes=actor_fact_changes, logs=logs, by_lineage=by_lineage,
         admissions_at=_due(events, indexes, [(row, indexes[row.event_uuid]) for row in admissions]),
         deliveries_at=_due(events, indexes, list(delivery_starts.items())),
         removals_at=_due(events, indexes, list(removal_starts.items())),
@@ -1220,26 +1219,29 @@ def _fold_version(session: "SessionProjection", folded: dict[UUID, AppliedWorldF
 
 
 def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", world: WorldFacts, event: Event,
-                   applied: AppliedWorldFact | None, folded: Mapping[UUID, AppliedWorldFact | None]) -> None:
-    """The seat's world update at an event: what the event wrote or, at a sensory event of one of its members,
-    what that member's senses changed and what the changes it saw happen wrote (folded at their own versions)."""
+                   applied: AppliedWorldFact | None, folded: Mapping[UUID, AppliedWorldFact | None],
+                   before: CellMask) -> None:
+    """The seat's world update at an event (`before`: its composed view's visible cells before the event): what
+    the event wrote or, at a sensory event of one of its members, what that member's senses changed and what the
+    changes it saw happen wrote (folded at their own versions), each of those once per seat."""
     composition, audience = state.audience_composition, state.audience
-    before = composition.view.visible if composition.view is not None else EMPTY_CELLS
     records: tuple[AppliedWorldFact, ...] = (applied,) if applied is not None else ()
+    # Each record publishes once per seat: a walked event's own, or an observed change's at the first sight of it.
+    walk.published_sources.add(event.uuid)
     sensed = None
     if isinstance(event, SensoryUpdateEvent) and audience.observes(event.observer_uuid):
         sources = tuple(source for source in dict.fromkeys(row.source_event_uuid for row in event.observed_changes)
             if source not in walk.published_sources)
         walk.published_sources.update(sources)
         records = tuple(record for source in sources if (record := folded.get(source)) is not None)
-        fold_senses(state.remembered, event, cursor=group.indexes[event.uuid], audience_composition=composition)
         sensed = SensedWorld(frozenset(event.object_contacts_changed) | event.object_contacts_removed,
             frozenset(event.spatial_effects_changed) | event.spatial_effects_removed)
     view = composition.view
     if view is None:
         return
     update = seat_world_update(world, group.indexes[event.uuid], records, before, view, composition.perception,
-        audience, sensed, state.observed_objects, state.granted_containers, state.static_sent, walk.pending)
+        audience, sensed, observed=state.observed_objects, granted=state.granted_containers, sent=state.static_sent,
+        pending=walk.pending)
     if update is not None:
         walk.updates.append(update)
 
@@ -1250,9 +1252,14 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
     its senses, its world update, its node. `folded` holds what each version the group folded so far applied."""
     private_actors, observer, remembered = state.actors, state.audience, state.remembered
     keys, indexes, facts = group.keys, group.indexes, walk.facts
-    if not event.canceled and (applied is not None
-            or isinstance(event, SensoryUpdateEvent) and observer.observes(event.observer_uuid)):
-        _publish_world(walk, group, state, world, event, applied, folded)
+    sensed_here = isinstance(event, SensoryUpdateEvent) and observer.observes(event.observer_uuid)
+    if not event.canceled and (applied is not None or sensed_here):
+        composition = state.audience_composition
+        before = composition.view.visible if composition.view is not None else EMPTY_CELLS
+        if isinstance(event, SensoryUpdateEvent) and sensed_here:
+            # The member's senses: the seat's perception and composed view after the event.
+            fold_senses(remembered, event, cursor=indexes[event.uuid], audience_composition=composition)
+        _publish_world(walk, group, state, world, event, applied, folded, before)
     view = state.audience_composition.view
     observed_objects = walk.observed_objects
     if (isinstance(event, ActionEvent) and event.source_item_uuid is not None
@@ -1437,8 +1444,6 @@ def _end_walk(walk: SeatWalk, group: WalkGroup, state: "ProjectionState"
 
 
 def _object_state(row: ObjectRow, value_of: Callable[[ObjectState], ObjectState]) -> ObjectRow:
-    if row.state is None:
-        return row
     state = value_of(row.state)
     return row if state is row.state else replace(row, state=state)
 
@@ -1702,8 +1707,8 @@ class SessionProjection:
 
     The native keys of every walked version (its cursor) and lineage (its first version's cursor), and the
     session's one world fold: the recorded after-values of every walked event, read as of the event by every
-    seat. A group is walked once (`walked`, its first version); its events fold in walk order, which is root
-    order: a root completing inside another root's execution is walked before it.
+    seat. A walk group is walked once (`walked`, its first version), in source order; roots whose versions
+    interleave are one group (`capture_context`), so the fold takes every change in native order.
     """
 
     versions: dict[UUID, int] = field(default_factory=dict)
@@ -1714,9 +1719,10 @@ class SessionProjection:
 
 @dataclass(slots=True)
 class ProjectionState:
-    """One seat's projection: its knowledge (control, perception, what it was sent, its numbering) and, until the
-    world and body lanes delete them, its client's held bodies, items, tiles and objects (`remembered`), the
-    diff bases of today's wire. The world it reads is the session's (`SessionProjection.world`).
+    """One seat's projection: its knowledge (control, perception, the world objects it observes and the contents
+    it sees, what it was sent, its numbering) and, until the body lane deletes them, its client's held bodies and
+    items (`remembered`), the diff bases of today's body wire; `remembered` holds no world on the server. The
+    world it reads is the session's (`SessionProjection.world`).
 
     `remembered`'s actors change only through the client's reducer on the emitted patches and facts
     (`_emit_bodies`); its perception is the seat's composition (no contacts from admitted observations).
@@ -1968,8 +1974,8 @@ def project_log_appends(state: ProjectionState, appends: tuple[CombatLogAppend, 
 def known_connector_uuids(session: SessionProjection, state: ProjectionState) -> frozenset[str]:
     """The connectors the seat sees now, both endpoints in its composed view: those its combat log may name.
 
-    Every change of the view or of a connector is followed by a world update of the seat, which sends exactly
-    these, so they are the connectors its client holds as visible.
+    The seat's world updates send each connector whose endpoints enter its view and each one written while it
+    sees it, so its client holds every one of these (and may keep others it saw before, by memory).
     """
     view = state.audience_composition.view
     if view is None:
@@ -2081,7 +2087,7 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
             if isinstance(event, SpatialEffectChangeEvent) and state.audience.controls(event.source_entity_uuid))
     group = _walk_group(session, versions)
     walks = tuple(_begin_walk(group, state, upgrade_recorded_resolutions(lineage.events), lineage.admissions,
-        lineage.conditions, lineage.actor_fact_changes, lineage.logs, lineage.observed_sources)
+        lineage.conditions, lineage.actor_fact_changes, lineage.logs)
         for state, lineage in zip(states, lineages))
     order = tuple(event.uuid for event in walks[0].events)
     if any(tuple(event.uuid for event in walk.events) != order for walk in walks[1:]):
