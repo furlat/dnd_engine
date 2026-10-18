@@ -136,17 +136,17 @@ CASES = (
     pytest.param(FoldCase('condition grants temporary hit points', True, lambda actor: condition_fact(
         actor, ConditionCategory.STATUS, stats_of(actor, temporary_hp=7, temporary_hp_grant=TemporaryHitPointsGrant(
             instance_uuid=uuid4(), source_id='condition.test.recorded_ward')))), id='temporary-hp',
-        marks=pytest.mark.xfail(strict=True, reason=(
+        marks=pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
             'the client folds a condition\'s resulting_stats without temporary_hp and its grant '
             '(reduction.py ConditionChangeFact) while the engine applies them (actor_projection.apply_stats); '
             f'latent on head: every live writer also emits TemporaryHitPointsChangedEvent; {PLAN}'))),
     pytest.param(FoldCase('internal condition raises armor class', True, lambda actor: condition_fact(
         actor, ConditionCategory.INTERNAL, stats_of(actor, armor_class=actor.armor_class + 2))), id='internal-ac',
-        marks=pytest.mark.xfail(strict=True, reason=(
+        marks=pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
             'an INTERNAL condition publishes no fact (projection._project_fact), so its resulting_stats never '
             f'reach the seat while the engine fold applies them; no live reproduction found on head; {PLAN}'))),
     pytest.param(FoldCase('seen enemy\'s equipped item is destroyed', False, destroyed_layer), id='ghost-layer',
-        marks=pytest.mark.xfail(strict=True, reason=(
+        marks=pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
             'only the controller receives ItemChargeFact (projection._project_fact), so other seats keep the '
             'destroyed item\'s loadout layer while the engine fold removes it; latent on head: the engine '
             f'publishes ItemLocationState(DESTROYED) first, which already sends a gear observation; {PLAN}'))),
