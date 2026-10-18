@@ -106,11 +106,11 @@ def capture_application_operation(runtimes: dict[str, AudienceRuntime], operatio
         for native in captured:
             if any(disposition is not Disposition.NOT_DISCLOSED for _, disposition in native.dispositions):
                 raise ValueError(f"Unprojected committed state: {native.dispositions}")
-    # Each root projected once for every seat, event by event.
+    # Each walk group projected once for every seat, event by event.
     lineages: dict[str, list[PlayerLineage]] = {seat: [] for seat in runtimes}
-    for root in range(len(operation.roots)):
+    for group in range(len(context.groups)):
         projected = project_lineages(shared, tuple(runtime.projection for runtime in runtimes.values()),
-            tuple(captured[root] for captured in natives.values()))
+            tuple(captured[group] for captured in natives.values()))
         for seat, lineage in zip(runtimes, projected, strict=True):
             if lineage is not None:
                 lineages[seat].append(lineage)

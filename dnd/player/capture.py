@@ -981,14 +981,16 @@ def capture_lineage(
 class CaptureContext:
     """One operation's seat-independent capture over the EventQueue's existing indexes.
 
-    `graphs` holds each root's lineage graph, `evidence` each version's
-    admission evidence from the shared fold and `bodies` each retained event's
-    detached body: every seat shares them and adds only its own admissions and
-    combat log.
+    `roots` are the roots it captures (by uuid, as given), `groups` their walk groups, each named by its root,
+    in the roots' order, and `graphs` each group's lineage graph by that root. `evidence` holds each
+    version's admission evidence from the shared fold and `bodies` each retained event's detached body:
+    every seat shares them and adds only its own admissions and combat log.
     """
 
     generation: UUID
     end_cursor: int
+    roots: tuple[UUID, ...] = ()
+    groups: tuple[Event, ...] = ()
     graphs: dict[UUID, "LineageGraph"] = field(default_factory=dict)
     evidence: dict[UUID, AdmissionEvidence] = field(default_factory=dict)
     bodies: dict[tuple[UUID, bool, bool | None], Event] = field(default_factory=dict)
@@ -1006,11 +1008,40 @@ class LineageGraph:
 
 def capture_context(checkpoint: CaptureCheckpoint, roots: tuple[Event, ...] = (), *,
                     end_cursor: int | None = None) -> CaptureContext:
-    """Each root's graph, then one advance of the shared fold past their last version (or to `end_cursor`)."""
-    context = CaptureContext(EventQueue.generation_id(), EventQueue.event_cursor())
+    """The roots' walk groups and their graphs, then one advance of the shared fold past their last version (or
+    to `end_cursor`).
+
+    Roots whose versions interleave form one walk group: a root completing inside another root's execution
+    is captured, walked, folded and published with it, in native order, so every fold (the session world,
+    the seats', the clients') takes their changes in the order they happened. A group is named by its root
+    completing last; a root overlapping no other is its own group.
+    """
+    context = CaptureContext(EventQueue.generation_id(), EventQueue.event_cursor(),
+        roots=tuple(dict.fromkeys(root.uuid for root in roots)))
+    graphs: dict[UUID, LineageGraph] = {}
+    named: dict[UUID, Event] = {}
+    # Each root's completion: its own version's index.
+    completions: dict[UUID, int] = {}
     for root in roots:
-        if root.uuid not in context.graphs:
-            context.graphs[root.uuid] = _lineage_graph(root, context)
+        if root.uuid not in graphs:
+            graphs[root.uuid] = _lineage_graph(root, context)
+            named[root.uuid] = root
+            completions[root.uuid] = next(index for index, event in graphs[root.uuid].indexed if event.uuid == root.uuid)
+    # By first version: a root starting before the last version of the group open so far joins it.
+    members: list[list[UUID]] = []
+    last = -1
+    for identity in sorted(graphs, key=lambda identity: graphs[identity].indexed[0][0]):
+        graph = graphs[identity]
+        if members and graph.indexed[0][0] < last:
+            members[-1].append(identity)
+        else:
+            members.append([identity])
+        last = max(last, graph.indexed[-1][0])
+    for group in members:
+        root = max(group, key=completions.__getitem__)
+        context.graphs[root] = graphs[root] if len(group) == 1 else _merged_graph(
+            tuple(graphs[identity] for identity in group))
+    context = replace(context, groups=tuple(named[identity] for identity in context.roots if identity in context.graphs))
     end = end_cursor if end_cursor is not None else max(
         (graph.indexed[-1][0] + 1 for graph in context.graphs.values()), default=checkpoint.cursor)
     context.evidence.update(advance_capture(checkpoint, end))
@@ -1036,10 +1067,12 @@ def capture_lineages(
     audience = resolve_audience(observer_uuid, audience)
     if context is None:
         context = capture_context(CaptureCheckpoint(EventQueue.generation_id(), frozenset(audience.observers)), roots)
+    elif tuple(dict.fromkeys(root.uuid for root in roots)) != context.roots:
+        raise ValueError("A capture context captures the roots it was built from")
     known: set[UUID] = set()
     names = ChainMap({}, known_entity_names or {})
     retained: list[CompletedLineage] = []
-    for root in roots:
+    for root in context.groups:
         lineage = _capture_lineage(root, observer_uuid=observer_uuid, audience=audience,
             known_actor_uuids=known_actor_uuids, newly_known_actor_uuids=known,
             context=context, known_entity_names=names,
@@ -1094,11 +1127,25 @@ def _lineage_graph(root: Event, context: CaptureContext) -> LineageGraph:
                            key=lambda row: row[0]))
     if not indexed or root.uuid not in {event.uuid for _, event in indexed}:
         raise ValueError("lineage root is absent from the current EventQueue")
+    return _graph(nodes, indexed)
+
+
+def _graph(nodes: dict[UUID, Event], indexed: tuple[tuple[int, Event], ...]) -> LineageGraph:
     conditions = tuple(fact for _, event in indexed
                        if event.uuid == nodes[event.lineage_uuid].uuid
                        and (fact := _condition_fact(event)) is not None)
     return LineageGraph(nodes, indexed, conditions,
                         tuple(_objective_row(index, event) for index, event in indexed))
+
+
+def _merged_graph(graphs: tuple[LineageGraph, ...]) -> LineageGraph:
+    """One walk group's graph: its roots' lineages and versions together, in source order."""
+    nodes: dict[UUID, Event] = {}
+    for graph in graphs:
+        nodes.update(graph.nodes)
+    if len(nodes) != sum(len(graph.nodes) for graph in graphs):
+        raise ValueError("Two roots share a lineage")
+    return _graph(nodes, tuple(sorted((row for graph in graphs for row in graph.indexed), key=lambda row: row[0])))
 
 
 def _capture_lineage(
