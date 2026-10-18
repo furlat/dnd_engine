@@ -7,9 +7,10 @@ O1, perceived equality. At an operation's end each seat's perceived view is buil
   `audience_view`; the visible cells' live tiles (`Tile.to_world_tile_state`); the live placed objects
   (`project_world_object`) through the seats' world publication rule (`world_publication.object_observed` and
   `disclosed_world_object`, which read no seat memory); the live connectors (`project_world_connector`); each perceived body read from its live aggregate
-  (`Entity._entity_created_event`, `actor_from_birth`) and disclosed by `_public_actor`, `_public_condition`,
-  `_item_records` and `_public_items`, which also withhold durations from non-owners (an effect's duration is
-  withheld by the same rule applied to its live owner, the effect's condition's source);
+  (`Entity._entity_created_event`, `actor_from_birth`) and disclosed by the body record a seat receives when the
+  body enters its view (`bodies.entering_body`, folded by the client's `enter_body`), which also withholds
+  durations from non-owners (an effect's duration is withheld by the same rule applied to its live owner, the
+  effect's condition's source);
 - the client's, from the reference fold of the records the seat received (`dnd.player.reduction`), as held.
 
 Both sides are what the seat perceives now: the composed visible cells with their light and hazard, each
@@ -68,10 +69,11 @@ from dnd.player.actor_facts import ActorState
 from dnd.player.audience import AudiencePerception, PlayerAudience, audience_view
 from dnd.player.facts import (PlayerActor, PlayerCharacterSheet, PlayerItem, PlayerObject, PlayerState,
     SpatialEffectContent)
-from dnd.player.projection import _item_records, _public_actor, _public_condition, _public_items
+from dnd.player.bodies import entering_body
+from dnd.player.reduction import enter_body
 from dnd.player.world_publication import disclosed_world_object, object_observed
 from dnd.player.session import Session
-from dnd.types.actor_facts import ConditionFact
+from dnd.types.actor_facts import ConditionMember
 from dnd.types.cells import cell_in
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SensesSnapshot
 from dnd.types.world import CardinalDirection
@@ -92,7 +94,7 @@ OBJECT = TypeAdapter(PlayerObject)
 CONNECTOR = TypeAdapter(WorldConnectorState)
 ACTOR = TypeAdapter(PlayerActor)
 ITEM = TypeAdapter(PlayerItem)
-CONDITION = TypeAdapter(ConditionFact)
+CONDITION = TypeAdapter(ConditionMember)
 CONTACT = TypeAdapter(PerceivedContact)
 EFFECT = TypeAdapter(PerceivedSpatialEffect)
 LIGHT = TypeAdapter(PerceivedLightSource)
@@ -186,7 +188,7 @@ def _lights(composed: Mapping[UUID, PerceivedLightSource], members: Mapping[UUID
     return result
 
 
-def _condition(condition: ConditionFact) -> dict[str, Any]:
+def _condition(condition: ConditionMember) -> dict[str, Any]:
     data = CONDITION.dump_python(condition, mode='json')
     for name in EVENT_TIME_CONDITION_FIELDS:
         data.pop(name, None)
@@ -206,10 +208,19 @@ def _body(actor: PlayerActor, visual: bool) -> dict[str, Any]:
 
 def _items(items: Mapping[str, dict[str, Any] | None]) -> dict[str, Any]:
     for item in items.values():
-        if item is not None and item.get('look') is not None:
-            for effect in item['look'].get('item_effects', ()):
+        if item is not None:
+            _schema16_item(item)
+            for effect in item.get('effects', ()):
                 effect.pop('applied_source_event_cursor', None)  # the seat's occurrence numbering
     return dict(items)
+
+
+def _schema16_item(item: dict[str, Any]) -> None:
+    """A held item in the schema-16 shape: before it, the effects travelled in the look (base recordings)."""
+    look = item.get('look')
+    if look is not None and 'item_effects' in look:
+        item['effects'] = look.pop('item_effects')
+    item.setdefault('effects', [])
 
 
 def _shown_item_uuids(actor: PlayerActor, owned: bool) -> tuple[UUID, ...]:
@@ -439,17 +450,17 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
         if state is None or entity is None:
             actors[str(identity)] = None
             continue
-        owned = audience.controls(identity)
         contact = senses.entities.get(identity)
         state = replace(state, last_visual_position=(contact.position if contact is not None else entity.position)
                         if visual else None)
-        # The projector's disclosure of a body and its item records to this seat (`_public_changes`, `_public_items`).
-        body = _public_actor(state, audience)
-        body = replace(body, conditions=tuple(_public_condition(row, {}, {}, owned=owned) for row in body.conditions))
+        # The seat's body record of this body entering its view now, as its client folds it.
+        record = entering_body(0, state, audience, visual=visual, birth=True, looks_sent=(), profiles_sent=())
+        held = PlayerState(generation=client.generation, observer_uuid=client.observer_uuid, world=client.world,
+            audience=audience)
+        enter_body(held, record)
+        body = replace(held.actors[identity], last_visual_position=state.last_visual_position)
         actors[str(identity)] = {'body': _body(body, visual), 'items': _items({
-            str(row.item_uuid): ITEM.dump_python(PlayerItem(look=row.look, profile=row.profile, state=row.state),
-                                                 mode='json')
-            for row in _public_items(_item_records(state, audience, {}), {}, owned=owned) if row.look is not None})}
+            str(row.item_uuid): ITEM.dump_python(held.items[row.item_uuid], mode='json') for row in record.items})}
     return {
         'cells': _cells(senses, visible),
         'member_cells': {str(member): sorted(key(position) for position in mask_positions(held.visible))
@@ -591,16 +602,34 @@ def close_oracle(oracle: Oracle, manifest: dict[str, Any], states: Mapping[str, 
     (oracle.directory / 'o1.json').write_text(json.dumps({'classes': classes, 'operations': oracle.report}, indent=1))
 
 
+def _schema16_view(view: View) -> View:
+    """A stored view in the schema-16 item shape (base recordings held item effects in the look)."""
+    for actor in view.get('actors', {}).values():
+        for item in (actor or {}).get('items', {}).values():
+            if item is not None:
+                _schema16_item(item)
+    return view
+
+
+def _schema16_leaf(leaf: Leaf) -> Leaf:
+    """A stored O4 leaf in the schema-16 item shape."""
+    category, name, path, value = leaf
+    if category == 'items' and path.startswith('look.item_effects'):
+        return category, name, 'effects' + path[len('look.item_effects'):], value
+    return leaf
+
+
 def _view_rows(directory: Path) -> dict[tuple[int, str, str], View]:
     with gzip.open(directory / 'views.jsonl.gz', 'rt') as rows:
-        return {(row['operation'], row['kind'], row['seat']): row['view'] for row in map(json.loads, rows)}
+        return {(row['operation'], row['kind'], row['seat']): _schema16_view(row['view']) for row in map(json.loads, rows)}
 
 
 def _held_rows(directory: Path) -> dict[str, list[tuple[int, str, list[Leaf]]]]:
     rows: dict[str, list[tuple[int, str, list[Leaf]]]] = {}
     with gzip.open(directory / 'held.jsonl.gz', 'rt') as source:
         for row in map(json.loads, source):
-            rows.setdefault(row['seat'], []).append((row['operation'], row['kind'], [tuple(leaf) for leaf in row['added']]))
+            rows.setdefault(row['seat'], []).append((row['operation'], row['kind'],
+                [_schema16_leaf((leaf[0], leaf[1], leaf[2], leaf[3])) for leaf in row['added']]))
     return rows
 
 
