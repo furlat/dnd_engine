@@ -179,7 +179,7 @@ The held values therefore go with each family's wire change.
 **Per-lane decisions** are in the briefs (scratchpad `e3design/{world,bodies,sensory}_brief.md`, the "Coordinator decisions" sections). They include:
 - E3-world sends exact object bits whenever a row is sent;
 - found traps are kept through retired cells (as today);
-- the client clears ghost bodies on visible cells (makes E1's ghost-layer xfail pass);
+- the client clears ghost bodies on visible cells (the ghost-body case O1 flags in room_reentry; E1's ghost-layer xfail is a destroyed equipped item's layer and turns green with E3-bodies' layer-removal row);
 - initialization replays the same walk, and the startup-damage grant bug is fixed at its source;
 - engine-free replay records seat-independent actor values per sensory version.
 
