@@ -756,7 +756,8 @@ class BaseBlock(BaseModel):
         return False
 
     def owned_values(self) -> tuple[ModifiableValue, ...]:
-        """Return exact values whose rows belong to this block: its value fields and declared extras."""
+        """Return exact values whose rows belong to this block: its value fields (blocks with list-held
+        values add them)."""
         return self.value_fields()
 
     def owned_block_tree(self, *, excluded_uuids: frozenset[UUID] = frozenset()) -> tuple['BaseBlock', ...]:

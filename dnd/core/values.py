@@ -141,9 +141,11 @@ class ModifiableValue:
 
     The base contributes `base` raw and `score_normalizer(base)` normalized, displayed
     as `<name>_base_value`; `base_owner_uuid` gates it like a modifier's contribution
-    owner. A removed base (`remove_all_modifiers`) is None: it contributes and shows nothing. `modifiers` holds one row per (channel, kind, modifier uuid), in insertion
-    order. The properties below read the value alone with no target or context, through
-    the same read functions every other read uses.
+    owner. A removed base (`remove_all_modifiers`) is None: it contributes and shows
+    nothing. `modifiers` holds one row per (channel, kind, modifier uuid), in insertion
+    order (`add_modifier` is its only writer of new rows). The properties below read the
+    value alone with no target or context, through the same read functions every other
+    read uses.
     """
 
     __slots__ = ("uuid", "name", "source_entity_uuid", "source_entity_name", "base", "base_owner_uuid",
