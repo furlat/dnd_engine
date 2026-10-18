@@ -38,11 +38,12 @@ from dnd.core.events import (
     SensoryUpdateReason, SensesUpdateHint,
 )
 from dnd.core.cells import pack_layers, pack_mask, pack_values
+from dnd.core.sensory_fold import sense_modes_key
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues, no_cells
 from dnd.types.event_facts import SpatialChangeType
 from dnd.types.senses import (
-    PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensesType, VolumeSurfaceSight,
-    SensesSnapshot as SensesSnapshot,
+    PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SenseModesKey, SensesType,
+    VolumeSurfaceSight, SensesSnapshot as SensesSnapshot,
 )
 from dnd.types.world import CardinalDirection, LightLevel, WorldEdgeChannel
 
@@ -121,7 +122,8 @@ class Senses(BaseBlock):
     )
     _paths_dirty: bool = PrivateAttr(default=False)
     _last_passive_perception: int = PrivateAttr(default=0)
-    _last_sense_modes_hash: int = PrivateAttr(default=0)
+    # Read before the first snapshot only by an initial publication, whose sense modes are sent regardless.
+    _last_sense_modes_key: SenseModesKey = PrivateAttr(default=())
     _last_visual_access: int = PrivateAttr(default=1)
     _perception_max_distance: int = PrivateAttr(default=20)
     _path_revision: int = PrivateAttr(default=0)
@@ -149,17 +151,14 @@ class Senses(BaseBlock):
             and self._path_max_distance >= max_distance
         )
 
-    def compute_sense_modes_hash(self) -> int:
-        """Hash of current sense modes for quick change detection."""
-        return hash(tuple(sorted(
-            (sm.sense_type.value, sm.range_feet)
-            for sm in self.get_sense_modes()
-        )))
+    def compute_sense_modes_key(self) -> SenseModesKey:
+        """The current sense modes as one comparable value, for change detection (`sense_modes_key`)."""
+        return sense_modes_key(self.get_sense_modes())
 
     def snapshot_perception(self, passive_perception: int) -> None:
         """Store current perception state for change detection."""
         self._last_passive_perception = passive_perception
-        self._last_sense_modes_hash = self.compute_sense_modes_hash()
+        self._last_sense_modes_key = self.compute_sense_modes_key()
         self._last_visual_access = self.visual_access.normalized_score
 
     def has_sense(self, sense_type: SensesType) -> bool:
@@ -331,7 +330,7 @@ class PublishedSenses:
     light_source_removals: Dict[UUID, int]
     paths_dirty: bool
     passive_perception: int
-    sense_modes_hash: int
+    sense_modes_key: SenseModesKey
     sense_modes: Tuple[SenseMode, ...]
     visual_access: int
 
@@ -343,7 +342,7 @@ def published_senses(senses: Senses) -> PublishedSenses:
         entities=senses.entities, objects=senses.objects,
         spatial_effects=dict(senses.spatial_effects), light_sources=senses.light_sources,
         light_source_removals=dict(senses.light_source_removals), paths_dirty=senses._paths_dirty,
-        passive_perception=senses._last_passive_perception, sense_modes_hash=senses._last_sense_modes_hash,
+        passive_perception=senses._last_passive_perception, sense_modes_key=senses._last_sense_modes_key,
         sense_modes=tuple(senses.get_sense_modes()),  # fresh values each call; an event copies them
         visual_access=senses._last_visual_access,
     )
@@ -367,7 +366,7 @@ def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
         light_source_removals=dict(senses.light_source_removals),
         paths_dirty=senses._paths_dirty,
         passive_perception=senses._last_passive_perception,
-        sense_modes_hash=senses._last_sense_modes_hash,
+        sense_modes_key=senses._last_sense_modes_key,
         sense_modes=tuple(mode.model_copy(deep=True) for mode in senses.get_sense_modes()),
         visual_access=senses._last_visual_access,
     )
@@ -523,7 +522,7 @@ def emit_sensory_update_delta(
     sources_removed = {identity: revision for identity, revision in after.light_source_removals.items()
         if not initial and before.light_source_removals.get(identity) != revision}
     passive_changed = initial or before.passive_perception != after.passive_perception
-    sense_modes_changed = initial or before.sense_modes_hash != after.sense_modes_hash
+    sense_modes_changed = initial or before.sense_modes_key != after.sense_modes_key
     visual_access_changed = initial or before.visual_access != after.visual_access
     position_changed = initial or before.position != after.position
     perception_capability_changed = (
@@ -1965,7 +1964,7 @@ class SpatialSensesSystem:
         senses.entities = entities
         senses.objects = objects
         senses._last_passive_perception = passive
-        senses._last_sense_modes_hash = senses.compute_sense_modes_hash()
+        senses._last_sense_modes_key = senses.compute_sense_modes_key()
         senses._last_visual_access = senses.visual_access.normalized_score
         return before_visible
 
@@ -2937,13 +2936,13 @@ def _window_values(layer: CellLayer, window: Box) -> np.ndarray:
 def _replace_effects(value: PublishedSenses, effects: Dict[UUID, PerceivedSpatialEffect]) -> PublishedSenses:
     return PublishedSenses(value.position, value.cells, value.seen, value.entities, value.objects, effects,
                            value.light_sources, value.light_source_removals, value.paths_dirty,
-                           value.passive_perception, value.sense_modes_hash, value.sense_modes, value.visual_access)
+                           value.passive_perception, value.sense_modes_key, value.sense_modes, value.visual_access)
 
 
 def _replace_paths_dirty(value: PublishedSenses) -> PublishedSenses:
     return PublishedSenses(value.position, value.cells, value.seen, value.entities, value.objects,
                            value.spatial_effects, value.light_sources, value.light_source_removals, True,
-                           value.passive_perception, value.sense_modes_hash, value.sense_modes, value.visual_access)
+                           value.passive_perception, value.sense_modes_key, value.sense_modes, value.visual_access)
 
 
 spatial_senses_system = SpatialSensesSystem()

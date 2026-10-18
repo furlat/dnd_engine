@@ -33,6 +33,11 @@ class SensesType(str, Enum):
     SEE_INVISIBLE = "See Invisible"
 
 
+# A snapshot's sense modes as one comparable value: each mode's type and range, sorted. Plain values, so it
+# compares the same in every process (no `hash()` of strings).
+SenseModesKey = tuple[tuple[str, int], ...]
+
+
 class SenseMode(BaseModel):
     """A special sense and its effective range in feet; zero is unlimited."""
 
@@ -223,7 +228,7 @@ class SensesSnapshot:
     effective_light_levels: CellValues
     paths_dirty: bool
     passive_perception: int
-    sense_modes_hash: int
+    sense_modes_key: SenseModesKey
     sense_modes: tuple[SenseMode, ...]
     visual_access: int
     hazardous_cells: CellValues = EMPTY_VALUES
