@@ -30,7 +30,7 @@ from pydantic import TypeAdapter
 
 from dnd.core.cells import mask_from_positions, values_from_items
 from dnd.core.traversal_connectors import ConnectorProvocationPolicy, TraversalConnectorKind
-from dnd.core.world_edges import ElevationSurfaceKind
+from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.player.facts import (BoundaryStructureStatic, ContainedItem, ContainerContents, ContentsChange, ContributionRow,
     FloorItem, ObjectRow, ResidueKey, ResidueMaterial, ResidueRow, TileConditions, TileFieldUpdate, TileStatic,
     WorldUpdate)
@@ -140,9 +140,13 @@ def view(tiles: dict | None = None, objects: dict | None = None, connectors: tup
     return {"tiles": tiles or {}, "objects": objects or {}, "connectors": sorted(str(row) for row in connectors)}
 
 
+TILE = TypeAdapter(WorldTileState)
+
+
 def tile_view(row: WorldTileState, *, conditions: tuple[str, ...] = (), residues: dict | None = None) -> dict:
-    return {"tile": str(row.tile_uuid), "walking_cost": row.walking_cost, "blocks_optics": row.blocks_optics,
-            "resolved_light": row.resolved_light.value, "conditions": list(conditions), "residues": residues or {}}
+    """The client's tile: every field of `row` (its static part and scalars), its condition names and residues."""
+    return {"tile": TILE.dump_python(row.model_copy(update={"condition_names": (), "residues": ()}), mode="json"),
+            "conditions": list(conditions), "residues": residues or {}}
 
 
 def object_view(at: WorldObjectPlacement, *, members: int = 1, name: str, is_open: bool | None = None,
@@ -175,6 +179,16 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
     construction_at = placement(STONE_WALL, (0, 0))
     construction_look, construction_row = look_and_row(construction, construction_at)
     replaced = tile((1, 0), generation=1, walking_cost=2)
+    # w12: every scalar a tile column carries, at values other than the floor's.
+    wood = TileSurface(base_material=Material.WOOD)
+    varied = (
+        tile((0, 0)).model_copy(update={"surface_kind": ElevationSurfaceKind.STAIRS,
+            "slope_axis": SlopeAxis.NORTH_SOUTH, "elevation_steps": 3, "walking_cost": 2, "flying_cost": 0}),
+        tile((1, 0)).model_copy(update={"surface_kind": ElevationSurfaceKind.RAMP, "slope_axis": SlopeAxis.EAST_WEST,
+            "elevation_steps": -2, "swimming_cost": 7, "burrowing_cost": 255, "blocks_propagation": True,
+            "default_light": LightLevel.DARKNESS, "resolved_light": LightLevel.DIM_LIGHT}),
+        tile((2, 0)).model_copy(update={"blocks_optics": True, "blocks_propagation": False, "surface": wood,
+            "name": "Plank wall", "default_light": LightLevel.DIM_LIGHT, "resolved_light": LightLevel.BRIGHT_LIGHT}))
     # w11: a centre object at its defaults; a two-cell object raised off the floor with a removed band; a boundary
     # with an orientation; an object naming another tile than the cell's held static row; two walls of one
     # structure.
@@ -281,7 +295,9 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
                                              conditions=("Difficult terrain",))})),
             Step(WorldUpdate(occurrence=2, tile_changes=(TileFieldUpdate(position=(1, 0),
                      changes={"walking_cost": 2}),), resolved_light=values_from_items({(1, 0): 3})),
-                 view({**t, "1,0": tile_view(tile((1, 0), walking_cost=2), conditions=("Difficult terrain",))})),
+                 view({**t, "1,0": tile_view(tile((1, 0), light=LightLevel.DIM_LIGHT).model_copy(update={
+                     "walking_cost": 2, "resolved_light": LightLevel.BRIGHT_LIGHT}),
+                     conditions=("Difficult terrain",))})),
             Step(entering(3, (replaced,)), view({**t, "1,0": tile_view(replaced)})),
         ]),
         "w8_residues_are_keyed_by_cell_and_material": (
@@ -332,6 +348,14 @@ def vectors() -> dict[str, tuple[str, tuple[UUID, ...], list[Step]]]:
                  view(t, {str(BOX): object_view(box_at, members=3, name="Box")})),
             Step(WorldUpdate(occurrence=2, objects=(replace(box_at_1, members=0b10, placement=None),)),
                  view(t, {str(BOX): object_view(box_at, members=2, name="Box")})),
+        ]),
+        "w12_tile_columns_carry_every_scalar": (
+            "An entered tile's scalars travel as one byte per cell per column: the four costs, default and objective "
+            "light, the flags (optics, propagation, surface kind, slope axis) and signed elevations; its surface "
+            "and name are its static row.",
+            (A,), [
+            Step(entering(0, varied), view({f"{x},{y}": tile_view(row) for (x, y), row in
+                                            ((row.position, row) for row in varied)})),
         ]),
         "w11_placements_and_structures_decode_exactly": (
             "A placement leaves out its object, its anchor tile when the client holds that cell's static row, its "

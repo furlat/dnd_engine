@@ -1,0 +1,179 @@
+{
+ "name": "w12_tile_columns_carry_every_scalar",
+ "rule": "An entered tile's scalars travel as one byte per cell per column: the four costs, default and objective light, the flags (optics, propagation, surface kind, slope axis) and signed elevations; its surface and name are its static row.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "update": {
+    "occurrence": 0,
+    "entered": {
+     "x0": 0,
+     "y0": 0,
+     "width": 3,
+     "height": 1,
+     "bits": "Bw=="
+    },
+    "tile_statics": [
+     {
+      "position": [
+       0,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100000000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       1,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100001000",
+      "surface": {
+       "base_material": "stone",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Stone floor"
+     },
+     {
+      "position": [
+       2,
+       0
+      ],
+      "tile_uuid": "00000000-0000-4000-8000-000100002000",
+      "surface": {
+       "base_material": "wood",
+       "layers": [],
+       "description": ""
+      },
+      "name": "Plank wall"
+     }
+    ],
+    "tile_columns": {
+     "cells": {
+      "x0": 0,
+      "y0": 0,
+      "width": 3,
+      "height": 1,
+      "bits": "Bw=="
+     },
+     "walking_cost": "AgEB",
+     "flying_cost": "AAEB",
+     "swimming_cost": "AAcA",
+     "burrowing_cost": "AP8A",
+     "flags": "FCoB",
+     "default_light": "AwEC",
+     "resolved_light": "AwID",
+     "elevation_steps": [
+      3,
+      -2,
+      0
+     ]
+    }
+   },
+   "expected": {
+    "tiles": {
+     "0,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100000000",
+       "position": [
+        0,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "walking_cost": 2,
+       "flying_cost": 0,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 3,
+       "surface_kind": "stairs",
+       "slope_axis": "north_south",
+       "default_light": 3,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "1,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100001000",
+       "position": [
+        1,
+        0
+       ],
+       "surface": {
+        "base_material": "stone",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Stone floor",
+       "blocks_optics": false,
+       "blocks_propagation": true,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 7,
+       "burrowing_cost": 255,
+       "elevation_steps": -2,
+       "surface_kind": "ramp",
+       "slope_axis": "east_west",
+       "default_light": 1,
+       "resolved_light": 2,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     },
+     "2,0": {
+      "tile": {
+       "tile_uuid": "00000000-0000-4000-8000-000100002000",
+       "position": [
+        2,
+        0
+       ],
+       "surface": {
+        "base_material": "wood",
+        "layers": [],
+        "description": ""
+       },
+       "name": "Plank wall",
+       "blocks_optics": true,
+       "blocks_propagation": false,
+       "walking_cost": 1,
+       "flying_cost": 1,
+       "swimming_cost": 0,
+       "burrowing_cost": 0,
+       "elevation_steps": 0,
+       "surface_kind": "ordinary",
+       "slope_axis": null,
+       "default_light": 2,
+       "resolved_light": 3,
+       "condition_names": [],
+       "residues": []
+      },
+      "conditions": [],
+      "residues": {}
+     }
+    },
+    "objects": {},
+    "connectors": []
+   }
+  }
+ ]
+}

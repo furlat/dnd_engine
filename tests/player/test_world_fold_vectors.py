@@ -11,7 +11,7 @@ from uuid import UUID
 import pytest
 from pydantic import TypeAdapter
 
-from devtools.fold_vectors_world import DIRECTORY, PLACEMENT, documents
+from devtools.fold_vectors_world import DIRECTORY, PLACEMENT, TILE, documents
 from dnd.player.audience import PlayerAudience
 from dnd.player.facts import PlayerState, PlayerWorld, TileFieldUpdate, WorldUpdate
 from dnd.player.world_reduction import fold_world_update
@@ -36,8 +36,8 @@ TWO = [*ONE, str(UUID("00000000-0000-4000-8000-00000000000b"))]
 def client_world_view(memory: PlayerState) -> dict:
     """What the client holds of the world, in the vectors' expected shape."""
     return {
-        "tiles": {f"{x},{y}": {"tile": str(tile.tile_uuid), "walking_cost": tile.walking_cost,
-                               "blocks_optics": tile.blocks_optics, "resolved_light": tile.resolved_light.value,
+        "tiles": {f"{x},{y}": {"tile": TILE.dump_python(tile.model_copy(update={"condition_names": (),
+                                                                               "residues": ()}), mode="json"),
                                "conditions": list(tile.condition_names),
                                "residues": {row.residue_id: {"amount": row.amount,
                                                              "contributions": len(row.contributions)}
@@ -98,3 +98,14 @@ def test_keyed_rows_require_what_they_change():
     without_look = {**first["update"], "object_looks": []}
     with pytest.raises(ValueError, match="first row requires its look"):
         _fold(seat(ONE), {"update": without_look})
+
+
+def test_tile_column_bytes_follow_the_documented_layout():
+    """w12's columns as the Godot note lays them out: flags bit 0 optics, bit 1 propagation, bits 2-3 surface kind
+    (ordinary, stairs, ramp), bits 4-5 slope axis (none, north-south, east-west); signed elevations."""
+    columns = UPDATE.validate_json(json.dumps(_vector("w12_tile_columns_carry_every_scalar")["steps"][0]["update"])).tile_columns
+    assert columns is not None
+    assert list(columns.flags) == [0b010100, 0b101010, 0b000001]
+    assert list(columns.burrowing_cost) == [0, 255, 0] and list(columns.swimming_cost) == [0, 7, 0]
+    assert columns.elevation_steps == (3, -2, 0)
+    assert list(columns.default_light) == [3, 1, 2] and list(columns.resolved_light) == [3, 2, 3]
