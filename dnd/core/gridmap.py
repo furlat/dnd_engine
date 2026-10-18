@@ -682,13 +682,15 @@ class GridMap:
         self._light_slot_of.pop(source.uuid, None)
 
     def light_slot_words(self, box: Box) -> np.ndarray:
-        """The lit-slot words of a non-empty box inside the cell box, (width, height, words) uint64: bit
-        `slot % 64` of word `slot // 64` is set where that emitter lights the cell (no words while no
-        emitter holds a slot)."""
+        """The lit-slot words of a non-empty box inside the cell box, (width, height, words) uint64, as a
+        read-only view: bit `slot % 64` of word `slot // 64` is set where that emitter lights the cell
+        (no words while no emitter holds a slot)."""
         slots = self._cell_light_slots
         if not self._light_slot_of:
             return np.zeros((box[2] - box[0] + 1, box[3] - box[1] + 1, 0), dtype=np.uint64)
-        return slots.values[box[0] - slots.x0:box[2] - slots.x0 + 1, box[1] - slots.y0:box[3] - slots.y0 + 1]
+        words = slots.values[box[0] - slots.x0:box[2] - slots.x0 + 1, box[1] - slots.y0:box[3] - slots.y0 + 1].view()
+        words.flags.writeable = False
+        return words
 
     def light_sources_in_slots(self, words: np.ndarray) -> Set[UUID]:
         """The emitters whose slot bit is set in lit-slot words."""

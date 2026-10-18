@@ -514,7 +514,7 @@ def emit_sensory_update_delta(
         reason: Typed reason for the sensory transition.
         register_event: Whether to register the completed event immediately.
         initial: Publish the complete after-state without an unrecorded seed.
-        cells: The observer's cell change (`_cell_change`), against no cells when initial.
+        cells: The cell change of this before and after (`_cell_change`), against no cells when initial.
         contact_changes: The entities and objects whose contacts can differ, when known.
         shared: The settlement's shared values: equal change references are built once.
         contact_deltas: The entity and object contact deltas, when the caller computed them.
@@ -739,7 +739,6 @@ class GrantTable:
     over the observer's window; the rows are read together through one flat array."""
 
     observers: Tuple[UUID, ...]
-    layers: Tuple[CellLayer, ...]
     x0: np.ndarray                   # each row's window origin, width and height
     y0: np.ndarray
     width: np.ndarray
@@ -750,9 +749,9 @@ class GrantTable:
 
 def _grant_table(rows: Sequence[Tuple[UUID, CellLayer]]) -> GrantTable:
     """The table of these rows (observer, granted cells over its window)."""
-    layers = tuple(layer for _, layer in rows)
+    layers = [layer for _, layer in rows]
     sizes = np.array([layer.values.size for layer in layers], dtype=np.int64)
-    return GrantTable(tuple(identity for identity, _ in rows), layers,
+    return GrantTable(tuple(identity for identity, _ in rows),
                       np.array([layer.x0 for layer in layers], dtype=np.int64),
                       np.array([layer.y0 for layer in layers], dtype=np.int64),
                       np.array([layer.values.shape[0] for layer in layers], dtype=np.int64),
@@ -767,12 +766,20 @@ NO_GRANTS = _grant_table(())
 
 def _replace_grants(table: GrantTable, rows: Mapping[UUID, Optional[CellLayer]]) -> GrantTable:
     """The table with these observers' rows replaced (None drops a row)."""
-    kept = [(identity, layer) for identity, layer in zip(table.observers, table.layers) if identity not in rows]
+    kept = [(identity, CellLayer(int(x0), int(y0), table.flat[offset:offset + width * height].reshape(width, height)))
+            for identity, x0, y0, width, height, offset in zip(table.observers, table.x0.tolist(), table.y0.tolist(),
+                                                               table.width.tolist(), table.height.tolist(),
+                                                               table.offset.tolist())
+            if identity not in rows]
     return _grant_table(kept + [(identity, layer) for identity, layer in rows.items() if layer is not None])
 
 
 # One view's seen volumes, their upper surfaces and the cells their routes grant (`_volume_sight`).
 VolumeSights = Tuple[Dict[UUID, FrozenSet[Position]], Dict[UUID, Tuple[VolumeSurfaceSight, ...]], Set[Position]]
+# One view's resolved contacts (`_contacts`): entities, objects, its evidence rows and their targets, and the
+# entities and objects the recompute touched (None for a first view).
+ResolvedContacts = Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray, np.ndarray,
+                         Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]]
 
 
 @dataclass(frozen=True)
@@ -793,19 +800,18 @@ def _layers_box(layers: Iterable[CellLayer]) -> Box:
     return (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
 
 
-def _stack(layers: Sequence[CellLayer], box: Box, dtype: np.dtype) -> np.ndarray:
-    """The layers' values over one box that holds them, one row per layer."""
-    out = np.zeros((len(layers), box[2] - box[0] + 1, box[3] - box[1] + 1), dtype=dtype)
-    for index, layer in enumerate(layers):
-        if layer.values.size:
-            x0, y0 = layer.x0 - box[0], layer.y0 - box[1]
-            out[index, x0:x0 + layer.values.shape[0], y0:y0 + layer.values.shape[1]] = layer.values
-    return out
-
-
 def _visible_stack(before: Sequence[CellLayer], after: Sequence[CellLayer]) -> VisibleStack:
+    """The views' visible cells before and after, each stacked over the union of all their boxes."""
     box = _layers_box((*before, *after))
-    return VisibleStack(box, _stack(before, box, np.dtype(bool)), _stack(after, box, np.dtype(bool)))
+    stacks = []
+    for layers in (before, after):
+        out = np.zeros((len(layers), box[2] - box[0] + 1, box[3] - box[1] + 1), dtype=bool)
+        for index, layer in enumerate(layers):
+            if layer.values.size:
+                x0, y0 = layer.x0 - box[0], layer.y0 - box[1]
+                out[index, x0:x0 + layer.values.shape[0], y0:y0 + layer.values.shape[1]] = layer.values
+        stacks.append(out)
+    return VisibleStack(box, stacks[0], stacks[1])
 
 
 def _granted_at(table: GrantTable, positions: Iterable[Position]) -> np.ndarray:
@@ -1313,9 +1319,9 @@ class SpatialSensesSystem:
         diagnostic = action_timing_enabled()
         sensory_events: List[SensoryUpdateEvent] = []
         for observer_uuid in observers:
-            started = time.perf_counter() if diagnostic else 0.0
             after = published_senses(self.senses_by_observer[observer_uuid])
             initial = observer_uuid not in self.published_observers
+            started = time.perf_counter() if diagnostic else 0.0
             change = _cell_change(settled[observer_uuid][0], after, initial)
             if diagnostic:
                 record_action_timing("sensory.settlement.cell_changes_ms", started)
@@ -1402,7 +1408,11 @@ class SpatialSensesSystem:
             return None
         after = published_senses(senses)
         initial = observer_uuid not in self.published_observers
-        return self._emit_refresh(observer_uuid, before, after, initial, _cell_change(before, after, initial))
+        started = time.perf_counter() if action_timing_enabled() else 0.0
+        change = _cell_change(before, after, initial)
+        if action_timing_enabled():
+            record_action_timing("sensory.settlement.cell_changes_ms", started)
+        return self._emit_refresh(observer_uuid, before, after, initial, change)
 
     def _emit_refresh(self, observer_uuid: UUID, before: PublishedSenses, after: PublishedSenses, initial: bool,
                       change: CellChange) -> Optional[SensoryUpdateEvent]:
@@ -1516,10 +1526,10 @@ class SpatialSensesSystem:
         if diagnostic:
             record_action_timing("sensory.settlement.contacts_ms", started)
         # The views publish stage by stage, each stage over every view: cells, volume sight, fixtures,
-        # then grants, emitters and fields. Every rule hook a stage asks (hazards, fixture observations
+        # emitters, then grants and fields. Every rule hook a stage asks (hazards, fixture observations
         # and hazard perception) reads the observer's own published senses, which the earlier stages
-        # wrote for every view, or the objective world, read before the stages; no fact is stored
-        # while they run.
+        # wrote for every view, or the objective world, which no stage writes; no fact is stored while
+        # they run.
         started = time.perf_counter() if diagnostic else 0.0
         before_visible = [self._publish_cells(view, world, passives[view.owner.uuid], resolved)
                           for view, resolved in zip(views, contacts)]
@@ -1765,14 +1775,12 @@ class SpatialSensesSystem:
         return _contact_table_value(box, listed, cell_array, side_array)
 
     def _publish_cells(self, view: ObserverView, world: SettlementWorld, passive: int,
-                       resolved: Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray,
-                                       np.ndarray, Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]],
-                       ) -> CellLayer:
+                       resolved: ResolvedContacts) -> CellLayer:
         """Hazards, cells, seen cells and contacts of one view, published on its Senses.
         Returns the visible cells it published before."""
         owner, senses, origin = view.owner, view.senses, view.origin
         observer_uuid = owner.uuid
-        entities, objects = resolved[0], resolved[1]
+        entities, objects, _, _, _ = resolved
         window = view.field.window
         # Each hazard owner states its rule once per observer; its cells are OR-ed in one scatter.
         hazard_frame = np.zeros(OFF + 1, dtype=bool)
@@ -1829,8 +1837,7 @@ class SpatialSensesSystem:
 
     def _contacts(self, views: Sequence[ObserverView], table: ContactTable, passives: Sequence[int],
                   changed: Sequence[Optional[np.ndarray]], shared: SharedValues,
-                  ) -> List[Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray, np.ndarray,
-                                  Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]]]:
+                  ) -> List[ResolvedContacts]:
         """Every view's entity and object contacts, as evidence rows over the settlement's table.
 
         A target's contact is a function of the observer's view and of that target's rows (its
@@ -2017,8 +2024,7 @@ class SpatialSensesSystem:
                           previous_rows: np.ndarray, previous_uuids: np.ndarray, previous_changed: np.ndarray,
                           start_entities: Dict[UUID, PerceivedContact], start_objects: Dict[UUID, PerceivedContact],
                           shared: SharedValues,
-                          ) -> Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray,
-                                     np.ndarray, Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]]:
+                          ) -> ResolvedContacts:
         """One view's contacts from its evidence rows: the targets with a changed row are resolved
         again, every other contact is kept."""
         origin = view.origin
@@ -2092,7 +2098,7 @@ class SpatialSensesSystem:
         return tuple(channel for channel in CHANNELS if channel not in blocked)
 
     def _volume_sight(self, view: ObserverView, world: SettlementWorld,
-                      ) -> Tuple[Dict[UUID, FrozenSet[Position]], Dict[UUID, Tuple[VolumeSurfaceSight, ...]], Set[Position]]:
+                      ) -> VolumeSights:
         """Each seen volume's visible geometry, its upper surfaces and the routes it grants.
 
         First-surface sight establishes a volume. Its geometry may be viewed from
@@ -2228,9 +2234,7 @@ class SpatialSensesSystem:
     def _refresh_spatial_effects(
         self, views: Sequence[ObserverView], sights: Sequence[VolumeSights], before_visible: Sequence[CellLayer],
         affected: Mapping[UUID, Optional[Set[Position]]], passives: Mapping[UUID, int],
-        resolved: Sequence[Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray, np.ndarray,
-                                 Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]]],
-        stack: VisibleStack,
+        resolved: Sequence[ResolvedContacts], stack: VisibleStack,
     ) -> List[Dict[UUID, Optional[PerceivedSpatialEffect]]]:
         """Re-observe every view's fixtures on its newly visible and affected cells, in one pass over the
         stacked views: each spatial condition's footprint meets every view's re-observed cells at once,
@@ -2262,41 +2266,26 @@ class SpatialSensesSystem:
         # the first two held and no named cell is visible or a volume surface, the published fixtures
         # stand. An observation also reads the observer's contacts (a fixture's anchor) and its passive
         # perception (hazard perception): any contact change or a passive change re-runs the stage.
-        for index, (view, (volumes, upper, _), contacts) in enumerate(zip(views, sights, resolved)):
+        for index, (view, (volumes, upper, _), (_, _, _, _, contact_changes)) in enumerate(zip(views, sights, resolved)):
             surfaces = {position for positions in volumes.values() for position in positions}
             surfaces.update(row.position for rows in upper.values() for row in rows)
             cells = affected[view.owner.uuid]
             if not (view.published and view.senses.cells.visible is before_visible[index] and cells is not None
-                    and contacts[4] == (frozenset(), frozenset()) and view.field.passive == passives[view.owner.uuid]
+                    and contact_changes == (frozenset(), frozenset()) and view.field.passive == passives[view.owner.uuid]
                     and volumes == view.field.volumes and upper == view.field.upper
                     and not affected_seen[index] and surfaces.isdisjoint(cells)):
                 surfaces_of[index] = surfaces
         # A published fixture is touched when it holds volume, upper-surface or suppression cells, or when
-        # one of its cells changed; the changed cells of every view are read in one gather. Each view's
-        # touched set is filled in its fixtures' published order.
-        listed: Dict[int, List[Tuple[UUID, int]]] = {}
-        pairs: List[Tuple[int, Tuple[Position, ...]]] = []
+        # one of its cells changed.
+        touched_of: Dict[int, Set[UUID]] = {}
         for index in surfaces_of:
-            rows = listed[index] = []
+            touched = touched_of[index] = set()
             for identity, previous in views[index].senses.spatial_effects.items():
                 if (previous.visible_volume_positions or previous.upper_volume_surfaces
                         or any(row.positions for row in previous.suppressions)):
-                    rows.append((identity, -1))
-                elif any_changed[index] and previous.positions:
-                    rows.append((identity, len(pairs)))
-                    pairs.append((index, previous.positions))
-        met: List[bool] = []
-        if pairs:
-            lengths = np.array([len(positions) for _, positions in pairs], dtype=np.int64)
-            cells_array = np.array([cell for _, positions in pairs for cell in positions], dtype=np.int64).reshape(-1, 2)
-            owners = np.repeat(np.array([index for index, _ in pairs], dtype=np.int64), lengths)
-            i, j = cells_array[:, 0] - box[0], cells_array[:, 1] - box[1]
-            inside = (i >= 0) & (i < now.shape[1]) & (j >= 0) & (j < now.shape[2])
-            hit = np.zeros(owners.size, dtype=bool)
-            hit[inside] = changed[owners[inside], i[inside], j[inside]]
-            met = np.logical_or.reduceat(hit, np.concatenate(([0], np.cumsum(lengths)[:-1]))).tolist()
-        touched_of = {index: {identity for identity, pair in rows if pair < 0 or met[pair]}
-                      for index, rows in listed.items()}
+                    touched.add(identity)
+                elif any_changed[index] and previous.positions and _gather(changed[index], box, previous.positions).any():
+                    touched.add(identity)
         # Only a footprint meeting a re-observed cell or a volume surface can be observed now: each
         # condition's footprint is read once, against every observing view.
         live = [index for index, surfaces in surfaces_of.items() if any_reobserved[index] or surfaces]
@@ -2434,9 +2423,7 @@ class SpatialSensesSystem:
 
     def _refresh_light_sources(
         self, views: Sequence[ObserverView], world: SettlementWorld,
-        resolved: Sequence[Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray, np.ndarray,
-                                 Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]]],
-        shared: SharedValues, stack: VisibleStack,
+        resolved: Sequence[ResolvedContacts], shared: SharedValues, stack: VisibleStack,
     ) -> List[Tuple[Tuple, Dict[UUID, Tuple]]]:
         """Every view's compact emitter descriptors: the emitters lighting a visible cell; cell
         illumination has its native events. An emitter's anchor is disclosed when the observer sees it
@@ -2444,16 +2431,15 @@ class SpatialSensesSystem:
         cells and the targets of its visual contacts: while they hold, its published emitters stand;
         otherwise only the emitters whose row, lighting or anchor disclosure changed are described
         again. The lighting and disclosure of every view are one array pass (the stacked visible
-        cells read their lit-slot words in one gather, OR-ed per view). Returns, per view, those
+        cells' lit-slot words, OR-ed per view). Returns, per view, those
         inputs with the per-emitter lighting and disclosure, and each published emitter's
         descriptor inputs."""
         grid = get_map()
         lights = world.light_sources
-        results: List[Tuple[Tuple, Dict[UUID, Tuple]]] = [((), {})] * len(views)
+        results: Dict[int, Tuple[Tuple, Dict[UUID, Tuple]]] = {}
         pending: List[int] = []
         visual_keys_of: List[np.ndarray] = []
-        for index, (view, contacts) in enumerate(zip(views, resolved)):
-            contact_rows = contacts[2]
+        for index, (view, (_, _, contact_rows, _, _)) in enumerate(zip(views, resolved)):
             visual_keys = np.sort(contact_rows[contact_rows[:, 5] != 0, 7])
             known = view.field.light_inputs
             if (known is not None and known[0] is lights and known[1] is view.senses.cells.visible
@@ -2463,15 +2449,18 @@ class SpatialSensesSystem:
             pending.append(index)
             visual_keys_of.append(visual_keys)
         if not pending:
-            return results
+            return [results[index] for index in range(len(views))]
         count, emitters = len(pending), lights.slots.size
         lit = np.zeros((count, emitters), dtype=bool)
-        if stack.after.size:
-            words = grid.light_slot_words(stack.box)
+        # The current windows lie in the current cell box (a published one may predate a replaced map).
+        box = _layers_box(views[index].senses.cells.visible for index in pending)
+        if box[0] <= box[2]:
+            words = grid.light_slot_words(box)
             slotted = (lights.slots >= 0) & (lights.slots // 64 < words.shape[2])
             if slotted.any():
-                # Each view's words OR-ed over its visible cells.
-                visible = stack.after[np.array(pending, dtype=np.int64)]
+                # Each view's words OR-ed over its visible cells (one masked reduce over the stacked views).
+                visible = stack.after[np.array(pending, dtype=np.int64), box[0] - stack.box[0]:box[2] - stack.box[0] + 1,
+                                      box[1] - stack.box[1]:box[3] - stack.box[1] + 1]
                 lit_words = np.bitwise_or.reduce(np.where(visible[..., None], words[None], np.uint64(0)), axis=(1, 2))
                 slots = lights.slots[slotted]
                 lit[:, slotted] = ((lit_words[:, slots // 64] >> (slots % 64).astype(np.uint64)) & np.uint64(1)) != 0
@@ -2500,13 +2489,14 @@ class SpatialSensesSystem:
             previous_index, row_changed, gone = _light_table_diff(published[0][1][0], lights)
             present = previous_index >= 0
 
-            def before(position: int) -> np.ndarray:
-                values = np.zeros((len(published), emitters), dtype=bool)
-                values[:, present] = np.stack([known[position] for _, known in published]).reshape(
-                    len(published), -1)[:, previous_index[present]]
+            def before(flags: List[np.ndarray]) -> np.ndarray:
+                """The published views' flags per previous emitter row, placed on the current rows."""
+                values = np.zeros((len(flags), emitters), dtype=bool)
+                values[:, present] = np.stack(flags)[:, previous_index[present]]
                 return values
-            check[members] = (row_changed[None, :] | (lit[members] != before(3))
-                              | (anchor_entity[members] != before(4)) | (anchor_item[members] != before(5)))
+            check[members] = (row_changed[None, :] | (lit[members] != before([known[3] for _, known in published]))
+                              | (anchor_entity[members] != before([known[4] for _, known in published]))
+                              | (anchor_item[members] != before([known[5] for _, known in published])))
             for order in members:
                 gone_of[order] = gone
         for order, index in enumerate(pending):
@@ -2574,7 +2564,7 @@ class SpatialSensesSystem:
                     senses.light_source_removals.pop(identity, None)
             senses.light_sources = sources
             results[index] = (inputs, values_of)
-        return results
+        return [results[index] for index in range(len(views))]
 
     @staticmethod
     def _residue_tile(event: Event) -> Optional[Tile]:

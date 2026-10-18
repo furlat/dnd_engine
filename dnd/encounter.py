@@ -114,8 +114,8 @@ def _compute_identified_entity_observers(
     identifies it when the participant is among that observer's contacts.
     `previous` is the grants mapping the version carries from its predecessor:
     the grants are computed for every version, and when every participant's grant
-    is unchanged the carried mapping is returned itself (grants are shared frozen
-    values), so versions share one mapping while it holds.
+    is unchanged the carried mapping is returned itself, so versions share one
+    mapping while it holds.
     """
     grid = get_map()
     participant_uuids = {
@@ -131,7 +131,7 @@ def _compute_identified_entity_observers(
             else frozenset(_id_string(holder)
                            for holder in spatial_senses_system.identifying_observers(participant_uuid, position))))
     if len(rows) == len(previous) and all(
-            held_key == key and (held is observers or held == observers)
+            held_key == key and held == observers
             for (held_key, held), (key, observers) in zip(previous.items(), rows)):
         return previous
     return dict(rows)
