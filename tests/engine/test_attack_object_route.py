@@ -100,12 +100,14 @@ def _place(kind: str, position: tuple[int, int], owner) -> BaseItem:
     if kind == "stove":
         item = build_authored_item("environment.furniture.clay_stove", owner)
         item.place_on_grid(position)
-    elif kind == "bed":  # two floor spaces; rotated north, the second is one cell south of `position`
+    elif kind == "bed":  # two floor spaces; rotated north, the second is one cell north (+y) of `position`
         item = build_world_prop("environment.furniture.bed", source_entity_uuid=owner)
         item.place_on_grid(position, orientation=CardinalDirection.NORTH)
-    else:  # a door on the east edge of `position`: contacted from either side of that edge
+    elif kind == "door":  # on the east edge of `position`: contacted from either side of that edge
         item = build_authored_door("environment.door.desert_c7")
         item.place_on_grid(position, boundary_direction=CardinalDirection.EAST)
+    else:
+        raise ValueError(f"Unknown object kind {kind}")
     return item
 
 

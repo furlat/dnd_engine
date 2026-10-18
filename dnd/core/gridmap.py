@@ -3343,17 +3343,16 @@ class GridMap:
         return tuple(sorted(origin for origin in near.intersection(origins) if self.manual_object_contact(
             requester_uuid, object_uuid, subjective=subjective, origin=origin) is not None))
 
-    def object_contact_floor_feet(self, object_uuid: UUID, origin: Tuple[int, int]) -> Optional[int]:
-        """The grid distance from ``origin`` to the nearest cell of the object's contact surface; None if unplaced.
+    def object_contact_beyond(self, object_uuid: UUID, origin: Tuple[int, int], feet: int) -> bool:
+        """Whether every cell of the placed object's contact surface is farther than ``feet`` from ``origin``.
 
-        No contact `attack_object_contact` finds from ``origin`` is nearer:
-        support distance is never shorter than grid distance, and the
-        subjective surface is a subset of the full one.
+        `attack_object_contact` from ``origin`` then finds no contact within
+        ``feet``: support distance is never shorter than grid distance, and the
+        subjective surface is a subset of the full one. False when unplaced.
         """
         placement = self._object_placements.get(object_uuid)
-        if placement is None:
-            return None
-        return min(grid_distance_feet(origin, position) for position in contact_surface(placement))
+        return placement is not None and all(
+            grid_distance_feet(origin, position) > feet for position in contact_surface(placement))
 
     def attack_object_contact(
         self, requester_uuid: UUID, object_uuid: UUID, *,

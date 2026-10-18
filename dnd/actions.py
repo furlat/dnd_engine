@@ -2101,7 +2101,7 @@ class Attack(BaseAction):
         return source.get_weapon_range(self.weapon_slot) if source is not None else None
 
     def target_reach_feet(self) -> Optional[int]:
-        """`weapon_reach` admits no target beyond the weapon's longer range: its long range, or its normal one."""
+        """The larger of the weapon range's normal and long distances: `weapon_reach` admits no target beyond it."""
         source = Entity.get(self.source_entity_uuid)
         if source is None:
             return None
