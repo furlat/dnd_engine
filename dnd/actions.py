@@ -3405,12 +3405,7 @@ class Jump(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
             return Range(type=RangeType.REACH, normal=15)
-
-        base = 15 + max(0, entity.ability_scores.strength.modifier) * 5
-        additive = entity.jump_distance_additive.normalized_score
-        multiplier = entity.jump_distance_multiplier.normalized_score
-        total_range = (base + additive) * multiplier
-        return Range(type=RangeType.REACH, normal=total_range)
+        return Range(type=RangeType.REACH, normal=entity.jump_distance_feet())
 
     def get_valid_positions(self) -> List[Tuple[int, int]]:
         """Get valid landing positions for jump.
@@ -3550,8 +3545,7 @@ class Jump(BaseAction):
         if end_pos not in scan.visible:
             return f"Position {end_pos} not visible"
 
-        action_range = self.get_range()
-        max_range = action_range.normal if action_range else 15
+        max_range = scan.jump_feet
         distance = source_entity.senses.get_feet_distance(end_pos)
         if distance > max_range:
             return f"Position {end_pos} out of jump range ({distance}ft > {max_range}ft)"

@@ -4032,6 +4032,11 @@ class Entity(BaseBlock):
         con_modifier = self.ability_scores.get_ability("constitution").modifier_reading()
         return self.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
 
+    def jump_distance_feet(self) -> int:
+        """(15 ft + 5 ft per positive Strength modifier point + the additive jump value) x the multiplier jump value."""
+        base = 15 + max(0, self.ability_scores.strength.modifier) * 5
+        return (base + self.jump_distance_additive.normalized_score) * self.jump_distance_multiplier.normalized_score
+
     def get_weapon_range(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> Range:
         """
         Get the range of a weapon without calculating attack bonuses.
@@ -4421,6 +4426,7 @@ class Entity(BaseBlock):
             free_cast_grants=frozenset(self.spellcasting.free_cast_grants),
             source_item_charges={item.uuid: item.charges for item in carried if isinstance(item, UsableItem)},
             active_encounter_uuid=self.active_encounter_uuid,
+            jump_feet=self.jump_distance_feet(),
         )
 
     def perform(self, action: BaseAction, selection: ActionSelection,
