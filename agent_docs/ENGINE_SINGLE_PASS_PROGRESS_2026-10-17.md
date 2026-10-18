@@ -693,3 +693,18 @@ Hard rules:
   - **Staging** (no projector change): schema-16 world types, codec, client fold and vectors W1-W10 at `sdk/protocol/fold-vectors/world/` (49432f670, e6cd2593c); a look census over 29 gallery cases moved a floor item's visual name into its state.
   - **Expected test change:** `test_content_local_admission.py::test_catalog_replacement_admits_public_values_and_keeps_private_links_hidden` still passes, but a replacement catalog no longer back-fills content witnessed before it (unreachable from the worker).
   - Next: Phase B after E2 and E0 merge.
+- 2026-10-18: **E3-world: roots whose versions interleave are one walk group (codex/enp-e3-world, 759f3b0c5; coordinator).**
+  - **The rule, for E3-bodies and E3-sensory:** `capture_context` groups an operation's roots. A root starting before the last version of the group open so far joins it. The group's graph holds its roots' lineages and versions together, in source order, and is named by its root completing last. It is captured once, walked once by every seat and published as one `PlayerLineage` with its nodes in native order; the nested roots are parentless nodes inside the root's interval. A root that overlaps no other is its own group. Every fold walks these groups: the session world, the seats' and the clients'.
+  - **Why:** the client folds a seat's lineages in emission order, so only one native-order lineage fixes it. This replaces the latent F11 note above. In round_step_zones a Prone removal root completed inside its TurnStart root, was published first and left the seat showing Prone. Probe (each seat's client mirror vs the native entity after each of the 63 operations): 168 stale Prone rows before, 0 after.
+  - **Merged groups (all of them):**
+    - gallery:
+      - round_step_zones ×3: TurnStart + Prone removal;
+      - summon_retirement: Conjure Animals + InitiativeOrderChanged and three rider conditions (Bite Prone Rider, Keen Hearing and Smell, Pack Tactics);
+      - summon_retirement: Drop Concentration + InitiativeOrderChanged.
+    - tests (tests/player, ai, engine), all in test_bg3_spell_transport.py:
+      - Flame Blade + two ItemLocationState, WeaponEquip, WeaponUnequip;
+      - Flaming Sphere + InitiativeOrderChanged;
+      - Spiritual Weapon ×2 + InitiativeOrderChanged;
+      - Dismiss Summon + InitiativeOrderChanged.
+    - The other 10 gallery cases merge nothing. The earlier "101 of 586" counted repeated walks of one history and was not a merge count.
+  - **Gate vs ad08ffa45:** 12 gallery cases byte-identical (summon_retirement's merged roots publish the same bytes); tests/player, ai, architecture failures = r29.
