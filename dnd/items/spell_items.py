@@ -51,6 +51,7 @@ from dnd.core.events import (
 )
 from dnd.core.creature_types import DamageType
 from dnd.core.values import ModifiableValue, parts
+from dnd.core.saving_throw_types import DamageSaveContext
 from dnd.entity import Entity
 from dnd.types.discovery import ActorScan
 from dnd.spells.abjuration import MageArmor
@@ -386,7 +387,8 @@ class _AcidFlaskSpell(SpellAction):
                 amount=final_damage,
                 damage_type=DamageType.ACID,
                 source_entity_uuid=caster.uuid,
-                parent_event=effect_event.uuid,
+                parent_event=effect_event.uuid, damages=[acid_damage], damage_rolls=[damage_roll],
+                damage_save=DamageSaveContext(ability="dexterity", success=success, success_fraction=0.5),
             )
 
         save_text = " (saved for half)" if success else ""

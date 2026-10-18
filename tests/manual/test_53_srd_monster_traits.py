@@ -124,17 +124,17 @@ def test_factory_trait_packages_are_installed() -> None:
         "ogre_zombie": {"Undead Fortitude"},
     }
     expected_actions = {
-        "scout": {"Scout Multiattack: Shortsword", "Scout Multiattack: Longbow"},
-        "thug": {"Thug Multiattack"},
+        "scout": {"Multiattack: 2 x main hand", "Multiattack: 2 x ranged"},
+        "thug": {"Multiattack: 2 x main hand"},
         "orc": {"Aggressive"},
         "gnoll": {"Bite"},
-        "spy": {"Cunning Action: Dash", "Cunning Action: Disengage", "Cunning Action: Hide", "Spy Multiattack"},
+        "spy": {"Cunning Action: Dash", "Cunning Action: Disengage", "Cunning Action: Hide", "Multiattack: 2 x main hand"},
         "berserker": {"Reckless"},
-        "bandit_captain": {"Bandit Captain Multiattack: Melee", "Bandit Captain Multiattack: Ranged"},
-        "cult_fanatic": {"Cult Fanatic Multiattack"},
+        "bandit_captain": {"Multiattack: 2 x main hand, 1 x off hand", "Multiattack: 2 x ranged"},
+        "cult_fanatic": {"Multiattack: 2 x main hand"},
         "priest": {"Divine Eminence"},
-        "knight": {"Leadership", "Knight Multiattack"},
-        "veteran": {"Veteran Multiattack: Melee", "Veteran Multiattack: Ranged"},
+        "knight": {"Leadership", "Multiattack: 2 x main hand"},
+        "veteran": {"Multiattack: 2 x main hand, 1 x off hand", "Multiattack: 2 x ranged"},
     }
 
     for monster_id, condition_names in expected_conditions.items():
@@ -223,11 +223,12 @@ def test_uniform_multiattack_discloses_repeated_attack_profile() -> None:
     longbow = next(
         row
         for row in scout.get_available_actions().entity_actions
-        if row.template_name == "Scout Multiattack: Longbow"
+        if row.template_name == "Multiattack: 2 x ranged"
     )
 
+    assert longbow.display_name == "Multiattack: 2 × Longbow"
     assert longbow.outcome_profile is not None
-    assert longbow.outcome_profile.effect_id == "multiattack.scout_multiattack_longbow"
+    assert longbow.outcome_profile.effect_id == "multiattack.multiattack_2_x_ranged"
     assert longbow.outcome_profile.applications == 2
     assert longbow.outcome_profile.damage_rolls[0].die_size == 8
     assert longbow.outcome_profile.damage_rolls[0].damage_type == DamageType.PIERCING.value
@@ -236,8 +237,8 @@ def test_uniform_multiattack_discloses_repeated_attack_profile() -> None:
 def test_off_hand_multiattack_children_use_parent_cost_after_bonus_is_spent() -> None:
     """Stat-block off-hand attacks are not player two-weapon bonus actions."""
     for monster_id, action_name in (
-        ("bandit_captain", "Bandit Captain Multiattack: Melee"),
-        ("veteran", "Veteran Multiattack: Melee"),
+        ("bandit_captain", "Multiattack: 2 x main hand, 1 x off hand"),
+        ("veteran", "Multiattack: 2 x main hand, 1 x off hand"),
     ):
         reset_srd_trait_state()
         actor = _materialize_srd_fixture(
@@ -499,4 +500,4 @@ def test_active_monster_actions_apply_their_marker_conditions() -> None:
         condition.name == "Leadership Aura"
         for condition in get_map().get_spatial_conditions()
     )
-    assert "Leadership Used" in knight.active_conditions
+    assert knight.action_economy.get_resource_current("leadership") == 0

@@ -178,6 +178,7 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _original(actions.TraverseConnector, "action.traverse_connector", "Traverse Connector", "Traverse an admitted existing passage using its native costs and endpoints."),
     _original(summoning.DismissSummon, "action.summon.dismiss", "Dismiss Summon", "Spend one action to dismiss a temporary creature whose control is retained."),
     _srd(monster_traits.InnateInvisibility,"action.monster.innate_invisibility","Innate Invisibility","Concentrate on indefinite innate invisibility.",root_owned=True),
+    _srd(monster_traits.ShieldBash, "action.monster.shield_bash", "Shield Bash", "Bash with a held shield; eligible targets save against falling Prone.", root_owned=True),
     _srd(monster_traits.WightLifeDrain,"action.monster.wight.life_drain","Life Drain","Intrinsic necrotic contact with saved maximum HP reduction.",root_owned=True),
     _original(spell_items.EmberQuiverActivation,"action.item.ember_quiver","Ember Quiver","Apply a ten-round fire coating to an equipped bow or crossbow."),
     _srd(evocation.DismissFireShield, "action.spell.fire_shield.dismiss", "Dismiss Fire Shield", "Dismiss the retained fire or cold shield."),
@@ -237,13 +238,16 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _srd(
         monster_traits.MultiattackAction,
         "action.monster.multiattack",
-        "Multiattack Runtime",
+        "Multiattack",
         (
-            "Internal reusable engine behavior specialized by exact public "
-            "stat-block action configurations."
+            "Make a creature's stat-block sequence of weapon attacks for one "
+            "action; each creature's recipe supplies its steps. The engine "
+            "resolves the whole sequence against one selected target, although "
+            "the general attack rules let each attack choose its own unless a "
+            "stat block says otherwise."
         ),
-        visibility=ContentVisibility.INTERNAL,
         root_owned=True,
+        icon_key="ui.filter-attacks",
     ),
     _srd(monster_traits.NaturalAttack, "action.monster.natural_attack", "Natural Attack", "Resolve a data-authored natural weapon attack.", root_owned=True),
 

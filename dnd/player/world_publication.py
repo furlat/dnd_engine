@@ -2,7 +2,8 @@
 change at one occurrence.
 
 Functions of the session world as of the occurrence (`WorldFacts`), what the occurrence wrote (`AppliedWorldFact`,
-which names the records: this module never compares world states), the seat's composed view before and after it
+which names the records: this module never compares two world states; a re-entering record's value digest meets
+the seat's stamp only through `world_stamps.unchanged_since`), the seat's composed view before and after it
 and the seat's knowledge (the objects it observes, the containers whose contents it sees and the static rows it
 was sent), which `seat_world_update` advances. The client's memory is never read: what it holds follows from the
 rules
@@ -11,7 +12,10 @@ rules
 - a record perceived before and after the occurrence travels as its keyed change;
 - a record entering perception travels whole: a cell entering the composed view (or a visible tile replaced),
   every object touching it and every connector with an endpoint there; an object newly observed; a container
-  whose contents become visible;
+  whose contents become visible. A tile or an object whose value now is the one the seat holds (its digest stamp,
+  `world_stamps`), seen on no new face and by the same members, is unchanged instead: an entered cell in
+  `tiles_unchanged`, an object on one in `objects_unchanged`, nothing for one off them (the client still holds it).
+  An object with suppressions, item effects or concentration slots always travels whole (`world_stamps.stampable`);
 - the seat sees an object go when it observed it and the occurrence removed or moved it, or when it sees the
   object's support without it;
 - leaving perception sends nothing;
@@ -29,6 +33,9 @@ from dnd.player.audience import AudiencePerception, PlayerAudience
 from dnd.player.facts import (BoundaryStructureStatic, ContainedItem, ContainerContents, ContentsChange,
     ContributionRow, FloorItem, ObjectLook, ObjectRow, ObjectState, PlayerObject, ResidueKey, ResidueMaterial,
     ResidueRow, TileConditions, TileFieldUpdate, TileLook, TileStatic, WorldUpdate)
+from dnd.player.world_digests import TileDigests, cached_tile_digest
+from dnd.player.world_stamps import (SeatStamps, object_digest, object_stamps, object_view, stamp_world_update,
+    stampable, tile_stamps, unchanged_since)
 from dnd.player.static_sent import StaticSent
 from dnd.player.world_columns import (pack_object_rows, pack_placement, pack_tile_columns, split_floor_item,
     tile_look_id)
@@ -210,7 +217,7 @@ def _contained(rows: _Rows, items: Iterable[ItemPresentationState], sent: Static
 
 
 def _scalars(changes: WorldTileChanges, keys: Iterable[str], tile: WorldTileState) -> None:
-    """A kept tile's written scalars with their values as of the occurrence. Its condition names follow its own
+    """A perceived tile's written scalars with their values as of the occurrence. Its condition names follow its own
     conditions' and residues' rows (a residue writer's names are its materials', which the client derives)."""
     for key in keys:
         match key:
@@ -243,7 +250,7 @@ def _scalars(changes: WorldTileChanges, keys: Iterable[str], tile: WorldTileStat
 def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[AppliedWorldFact, ...], before: CellMask,
                       view: SensesSnapshot, perception: AudiencePerception, audience: PlayerAudience,
                       sensed: SensedWorld | None, *, observed: set[UUID], granted: set[UUID], sent: StaticSent,
-                      pending: StaticSent) -> WorldUpdate | None:
+                      pending: StaticSent, digests: TileDigests, stamps: SeatStamps) -> WorldUpdate | None:
     """One seat's world update at an occurrence, or None when it perceives no world change there.
 
     `applied` is what the occurrence wrote (for a member's sensory occurrence, what the changes it saw happen
@@ -251,7 +258,8 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
     of the occurrence. `before` is the composed view's visible cells before it, `view` the composed view after
     it. It writes the seat knowledge it is given: `observed` and `granted` (the seat's observed objects and seen
     contents) become the seat's perception after it, and the static rows sent here join `pending` (the walk's,
-    merged into `sent` once its group is emitted, never mid-walk: plan §3.5).
+    merged into `sent` once its group is emitted, never mid-walk: plan §3.5), its stamps the walk's (`stamps.walk`).
+    `digests` are the session's tile digests.
     """
     visible = view.visible
     replaced = set().union(*(row.replaced for row in applied))
@@ -263,8 +271,13 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
     entered = set(mask_positions(entered_cells))
     rows = _Rows()
 
-    # Tiles: the entered cells whole (their static rows first: a placement's anchor tile is derived from them).
-    tiles = {position: world.tiles[position] for position in sorted(entered) if position in world.tiles}
+    # Tiles: the entered cells whole (their static rows first: a placement's anchor tile is derived from them),
+    # but those the seat still has as they are.
+    unchanged_tiles = {position for position in entered if position in world.tiles
+                       and unchanged_since(tile_stamps(stamps, position), position,
+                                           cached_tile_digest(digests, world.tiles, position))}
+    tiles = {position: world.tiles[position] for position in sorted(entered - unchanged_tiles)
+             if position in world.tiles}
     tile_conditions: dict[Position, tuple[str, ...]] = {}
     residues: dict[tuple[Position, str], ResidueRow] = {}
     residues_removed: dict[tuple[Position, str], ResidueKey] = {}
@@ -298,6 +311,19 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
              if identity in world.objects and object_observed(world, view, identity)}
     before_observed = observed & candidates
     whole = (after - observed) | (after & (touching | providers))
+    unchanged = set()
+    known_before = sent.object_looks | pending.object_looks
+    for identity in whole:
+        seen = object_view(stamps, identity)
+        if seen is None:
+            continue
+        placement = world.objects[identity].placement
+        state = split_floor_item(disclosed_floor_item(world, view, identity, known_before))[1]
+        if (stampable(state) and set(observed_faces(placement, visible)) <= seen.faces
+                and object_members(world, perception, audience, identity) == seen.members
+                and unchanged_since(object_stamps(stamps, identity), identity, object_digest(state, placement))):
+            unchanged.add(identity)
+    whole -= unchanged
     for identity in sorted(whole, key=str):
         _look(rows, split_floor_item(floor_item(world.objects[identity].item, ()))[0], sent, pending)
     known = sent.object_looks | pending.object_looks
@@ -412,6 +438,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
                     for index in sorted(indexes)))
     tile_changes = {position: changes for position, changes in tile_changes.items() if changes}
     update = WorldUpdate(occurrence=occurrence, entered=entered_cells,
+        tiles_unchanged=mask_from_positions(unchanged_tiles) if unchanged_tiles else EMPTY_CELLS,
         tile_looks=tuple(rows.tile_looks), tile_statics=tuple(rows.tile_statics), tile_columns=pack_tile_columns(tiles),
         tile_conditions=tuple(TileConditions(position=position, names=names)
             for position, names in sorted(tile_conditions.items())),
@@ -421,8 +448,15 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
         boundary_structures=tuple(rows.boundary_structures),
         residues=tuple(residues[key] for key in sorted(residues)),
         residues_removed=tuple(residues_removed[key] for key in sorted(residues_removed)),
-        object_looks=tuple(rows.object_looks), objects=pack_object_rows(object_rows), objects_removed=tuple(removed),
+        object_looks=tuple(rows.object_looks), objects=pack_object_rows(object_rows),
+        # An unchanged composite re-sent as a changed row (an attachment of it newly sent) travels as that row.
+        objects_unchanged=tuple(sorted((unchanged - changed) & touching, key=str)), objects_removed=tuple(removed),
         contents=tuple(contents), contents_changed=tuple(contents_changed),
         connectors=tuple(connectors[identity] for identity in sorted(connectors, key=str)),
         connectors_removed=tuple(connectors_removed))
-    return None if update == WorldUpdate(occurrence=occurrence) else update
+    if update == WorldUpdate(occurrence=occurrence):
+        return None
+    stamp_world_update(stamps, update, object_rows, lambda position: cached_tile_digest(digests, world.tiles, position),
+                       {row.item_uuid: world.objects[row.item_uuid].placement for row in object_rows
+                        if row.placement is not None})
+    return update

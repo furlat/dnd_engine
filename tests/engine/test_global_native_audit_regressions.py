@@ -138,11 +138,16 @@ def test_class_action_benefit_requires_own_effect_admission(game, class_id, leve
     assert (after == before) is refused
 
 
-@pytest.mark.parametrize("refused", refusal_cases("GA-01: refused monster action commits conditions"))
-@pytest.mark.parametrize("creature_id,action_type", [
+@pytest.mark.parametrize("creature_id,action_type,refused", [
+    pytest.param(creature_id, action_type, refused,
+        marks=(pytest.mark.xfail(strict=True, raises=AssertionError,
+            reason="GA-01: refused monster action commits conditions")
+            if refused and creature_id != "knight" else ()))
+    for creature_id, action_type in [
     ("priest", DivineEminenceAction),
     ("knight", LeadershipAction),
     ("skeleton_archer", MarkTargetAction),
+    ] for refused in (False, True)
 ])
 def test_authored_monster_benefit_requires_own_effect_admission(game, creature_id, action_type, refused):
     if creature_id == "skeleton_archer":
@@ -160,20 +165,30 @@ def test_authored_monster_benefit_requires_own_effect_admission(game, creature_i
     target.compose_entity()
     game.deploy_entity(target, (4, 2))
     Entity.update_all_entities_senses()
-    before = (frozenset(actor.active_conditions), frozenset(target.active_conditions))
+    before = (frozenset(actor.active_conditions), frozenset(target.active_conditions),
+              frozenset(condition.uuid for condition in get_map().get_spatial_conditions()))
     refusals = refuse_effect(actor, EventType.BASE_ACTION) if refused else []
     template = next(action for action in actor.registered_actions if isinstance(action, action_type))
     kwargs = {"target_entity_uuid": target.uuid} if action_type is MarkTargetAction else {}
     result = template.instantiate(**kwargs).apply()
-    after = (frozenset(actor.active_conditions), frozenset(target.active_conditions))
+    after = (frozenset(actor.active_conditions), frozenset(target.active_conditions),
+             frozenset(condition.uuid for condition in get_map().get_spatial_conditions()))
     assert result is not None
     assert result.canceled is refused
     assert bool(refusals) is refused
     assert (after == before) is refused
 
 
-@pytest.mark.parametrize("refused", refusal_cases("GA-02: refused item use commits healing or coating"))
-@pytest.mark.parametrize("item_id", [
+@pytest.mark.parametrize("item_id,refused", [
+    pytest.param(item_id, refused,
+        marks=(pytest.mark.xfail(strict=True, raises=AssertionError,
+            reason="GA-02: refused item use commits healing or coating")
+            if refused and item_id in {
+                "consumable.healing_potion", "consumable.potion_haste",
+                "consumable.potion_greater_invisibility", "consumable.potion_true_seeing",
+                "gear.ember_quiver",
+            } else ()))
+    for item_id in [
     "consumable.healing_potion",
     "consumable.potion_haste",
     "consumable.potion_greater_invisibility",
@@ -181,9 +196,11 @@ def test_authored_monster_benefit_requires_own_effect_admission(game, creature_i
     "consumable.weapon_coat.fire",
     "consumable.weapon_coat.lightning",
     "consumable.weapon_coat.basic_poison",
+    "consumable.weapon_coat.assassin_poison",
     "consumable.weapon_coat.concentration_fire",
     "consumable.weapon_coat.timed_fire",
     "gear.ember_quiver",
+    ] for refused in (False, True)
 ])
 def test_authored_item_benefit_requires_own_effect_admission(game, item_id, refused):
     actor = combatant(game)

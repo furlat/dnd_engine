@@ -42,6 +42,19 @@ class NaturalWeaponSpec(BaseModel):
     fixed_damage_bonus: int | None = None
 
 
+class ShieldAttackSpec(BaseModel):
+    """An authored bash with one actual equipped shield, retained by its UUID; its numbers come from the action."""
+
+    item_uuid: UUID
+    name: str
+    dice_numbers: int
+    damage_dice: DamageDieValue
+    damage_type: DamageType
+    range: Range
+    fixed_attack_bonus: int
+    fixed_damage_bonus: int
+
+
 class AttackSourceMetadata(BaseModel):
     kind: Literal["equipped", "unarmed", "natural"]
     weapon_slot: WeaponSlot

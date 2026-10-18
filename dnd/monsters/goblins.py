@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict
 from dnd.actions import CORE_STANDARD_ACTION_DECLARATIONS
 from dnd.actions_functional import register_spell
 from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
-from dnd.classes.fighter import create_protection_handler
 from dnd.content_system.action_definitions import ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS
 from dnd.content_system.condition_definitions import CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS
 from dnd.content_system.creature_possessions import (
@@ -21,16 +20,15 @@ from dnd.core.content.provenance import (
     ContentFidelity, ContentProvenance, ContentProvenanceRelation, ContentReviewStatus,
 )
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.content.registration import ContentDeclaration, creature_factory, get_content_declaration
 from dnd.core.creature_types import Size
 from dnd.core.equipment_types import BodyPart, EquipmentSlot, WeaponSlot
 from dnd.entity import Entity
 from dnd.monsters.bestiary import register_goblin_nimble_escape
-from dnd.monsters.multiattack_definitions import GOBLIN_MULTIATTACK_CONFIGURATIONS_BY_ID, MultiattackConfigurationDefinition
+from dnd.monsters.protection import register_protection
 from dnd.monsters.srd_roster import HitDieValue, create_creature_entity
 from dnd.monsters.traits import (
-    BruteFeature, MultiattackAction, SurpriseAttackFeature,
+    BruteFeature, MultiattackAction, MultiattackSteps, SurpriseAttackFeature,
     register_brute, register_multiattack, register_surprise_attack,
 )
 from dnd.spells.abjuration import (
@@ -75,7 +73,7 @@ class GoblinDefinition:
     profile: GoblinProfile
     possessions: tuple[CreaturePossessionGrant, ...]
     protection: bool = False
-    multiattack: str | None = None
+    multiattack: MultiattackSteps = ()
 
 
 def _equipped(item_id: str, slot: EquipmentSlot) -> CreaturePossessionGrant:
@@ -128,7 +126,7 @@ GOBLIN_DEFINITIONS = (
         _equipped("weapon.dagger", WeaponSlot.MELEE_OFF),
         _equipped("weapon.shortsword", WeaponSlot.MELEE_MAIN),
         _equipped("apparel.roster.cloth_hood_7d8178761a23", BodyPart.HEAD),
-    ), multiattack="goblin_briarling"),
+    ), multiattack=((WeaponSlot.MELEE_MAIN, 1), (WeaponSlot.MELEE_OFF, 1))),
     GoblinDefinition("goblin_redcap", "Redcap", CASTER, (
         _equipped("apparel.leather_shoes.brown", BodyPart.FEET),
         _equipped("apparel.roster.robes_51a81ec5104c", BodyPart.BODY),
@@ -185,7 +183,7 @@ GOBLIN_DEFINITIONS = (
         _equipped("apparel.roster.bracers_g0000003", BodyPart.HANDS),
         _equipped("weapon.handaxe", WeaponSlot.MELEE_MAIN),
         _equipped("armor.roster.armor_scraps_d6b6c79a6d59", BodyPart.BODY),
-    ), multiattack="goblin_gloomplate"),
+    ), multiattack=((WeaponSlot.MELEE_MAIN, 1), (WeaponSlot.MELEE_OFF, 1))),
     GoblinDefinition("goblin_mossbreaker", "Mossbreaker", SKIRMISHER, (
         _equipped("shield.roster.wooden_90000006", WeaponSlot.MELEE_OFF),
         _equipped("apparel.leather_boots.brown", BodyPart.FEET),
@@ -225,21 +223,14 @@ def build_goblin(context: CreatureBuildContext, definition: GoblinDefinition, *,
         register_brute(entity)
         register_surprise_attack(entity)
     if definition.protection:
-        handler = create_protection_handler(entity.uuid)
-        handler.behavior_binding = BehaviorBinding(behavior_id="reaction.class_feature.fighter.protection",
-            provided_by_id=context.requested_ref.content_id, origin_root_id=context.requested_ref.content_id,
-            runtime_owner_uuid=entity.uuid)
-        entity.add_event_handler(handler)
+        register_protection(entity, context.requested_ref)
     if profile.caster:
         for spell_type in CASTER_SPELLS:
             register_spell(entity, spell_type, caster_level=9)
         register_shield_reaction(entity)
         register_counterspell_reaction(entity)
-    if definition.multiattack is not None:
-        declaration = GOBLIN_MULTIATTACK_CONFIGURATIONS_BY_ID[definition.multiattack]
-        config = MultiattackConfigurationDefinition.model_validate(declaration.definition_payload)
-        register_multiattack(entity, declaration.descriptor.display_name,
-            tuple((step.weapon_slot, step.count) for step in config.steps), configured_action_ref=declaration.ref)
+    if definition.multiattack:
+        register_multiattack(entity, definition.multiattack)
     return entity
 
 
@@ -260,10 +251,9 @@ def _declare_goblin(definition: GoblinDefinition) -> ContentDeclaration:
             target_ref=SPELL_CONTENT_DECLARATIONS_BY_CLASS[spell].ref) for spell in CASTER_SPELLS)
         dependencies += tuple(ContentDependency(relation=ContentDependencyRelation.INSTALLS_HANDLER, target_ref=row.ref)
             for row in (SHIELD_REACTION_DECLARATION, COUNTERSPELL_REACTION_DECLARATION))
-    if definition.multiattack is not None:
-        dependencies += tuple(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION, target_ref=row.ref)
-            for row in (ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[MultiattackAction],
-                GOBLIN_MULTIATTACK_CONFIGURATIONS_BY_ID[definition.multiattack]))
+    if definition.multiattack:
+        dependencies += (ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,
+            target_ref=ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[MultiattackAction].ref),)
     declared = creature_factory(pack_id="content.neurodragon", content_id=f"creature.{definition.key}", version=1,
         parameters=GoblinRosterParameters,
         descriptor=ContentDescriptorSpec(display_name=definition.name,

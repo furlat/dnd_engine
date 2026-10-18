@@ -19,7 +19,8 @@ from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.actions_functional import execute_use_action
-from dnd.monsters.traits import InnateFlight, InnateInvisibility, MagicResistance, WightLifeDrain, wight_melee_multiattack
+from dnd.core.equipment_types import WeaponKind
+from dnd.monsters.traits import AttackReplacement, InnateFlight, InnateInvisibility, MagicResistance, WightLifeDrain
 from dnd.monsters.traits import MultiattackAction
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.transmutation import Longstrider
@@ -153,8 +154,9 @@ def test_fixed_life_drain_baseline_keeps_independent_buffs_and_reductions_accumu
 def test_wight_multiattack_replaces_one_longsword_and_has_no_bow_replacement(game):
     owner=actor(game); target=actor(game,'Target',(4,3))
     equip(owner,'weapon.longsword',WeaponSlot.MELEE_MAIN)
-    action=wight_melee_multiattack(owner.uuid)
-    action.template=True
+    action=MultiattackAction(source_entity_uuid=owner.uuid,template=True,attack_sequence=((WeaponSlot.MELEE_MAIN,2),),
+        attack_replacement=AttackReplacement(sequence_index=0,weapon_kind=WeaponKind.LONGSWORD,
+            action=WightLifeDrain(source_entity_uuid=owner.uuid)))
     choice=next(variant for variant in action.discovery_forms(owner.action_scan(subjective=True)) if variant.use_attack_substitution)
     with fixed_dice_faces(15,4,1,15,2): result=choice.instantiate(target_entity_uuid=target.uuid).apply()
     assert result and not result.canceled

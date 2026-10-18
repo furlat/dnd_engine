@@ -22,9 +22,8 @@ from dnd.core.content.registration import ContentDeclaration, creature_factory, 
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.entity import Entity
-from dnd.monsters.multiattack_definitions import BODY_MULTIATTACK_CONFIGURATIONS_BY_ID, MultiattackConfigurationDefinition
 from dnd.monsters.srd_roster import HitDieValue, create_creature_entity
-from dnd.monsters.traits import InnateFlight, MagicResistance, MultiattackAction, register_multiattack
+from dnd.monsters.traits import InnateFlight, MagicResistance, MultiattackAction, MultiattackSteps, register_multiattack
 
 
 class FiendParameters(BaseModel):
@@ -48,20 +47,22 @@ class FiendDefinition:
     flying_speed: int | None = None
     devils_sight: bool = False
     magic_resistance: bool = False
+    multiattack: MultiattackSteps = ()
 
 
 FIEND_DEFINITIONS = (
     FiendDefinition("claw_mote_devil", "Claw Mote Devil", "C27", (12,12,10,6,10,6),
         Size.SMALL, 7,6,2,25,2),
     FiendDefinition("huntsman_wing_devil", "Huntsman Wing Devil", "C05", (18,16,18,12,14,12),
-        Size.MEDIUM, 93,8,11,30,2, natural_armor=True, flying_speed=40, devils_sight=True),
+        Size.MEDIUM, 93,8,11,30,2, natural_armor=True, flying_speed=40, devils_sight=True,
+        multiattack=((WeaponSlot.MELEE_MAIN, 2),)),
     FiendDefinition("fellwing_devil", "Fellwing Devil", "C04", (20,14,20,12,14,14),
-        Size.LARGE, 136,10,13,30,3, natural_armor=True, gore=True, flying_speed=50, magic_resistance=True),
+        Size.LARGE, 136,10,13,30,3, natural_armor=True, gore=True, flying_speed=50, magic_resistance=True,
+        multiattack=((WeaponSlot.MELEE_MAIN, 2), (WeaponSlot.MELEE_OFF, 1))),
 )
 
 
 def _declare_fiend(definition: FiendDefinition) -> ContentDeclaration:
-    multiattack = BODY_MULTIATTACK_CONFIGURATIONS_BY_ID.get(definition.key)
     grants = [CreaturePossessionGrant(item_id=f"weapon.creature.{definition.key}_claws",
         disposition=CreaturePossessionDisposition.INTRINSIC, equipment_slot=WeaponSlot.MELEE_MAIN)]
     if definition.gore:
@@ -95,10 +96,8 @@ def _declare_fiend(definition: FiendDefinition) -> ContentDeclaration:
                 flying_speed=definition.flying_speed))
         if definition.magic_resistance:
             entity.add_condition(MagicResistance(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid))
-        if multiattack is not None:
-            config = MultiattackConfigurationDefinition.model_validate(multiattack.definition_payload)
-            register_multiattack(entity, multiattack.descriptor.display_name,
-                tuple((step.weapon_slot, step.count) for step in config.steps), configured_action_ref=multiattack.ref)
+        if definition.multiattack:
+            register_multiattack(entity, definition.multiattack)
         return entity
 
     factory.__name__ = f"build_{definition.key}"
@@ -109,9 +108,9 @@ def _declare_fiend(definition: FiendDefinition) -> ContentDeclaration:
         target_ref=CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[feature].ref)
         for enabled, feature in ((definition.flying_speed is not None, InnateFlight),
             (definition.magic_resistance, MagicResistance)) if enabled)
-    if multiattack is not None:
-        dependencies += tuple(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION, target_ref=row.ref)
-            for row in (ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[MultiattackAction], multiattack))
+    if definition.multiattack:
+        dependencies += (ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,
+            target_ref=ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[MultiattackAction].ref),)
     declared = creature_factory(pack_id="content.neurodragon", content_id=f"creature.{definition.key}", version=1,
         parameters=FiendParameters,
         descriptor=ContentDescriptorSpec(display_name=definition.name,

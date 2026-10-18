@@ -68,11 +68,12 @@ from dnd.core.content.runtime import (
 )
 from dnd.core.content.identities import ContentRef
 from dnd.core.damage import DamageResolution
+from dnd.core.modifiers import AdvantageStatus
 from dnd.core.effect_types import ObservedChangeRef, EffectOrigin, EventResolutionRef, ResolutionRef
 from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.creature_types import DamageType
-from dnd.core.saving_throw_types import SavingThrowContext
+from dnd.core.saving_throw_types import DamageSaveContext, SavingThrowContext
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, CellValues
 from dnd.core.cells import mask_positions, mask_union
@@ -1077,14 +1078,24 @@ class Trigger(BaseModel):
         default=None,
         description="Optional target-entity filter; absent means any target.",
     )
+    event_source_item_uuid: UUID | None = Field(
+        default=None,
+        description="Exact striking item for a damage-roll result.",
+    )
 
     model_config = ConfigDict(frozen=True)
+
+    @model_validator(mode="after")
+    def _validate_item_filter(self) -> Self:
+        if self.event_source_item_uuid is not None and self.event_type is not EventType.DAMAGE_ROLL_RESULT:
+            raise ValueError("Source-item triggers require a damage-roll result")
+        return self
 
     def __hash__(self):
         """Return a stable hash for queue indexes."""
         return hash((self.event_type, self.event_phase,
                     self.event_source_entity_uuid,
-                    self.event_target_entity_uuid))
+                    self.event_target_entity_uuid, self.event_source_item_uuid))
 
     def __eq__(self, other):
         """Return whether another object matches this trigger exactly."""
@@ -1093,7 +1104,8 @@ class Trigger(BaseModel):
         return (self.event_type == other.event_type and
                 self.event_phase == other.event_phase and
                 self.event_source_entity_uuid == other.event_source_entity_uuid and
-                self.event_target_entity_uuid == other.event_target_entity_uuid)
+                self.event_target_entity_uuid == other.event_target_entity_uuid and
+                self.event_source_item_uuid == other.event_source_item_uuid)
 
     def __call__(self, event: Event) -> bool:
         """Return whether an event satisfies this trigger.
@@ -1110,17 +1122,21 @@ class Trigger(BaseModel):
                 return False
             if self.event_target_entity_uuid and event.target_entity_uuid != self.event_target_entity_uuid:
                 return False
+            if (self.event_source_item_uuid is not None
+                    and cast(DamageRollResultEvent, event).source_item_uuid != self.event_source_item_uuid):
+                return False
             return True
         return False
 
     def is_simple(self) -> bool:
         """Return True when the trigger has no source or target filters."""
-        return self.event_source_entity_uuid is None and self.event_target_entity_uuid is None
+        return (self.event_source_entity_uuid is None and self.event_target_entity_uuid is None
+                and self.event_source_item_uuid is None)
 
-    def index_key(self) -> Tuple[EventType, EventPhase, Optional[UUID], Optional[UUID]]:
+    def index_key(self) -> Tuple[EventType, EventPhase, Optional[UUID], Optional[UUID], Optional[UUID]]:
         """Return the queue index key: type, phase and the optional source/target filters."""
         return (self.event_type, self.event_phase,
-                self.event_source_entity_uuid, self.event_target_entity_uuid)
+                self.event_source_entity_uuid, self.event_target_entity_uuid, self.event_source_item_uuid)
 
 class BaseHandler(BaseObject):
     """Shared callable wrapper for event and spatial handlers.
@@ -1353,7 +1369,7 @@ class EventQueue:
     _next_event_handler_order: int = 0
     # Keyed by `Trigger.index_key()` and by (type, phase) for simple triggers.
     _event_handlers_by_trigger: Dict[
-        Tuple[EventType, EventPhase, Optional[UUID], Optional[UUID]],
+        Tuple[EventType, EventPhase, Optional[UUID], Optional[UUID], Optional[UUID]],
         List['EventHandler'],
     ] = defaultdict(list)
     _event_handlers_by_simple_trigger: Dict[Tuple[EventType, EventPhase], List['EventHandler']] = defaultdict(list)
@@ -2558,16 +2574,19 @@ class EventQueue:
     def _event_trigger_candidates(cls, event: Event, *, include_simple: bool) -> List['EventHandler']:
         """Read only trigger buckets compatible with this event's native fields."""
         candidates: Dict[UUID, EventHandler] = {}
+        source_items = ((None, cast(DamageRollResultEvent, event).source_item_uuid)
+                        if event.event_type is EventType.DAMAGE_ROLL_RESULT else (None,))
         for source in dict.fromkeys((None, event.source_entity_uuid)):
             for target in dict.fromkeys((None, event.target_entity_uuid)):
                 # Positioned dispatch already read its local and simple-global
                 # indexes. The unfiltered bucket only repeats those handlers or
                 # contains distant positional registrations that it must skip.
-                if not include_simple and source is None and target is None:
-                    continue
-                key = (event.event_type, event.phase, source, target)
-                for handler in cls._event_handlers_by_trigger.get(key, ()):
-                    candidates[handler.uuid] = handler
+                for source_item in dict.fromkeys(source_items):
+                    if not include_simple and source is None and target is None and source_item is None:
+                        continue
+                    key = (event.event_type, event.phase, source, target, source_item)
+                    for handler in cls._event_handlers_by_trigger.get(key, ()):
+                        candidates[handler.uuid] = handler
         return sorted(candidates.values(), key=lambda handler: cls._event_handler_order[handler.uuid])
 
     @classmethod
@@ -5161,6 +5180,7 @@ class DamageRollResultEvent(DiceRollResultEvent):
     weapon_slot: WeaponSlot | None = Field(default=None,description="Weapon slot; absent for spell attacks.")
     attack_kind: Literal["weapon","spell","unarmed","natural"] = "weapon"
     source_item_uuid: UUID | None = None
+    attack_advantage: AdvantageStatus = AdvantageStatus.NONE
     attack_outcome: AttackOutcome = Field(description="Attack outcome associated with this damage roll.")
     damage_packets: List[DamageRollPacket] = Field(
         min_length=1,
@@ -5381,6 +5401,8 @@ class TakeDamageEvent(Event):
         description="Event category for damage application.",
     )
     total_damage: int = Field(description="Total damage before any modifications")
+    critical_hit: bool = False
+    damage_save: DamageSaveContext | None = None
     ignores_resistance_immunity: bool = False
     relentless_rage: RelentlessRageIntervention | None = None
     intercepted_by_condition_uuid: UUID | None = None

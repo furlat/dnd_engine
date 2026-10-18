@@ -84,6 +84,7 @@ from dnd.core.equipment_types import UnarmoredAc
 
 from dnd.core.dice import RollType, AttackOutcome, Dice, roll_die_face
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterruptionLogData
+from dnd.core.saving_throw_types import DamageSaveContext
 from dnd.entity import Entity, PreparedSpatialReturn
 from dnd.core.values import (
     ModifiableValue,
@@ -3416,6 +3417,7 @@ class GlyphOfWardingZone(AreaCondition):
                         damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)))
                     roll=roll_spell_damage(damage, parent_event=event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
                     target.receive_damage(roll.total//2 if saved else roll.total,damage_type,caster.uuid,parent_event=event.uuid,
+                        damage_save=DamageSaveContext(ability="dexterity", success=saved, success_fraction=0.5),
                         damages=[damage],damage_rolls=[roll],effect_origin=self.effect_origin,independent_resolution=True,
                         source_condition_uuid=self.uuid)
             if self.payload not in ("sleep","detonation"):

@@ -22,6 +22,7 @@ from collections.abc import Iterator
 import logging
 
 from dnd.core.base_object import BaseObject
+from dnd.core.condition_types import ConditionRemovalTrigger
 from dnd.core.dice import Dice, RollType
 from dnd.core.values import ValueRead, read_value, parts
 from dnd.types.event_facts import GroupEntryKind
@@ -258,6 +259,7 @@ class CombatantState(BaseObject):
         initiative_total: Final initiative total.
         has_acted_this_round: Whether the entity has taken this round's turn.
         turn_count: Number of turns this entity has taken in the encounter.
+        has_started_turn: Whether this combatant's first encounter turn has begun.
         surprised: Whether the entity is surprised during round one.
         delaying: Whether the entity is currently delaying.
         is_dead: Computed view of the entity's authoritative life state.
@@ -278,6 +280,7 @@ class CombatantState(BaseObject):
         default=0,
         description="Number of turns this entity has taken in the encounter.",
     )
+    has_started_turn: bool = Field(default=False, description="Whether this combatant has started its first encounter turn.")
     surprised: bool = Field(default=False, description="Whether the entity is surprised during round one.")
     delaying: bool = Field(default=False, description="Whether the entity is currently delaying.")
 
@@ -305,6 +308,21 @@ class CombatantState(BaseObject):
         if entity is None:
             return False
         return entity.is_encounter_alive
+
+
+@dataclass(frozen=True, slots=True)
+class OpeningTurnFacts:
+    """A combatant's opening-turn facts, read live from its encounter.
+
+    Attributes:
+        has_started_turn: Whether the combatant's first encounter turn has begun.
+        in_first_turn: Whether the combatant's first encounter turn is the turn in progress.
+        is_surprised: Whether the combatant is still within its surprised first turn.
+    """
+
+    has_started_turn: bool
+    in_first_turn: bool
+    is_surprised: bool
 
 
 @dataclass(slots=True)
@@ -396,6 +414,22 @@ class Encounter(BaseObject):
     def get(cls, uuid: UUID) -> Optional['Encounter']:
         """Get an encounter by UUID."""
         return cls._encounter_registry.get(uuid)
+
+    def opening_turn_facts(self, entity_uuid: UUID) -> OpeningTurnFacts | None:
+        """Return live first-turn and surprise facts from this encounter's owner."""
+        combatant = self.combatants.get(entity_uuid)
+        if self.state is not EncounterState.ACTIVE or combatant is None:
+            return None
+        entity = combatant.entity
+        if entity is None or entity.active_encounter_uuid != self.uuid:
+            return None
+        return OpeningTurnFacts(
+            has_started_turn=combatant.has_started_turn,
+            in_first_turn=(combatant.has_started_turn and combatant.turn_count == 0
+                and self.turn_state is TurnState.IN_PROGRESS and self.get_current_combatant() is combatant),
+            is_surprised=(combatant.surprised and self.round_number == 1
+                and combatant.turn_count == 0 and not entity.prevents_surprise()),
+        )
 
     @classmethod
     def get_active(cls) -> Optional['Encounter']:
@@ -696,7 +730,9 @@ class Encounter(BaseObject):
         self.round_number = 1
 
         Encounter._active_encounter = self
-        for entity_uuid in self.combatants:
+        for entity_uuid, combatant in self.combatants.items():
+            combatant.has_started_turn = False
+            combatant.turn_count = 0
             entity = Entity.get(entity_uuid)
             if entity is not None:
                 entity.active_encounter_uuid = self.uuid
@@ -744,6 +780,9 @@ class Encounter(BaseObject):
         for entity_uuid in self.combatants:
             entity = Entity.get(entity_uuid)
             if entity is not None and entity.active_encounter_uuid == self.uuid:
+                for condition in tuple(entity.active_conditions_by_uuid.values()):
+                    if ConditionRemovalTrigger.ENCOUNTER_END in condition.removal_triggers:
+                        entity.remove_condition_by_uuid(condition.uuid)
                 entity.active_encounter_uuid = None
                 entity.action_economy.reset_all_costs()
         self.ended_at = datetime.now(UTC)
@@ -840,6 +879,7 @@ class Encounter(BaseObject):
         controller: Optional[Controller],
     ) -> Optional[TurnStartEvent]:
         """Run turn boundary hooks for a surprised combatant without allowing actions."""
+        combatant.has_started_turn = True
         self.turn_state = TurnState.IN_PROGRESS
         self._begin_turn_execution()
 
@@ -927,6 +967,7 @@ class Encounter(BaseObject):
             combatant.has_acted_this_round = True
             return self._skip_to_next_turn()
 
+        combatant.has_started_turn = True
         self.turn_state = TurnState.IN_PROGRESS
         self._begin_turn_execution()
 

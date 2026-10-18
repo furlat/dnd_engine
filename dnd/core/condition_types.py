@@ -43,6 +43,7 @@ class ConditionRemovalTrigger(str, Enum):
     SHAKE_AWAKE = "shake_awake"
     ALLY_HELP = "ally_help"
     WET_APPLICATION = "wet_application"
+    ENCOUNTER_END = "encounter_end"
 
 
 class ConditionAgencyDenial(str, Enum):

@@ -97,46 +97,6 @@ _HUMAN_REVIEWED_BINDINGS = {
     ): "condition.dnd-classes-barbarian-retaliation",
     # Definition identity owns the selected authored inventory asset.
     (
-        "content.srd_5_1_cc:action:"
-        "action.monster.multiattack.bandit_captain.melee@1"
-    ): "action.bandit-captain-multiattack-melee",
-    (
-        "content.srd_5_1_cc:action:"
-        "action.monster.multiattack.bandit_captain.ranged@1"
-    ): "action.bandit-captain-multiattack-ranged",
-    (
-        "content.srd_5_1_cc:action:"
-        "action.monster.multiattack.cult_fanatic@1"
-    ): "action.cult-fanatic-multiattack",
-    (
-        "content.srd_5_1_cc:action:"
-        "action.monster.multiattack.knight@1"
-    ): "action.knight-multiattack",
-    (
-        "content.srd_5_1_cc:action:"
-        "action.monster.multiattack.scout.longbow@1"
-    ): "action.scout-multiattack-longbow",
-    (
-        "content.srd_5_1_cc:action:"
-        "action.monster.multiattack.scout.shortsword@1"
-    ): "action.scout-multiattack-shortsword",
-    (
-        "content.srd_5_1_cc:action:"
-        "action.monster.multiattack.spy@1"
-    ): "action.spy-multiattack",
-    (
-        "content.srd_5_1_cc:action:"
-        "action.monster.multiattack.thug@1"
-    ): "action.thug-multiattack",
-    (
-        "content.srd_5_1_cc:action:"
-        "action.monster.multiattack.veteran.melee@1"
-    ): "action.veteran-multiattack-melee",
-    (
-        "content.srd_5_1_cc:action:"
-        "action.monster.multiattack.veteran.ranged@1"
-    ): "action.veteran-multiattack-ranged",
-    (
         "content.neurodragon:item:"
         "apparel.bracers@1"
     ): "item.bracers",
