@@ -342,7 +342,8 @@ def reach_mask(modes: Mapping[SensesType, int], sense_type: SensesType, distance
 class RouteSight:
     """One observer's wall-FOV routes judged without light: what range and obscurement let through.
 
-    Light is the only input of sight it leaves out, so a light change re-reads only `lit_view`.
+    Light is the only input of sight it leaves out, so a light change re-reads only `lit_view` (or
+    `relit_view` at the rows whose light changed).
     """
 
     rows: np.ndarray             # wall-FOV candidates holding a Tile, sorted
@@ -383,7 +384,8 @@ def lit_view(sight: RouteSight, exists: np.ndarray, light: np.ndarray) -> Optica
     before it: its own cloud does not hide its surface; under magical darkness the light
     comes from the previous route cell.
     """
-    rows, at_cell, before, in_range, eligibility = sight.rows, sight.at_cell, sight.before, sight.in_range, sight.eligibility
+    rows, at_cell, before, in_range = sight.rows, sight.at_cell, sight.before, sight.in_range
+    eligibility = sight.eligibility
     effective = LIGHT_TABLE[eligibility, light[rows]]
     visible = effective != UNSEEN
     surface = ~visible & (at_cell != 0)
