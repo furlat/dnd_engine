@@ -71,6 +71,7 @@ from dnd.player.facts import (PlayerActor, PlayerCharacterSheet, PlayerItem, Pla
     SpatialEffectContent)
 from dnd.player.bodies import entering_body
 from dnd.player.reduction import enter_body
+from dnd.player.static_sent import StaticSent
 from dnd.player.world_publication import disclosed_world_object, object_observed
 from dnd.player.session import Session
 from dnd.types.actor_facts import ConditionMember
@@ -454,7 +455,7 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
         state = replace(state, last_visual_position=(contact.position if contact is not None else entity.position)
                         if visual else None)
         # The seat's body record of this body entering its view now, as its client folds it.
-        record = entering_body(0, state, audience, visual=visual, birth=True, looks_sent=(), profiles_sent=())
+        record = entering_body(0, state, audience, visual=visual, birth=True, sent=StaticSent(), pending=StaticSent())
         held = PlayerState(generation=client.generation, observer_uuid=client.observer_uuid, world=client.world,
             audience=audience)
         enter_body(held, record)

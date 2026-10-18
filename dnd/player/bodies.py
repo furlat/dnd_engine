@@ -1,15 +1,18 @@
 """The bodies family of the seat wire (EVENT_NATIVE_PUBLICATION_PLAN_2026-10-18 §3.3-§3.5).
 
-One conversion (`change_rows`) turns an event's actor change (E2's record) into its seat-independent rows, once
-per event for every seat; one table (`DISCLOSURE`) says who may see each row; `change_fact` is a seat's part of
-those rows. A body or item entering a seat's view is sent whole by `entering_body` and `entering_items`, its
-static parts (birth, item look and profile) only the first time.
+One conversion (`change_rows`) turns an event's actor change (E2's record) into its seat-independent rows, and
+`change_views` those rows into what each of the two views (controller, observer) may see, once per event for every
+seat; one table (`DISCLOSURE`) says who may see each row. `change_fact` is a seat's part: the view `actor_view`
+gives it of each actor. A body or item entering a seat's view is sent whole by `entering_body` and
+`entering_items`, its static parts (birth, item look and profile) only the first time.
 
 Data and functions only: the records are frozen, the session fold is the caller's, the seat contributes its
-audience, the bodies it holds (`born`), its composed view and what static content it was sent.
+audience, the bodies it holds (`born`), its composed view and what static content it was sent (`sent`, and
+`pending`: its walk's own, not yet emitted).
 """
 
 from collections.abc import Collection, Mapping
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from types import MappingProxyType
 from uuid import UUID
@@ -21,6 +24,7 @@ from dnd.core.item_types import ItemEffectPresentationState, ItemPresentationSta
 from dnd.player.audience import PlayerAudience
 from dnd.player.facts import (ActorBirth, ActorChangeFact, ActorRows, BodyRecord, BodyState, ItemRecord,
     VisualLoadout)
+from dnd.player.static_sent import StaticSent
 from dnd.types.actor_facts import (ActorFactChange, ActorState, ChangeField, ChangeRow, ConditionFact,
     ConditionMember, ConditionRow, DispositionRow, DurationRow, GrantRow, InventoryRow, ItemEffectsRow, ItemStateRow,
     LayerRow, NumberRow, SizeRow, WeaponSetRow)
@@ -47,7 +51,7 @@ DISCLOSURE: Mapping[ChangeField, Disclosure] = MappingProxyType({
     ChangeField.WEAPON_SET: Disclosure.OBSERVER,
     ChangeField.CONDITION: Disclosure.OBSERVER,
     ChangeField.LAYER: Disclosure.OBSERVER,
-    # An item's rows are also gated by the item being shown to the seat (`_item_shown`).
+    # An item's rows are also gated by the item being shown to the view (`shown_items`).
     ChangeField.ITEM_EFFECTS: Disclosure.OBSERVER,
     ChangeField.CONDITION_DURATION: Disclosure.CONTROLLER,
     ChangeField.INVENTORY: Disclosure.CONTROLLER,
@@ -56,13 +60,6 @@ DISCLOSURE: Mapping[ChangeField, Disclosure] = MappingProxyType({
     ChangeField.HEALING_BLOCKED: Disclosure.NOBODY,
     ChangeField.DAMAGE_AFFINITIES: Disclosure.NOBODY,
 })
-
-
-class View(StrEnum):
-    """A seat's view of one actor at an event."""
-
-    CONTROLLER = "controller"
-    OBSERVER = "observer"
 
 
 # The parts of an engine value a seat may hold.
@@ -155,6 +152,13 @@ def condition_member(fact: ConditionFact) -> ConditionMember:
         behavior_id=fact.behavior_id, state=fact.state)
 
 
+def _without_duration(member: ConditionMember) -> ConditionMember:
+    """A membership as an observer holds it: its state without the duration."""
+    if member.state is None or member.state.duration is None:
+        return member
+    return replace(member, state=member.state.model_copy(update={"duration": None}))
+
+
 def visual_loadout(actor: ActorState) -> VisualLoadout:
     items = {item.item_uuid: item for item in actor.items}
     return VisualLoadout(active_weapon_set=actor.active_weapon_set, layers=tuple(
@@ -214,9 +218,7 @@ def _member_rows(held: ActorState, change: ActorFactChange, consumed: bool) -> l
         member = condition_member(fact)
         previous = members.get(fact.condition_uuid)
         if (previous is not None and previous.state is not None and member.state is not None
-                and condition_member(previous) == ConditionMember(condition_uuid=member.condition_uuid,
-                    name=member.name, category=member.category, behavior_id=member.behavior_id,
-                    state=member.state.model_copy(update={"duration": previous.state.duration}))):
+                and _without_duration(condition_member(previous)) == _without_duration(member)):
             if previous.state.duration != member.state.duration:
                 rows.append(DurationRow(field=ChangeField.CONDITION_DURATION, key=fact.condition_uuid,
                     duration=member.state.duration))
@@ -291,21 +293,30 @@ def change_rows(change: ActorFactChange, actors: Mapping[UUID, ActorState], *, c
     return tuple(result)
 
 
-# A seat's part.
+# Both views, once per event.
 
-def actor_view(event: Event, actor_uuid: UUID, audience: PlayerAudience, born: Collection[UUID],
-               senses: SensesSnapshot | None) -> View | None:
-    """The seat's view of an actor an event changes: its controller's; an observer's if the seat holds its body and
-    perceives it at the event (the owner by the event's identity grant, another holder by a visual contact)."""
-    if audience.controls(actor_uuid):
-        return View.CONTROLLER
-    if actor_uuid not in born:
-        return None
-    if actor_uuid == actor_fact_owner(event):
-        grant = event.identified_entity_observer_uuids.get(str(actor_uuid), frozenset())
-        return View.OBSERVER if not audience.observer_ids.isdisjoint(grant) else None
-    contact = senses.entities.get(actor_uuid) if senses is not None else None
-    return View.OBSERVER if contact is not None and contact.visual else None
+@dataclass(frozen=True, slots=True)
+class ViewedChange:
+    """One actor's rows at an event as one view may see them, and the items the event brings into that view."""
+
+    rows: ActorRows | None
+    entering: tuple[ItemPresentationState, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ActorChangeViews:
+    """An actor's change at an event in both views, built once per event; each seat picks one (`actor_view`)."""
+
+    actor_uuid: UUID
+    controller: ViewedChange
+    observer: ViewedChange
+
+
+class View(StrEnum):
+    """A seat's view of one actor at an event."""
+
+    CONTROLLER = "controller"
+    OBSERVER = "observer"
 
 
 def shown_items(actor: ActorState, view: View) -> tuple[UUID, ...]:
@@ -313,10 +324,6 @@ def shown_items(actor: ActorState, view: View) -> tuple[UUID, ...]:
     if view is View.CONTROLLER:
         return tuple(item.item_uuid for item in actor.items)
     return tuple(dict.fromkeys(identity for _, identity in actor.equipment))
-
-
-def _row_field(row: ChangeRow) -> ChangeField:
-    return row.field
 
 
 def _row_item(row: ChangeRow) -> UUID | None:
@@ -328,20 +335,6 @@ def _row_item(row: ChangeRow) -> UUID | None:
     return None
 
 
-def _disclosed_row(row: ChangeRow, view: View) -> ChangeRow:
-    """A row as an observer sees it: membership and effect values without their durations."""
-    if view is View.CONTROLLER:
-        return row
-    match row:
-        case ConditionRow(member=ConditionMember(state=state) as member) if state is not None and state.duration is not None:
-            return ConditionRow(condition_uuid=row.condition_uuid, consumed=row.consumed, member=ConditionMember(
-                condition_uuid=member.condition_uuid, name=member.name, category=member.category,
-                behavior_id=member.behavior_id, state=state.model_copy(update={"duration": None})))
-        case ItemEffectsRow():
-            return ItemEffectsRow(item_uuid=row.item_uuid, effects=_shown_effects(row.effects, view))
-    return row
-
-
 def _shown_effects(effects: tuple[ItemEffectPresentationState, ...], view: View
                    ) -> tuple[ItemEffectPresentationState, ...]:
     if view is View.CONTROLLER:
@@ -350,68 +343,105 @@ def _shown_effects(effects: tuple[ItemEffectPresentationState, ...], view: View
                  for effect in effects)
 
 
-def item_record(item: ItemPresentationState, view: View, *, looks_sent: Collection[UUID],
-                profiles_sent: Collection[UUID]) -> ItemRecord:
+def _observed_row(row: ChangeRow) -> ChangeRow:
+    """A row as an observer sees it: membership and effect values without their durations."""
+    match row:
+        case ConditionRow(member=ConditionMember() as member):
+            return replace(row, member=_without_duration(member))
+        case ItemEffectsRow():
+            return replace(row, effects=_shown_effects(row.effects, View.OBSERVER))
+    return row
+
+
+def _viewed(change: ActorRows, before: ActorState, after: ActorState | None, view: View) -> ViewedChange:
+    """The rows `DISCLOSURE` and the item gate give a view (an item row needs its item shown before or after the
+    event), and the items shown after the event but not before."""
+    shown_before = shown_items(before, view)
+    shown = {*shown_before, *(shown_items(after, view) if after is not None else ())}
+    rows = tuple(row if view is View.CONTROLLER else _observed_row(row) for row in change.rows
+        if (DISCLOSURE[row.field] is Disclosure.OBSERVER
+            or DISCLOSURE[row.field] is Disclosure.CONTROLLER and view is View.CONTROLLER)
+        and ((item := _row_item(row)) is None or item in shown))
+    entering: tuple[ItemPresentationState, ...] = ()
+    if after is not None:
+        items = {item.item_uuid: item for item in after.items}
+        entering = tuple(items[identity] for identity in shown_items(after, view) if identity not in shown_before)
+    return ViewedChange(ActorRows(actor_uuid=change.actor_uuid, rows=rows) if rows else None, entering)
+
+
+def change_views(rows: tuple[ActorRows, ...], before: Mapping[UUID, ActorState],
+                 after: Mapping[UUID, ActorState]) -> tuple[ActorChangeViews, ...]:
+    """An event's rows in both views (`before`, `after`: the session values of the actors they name; an actor
+    whose lifetime the event ended has no after-value)."""
+    return tuple(ActorChangeViews(actor_uuid=change.actor_uuid,
+        controller=_viewed(change, before[change.actor_uuid], after.get(change.actor_uuid), View.CONTROLLER),
+        observer=_viewed(change, before[change.actor_uuid], after.get(change.actor_uuid), View.OBSERVER))
+        for change in rows)
+
+
+# A seat's part.
+
+def actor_view(event: Event, actor_uuid: UUID, audience: PlayerAudience, born: Collection[UUID],
+               senses: SensesSnapshot | None) -> View | None:
+    """The seat's view of an actor an event changes: its controller's; an observer's if the seat holds its body and
+    perceives it at the event (the owner by the event's identity grant, another holder by a visual contact)."""
+    if audience.controls(actor_uuid):
+        return View.CONTROLLER
+    if actor_uuid not in born:
+        return None
+    if actor_uuid == actor_fact_owner(event):
+        return View.OBSERVER if audience.granted(event.identified_entity_observer_uuids.get(str(actor_uuid), set())) else None
+    contact = senses.entities.get(actor_uuid) if senses is not None else None
+    return View.OBSERVER if contact is not None and contact.visual else None
+
+
+def item_record(item: ItemPresentationState, view: View, *, sent: StaticSent, pending: StaticSent) -> ItemRecord:
     """An item entering a seat's view: its look and (its controller's) profile if not yet sent, its dynamic parts."""
     controlled = view is View.CONTROLLER
-    return ItemRecord(item_uuid=item.item_uuid,
-        look=item_look(item) if item.item_uuid not in looks_sent else None,
-        profile=item_profile(item) if controlled and item.item_uuid not in profiles_sent else None,
+    identity = item.item_uuid
+    return ItemRecord(item_uuid=identity,
+        look=item_look(item) if identity not in sent.item_looks and identity not in pending.item_looks else None,
+        profile=item_profile(item) if controlled and identity not in sent.item_profiles
+            and identity not in pending.item_profiles else None,
         state=item_state(item) if controlled else None, effects=_shown_effects(item.item_effects, view))
 
 
-def entering_items(actor: ActorState, view: View, *, looks_sent: Collection[UUID],
-                   profiles_sent: Collection[UUID], already: Collection[UUID] = ()) -> tuple[ItemRecord, ...]:
-    """The records of the items a body shows a seat, except those `already` shown."""
+def entering_items(actor: ActorState, view: View, *, sent: StaticSent, pending: StaticSent
+                   ) -> tuple[ItemRecord, ...]:
+    """The records of the items a body shows a seat."""
     items = {item.item_uuid: item for item in actor.items}
-    return tuple(item_record(items[identity], view, looks_sent=looks_sent, profiles_sent=profiles_sent)
-                 for identity in shown_items(actor, view) if identity not in already)
+    return tuple(item_record(items[identity], view, sent=sent, pending=pending)
+                 for identity in shown_items(actor, view))
 
 
-def change_fact(event: Event, rows: tuple[ActorRows, ...], before: Mapping[UUID, ActorState],
-                after: Mapping[UUID, ActorState], audience: PlayerAudience, born: Collection[UUID],
-                senses: SensesSnapshot | None, *, looks_sent: Collection[UUID], profiles_sent: Collection[UUID]
-                ) -> ActorChangeFact | None:
-    """A seat's part of an event's rows: each actor it views, the rows `DISCLOSURE` and the item gate give it, and
-    the items the event brings into its view; None when nothing is disclosed."""
+def change_fact(event: Event, views: tuple[ActorChangeViews, ...], audience: PlayerAudience, born: Collection[UUID],
+                senses: SensesSnapshot | None, *, sent: StaticSent, pending: StaticSent) -> ActorChangeFact | None:
+    """A seat's part of an event's rows: each actor it views, in the view it has, and the records of the items the
+    event brings into that view; None when nothing is disclosed."""
     actors: list[ActorRows] = []
     records: list[ItemRecord] = []
-    for change in rows:
+    for change in views:
         view = actor_view(event, change.actor_uuid, audience, born, senses)
         if view is None:
             continue
-        held_before, held_after = before.get(change.actor_uuid), after.get(change.actor_uuid)
-        shown = set(shown_items(held_before, view)) if held_before is not None else set()
-        if held_after is not None:
-            shown.update(shown_items(held_after, view))
-        disclosed = tuple(_disclosed_row(row, view) for row in change.rows
-            if (DISCLOSURE[_row_field(row)] is Disclosure.OBSERVER
-                or DISCLOSURE[_row_field(row)] is Disclosure.CONTROLLER and view is View.CONTROLLER)
-            and ((item := _row_item(row)) is None or item in shown))
-        if held_after is not None and held_before is not None:
-            records.extend(entering_items(held_after, view, looks_sent=looks_sent, profiles_sent=profiles_sent,
-                already=shown_items(held_before, view)))
-        if disclosed:
-            actors.append(ActorRows(actor_uuid=change.actor_uuid, rows=disclosed))
+        viewed = change.controller if view is View.CONTROLLER else change.observer
+        records.extend(item_record(item, view, sent=sent, pending=pending) for item in viewed.entering)
+        if viewed.rows is not None:
+            actors.append(viewed.rows)
     if not actors and not records:
         return None
     return ActorChangeFact(actors=tuple(actors), items=tuple(records))
 
 
 def entering_body(occurrence: int, actor: ActorState, audience: PlayerAudience, *, visual: bool, birth: bool,
-                  looks_sent: Collection[UUID], profiles_sent: Collection[UUID]) -> BodyRecord:
+                  sent: StaticSent, pending: StaticSent) -> BodyRecord:
     """A body entering a seat's view, whole: every changeable field, its birth if the seat has none, the records of
     the items it shows. Occupancy is disclosed to its controller or a visual contact; INTERNAL memberships are never
     held."""
     view = View.CONTROLLER if audience.controls(actor.uuid) else View.OBSERVER
     controlled = view is View.CONTROLLER
-    conditions = tuple(condition_member(fact) for fact in actor.conditions
-                       if fact.category is not ConditionCategory.INTERNAL)
-    if not controlled:
-        conditions = tuple(ConditionMember(condition_uuid=member.condition_uuid, name=member.name,
-            category=member.category, behavior_id=member.behavior_id,
-            state=member.state.model_copy(update={"duration": None}) if member.state is not None else None)
-            for member in conditions)
+    conditions = tuple(condition_member(fact) if controlled else _without_duration(condition_member(fact))
+                       for fact in actor.conditions if fact.category is not ConditionCategory.INTERNAL)
     body = BodyState(visual_loadout=visual_loadout(actor), normal_hp=actor.normal_hp, maximum_hp=actor.maximum_hp,
         temporary_hp=actor.temporary_hp, life_state=actor.life_state, armor_class=actor.armor_class,
         temporary_hp_grant=actor.temporary_hp_grant, conditions=conditions,
@@ -425,4 +455,4 @@ def entering_body(occurrence: int, actor: ActorState, audience: PlayerAudience, 
             structural_base_size=actor.structural_base_size,
             manifestation=actor.summon_origin.manifestation if actor.summon_origin is not None else None)
             if birth else None,
-        body=body, items=entering_items(actor, view, looks_sent=looks_sent, profiles_sent=profiles_sent))
+        body=body, items=entering_items(actor, view, sent=sent, pending=pending))

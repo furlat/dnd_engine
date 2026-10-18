@@ -26,13 +26,14 @@ from dnd.core.item_types import ItemEffectPresentationState, ItemPresentationSta
 from dnd.player.capture import CompletedLineage, capture_interval, reduce_interval
 from dnd.player.actor_projection import apply_presented_change
 from dnd.player.application import initialize_audiences
-from dnd.player.bodies import change_fact, change_rows, entering_body, shown_items, View
+from dnd.player.bodies import change_fact, change_rows, change_views, entering_body, shown_items, View
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import PlayerActor, PlayerState, PlayerWorld
 from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.recorded import RecordedSequence
 from dnd.player.reduction import apply_actor_change_fact, enter_body, reduce_initialization, reduce_lineage
 from dnd.player.session import Session, close_session, create_session
+from dnd.player.static_sent import StaticSent
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.actor import ConditionState, EntityStatsState, TemporaryHitPointsGrant
 from dnd.types.actor_facts import ActorFactChange, ActorState, ConditionFact, HeldItem, ItemResources
@@ -260,7 +261,7 @@ def seat_view(audience, actor: ActorState) -> PlayerState:
     """A client holding `actor`'s body as it enters this seat's view."""
     seat = PlayerState(generation=uuid4(), observer_uuid=audience.observers[0], world=PlayerWorld(
         battlefield_id="rows", battlefield_name="Rows", bounds=(0, 0, 1, 1), width=2, height=2), audience=audience)
-    enter_body(seat, entering_body(0, actor, audience, visual=True, birth=True, looks_sent=(), profiles_sent=()))
+    enter_body(seat, entering_body(0, actor, audience, visual=True, birth=True, sent=StaticSent(), pending=StaticSent()))
     return seat
 
 
@@ -281,8 +282,10 @@ def test_change_rows_reproduce_the_session_fold_for_the_fields_they_name(session
         identified_entity_observer_uuids={str(identity): frozenset(map(str, audience.observers))}),
         context=PASSIVE_EVENT_REPLAY)
     client = seat_view(audience, held)
-    fact = change_fact(header, change_rows(change, before), before, after, audience, {identity}, None,
-        looks_sent=set(client.items), profiles_sent={key for key, row in client.items.items() if row.profile})
+    sent = StaticSent(item_looks=set(client.items),
+        item_profiles={key for key, row in client.items.items() if row.profile})
+    fact = change_fact(header, change_views(change_rows(change, before), before, after), audience, {identity}, None,
+        sent=sent, pending=StaticSent())
     if fact is not None:
         apply_actor_change_fact(client, fact)
     expected = seat_view(audience, after[identity])
