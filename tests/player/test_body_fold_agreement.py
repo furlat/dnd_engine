@@ -74,7 +74,7 @@ def stats_of(actor: ActorState, **changes) -> EntityStatsState:
 
 def destroyed_layer(actor: ActorState) -> tuple[Event, None]:
     """A recorded consumption that destroys the actor's first equipped item."""
-    slot, identity = actor.equipment[0]
+    identity = actor.equipment[0][1]
     item = next(row for row in actor.items if row.item_uuid == identity)
     return ItemResourceChangeEvent.model_validate(dict(source_entity_uuid=actor.uuid, item_uuid=identity,
         item_id=item.item_id, charges_before=0, charges_after=0, stack_count_before=1, stack_count_after=1,
@@ -89,12 +89,17 @@ class FoldCase:
     fact: Callable[[ActorState], tuple[Event, ConditionFact | None]]
 
 
-def body(actor: PlayerActor | ActorState) -> dict[str, object]:
-    """The body fields the client fold and the engine fold both hold."""
-    layers = (tuple((row.slot, row.item_uuid) for row in actor.visual_loadout.layers)
-        if isinstance(actor, PlayerActor) else actor.equipment)
+def client_body(actor: PlayerActor) -> dict[str, object]:
+    """The client's body fields that the engine fold also holds (`engine_body`)."""
     return dict(normal_hp=actor.normal_hp, maximum_hp=actor.maximum_hp, temporary_hp=actor.temporary_hp,
-        temporary_hp_grant=actor.temporary_hp_grant, armor_class=actor.armor_class, layers=layers)
+        temporary_hp_grant=actor.temporary_hp_grant, armor_class=actor.armor_class,
+        layers=tuple((row.slot, row.item_uuid) for row in actor.visual_loadout.layers))
+
+
+def engine_body(actor: ActorState) -> dict[str, object]:
+    """The engine fold's body fields that the client also holds (`client_body`)."""
+    return dict(normal_hp=actor.normal_hp, maximum_hp=actor.maximum_hp, temporary_hp=actor.temporary_hp,
+        temporary_hp_grant=actor.temporary_hp_grant, armor_class=actor.armor_class, layers=actor.equipment)
 
 
 def check(session: Session, case: FoldCase) -> None:
@@ -115,13 +120,13 @@ def check(session: Session, case: FoldCase) -> None:
         lineages=(lineage,)).model_dump_json(), context=PASSIVE_EVENT_REPLAY)
     projection, initial = begin_projection(recorded.initialization)
     client = reduce_initialization(initial)
-    assert body(client.actors[identity]) == body(before), case.name
+    assert client_body(client.actors[identity]) == engine_body(before), case.name
     packet = project_lineage(projection, recorded.lineages[0])
     if packet is not None:
         client = reduce_lineage(client, packet)
-    expected = body(apply_actor_fact(before, event, fact))
-    assert expected != body(before), case.name
-    assert body(client.actors[identity]) == expected, case.name
+    expected = engine_body(apply_actor_fact(before, event, fact))
+    assert expected != engine_body(before), case.name
+    assert client_body(client.actors[identity]) == expected, case.name
 
 
 CASES = (

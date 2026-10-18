@@ -91,8 +91,8 @@ def test_initial_tiles_carry_the_light_settled_after_the_world_snapshot(sessions
     session = sessions(battlefield_id='battlefield.lantern_crypt', player_positions=((3, 5), (4, 5)),
         enemy_positions=((14, 6), (15, 6)))
     client = initialize(session).client
-    grid = get_map()
-    engine = {position: grid.get_tile(*position).to_world_tile_state().resolved_light for position in client.tiles}
+    tiles = get_map().get_all_tiles()
+    engine = {position: tiles[position].to_world_tile_state().resolved_light for position in client.tiles}
     assert set(engine.values()) - {LightLevel.DARKNESS}, 'the torches light cells the party sees'
     assert {position: tile.resolved_light for position, tile in client.tiles.items()} == engine
 
