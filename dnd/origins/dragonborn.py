@@ -30,6 +30,7 @@ from dnd.core.values import ModifiableValue, parts
 from dnd.entity import Entity
 from dnd.types.abilities import AbilityName
 from dnd.types.discovery import ActorScan
+from dnd.core.base_object import empty_list
 
 
 DRAGONBORN_BREATH_RESOURCE = "dragonborn_breath_weapon"
@@ -69,7 +70,7 @@ class DragonbornBreathWeapon(BaseAction):
     breath_geometry: Literal["line", "cone"]
     save_ability: AbilityName
     character_level: int = Field(ge=1, le=20)
-    costs: list[Cost] = Field(default_factory=list)
+    costs: list[Cost] = Field(default_factory=empty_list)
 
     @property
     def damage_dice_count(self) -> int:

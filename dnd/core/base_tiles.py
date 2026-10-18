@@ -239,6 +239,10 @@ class Tile(BaseBlock):
         """Return a defensive snapshot of the Tile's present Entities."""
         return set(self._entity_uuids)
 
+    def holds_entity(self, entity_uuid: UUID) -> bool:
+        """Whether the Entity is present on this Tile (no snapshot)."""
+        return entity_uuid in self._entity_uuids
+
     def _replace_entity_uuids(self, entity_uuids: set[UUID]) -> None:
         """Replace complete occupancy; called only by GridMap commits."""
         self._entity_uuids = set(entity_uuids)
@@ -368,9 +372,13 @@ class Tile(BaseBlock):
             elevation_steps=self.height, surface_kind=self.elevation_surface_kind,
             slope_axis=self.slope_axis, default_light=self.default_light,
             resolved_light=self.resolved_light_level,
-            condition_names=(*self.active_conditions, *(self._residue_names[key] for key in sorted(self._residues))),
+            condition_names=self.condition_names(),
             residues=self.residue_states(),
         )
+
+    def condition_names(self) -> Tuple[str, ...]:
+        """This tile's condition names: its active conditions, then its materials in residue order."""
+        return (*self.active_conditions, *(self._residue_names[key] for key in sorted(self._residues)))
 
     def residue_states(self) -> Tuple[TileResidueState, ...]:
         """This tile's residue after-values, one per material."""

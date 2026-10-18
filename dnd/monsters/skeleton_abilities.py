@@ -20,6 +20,7 @@ from dnd.types.discovery import ActorScan
 from dnd.actions import entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.conditions import Concentrating
 from dnd.core.values import Channel, Kind, add_modifier
+from dnd.core.base_object import empty_list
 
 
 class Marked(BaseCondition):
@@ -176,7 +177,7 @@ class MarkTargetAction(BaseAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
         description="Range used by Mark Target validation.",
     )
-    costs: List[Cost] = Field(default_factory=list, description="Runtime action-economy costs.")
+    costs: List[Cost] = Field(default_factory=empty_list, description="Runtime action-economy costs.")
 
     def model_post_init(self, __context: Any) -> None:
         """Install the default bonus-action cost when none is provided.

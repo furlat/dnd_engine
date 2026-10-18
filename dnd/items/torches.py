@@ -33,6 +33,7 @@ from dnd.types.discovery import ActorScan
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemLocation, ItemPresentationState
 from dnd.entity import Entity
+from dnd.core.base_object import empty_list
 
 
 def _torch_action_identity(
@@ -104,7 +105,7 @@ class IgniteTorchAction(BaseAction):
         ),
     )
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="No-cost action-economy payload for igniting a torch.",
     )
     source_item_uuid: Optional[UUID] = Field(
@@ -169,7 +170,7 @@ class ExtinguishTorchAction(BaseAction):
         ),
     )
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="No-cost action-economy payload for extinguishing a torch.",
     )
     source_item_uuid: Optional[UUID] = Field(
@@ -401,7 +402,7 @@ class IgniteWallTorchAction(BaseAction):
         description="Wall torch actions target the user.",
     )
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="No-cost action-economy payload for lighting a wall torch.",
     )
     source_item_uuid: Optional[UUID] = Field(
@@ -452,7 +453,7 @@ class ExtinguishWallTorchAction(BaseAction):
         description="Wall torch actions target the user.",
     )
     costs: List[Cost] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description=(
             "No-cost action-economy payload for extinguishing a wall torch."
         ),

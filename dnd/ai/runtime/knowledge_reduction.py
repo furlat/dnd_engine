@@ -5,7 +5,7 @@ from collections.abc import Iterable, Set as AbstractSet
 from typing import TypeVar
 from uuid import UUID
 
-from dnd.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact, condition_fact
+from dnd.actor_projection import actor_fact_change, actor_fact_owner, actor_from_birth, apply_actor_fact_change, condition_fact
 from dnd.ai.contracts.observation import (
     KnowledgeState, ObservationConditionFact, ObservationEffectProtection,
     ObservationEntityFact, ObservationObjectFact, ObservationObserverState,
@@ -117,11 +117,12 @@ def _cell_observers(senses: dict[UUID, SensesSnapshot], positions: Iterable[tupl
         return result
     xs, ys = np.array(cells, dtype=np.int64).T
     box = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
-    for observer in sorted(senses, key=str):
+    # Each observer's text once: the sort key (texts are distinct) and every cell's entry.
+    for text, observer in sorted((str(observer), observer) for observer in senses):
         snapshot = senses[observer]
         hits = mask_array(snapshot.seen if seen else snapshot.visible, box)[xs - box[0], ys - box[1]]
         for index in np.flatnonzero(hits).tolist():
-            result[cells[index]].append(str(observer))
+            result[cells[index]].append(text)
     return result
 
 
@@ -203,10 +204,11 @@ class AIKnowledge:
                 self.dirty_observers.add(event.entity_uuid)
 
         owner = actor_fact_owner(event)
+        # The AI folds its own record: its condition fact carries the version's source cursor.
+        change = actor_fact_change(event, condition)
+        written = apply_actor_fact_change(self.actors, change) if change is not None else ()
         if owner is not None:
-            actor = self.actors.get(owner)
-            if actor is not None:
-                self.actors[owner] = apply_actor_fact(actor, event, condition)
+            if owner in written:
                 self._refresh_entity(owner)
             elif condition is not None and condition.resulting_stats is not None:
                 pending = self.pending_conditions.setdefault(owner, {})

@@ -7,7 +7,7 @@ masks. Python runs per observer, per target on hit cells, per hazard owner and p
 spatial condition; never per visible cell.
 """
 
-from typing import AbstractSet, Any, Dict, FrozenSet, Iterable, List, Mapping, Optional, Self, Sequence, Set, Tuple
+from typing import AbstractSet, Any, Callable, Dict, FrozenSet, Iterable, List, Mapping, Optional, Self, Sequence, Set, Tuple
 from uuid import UUID
 from pydantic import Field, InstanceOf, PrivateAttr
 
@@ -23,7 +23,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.base_tiles import Tile
-from dnd.core.gridmap import GridMap, SpatialConditionOwner, get_map
+from dnd.core.gridmap import CellBox, GridMap, SpatialConditionOwner, get_map
 from dnd.core.navigation import NO_CELLS_LAYER, NO_ROUTES, NO_SIDES_LAYER, Routes, has_route
 from dnd.core.geometry import ROUTE_STEP_SHIFT, supercover_line, supercover_route_table
 from dnd.core.presentation_geometry import SpherePresentationGeometry
@@ -908,17 +908,58 @@ def _pack_cells(keys: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
 TargetFacts = Tuple[BaseBlock, int, int, bool, bool]  # block, key, stealth DC, invisible, volatile
 
 
-def _contact_table_value(box: Box, facts: Sequence[Tuple[UUID, bool, TargetFacts]], cell_array: np.ndarray,
+@dataclass(frozen=True)
+class TargetColumns:
+    """A contact table's per-target columns, in target order."""
+
+    blocks: Tuple[BaseBlock, ...]
+    uuid_objects: np.ndarray         # object array of the uuids
+    uuid_halves: np.ndarray          # (targets, 2) uint64
+    target_key: np.ndarray           # int64: the target's id times two plus its class (0 entity, 1 object)
+    stealth: np.ndarray              # int64
+    invisible: np.ndarray            # bool
+    volatile: np.ndarray             # bool
+
+
+def _listed_columns(facts: Sequence[Tuple[UUID, bool, TargetFacts]]) -> TargetColumns:
+    """The columns of these read targets (uuid, listed as an entity, facts)."""
+    uuid_objects = np.empty(len(facts), dtype=object)
+    uuid_objects[:] = [identity for identity, _, _ in facts]
+    return TargetColumns(
+        tuple(values[0] for _, _, values in facts), uuid_objects,
+        np.array([(identity.int >> 64, identity.int & UUID_LOW) for identity, _, _ in facts],
+                 dtype=np.uint64).reshape(-1, 2),
+        np.array([values[1] for _, _, values in facts], dtype=np.int64),
+        np.array([values[2] for _, _, values in facts], dtype=np.int64),
+        np.array([values[3] for _, _, values in facts], dtype=bool),
+        np.array([values[4] for _, _, values in facts], dtype=bool))
+
+
+def _kept_columns(table: ContactTable, indexes: np.ndarray) -> TargetColumns:
+    """A kept table's columns at these targets."""
+    return TargetColumns(tuple(table.blocks[index] for index in indexes.tolist()), table.uuid_objects[indexes],
+                         table.uuid_halves[indexes], table.target_key[indexes], table.stealth[indexes],
+                         table.invisible[indexes], table.volatile[indexes])
+
+
+def _joined_columns(first: TargetColumns, second: TargetColumns) -> TargetColumns:
+    return TargetColumns(first.blocks + second.blocks,
+                         np.concatenate((first.uuid_objects, second.uuid_objects)),
+                         np.concatenate((first.uuid_halves, second.uuid_halves)),
+                         np.concatenate((first.target_key, second.target_key)),
+                         np.concatenate((first.stealth, second.stealth)),
+                         np.concatenate((first.invisible, second.invisible)),
+                         np.concatenate((first.volatile, second.volatile)))
+
+
+def _contact_table_value(box: Box, columns: TargetColumns, cell_array: np.ndarray,
                          side_array: np.ndarray) -> ContactTable:
-    """The table of these targets (uuid, listed as an entity, facts) and rows: cells (x, y, target,
-    kind) and sides (side x, y, across x, y, across tile, optical, propagation, target, position)."""
-    uuids = tuple(identity for identity, _, _ in facts)
-    halves = np.array([(identity.int >> 64, identity.int & UUID_LOW) for identity in uuids],
-                      dtype=np.uint64).reshape(-1, 2)
-    target_key = np.array([values[1] for _, _, values in facts], dtype=np.int64)
-    stealth = np.array([values[2] for _, _, values in facts], dtype=np.int64)
-    invisible = np.array([values[3] for _, _, values in facts], dtype=bool)
-    volatile = np.array([values[4] for _, _, values in facts], dtype=bool)
+    """The table of these targets' columns and rows: cells (x, y, target, kind) and sides (side x, y,
+    across x, y, across tile, optical, propagation, target, position)."""
+    uuids = tuple(columns.uuid_objects.tolist())
+    as_entity = ((columns.target_key & 1) == 0).tolist()
+    halves, target_key = columns.uuid_halves, columns.target_key
+    stealth, invisible, volatile = columns.stealth, columns.invisible, columns.volatile
     cell_x, cell_y, cell_target, cell_kind = cell_array[:, 0], cell_array[:, 1], cell_array[:, 2], cell_array[:, 3]
     side_target = side_array[:, 7]
     cell_keys, side_keys = target_key[cell_target], target_key[side_target]
@@ -926,12 +967,10 @@ def _contact_table_value(box: Box, facts: Sequence[Tuple[UUID, bool, TargetFacts
                                   invisible[cell_target])).astype(np.int64).reshape(-1, 6)
     side_input = np.column_stack((side_array[:, :7], side_keys, side_array[:, 8:10], stealth[side_target],
                                   invisible[side_target])).astype(np.int64).reshape(-1, 12)
-    uuid_objects = np.empty(len(uuids), dtype=object)
-    uuid_objects[:] = uuids
     return ContactTable(
-        box, tuple(values[0] for _, _, values in facts), uuids, uuid_objects,
-        {(identity, as_entity): index for index, (identity, as_entity, _) in enumerate(facts)},
-        {identity: index for index, (identity, as_entity, _) in enumerate(facts) if as_entity},
+        box, columns.blocks, uuids, columns.uuid_objects,
+        dict(zip(zip(uuids, as_entity), range(len(uuids)))),
+        {identity: index for index, (identity, entity) in enumerate(zip(uuids, as_entity)) if entity},
         halves, stealth, invisible, volatile,
         cell_x, cell_y, cell_target, cell_kind,
         side_array[:, 0], side_array[:, 1], side_array[:, 2], side_array[:, 3], side_array[:, 4] != 0,
@@ -1006,6 +1045,15 @@ def _perception_inert(event: Event) -> bool:
             and event.senses_hint == _INERT_SENSES_HINT)
 
 
+@dataclass(frozen=True)
+class NavigationRead:
+    """The cells one observer's last navigation materialization read and their traversal stamp then
+    (`GridMap.traversal_stamp`): its paths are current while the stamp of those cells is unchanged."""
+
+    box: CellBox
+    traversal_stamp: int
+
+
 @dataclass
 class _GroupSettlement:
     """Facts recorded for one observer while a simultaneous group is open."""
@@ -1054,6 +1102,13 @@ class SpatialSensesSystem:
         # perception changes: every perception write (register, unregister, recompute,
         # reset, a replaced map) clears them with the grant table's write.
         self._identity_grants: Dict[Tuple[UUID, Tuple[int, int]], FrozenSet[str]] = {}
+        # Advances with every clear of the identity grants (and starts again at 0 when the system resets):
+        # a grant read at one epoch holds while it does.
+        self.identity_epoch = 0
+        # Each registered observer's id as text (written with `senses_by_observer`): the identity
+        # grants share these strings instead of formatting an id per grant. The Encounter keeps its own
+        # such table for its event computers (`dnd.encounter._ID_STRINGS`); this module cannot import it.
+        self._id_texts: Dict[UUID, str] = {}
         # Contact targets' ids (each target once, in first-seen order): their keys compare by value
         # across settlements. Append-only; reset clears it with every field that holds a key.
         self._target_ids: Dict[UUID, int] = {}
@@ -1071,6 +1126,8 @@ class SpatialSensesSystem:
         # completion reads settled senses); those observers already settled it.
         self._covered_facts: FrozenSet[UUID] = frozenset()
         self._covered_observers: FrozenSet[UUID] = frozenset()
+        # Each observer's last navigation read, replaced by its next materialization; reset clears it.
+        self._navigation_reads: Dict[UUID, NavigationRead] = {}
         # The next settlement's marker: the observers one pass settles share it (`SensoryUpdateEvent.settlement`).
         self._next_settlement = 0
 
@@ -1085,6 +1142,7 @@ class SpatialSensesSystem:
     def reset(self) -> None:
         """Clear observers and their fields."""
         self.senses_by_observer.clear()
+        self._id_texts.clear()
         self.published_observers.clear()
         self.fields.clear()
         self._covered_facts = frozenset()
@@ -1094,13 +1152,18 @@ class SpatialSensesSystem:
         self._absorbing_light = False
         self._settled_with_light = False
         self._grants = None
+        # A reset runtime is cold (the content loader requires every field empty): the epoch starts
+        # again at 0. The Encounter's carry never outlives that in use: the queue's reset removes its
+        # computers, and installing them clears it.
         self._identity_grants.clear()
+        self.identity_epoch = 0
         self._target_ids.clear()
         self._light_table = None
         self._table = None
         self._table_version = 0
         self._table_changes = None
         self._map = None
+        self._navigation_reads.clear()
         self._next_settlement = 0
 
     def _settlement(self) -> int:
@@ -1183,17 +1246,28 @@ class SpatialSensesSystem:
     def register_observer(self, observer_uuid: UUID, senses: Senses) -> None:
         """Register an observer without independently materializing its world view."""
         self.senses_by_observer[observer_uuid] = senses
+        self._id_texts[observer_uuid] = str(observer_uuid)
         if self.fields.pop(observer_uuid, None) is not None:
             self._grants = _replace_grants(self._grants, {observer_uuid: None})
-        self._identity_grants.clear()
+        self._drop_identity_grants()
+
+    def record_navigation_read(self, observer_uuid: UUID, box: CellBox, traversal_stamp: int) -> None:
+        """Keep the cells a written navigation materialization read, with their traversal stamp when read."""
+        self._navigation_reads[observer_uuid] = NavigationRead(box, traversal_stamp)
+
+    def navigation_current(self, observer_uuid: UUID, grid: GridMap) -> bool:
+        """Whether no traversal write touched a cell the observer's last navigation materialization read."""
+        read = self._navigation_reads.get(observer_uuid)
+        return read is not None and grid.traversal_stamp(read.box) == read.traversal_stamp
 
     def unregister_observer(self, observer_uuid: UUID) -> None:
         """Remove an observer and its field."""
         self.senses_by_observer.pop(observer_uuid, None)
+        self._id_texts.pop(observer_uuid, None)
         self.published_observers.discard(observer_uuid)
         if self.fields.pop(observer_uuid, None) is not None:
             self._grants = _replace_grants(self._grants, {observer_uuid: None})
-            self._identity_grants.clear()
+            self._drop_identity_grants()
 
     # ------------------------------------------------------------------ selection
 
@@ -1220,9 +1294,16 @@ class SpatialSensesSystem:
         if grants is None:
             holders = self.contact_holders(subject_uuid, _granted_at(self._grants, (position,)))
             holders.add(subject_uuid)
+            id_texts = self._id_texts
+            # In the holders' own order, as before: a frozenset's iteration order follows its insertions.
             grants = self._identity_grants[(subject_uuid, position)] = frozenset(
-                str(holder) for holder in holders)
+                id_texts.get(holder) or str(holder) for holder in holders)
         return grants
+
+    def _drop_identity_grants(self) -> None:
+        """Every perception write's end of the identity grants: they are cleared and the epoch advances."""
+        self._identity_grants.clear()
+        self.identity_epoch += 1
 
     def contact_holders(self, subject_uuid: UUID, observers: AbstractSet[UUID]) -> Set[UUID]:
         """Those observers whose current entity contacts include this subject."""
@@ -1397,8 +1478,7 @@ class SpatialSensesSystem:
             change.hazard_differs,
             before.spatial_effects != after.spatial_effects,
         ))
-        visible_topology_changed = any(self._changes_visible_topology(event, senses) for event in events)
-        if projection_changed or visible_topology_changed:
+        if projection_changed or any(self._changes_visible_topology(event, senses, shared) for event in events):
             senses._paths_dirty = True
             after = _replace_paths_dirty(after)
         # A group's settlement attaches to its still-open root: a completed
@@ -1478,7 +1558,7 @@ class SpatialSensesSystem:
             # A replaced map: every field and table read the old one.
             self.fields.clear()
             self._grants = None
-            self._identity_grants.clear()
+            self._drop_identity_grants()
             self._light_table = None
             self._table = None
             self._map = grid
@@ -1607,7 +1687,7 @@ class SpatialSensesSystem:
             touched[observer_uuid] = effect_before
         # The grants are written once the settlement is published.
         self._grants = _replace_grants(self._grants, grants)
-        self._identity_grants.clear()
+        self._drop_identity_grants()
         return touched
 
     def _sight_scope(self, observer_uuid: UUID, world: SettlementWorld) -> SightScope:
@@ -1798,7 +1878,7 @@ class SpatialSensesSystem:
         kept_cells = kept_sides = None
         if incremental:
             assert previous is not None and named is not None
-            # Every other row and every other target's facts are the kept table's.
+            # Every row away from the named cells is the kept table's (its targets' facts below).
             def named_at(xs: np.ndarray, ys: np.ndarray, cells_named: Set[Position]) -> np.ndarray:
                 named_array = np.array(list(cells_named), dtype=np.int64).reshape(-1, 2)
                 return np.isin(_pack_cells(np.zeros(xs.size, dtype=np.int64), xs, ys),
@@ -1811,14 +1891,6 @@ class SpatialSensesSystem:
                 target(previous.uuids[index], kind == ROW_ENTITY)
             for index in previous.side_target[~kept_sides].tolist():
                 target(previous.uuids[index], False)
-            kept_targets = np.unique(np.concatenate((previous.cell_target[kept_cells],
-                                                     previous.side_target[kept_sides]))).tolist()
-            entity_of = {index: identity for identity, index in previous.entity_index.items()}
-            for index in kept_targets:
-                key = (previous.uuids[index], entity_of.get(index) == previous.uuids[index])
-                if key not in facts:
-                    facts[key] = (previous.blocks[index], int(previous.target_key[index]), int(previous.stealth[index]),
-                                  bool(previous.invisible[index]), bool(previous.volatile[index]))
         listed = [(identity, as_entity, values) for (identity, as_entity), values in facts.items() if values is not None]
         index_of = {(identity, as_entity): index for index, (identity, as_entity, _) in enumerate(listed)}
         cell_rows = [(x, y, index_of[(identity, as_entity)], kind) for identity, as_entity, x, y, kind in cells]
@@ -1826,12 +1898,24 @@ class SpatialSensesSystem:
                      for identity, x, y, ax, ay, tile, optical, propagation, px, py in sides]
         cell_array = np.array(cell_rows, dtype=np.int64).reshape(-1, 4)
         side_array = np.array(side_rows, dtype=np.int64).reshape(-1, 10)
+        columns = _listed_columns(listed)
         if incremental:
             assert previous is not None and kept_cells is not None and kept_sides is not None
+            # Every other target's facts are the kept table's: the targets with a kept row that this
+            # settlement did not read follow the read ones, in kept order (a key is the target's
+            # (uuid, listed as an entity) pair: its id and class).
+            read_keys = np.array([target_id * 2 + (0 if as_entity else 1) for identity, as_entity in facts
+                                  if (target_id := self._target_ids.get(identity)) is not None], dtype=np.int64)
+            kept = np.unique(np.concatenate((previous.cell_target[kept_cells], previous.side_target[kept_sides])))
+            kept = kept[~np.isin(previous.target_key[kept], read_keys)]
+            columns = _joined_columns(columns, _kept_columns(previous, kept))
             # The kept rows, re-indexed; a target no longer listed loses them.
-            remap = np.array([index_of.get((identity, as_entity), -1)
-                              for (identity, as_entity), _ in sorted(previous.targets.items(), key=lambda item: item[1])],
-                             dtype=np.int64)
+            remap = np.full(len(previous.uuids), -1, dtype=np.int64)
+            remap[kept] = len(listed) + np.arange(kept.size, dtype=np.int64)
+            for index, (identity, as_entity, _) in enumerate(listed):
+                held = previous.targets.get((identity, as_entity))
+                if held is not None:
+                    remap[held] = index
             old_cells = np.column_stack((previous.cell_x, previous.cell_y, remap[previous.cell_target],
                                          previous.cell_kind)).astype(np.int64).reshape(-1, 4)[kept_cells]
             old_sides = np.column_stack((previous.side_x, previous.side_y, previous.across_x, previous.across_y,
@@ -1840,7 +1924,7 @@ class SpatialSensesSystem:
                                          previous.side_position_y)).astype(np.int64).reshape(-1, 10)[kept_sides]
             cell_array = np.concatenate((old_cells[old_cells[:, 2] >= 0], cell_array))
             side_array = np.concatenate((old_sides[old_sides[:, 7] >= 0], side_array))
-        return _contact_table_value(box, listed, cell_array, side_array)
+        return _contact_table_value(box, columns, cell_array, side_array)
 
     def _publish_cells(self, view: ObserverView, world: SettlementWorld, passive: int,
                        resolved: ResolvedContacts) -> CellLayer:
@@ -2580,15 +2664,17 @@ class SpatialSensesSystem:
             return {event.resulting_tile.position}
         return None
 
-    def _changes_visible_topology(self, event: Event, senses: Senses) -> bool:
+    def _changes_visible_topology(self, event: Event, senses: Senses, shared: SharedValues) -> bool:
+        """Whether the fact changes movement topology at a cell the observer sees or at an object it holds.
+        A fact's cells are read once per settlement (`shared`); each observer gathers its visible cells there."""
         if isinstance(event, SpatialChangeEvent):
             hint = event.senses_hint
             if hint is None or not hint.requires_paths:
                 return False
-            return (_any_visible(senses.cells, self._candidate_positions(event))
+            return (_any_visible(senses.cells, shared, event, lambda: self._candidate_positions(event))
                 or (event.object_uuid is not None and event.object_uuid in senses.objects))
         if isinstance(event, SpatialEffectChangeEvent):
-            return _any_visible(senses.cells, event.get_affected_positions())
+            return _any_visible(senses.cells, shared, event, event.get_affected_positions)
         return False
 
     @staticmethod
@@ -2636,10 +2722,15 @@ class SpatialSensesSystem:
         return positions
 
 
-def _any_visible(cells: PerceivedCells, positions: Iterable[Position]) -> bool:
-    """Whether any of these cells is visible (one gather)."""
-    positions = list(positions)
-    return bool(positions) and bool(_gather(cells.visible.values, cells.visible.box, positions).any())
+def _any_visible(cells: PerceivedCells, shared: SharedValues, fact: Event,
+                 positions: Callable[[], Iterable[Position]]) -> bool:
+    """Whether any of a fact's cells is visible (one gather). The fact's cells are one array per
+    settlement, built from `positions` by their first reader."""
+    key = ("fact cells", fact.uuid)
+    fact_cells = shared.get(key)
+    if fact_cells is None:
+        fact_cells = shared[key] = np.array(list(positions()), dtype=np.int64).reshape(-1, 2)
+    return bool(fact_cells.size) and bool(_gather(cells.visible.values, cells.visible.box, fact_cells).any())
 
 
 def _changed_targets(previous: ContactTable, current: ContactTable) -> np.ndarray:

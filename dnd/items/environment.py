@@ -16,6 +16,7 @@ from dnd.types.discovery import ActorScan
 from dnd.types.materials import Material
 from dnd.types.physical_access import ContactPassage
 from dnd.types.world import WorldEdgeChannel
+from dnd.core.base_object import empty_list
 from dnd.types.world_placement import (
     BoundaryStructure,
     BoundaryStructureKind,
@@ -136,7 +137,7 @@ class OpenDirectionalDoorAction(BaseAction):
         default=TargetType.SELF,
         description="Door actions target the acting entity and use source item state.",
     )
-    costs: List[Cost] = Field(default_factory=list, description="Open Door has no action economy cost.")
+    costs: List[Cost] = Field(default_factory=empty_list, description="Open Door has no action economy cost.")
     source_item_uuid: Optional[UUID] = Field(
         default=None,
         description="UUID of the directional door opened by this action.",
@@ -180,7 +181,7 @@ class CloseDirectionalDoorAction(BaseAction):
         default=TargetType.SELF,
         description="Door actions target the acting entity and use source item state.",
     )
-    costs: List[Cost] = Field(default_factory=list, description="Close Door has no action economy cost.")
+    costs: List[Cost] = Field(default_factory=empty_list, description="Close Door has no action economy cost.")
     source_item_uuid: Optional[UUID] = Field(
         default=None,
         description="UUID of the directional door closed by this action.",

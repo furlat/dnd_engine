@@ -34,7 +34,7 @@ __all__ = [
     "DeathSaveEvent", "InstantDeathEvent", "DeathEvent",
 ]
 
-from dnd.types.event_facts import (JOINS_A_STEP, SIMULTANEOUS_ENTRIES, GroupEntryKind, HandlerGroupDispatch, LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, WorldConnectorState as WorldConnectorState)
+from dnd.types.event_facts import (JOINS_A_STEP, SIMULTANEOUS_ENTRIES, GroupEntryKind, HandlerGroupDispatch, LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, KeyedTileChange, WorldConnectorState as WorldConnectorState)
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -118,7 +118,7 @@ import logging
 import time
 
 from dnd.action_timing import action_timing_enabled, record_action_timing
-from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute, empty_list
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +177,10 @@ class OpenGroup:
         """Whether a simultaneous entry is open (`SIMULTANEOUS_ENTRIES`). A move step alone only
         settles perception once: its handlers, departures and reactions run as without a group."""
         return any(kind in SIMULTANEOUS_ENTRIES for kind in self.kinds)
+
+
+# How many contained grant pairs the queue keeps (`EventQueue._merged_grants`) before it starts again.
+CONTAINED_GRANTS_KEPT = 4096
 
 
 def merged_grants(grants: Dict[str, FrozenSet[str]], added: Mapping[str, FrozenSet[str]]) -> Dict[str, FrozenSet[str]]:
@@ -349,12 +353,12 @@ class Event(BaseModel):
         description="Whether this is the last event at this phase in its lineage.",
     )
     lineage_children_events: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description=("Child event UUIDs accumulated across this lineage's earlier phases, as stored; "
                      "later children are read through EventQueue.child_links."),
     )
     children_events: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description=("Child event UUIDs attached during this event version's phase, as stored; "
                      "later children are read through EventQueue.child_links."),
     )
@@ -363,7 +367,7 @@ class Event(BaseModel):
         description="Stable lineage UUID of the parent, resolved during completion.",
     )
     children_lineages: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Stable child lineage UUIDs resolved during completion.",
     )
     combat_log: Optional[CombatLogEntry] = Field(
@@ -1398,6 +1402,12 @@ class EventQueue:
     _revealed_computer: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]] = None
     _identified_entity_observer_computer: Optional[Callable[
         ['Event', Dict[str, FrozenSet[str]]], Dict[str, FrozenSet[str]]]] = None
+    # The mapping pairs (grants, added) whose union is `grants` itself (`merged_grants` adds nothing):
+    # stored grant mappings are never edited, so such a pair stays contained. Keyed by the inputs' ids;
+    # each entry holds its inputs (so a kept id is not reused while held) and an answer also checks it
+    # holds these very objects. Not a runtime slot of the content loader: a derived table, cleared when
+    # full and with the queue.
+    _contained_grants: Dict[Tuple[int, int], Tuple[Mapping[str, FrozenSet[str]], Mapping[str, FrozenSet[str]]]] = {}
 
     @classmethod
     def begin_turn_execution(cls, execution_id: Optional[UUID] = None) -> UUID:
@@ -2365,6 +2375,23 @@ class EventQueue:
         return event.children_events + tail, event.lineage_children_events + tail
 
     @classmethod
+    def _merged_grants(cls, grants: Dict[str, FrozenSet[str]],
+                       added: Mapping[str, FrozenSet[str]]) -> Dict[str, FrozenSet[str]]:
+        """`merged_grants`, answering a pair already known to add nothing without merging it again."""
+        if not added:
+            return grants
+        key = (id(grants), id(added))
+        held = cls._contained_grants.get(key)
+        if held is not None and held[0] is grants and held[1] is added:
+            return grants
+        merged = merged_grants(grants, added)
+        if merged is grants:
+            if len(cls._contained_grants) >= CONTAINED_GRANTS_KEPT:
+                cls._contained_grants.clear()
+            cls._contained_grants[key] = (grants, added)
+        return merged
+
+    @classmethod
     def _store_event(
         cls,
         event: Event,
@@ -2391,7 +2418,7 @@ class EventQueue:
             if timing:
                 record_action_timing("event_queue.store.compute_identified_ms", started)
             started = time.perf_counter() if timing else 0.0
-            identified = merged_grants(identified, located)
+            identified = cls._merged_grants(identified, located)
             if timing:
                 record_action_timing("event_queue.store.merge_identified_ms", started)
 
@@ -2402,7 +2429,7 @@ class EventQueue:
                 # Canceled children retain the same causal parent as completed
                 # ones; relationship identity exists before any terminal phase.
                 event.parent_lineage = parent_event.lineage_uuid
-            identified = merged_grants(identified, parent_event.identified_entity_observer_uuids)
+            identified = cls._merged_grants(identified, parent_event.identified_entity_observer_uuids)
         event.identified_entity_observer_uuids = identified
         event.located_entity_observer_uuids = located
         if timing:
@@ -2899,6 +2926,7 @@ class EventQueue:
         cls._perceiver_computer = None
         cls._revealed_computer = None
         cls._identified_entity_observer_computer = None
+        cls._contained_grants.clear()
 
     @classmethod
     def get_events_chronological(cls, start_time: Optional[datetime] = None,
@@ -2972,13 +3000,12 @@ class EventQueue:
 
         Returns:
             True if no other events with the same lineage_uuid exist at this phase
-            (considering only events registered before this one).
+            (only versions stored before it; the lineage index is in store order).
         """
-        history = cls._events_by_lineage.get(event.lineage_uuid, [])
-        for e in history:
+        for e in cls._events_by_lineage.get(event.lineage_uuid, []):
             if e.uuid == event.uuid:
-                continue
-            if e.phase == event.phase and e.timestamp < event.timestamp:
+                return True
+            if e.phase == event.phase:
                 return False
         return True
 
@@ -2991,9 +3018,9 @@ class D20Event(Event):
         default=None,
         description="Difficulty class for the roll.",
     )
-    bonus: Optional[Union[int, ValueReading]] = Field(
-        default=0,
-        description="Roll bonus: the evaluated bonus, or its total once detached for a seat.",
+    bonus: Optional[ValueReading] = Field(
+        default=None,
+        description="Evaluated roll bonus; None before the roll and in a seat's detached body (its value stays in dice_roll.bonus).",
     )
     dice: Optional[Dice] = Field(default=None, description="Dice object used to create the roll.")
     dice_roll: Optional[DiceRoll] = Field(default=None, description="Resolved dice roll.")
@@ -3066,9 +3093,8 @@ class SavingThrowEvent(D20Event):
             roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
-        bonus_breakdown = value_log_rows(self.bonus.breakdown) if isinstance(self.bonus, ValueReading) else []
-        advantage_breakdown = (advantage_log_rows(self.bonus.advantage_breakdown)
-                               if isinstance(self.bonus, ValueReading) else [])
+        bonus_breakdown = value_log_rows(self.bonus.breakdown) if self.bonus is not None else []
+        advantage_breakdown = advantage_log_rows(self.bonus.advantage_breakdown) if self.bonus is not None else []
 
         success = self.result if self.result is not None else (roll.total >= dc if dc > 0 else None)
 
@@ -3166,9 +3192,8 @@ class SkillCheckEvent(D20Event):
             roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
-        bonus_breakdown = value_log_rows(self.bonus.breakdown) if isinstance(self.bonus, ValueReading) else []
-        advantage_breakdown = (advantage_log_rows(self.bonus.advantage_breakdown)
-                               if isinstance(self.bonus, ValueReading) else [])
+        bonus_breakdown = value_log_rows(self.bonus.breakdown) if self.bonus is not None else []
+        advantage_breakdown = advantage_log_rows(self.bonus.advantage_breakdown) if self.bonus is not None else []
 
         success = self.result if self.result is not None else (roll.total >= dc if dc is not None and dc > 0 else None)
 
@@ -3726,8 +3751,9 @@ class SpatialChangeEvent(Event):
     tile_state: Optional[WorldTileState] = Field(
         default=None, description="Complete Tile after-value at an actual commit.",
     )
-    tile_states: Tuple[WorldTileState, ...] = Field(
-        default=(), description="Complete after-values of every Tile in one committed mechanics change.",
+    keyed_tile_changes: Tuple[KeyedTileChange, ...] = Field(
+        default=(), description="Keyed changes of every Tile in one committed mechanics change: the keys its writer "
+        "changed, with their after-values.",
     )
     tile_present: Optional[bool] = Field(
         default=None, description="Whether the addressed Tile exists after this commit.",
@@ -3914,24 +3940,25 @@ class SpatialChangeEvent(Event):
         )
 
     @classmethod
-    def tiles_changed(cls, rows: Tuple[WorldTileState, ...], *,
+    def tiles_changed(cls, changes: Tuple[KeyedTileChange, ...], *,
                       source_entity_uuid: UUID,
                       parent_event: Optional[UUID] = None,
                       inert: bool = False) -> 'SpatialChangeEvent':
         """One committed change covering every changed Tile (plan §5.5).
 
-        The rows are complete after-values; observers and world folds read them
-        as one fact instead of one fact per cell. ``inert`` after-values (residue
-        amounts) change no traversal, like a single inert tile refresh.
+        Each change names the keys its writer changed, with their after-values;
+        observers and world folds read them as one fact instead of one fact per
+        cell. ``inert`` after-values (residue amounts) change no traversal, like a
+        single inert tile refresh.
         """
-        if not rows:
+        if not changes:
             raise ValueError("A tile mechanics change needs at least one Tile")
         return cls(
             source_entity_uuid=source_entity_uuid,
             event_type=EventType.SPATIAL_TILE_CHANGED,
             change_type=SpatialChangeType.TILES_CHANGED,
-            position=rows[0].position,
-            tile_states=rows,
+            position=changes[0].position,
+            keyed_tile_changes=changes,
             tile_present=True,
             phase=EventPhase.DECLARATION,
             use_register=False,
@@ -3948,7 +3975,6 @@ class SpatialChangeEvent(Event):
                      tile_blocks_optics: Optional[bool] = None,
                      tile_blocks_propagation: Optional[bool] = None,
                      new_light_level: Optional[int] = None,
-                     source_entity_uuid: Optional[UUID] = None,
                      senses_hint: Optional['SensesUpdateHint'] = None,
                      parent_event: Optional[UUID] = None,
                      directional_position: Optional[Tuple[int, int]] = None,
@@ -3993,7 +4019,7 @@ class SpatialChangeEvent(Event):
                 ),
             )
         return cls(
-            source_entity_uuid=source_entity_uuid or uuid4(),
+            source_entity_uuid=uuid4(),
             event_type=EventType.SPATIAL_TILE_CHANGED,
             change_type=SpatialChangeType.TILE_CHANGED,
             position=position,
@@ -4296,7 +4322,7 @@ class SpatialChangeEvent(Event):
             positions.add(self.transition_from)
         if self.transition_to:
             positions.add(self.transition_to)
-        positions.update(row.position for row in self.tile_states)
+        positions.update(change.position for change in self.keyed_tile_changes)
         if self.senses_hint:
             if self.senses_hint.directional_positions:
                 positions.update(self.senses_hint.directional_positions)

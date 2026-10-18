@@ -1,7 +1,7 @@
 from dnd.core.effect_types import EventResolutionRef, EffectOrigin
 from dnd.core.damage import DamageResolution
 from dnd.core.attack_types import NaturalWeaponSpec
-from typing import cast, Callable, AbstractSet, Dict, FrozenSet, Hashable, Mapping, Optional, Any, List, ClassVar, Sequence, Union, Tuple, Set
+from typing import cast, Callable, AbstractSet, Dict, FrozenSet, Hashable, Iterable, Mapping, Optional, Any, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from dataclasses import dataclass, field, replace
@@ -84,6 +84,7 @@ from dnd.blocks.health import (
     Health,
     HitDiceConfig,
     HitDiceHealingResult,
+    normal_hit_points,
 )
 from dnd.blocks.equipment import EquipmentConfig, Equipment, PreparedEquipmentRelease
 from dnd.blocks.creature_proficiencies import (
@@ -246,14 +247,14 @@ def get_natural_roll(roll: DiceRoll) -> int:
 
 def determine_attack_outcome(
     roll: DiceRoll,
-    ac: Union[int, ValueReading],
+    target_ac: int,
     crit_threshold: int = 20
 ) -> AttackOutcome:
         """Determine current engine d20 outcome from a roll and target number.
 
         Args:
             roll: D20 roll result.
-            ac: Target number or evaluated armor class.
+            target_ac: Target number: the read armor class's normalized score, or a DC.
             crit_threshold: Minimum natural attack roll that upgrades a hit to
                 a critical hit.
 
@@ -261,8 +262,6 @@ def determine_attack_outcome(
             Engine outcome for the roll. Attack rolls use natural 1/critical
             semantics; saving throws and checks compare total against DC.
         """
-        target_ac = ac if isinstance(ac, int) else ac.normalized_score
-
         if roll.roll_type != RollType.ATTACK:
             return AttackOutcome.HIT if roll.total >= target_ac else AttackOutcome.MISS
 
@@ -628,8 +627,6 @@ class Entity(BaseBlock):
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
 
     _fast_move_target_cache_revision: Optional[Tuple[int, int]] = PrivateAttr(default=None)
-    # The cells the last navigation materialization read and their traversal stamp then.
-    _navigation_traversal: Optional[Tuple[CellBox, int]] = PrivateAttr(default=None)
     _fast_move_target_cache: Dict[
         Tuple[Any, ...],
         Tuple[AvailableTarget, ...],
@@ -2486,7 +2483,7 @@ class Entity(BaseBlock):
 
     def get_normal_hp(self) -> int:
         """Return current normal HP before temporary hit points."""
-        return self.get_max_hp() - self.health.damage_taken
+        return normal_hit_points(self.get_max_hp(), self.health)
 
     @property
     def is_dying(self) -> bool:
@@ -3596,6 +3593,7 @@ class Entity(BaseBlock):
         resolution: DamageApplicationPreview,
         critical_hit: bool,
         impact_direction: tuple[float, float] | None,
+        resulting_normal_hp: int,
     ) -> DamageAppliedEvent:
         """Emit the factual positive-damage boundary through completion.
 
@@ -3608,6 +3606,7 @@ class Entity(BaseBlock):
             normal_hit_point_damage: Damage applied beyond temporary hit points.
             temporary_hit_point_damage: Temporary hit points consumed.
             resolution: Complete typed damage-resolution evidence.
+            resulting_normal_hp: Normal hit points after the damage is applied.
 
         Returns:
             Completed positive post-mitigation damage event.
@@ -3625,7 +3624,7 @@ class Entity(BaseBlock):
             applied_damage=applied_damage,
             normal_hit_point_damage=normal_hit_point_damage,
             temporary_hit_point_damage=temporary_hit_point_damage,
-            resulting_normal_hp=self.get_normal_hp(),
+            resulting_normal_hp=resulting_normal_hp,
             resulting_temporary_hp=max(0, self.health.temporary_hit_points.normalized_score),
             damage_type=damage_type,
             damages=damages,
@@ -3704,9 +3703,9 @@ class Entity(BaseBlock):
         Returns:
             Actual HP lost after handlers, cancellation, and resistances.
         """
-        normal_hp_before = self.get_normal_hp()
-        temporary_hp_before = max(0, self.health.temporary_hit_points.normalized_score)
         max_hp = self.get_max_hp()
+        normal_hp_before = normal_hit_points(max_hp, self.health)
+        temporary_hp_before = max(0, self.health.temporary_hit_points.normalized_score)
         event_damages = damages if damages else [
             Damage(
                 damage_type=damage_type,
@@ -3744,8 +3743,12 @@ class Entity(BaseBlock):
 
         actual_damage = 0
         damage_resolution: Optional[DamageApplicationPreview] = None
+        # The maximum after the incoming handlers, read once for the preview and the applied event:
+        # what runs between them writes only temporary hit points and damage taken, which it does not read.
+        max_hp_applied = self.get_max_hp()
         if not take_damage_event.canceled:
-            damage_resolution = self.preview_take_damage(take_damage_event)
+            damage_resolution = self.health.preview_damage_event(
+                take_damage_event, normal_hit_points_available=max(0, normal_hit_points(max_hp_applied, self.health)))
             actual_damage = self.health.apply_damage_preview(
                 damage_resolution,
                 source_entity_uuid,
@@ -3774,6 +3777,7 @@ class Entity(BaseBlock):
                 resolution=damage_resolution,
                 critical_hit=critical_hit,
                 impact_direction=impact_direction,
+                resulting_normal_hp=normal_hit_points(max_hp_applied, self.health),
             )
 
         if (
@@ -5252,11 +5256,6 @@ class Entity(BaseBlock):
                     return True
         return False
 
-    def _navigation_traversal_current(self) -> bool:
-        """Whether no traversal write touched a cell the last navigation materialization read."""
-        recorded = self._navigation_traversal
-        return recorded is not None and get_map().traversal_stamp(recorded[0]) == recorded[1]
-
     def materialize_navigation_after_movement(self, movement_mode: MovementMode) -> None:
         """Refresh navigation, omitting unused routes after ordinary exhaustion."""
         remaining_distance = max(
@@ -5293,7 +5292,7 @@ class Entity(BaseBlock):
         senses = self.senses
         # Paths read traversal within their search box; the walkable map reads every visible cell.
         read_box = union_box(path_read_box(self.position, effective_path_distance), visible_box(senses.cells))
-        self._navigation_traversal = (read_box, grid.traversal_stamp(read_box))
+        read_stamp = grid.traversal_stamp(read_box)
 
         def search_from_here(walk_in_danger: bool) -> PathSearch:
             return grid.path_search(self.position, effective_path_distance, requesting_entity_uuid=self.uuid,
@@ -5328,6 +5327,7 @@ class Entity(BaseBlock):
             safe_paths=safe_paths,
             path_max_distance=effective_path_distance,
         )
+        spatial_senses_system.record_navigation_read(self.uuid, read_box, read_stamp)
 
     def update_entity_senses(
         self,
@@ -5780,17 +5780,17 @@ class Entity(BaseBlock):
             footprints[identity] = footprint
         return footprint
 
-    def _aoe_aim_points(self, template: BaseAction, admitted: Sequence[Tuple[int, int]],
+    def _aim_candidates(self) -> Set[Tuple[int, int]]:
+        """The aim points discovery lists: each perceived creature's position and the actor's own (plan §14.1)."""
+        return {contact.position for contact in self.senses.entities.values()} | {self.position}
+
+    def _aoe_aim_points(self, template: BaseAction, aims: Iterable[Tuple[int, int]],
                         scan: ActorScan) -> List[Tuple[int, int]]:
-        """One aim point per perceived creature, the actor included (plan §14.1), that the action admits.
+        """The aims, in sorted order, that the action admits.
 
         Each aim passes the one admission path (plan §14.3b). Free aims anywhere
         in the row's region are validated on demand.
         """
-        allowed = set(admitted)
-        aims = {contact.position for contact in self.senses.entities.values() if contact.position in allowed}
-        if self.position in allowed:
-            aims.add(self.position)
         base = template.current_selection()
         admitted_aims = []
         for aim in sorted(aims):
@@ -6926,16 +6926,12 @@ class Entity(BaseBlock):
                     continue
 
                 if type(template).get_valid_positions is BaseAction.get_valid_positions:
-                    valid_pos_list = list(
-                        self._get_subjective_visible_positions(
-                            template,
-                            visible_cells,
-                        )
-                    )
+                    # The default region, measured subjectively from the call's distance table.
+                    region = frozenset(self._get_subjective_visible_positions(template, visible_cells))
+                    aims = [aim for aim in self._aim_candidates() if aim in region]
                 else:
-                    valid_pos_list = template.get_valid_positions()
-
-                valid_pos_list = self._aoe_aim_points(template, valid_pos_list, scan)
+                    aims = template.valid_positions_among(self._aim_candidates())
+                valid_pos_list = self._aoe_aim_points(template, aims, scan)
                 if not include_aoe_preview and not template.aoe_require_targets:
                     valid_positions = [AvailableTarget(
                         index=index, position=position,
@@ -7261,7 +7257,8 @@ class Entity(BaseBlock):
                 if use_shape_template is None:
                     continue
 
-                valid_pos_list = self._aoe_aim_points(use_template, use_template.get_valid_positions(), scan)
+                valid_pos_list = self._aoe_aim_points(
+                    use_template, use_template.valid_positions_among(self._aim_candidates()), scan)
 
                 use_valid_positions: List[AvailableTarget] = []
                 use_idx = 0
@@ -7488,7 +7485,7 @@ class Entity(BaseBlock):
         paths_need_refresh = (
             required_path_distance > 0
             and not (self.senses.has_clean_paths_for_distance(required_path_distance)
-                     and self._navigation_traversal_current())
+                     and spatial_senses_system.navigation_current(self.uuid, get_map()))
         )
         if paths_need_refresh:
             started = time.perf_counter() if timing else 0.0

@@ -23,6 +23,7 @@ from dnd.core.events import Event, EventPhase, EventQueue, SkillCheckEvent
 from dnd.entity import Entity
 from dnd.types.abilities import SkillName
 from dnd.types.discovery import ActorScan
+from dnd.core.base_object import empty_list
 from dnd.spatial.memberships import (
     MembershipAreaCondition,
     SpatialConditionMembershipSource,
@@ -137,7 +138,7 @@ class SpatialRestraintSource(SpatialConditionMembershipSource):
         default=None,
         exclude=True,
     )
-    escape_action_uuids: List[UUID] = Field(default_factory=list, exclude=True)
+    escape_action_uuids: List[UUID] = Field(default_factory=empty_list, exclude=True)
     escape_action_types: ClassVar[
         Tuple[type[EscapeSpatialRestraintAction], ...]
     ] = ()

@@ -247,6 +247,14 @@ class BaseBlock(BaseModel):
         return {cond: [name for name, _ in imms] for cond, imms in self.contextual_condition_immunities.items()}
 
     _registry: ClassVar[Dict[UUID, 'BaseBlock']] = {}
+    # The registry's attachment index: per supporting block, the registered blocks it physically supports
+    # (`get_supporting_object_uuid`, fixed at construction), in registry order (a key new to the registry
+    # goes last, a held key keeps its place); and each attachment's support. Written wherever `_registry`
+    # is: `_store_registered`, `unregister` / `drop_registered`, the runtime reset, and the content
+    # loader's rollback (both are its runtime slots). Reads keep only entries the registry still holds,
+    # since tests clear `_registry` directly.
+    _attachments: ClassVar[Dict[UUID, Dict[UUID, 'BaseBlock']]] = {}
+    _attachment_support: ClassVar[Dict[UUID, UUID]] = {}
     # The model classes this block's content can create in play (see BaseObject.creates).
     creates: ClassVar[tuple[type[CreatesModels], ...]] = ()
     _accepted_condition_removals: ClassVar[ContextVar[Optional[Dict[
@@ -440,7 +448,41 @@ class BaseBlock(BaseModel):
         """Build what this block can create and register it in the block registry by UUID."""
         super().model_post_init(__context)
         build_creatable_models(type(self))
-        self.__class__._registry[self.uuid] = self
+        BaseBlock._store_registered(self)
+
+    @staticmethod
+    def _store_registered(block: 'BaseBlock') -> None:
+        """Write a block into the registry and the attachment index. A key new to the registry goes last
+        in both, a held key keeps its place in both (dict order), so each support's attachments stay in
+        registry order. An index entry left by a registry cleared outside the reset is dropped first, and
+        so is a held key registered again with another support (only a test re-registers a uuid; the
+        support is frozen on the block)."""
+        registry = BaseBlock._registry
+        identity = block.uuid
+        support = block.get_supporting_object_uuid()
+        held = BaseBlock._attachment_support.get(identity)
+        if held is not None and (identity not in registry or held != support):
+            BaseBlock._drop_attachment(identity)
+        registry[identity] = block
+        if support is not None:
+            BaseBlock._attachments.setdefault(support, {})[identity] = block
+            BaseBlock._attachment_support[identity] = support
+
+    @staticmethod
+    def _drop_attachment(identity: UUID) -> None:
+        support = BaseBlock._attachment_support.pop(identity, None)
+        if support is not None:
+            attached = BaseBlock._attachments[support]
+            attached.pop(identity, None)
+            if not attached:
+                del BaseBlock._attachments[support]
+
+    @staticmethod
+    def attachments_of(support_uuid: UUID) -> tuple['BaseBlock', ...]:
+        """The registered blocks a block physically supports, in registry order (the attachment index)."""
+        registry = BaseBlock._registry
+        return tuple(block for identity, block in BaseBlock._attachments.get(support_uuid, {}).items()
+                     if registry.get(identity) is block)
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['BaseBlock']:
@@ -470,7 +512,7 @@ class BaseBlock(BaseModel):
         Args:
             value: Block instance to register.
         """
-        cls._registry[value.uuid] = value
+        BaseBlock._store_registered(value)
 
     @classmethod
     def unregister(cls, uuid: UUID) -> None:
@@ -479,8 +521,14 @@ class BaseBlock(BaseModel):
         Args:
             uuid: UUID of the block to unregister.
         """
-        cls._registry.pop(uuid, None)
+        BaseBlock.drop_registered(uuid)
         BaseObject.unregister(uuid)
+
+    @staticmethod
+    def drop_registered(uuid: UUID) -> None:
+        """Remove a block from the block registry and its attachment index only."""
+        BaseBlock._registry.pop(uuid, None)
+        BaseBlock._drop_attachment(uuid)
 
     def get_blocks(self) -> List['BaseBlock']:
         """Return direct child blocks discovered on this block.
