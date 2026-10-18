@@ -117,11 +117,12 @@ def _cell_observers(senses: dict[UUID, SensesSnapshot], positions: Iterable[tupl
         return result
     xs, ys = np.array(cells, dtype=np.int64).T
     box = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
-    for observer in sorted(senses, key=str):
+    # Each observer's text once: the sort key (texts are distinct) and every cell's entry.
+    for text, observer in sorted((str(observer), observer) for observer in senses):
         snapshot = senses[observer]
         hits = mask_array(snapshot.seen if seen else snapshot.visible, box)[xs - box[0], ys - box[1]]
         for index in np.flatnonzero(hits).tolist():
-            result[cells[index]].append(str(observer))
+            result[cells[index]].append(text)
     return result
 
 
