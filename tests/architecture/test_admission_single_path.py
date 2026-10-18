@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-SHARED_ADMISSION = {"_admission_error", "_requirements", "requirements_error", "discovery_admission",
+SHARED_ADMISSION = {"_admission_error", "_physical_access_contact", "requirements_error", "discovery_admission",
                     "discovery_error"}
 
 

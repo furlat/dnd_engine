@@ -1412,11 +1412,12 @@ class BaseAction(BaseObject):
         source = BaseBlock.get(self.source_entity_uuid)
         if source is None:
             return "Action origin is not placed"
-        return self._physical_access(source.action_scan(subjective=False),
+        return self._physical_access_contact(source.action_scan(subjective=False),
             replace(self.current_selection(), target_uuids=(target_uuid,)))[0]
 
-    def _physical_access(self, scan: ActorScan,
-                         selection: ActionSelection) -> Tuple[Optional[str], Optional[Tuple[int, int]]]:
+    @final
+    def _physical_access_contact(self, scan: ActorScan,
+                                 selection: ActionSelection) -> Tuple[Optional[str], Optional[Tuple[int, int]]]:
         """(error, contact): physical access to the selection's targets, and the surface of a placed
         object target that a creature-or-object action reaches (None for every other target)."""
         access = self.get_physical_access()
@@ -1935,13 +1936,13 @@ class BaseAction(BaseObject):
 
     @final
     def discovery_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        """Discovery's admission of one candidate: the shared path plus physical access, without a copy or an event."""
+        """The error of `discovery_admission`."""
         return self.discovery_admission(scan, selection)[0]
 
     @final
     def discovery_admission(self, scan: ActorScan,
                             selection: ActionSelection) -> Tuple[Optional[str], Optional[Tuple[int, int]]]:
-        """(error, contact) of `discovery_error`; the contact is the surface physical access reached an object target at.
+        """Discovery's admission of one candidate, without a copy or an event: (error, physical-access contact).
 
         A creature-and-destination action lists a creature when one of its
         destinations (plan §14.1) passes the rule; the first that does ends the
@@ -1956,7 +1957,8 @@ class BaseAction(BaseObject):
                 if error is None:
                     break
             return error, None
-        return self._requirements(scan, selection)
+        error = self._admission_error(scan, selection)
+        return (error, None) if error else self._physical_access_contact(scan, selection)
 
     @final
     def requirements_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
@@ -1964,14 +1966,7 @@ class BaseAction(BaseObject):
 
         The scan's knowledge decides what is read: perception in discovery, the world at execution.
         """
-        return self._requirements(scan, selection)[0]
-
-    @final
-    def _requirements(self, scan: ActorScan,
-                      selection: ActionSelection) -> Tuple[Optional[str], Optional[Tuple[int, int]]]:
-        """(error, contact) of `requirements_error`, the contact from physical access."""
-        error = self._admission_error(scan, selection)
-        return (error, None) if error else self._physical_access(scan, selection)
+        return self._admission_error(scan, selection) or self._physical_access_contact(scan, selection)[0]
 
     def relocation_destinations(self, scan: ActorScan, selection: ActionSelection) -> Tuple[Tuple[int, int], ...]:
         """Destinations a relocation may choose: seen, unoccupied and in range (plan §14.1).
@@ -2692,7 +2687,7 @@ class BaseAction(BaseObject):
             access_error = (self._source_condition_error(self._selection_targets(selection),
                                 selection.positions[0] if selection.positions else None)
                             or self.source_item_contact_error() or self._position_selection_error(selection)
-                            or self._physical_access(scan, selection)[0])
+                            or self._physical_access_contact(scan, selection)[0])
             if access_error is not None:
                 record_total()
                 return execution_event.cancel(status_message=access_error)
