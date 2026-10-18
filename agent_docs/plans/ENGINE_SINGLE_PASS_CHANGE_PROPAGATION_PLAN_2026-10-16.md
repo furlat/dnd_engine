@@ -654,6 +654,14 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
   zone install (Wall of Stone: `recompute_lights_at_positions`, light work, not sensory). The emit still scales
   with the changed contacts (observed-change references and contact order), which the event payload lists.
 
+**PV1a-2 contacts (codex/single-pass-contacts, 2026-10-18).**
+
+- A settlement's contact maps are built in one batch over all its views (`_contact_maps`):
+  `_changed_contacts`, `_listed` and `_target_order` (about ten numpy calls per view) are deleted. Python runs
+  per touched row and per view.
+- Measured and not done: the contact rule as arrays (exact, and the same speed as its Python loop over the
+  touched rows).
+
 **PV1 is split so that it doesn't collide with P7.**
 
 - **PV1a** touches only sensory, GridMap, the new `dnd/core` view module and the rules / discovery readers. It can start now; the Sleet demonstration comes from PV1a.
