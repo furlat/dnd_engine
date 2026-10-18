@@ -742,6 +742,43 @@ def _replace_grants(table: GrantTable, rows: Mapping[UUID, Optional[CellLayer]])
     return _grant_table(kept + [(identity, layer) for identity, layer in rows.items() if layer is not None])
 
 
+# One view's seen volumes, their upper surfaces and the cells their routes grant (`_volume_sight`).
+VolumeSights = Tuple[Dict[UUID, FrozenSet[Position]], Dict[UUID, Tuple[VolumeSurfaceSight, ...]], Set[Position]]
+
+
+@dataclass(frozen=True)
+class VisibleStack:
+    """The settled views' visible cells before and after their settlement, stacked over one box
+    (a local value of one settlement)."""
+
+    box: Box
+    before: np.ndarray               # (views, width, height) bool
+    after: np.ndarray
+
+
+def _layers_box(layers: Iterable[CellLayer]) -> Box:
+    """The union of the non-empty layers' boxes ((0, 0, -1, -1) when all are empty)."""
+    boxes = [layer.box for layer in layers if layer.values.size]
+    if not boxes:
+        return 0, 0, -1, -1
+    return (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+
+
+def _stack(layers: Sequence[CellLayer], box: Box, dtype: np.dtype) -> np.ndarray:
+    """The layers' values over one box that holds them, one row per layer."""
+    out = np.zeros((len(layers), box[2] - box[0] + 1, box[3] - box[1] + 1), dtype=dtype)
+    for index, layer in enumerate(layers):
+        if layer.values.size:
+            x0, y0 = layer.x0 - box[0], layer.y0 - box[1]
+            out[index, x0:x0 + layer.values.shape[0], y0:y0 + layer.values.shape[1]] = layer.values
+    return out
+
+
+def _visible_stack(before: Sequence[CellLayer], after: Sequence[CellLayer]) -> VisibleStack:
+    box = _layers_box((*before, *after))
+    return VisibleStack(box, _stack(before, box, np.dtype(bool)), _stack(after, box, np.dtype(bool)))
+
+
 def _granted_at(table: GrantTable, positions: Iterable[Position]) -> np.ndarray:
     """The indices of the table's observers granted any of these cells."""
     cells = np.array(list(positions), dtype=np.int64).reshape(-1, 2)
@@ -908,6 +945,20 @@ class ObserverView:
     seen_frame: np.ndarray           # bool frame of the visible cells
     senses_frame: np.ndarray         # uint8 frame: contact sense bits established on visible cells
     felt_frame: np.ndarray           # uint8 frame: BLINDSIGHT / TREMORSENSE bits on felt cells
+
+
+def _granted_cells(view: ObserverView, volume_grants: Set[Position]) -> CellLayer:
+    """The cells whose facts a view grants, over its window: its wall-FOV routes, felt cells and the
+    routes its seen volumes tested."""
+    origin, window = view.origin, view.field.window
+    grants = np.zeros(OFF + 1, dtype=bool)
+    grants[view.field.routes.rows] = True
+    grants |= view.felt_frame != 0
+    if volume_grants:
+        cells_array = np.array(sorted(volume_grants), dtype=np.int64)
+        grants[frame_index(cells_array[:, 0], cells_array[:, 1], origin)] = True
+    grants[OFF] = False
+    return CellLayer(window[0], window[1], window_of(grants, origin, window))
 
 
 @dataclass
@@ -1416,13 +1467,46 @@ class SpatialSensesSystem:
         contacts = self._contacts(views, table, [passives[view.owner.uuid] for view in views], changed, shared)
         if diagnostic:
             record_action_timing("sensory.settlement.contacts_ms", started)
-        touched = {}
+        # The views publish stage by stage, each stage over every view: cells, volume sight, fixtures,
+        # then grants, emitters and fields. Every rule hook a stage asks (hazards, fixture observations
+        # and hazard perception) reads the observer's own published senses, which the earlier stages
+        # wrote for every view, or the objective world, read before the stages; no fact is stored
+        # while they run.
+        started = time.perf_counter() if diagnostic else 0.0
+        before_visible = [self._publish_cells(view, world, passives[view.owner.uuid], resolved)
+                          for view, resolved in zip(views, contacts)]
+        if diagnostic:
+            record_action_timing("sensory.recompute.cells_ms", started)
+            started = time.perf_counter()
+        sights = [self._volume_sight(view, world) for view in views]
+        if diagnostic:
+            record_action_timing("sensory.recompute.volume_geometry_ms", started)
+            started = time.perf_counter()
+        stack = _visible_stack(before_visible, [view.senses.cells.visible for view in views])
+        effects = self._refresh_spatial_effects(views, sights, before_visible, affected, passives, contacts, stack)
+        if diagnostic:
+            record_action_timing("sensory.recompute.spatial_effects_ms", started)
+        touched: Dict[UUID, Dict[UUID, Optional[PerceivedSpatialEffect]]] = {}
         grants: Dict[UUID, Optional[CellLayer]] = {}
         light_diffs: Dict[int, Tuple[np.ndarray, np.ndarray, Tuple[UUID, ...]]] = {}
-        for view, resolved in zip(views, contacts):
-            touched[view.owner.uuid], grants[view.owner.uuid] = self._publish(
-                view, world, table, affected[view.owner.uuid], shared, passives[view.owner.uuid], resolved, light_diffs)
-        # The grants are written once the settlement is published (no fact is stored while it publishes).
+        for view, (_, _, contact_rows, contact_uuids, contact_changes), (volumes, upper, volume_grants), effect_before \
+                in zip(views, contacts, sights, effects):
+            started = time.perf_counter() if diagnostic else 0.0
+            observer_uuid, field = view.owner.uuid, view.field
+            grants[observer_uuid] = _granted_cells(view, volume_grants)
+            light_inputs, light_values = self._refresh_light_sources(observer_uuid, view.senses, world, field,
+                                                                     view.senses.cells.visible, contact_rows, shared,
+                                                                     light_diffs)
+            if diagnostic:
+                record_action_timing("sensory.recompute.light_sources_ms", started)
+            self.fields[observer_uuid] = ObserverField(
+                field.origin, field.window, field.selection, field.optical_key, field.routes, field.felt_keys,
+                field.felt_rows, field.sight_inputs, field.sight, field.light, field.light_version, field.optical,
+                field.exists_frame, field.felt_frame, field.seen_frame, field.senses_frame,
+                contact_rows, contact_uuids, contact_changes, self._table_version, passives[observer_uuid],
+                light_values, light_inputs, volumes, upper)
+            touched[observer_uuid] = effect_before
+        # The grants are written once the settlement is published.
         self._grants = _replace_grants(self._grants, grants)
         return touched
 
@@ -1635,20 +1719,15 @@ class SpatialSensesSystem:
             side_array = np.concatenate((old_sides[old_sides[:, 7] >= 0], side_array))
         return _contact_table_value(box, listed, cell_array, side_array)
 
-    def _publish(self, view: ObserverView, world: SettlementWorld, table: ContactTable,
-                 affected: Optional[Set[Position]], shared: SharedValues, passive: int,
-                 resolved: Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray, np.ndarray,
-                                 Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]],
-                 light_diffs: Dict[int, Tuple[np.ndarray, np.ndarray, Tuple[UUID, ...]]],
-                 ) -> Tuple[Dict[UUID, Optional[PerceivedSpatialEffect]], CellLayer]:
-        """Contacts, hazards, volume sight and fixtures of one view; publish them on its Senses.
-        Returns the prior values of the fixtures it re-observed and its granted cells."""
-        diagnostic = action_timing_enabled()
-        started = time.perf_counter() if diagnostic else 0.0
+    def _publish_cells(self, view: ObserverView, world: SettlementWorld, passive: int,
+                       resolved: Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray,
+                                       np.ndarray, Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]],
+                       ) -> CellLayer:
+        """Hazards, cells, seen cells and contacts of one view, published on its Senses.
+        Returns the visible cells it published before."""
         owner, senses, origin = view.owner, view.senses, view.origin
         observer_uuid = owner.uuid
-        field = view.field
-        entities, objects, contact_rows, contact_uuids, contact_changes = resolved
+        entities, objects = resolved[0], resolved[1]
         window = view.field.window
         # Each hazard owner states its rule once per observer; its cells are OR-ed in one scatter.
         hazard_frame = np.zeros(OFF + 1, dtype=bool)
@@ -1661,9 +1740,6 @@ class SpatialSensesSystem:
             hazard_frame[cell_rows[hazardous[world.hazard_owner]]] = True
         hazard_frame[OFF] = False
         hazard_frame &= view.seen_frame
-        if diagnostic:
-            record_action_timing("sensory.recompute.hazards_ms", started)
-            started = time.perf_counter()
         # Each published layer that held is kept (the same object): a stage that did not run, or
         # ran to the same values, changes nothing downstream.
         published = senses.cells
@@ -1704,53 +1780,7 @@ class SpatialSensesSystem:
         senses._last_passive_perception = passive
         senses._last_sense_modes_hash = senses.compute_sense_modes_hash()
         senses._last_visual_access = senses.visual_access.normalized_score
-        if diagnostic:
-            record_action_timing("sensory.recompute.cells_ms", started)
-            started = time.perf_counter()
-        volumes, upper, volume_grants = self._volume_sight(view, world)
-        if diagnostic:
-            record_action_timing("sensory.recompute.volume_geometry_ms", started)
-            started = time.perf_counter()
-        # The fixture stage reads the visible cells, the seen volumes and the cells the facts name:
-        # while the first two held and no named cell is visible or a volume surface, the published
-        # fixtures stand.
-        surfaces = {position for positions in volumes.values() for position in positions}
-        surfaces.update(row.position for rows in upper.values() for row in rows)
-        # An observation also reads the observer's contacts (a fixture's anchor) and its passive
-        # perception (hazard perception): any contact change or a passive change re-runs the stage.
-        fixtures_kept = (view.published and cells.visible is before_visible and affected is not None
-                         and contact_changes == (frozenset(), frozenset()) and field.passive == passive
-                         and volumes == field.volumes and upper == field.upper
-                         and not any(cell_visible(cells, position) or position in surfaces for position in affected))
-        effect_before = {} if fixtures_kept else self._refresh_spatial_effects(
-            observer_uuid, senses, cells.visible, before_visible, affected, volumes, upper)
-        if diagnostic:
-            record_action_timing("sensory.recompute.spatial_effects_ms", started)
-            started = time.perf_counter()
-        grants = np.zeros(OFF + 1, dtype=bool)
-        grants[view.field.routes.rows] = True
-        grants |= view.felt_frame != 0
-        if volume_grants:
-            cells_array = np.array(sorted(volume_grants), dtype=np.int64)
-            grants[frame_index(cells_array[:, 0], cells_array[:, 1], origin)] = True
-        grants[OFF] = False
-        if diagnostic:
-            record_action_timing("sensory.recompute.grants_ms", started)
-            started = time.perf_counter()
-        light_inputs, light_values = self._refresh_light_sources(observer_uuid, senses, world, view.field,
-                                                                 cells.visible, contact_rows, shared, light_diffs)
-        if diagnostic:
-            record_action_timing("sensory.recompute.light_sources_ms", started)
-            started = time.perf_counter()
-        self.fields[observer_uuid] = ObserverField(
-            field.origin, window, field.selection, field.optical_key, field.routes, field.felt_keys, field.felt_rows,
-            field.sight_inputs, field.sight, field.light, field.light_version, field.optical, field.exists_frame,
-            field.felt_frame, field.seen_frame, field.senses_frame,
-            contact_rows, contact_uuids, contact_changes, self._table_version, passive, light_values, light_inputs,
-            volumes, upper)
-        if diagnostic:
-            record_action_timing("sensory.recompute.publish_ms", started)
-        return effect_before, CellLayer(window[0], window[1], window_of(grants, origin, window))
+        return before_visible
 
     def _contacts(self, views: Sequence[ObserverView], table: ContactTable, passives: Sequence[int],
                   changed: Sequence[Optional[np.ndarray]], shared: SharedValues,
@@ -2151,146 +2181,209 @@ class SpatialSensesSystem:
         return volumes, upper, grants
 
     def _refresh_spatial_effects(
-        self, observer_uuid: UUID, senses: Senses, visible: CellLayer, before_visible: CellLayer,
-        affected: Optional[Set[Position]], volumes: Mapping[UUID, FrozenSet[Position]],
-        upper: Mapping[UUID, Tuple[VolumeSurfaceSight, ...]],
-    ) -> Dict[UUID, Optional[PerceivedSpatialEffect]]:
-        """Re-observe the fixtures on newly visible and affected cells; hidden parts keep their last
-        observation. Returns the prior value of every fixture touched."""
+        self, views: Sequence[ObserverView], sights: Sequence[VolumeSights], before_visible: Sequence[CellLayer],
+        affected: Mapping[UUID, Optional[Set[Position]]], passives: Mapping[UUID, int],
+        resolved: Sequence[Tuple[Dict[UUID, PerceivedContact], Dict[UUID, PerceivedContact], np.ndarray, np.ndarray,
+                                 Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]]]],
+        stack: VisibleStack,
+    ) -> List[Dict[UUID, Optional[PerceivedSpatialEffect]]]:
+        """Re-observe every view's fixtures on its newly visible and affected cells, in one pass over the
+        stacked views: each spatial condition's footprint meets every view's re-observed cells at once,
+        and a view asks only the conditions it meets. Hidden parts keep their last observation. Returns,
+        per view, the prior value of every fixture touched (none while its fixtures stand)."""
         grid = get_map()
-        box = (visible.box if not before_visible.values.size else before_visible.box if not visible.values.size
-               else union_box(visible.box, before_visible.box))
-        now = embed(visible, box, np.dtype(bool))
-        before = now if visible is before_visible else embed(before_visible, box, np.dtype(bool))
-        if affected is None:
-            reobserved = now.copy()
-        else:
-            reobserved = now & ~before
-            if affected:
-                marks = np.zeros(now.shape, dtype=bool)
-                cells = np.array(list(affected), dtype=np.int64).reshape(-1, 2)
-                i, j = cells[:, 0] - box[0], cells[:, 1] - box[1]
-                inside = (i >= 0) & (i < now.shape[0]) & (j >= 0) & (j < now.shape[1])
-                marks[i[inside], j[inside]] = True
-                reobserved |= now & marks
+        box, now, before = stack.box, stack.after, stack.before
+        marks = np.zeros(now.shape, dtype=bool)
+        named: Dict[FrozenSet[Position], np.ndarray] = {}
+        everywhere = np.zeros(len(views), dtype=bool)
+        for index, view in enumerate(views):
+            cells = affected[view.owner.uuid]
+            if cells is None:
+                everywhere[index] = True
+            elif cells:
+                key = frozenset(cells)
+                mask = named.get(key)
+                if mask is None:
+                    mask = named[key] = _cells_mask(key, box)
+                marks[index] = mask
+        reobserved = now & (everywhere[:, None, None] | ~before | marks)
         changed = reobserved | (before & ~now)
+        any_reobserved = reobserved.any(axis=(1, 2)).tolist()
+        any_changed = changed.any(axis=(1, 2)).tolist()
+        affected_seen = (now & marks).any(axis=(1, 2)).tolist()
+        results: List[Dict[UUID, Optional[PerceivedSpatialEffect]]] = [{} for _ in views]
+        surfaces_of: Dict[int, Set[Position]] = {}
+        # The fixture stage reads the visible cells, the seen volumes and the cells the facts name: while
+        # the first two held and no named cell is visible or a volume surface, the published fixtures
+        # stand. An observation also reads the observer's contacts (a fixture's anchor) and its passive
+        # perception (hazard perception): any contact change or a passive change re-runs the stage.
+        for index, (view, (volumes, upper, _), contacts) in enumerate(zip(views, sights, resolved)):
+            surfaces = {position for positions in volumes.values() for position in positions}
+            surfaces.update(row.position for rows in upper.values() for row in rows)
+            cells = affected[view.owner.uuid]
+            if not (view.published and view.senses.cells.visible is before_visible[index] and cells is not None
+                    and contacts[4] == (frozenset(), frozenset()) and view.field.passive == passives[view.owner.uuid]
+                    and volumes == view.field.volumes and upper == view.field.upper
+                    and not affected_seen[index] and surfaces.isdisjoint(cells)):
+                surfaces_of[index] = surfaces
+        # A published fixture is touched when it holds volume, upper-surface or suppression cells, or when
+        # one of its cells changed; the changed cells of every view are read in one gather. Each view's
+        # touched set is filled in its fixtures' published order.
+        listed: Dict[int, List[Tuple[UUID, int]]] = {}
+        pairs: List[Tuple[int, Tuple[Position, ...]]] = []
+        for index in surfaces_of:
+            rows = listed[index] = []
+            for identity, previous in views[index].senses.spatial_effects.items():
+                if (previous.visible_volume_positions or previous.upper_volume_surfaces
+                        or any(row.positions for row in previous.suppressions)):
+                    rows.append((identity, -1))
+                elif any_changed[index] and previous.positions:
+                    rows.append((identity, len(pairs)))
+                    pairs.append((index, previous.positions))
+        met: List[bool] = []
+        if pairs:
+            lengths = np.array([len(positions) for _, positions in pairs], dtype=np.int64)
+            cells_array = np.array([cell for _, positions in pairs for cell in positions], dtype=np.int64).reshape(-1, 2)
+            owners = np.repeat(np.array([index for index, _ in pairs], dtype=np.int64), lengths)
+            i, j = cells_array[:, 0] - box[0], cells_array[:, 1] - box[1]
+            inside = (i >= 0) & (i < now.shape[1]) & (j >= 0) & (j < now.shape[2])
+            hit = np.zeros(owners.size, dtype=bool)
+            hit[inside] = changed[owners[inside], i[inside], j[inside]]
+            met = np.logical_or.reduceat(hit, np.concatenate(([0], np.cumsum(lengths)[:-1]))).tolist()
+        touched_of = {index: {identity for identity, pair in rows if pair < 0 or met[pair]}
+                      for index, rows in listed.items()}
+        # Only a footprint meeting a re-observed cell or a volume surface can be observed now: each
+        # condition's footprint is read once, against every observing view.
+        live = [index for index, surfaces in surfaces_of.items() if any_reobserved[index] or surfaces]
+        candidates_of: Dict[int, Dict[UUID, Tuple[SpatialConditionOwner, Set[Position], Set[Position]]]] = {
+            index: {} for index in live}
+        if live:
+            rows_of = np.array(live, dtype=np.int64)
+            reobserved_live = reobserved[rows_of]
+            surface_masks = {order: _cells_mask(surfaces_of[index], box) for order, index in enumerate(live)
+                             if surfaces_of[index]}
+            for condition in grid.get_spatial_conditions():
+                footprint = grid.condition_footprint(condition.uuid)
+                if footprint is None:
+                    continue
+                fx0, fy0, fx1, fy1 = footprint.box
+                x0, y0, x1, y1 = max(fx0, box[0]), max(fy0, box[1]), min(fx1, box[2]), min(fy1, box[3])
+                if x0 > x1 or y0 > y1:
+                    continue
+                inside_footprint = footprint.values[x0 - fx0:x1 - fx0 + 1, y0 - fy0:y1 - fy0 + 1]
+                part = (slice(x0 - box[0], x1 - box[0] + 1), slice(y0 - box[1], y1 - box[1] + 1))
+                hit_cells = inside_footprint & reobserved_live[:, part[0], part[1]]
+                for order, surface_mask in surface_masks.items():
+                    index = live[order]
+                    volumes, upper, _ = sights[index]
+                    seen_on = now[index]
+                    if condition.uuid in volumes or condition.uuid in upper:
+                        seen_on = now[index] | _cells_mask(volumes.get(condition.uuid, frozenset()), box) | _cells_mask(
+                            [row.position for row in upper.get(condition.uuid, ())], box)
+                    hit_cells[order] |= inside_footprint & (surface_mask & seen_on)[part]
+                orders, ox, oy = np.nonzero(hit_cells)
+                if not orders.size:
+                    continue
+                shown = now[rows_of[orders], ox + part[0].start, oy + part[1].start].tolist()
+                xs, ys = (ox + x0).tolist(), (oy + y0).tolist()
+                bounds = np.searchsorted(orders, np.arange(len(live) + 1)).tolist()
+                for order, index in enumerate(live):
+                    low, high = bounds[order], bounds[order + 1]
+                    if low == high:
+                        continue
+                    observed = list(zip(xs[low:high], ys[low:high]))
+                    candidates_of[index][condition.uuid] = (condition, set(observed), {
+                        position for position, seen in zip(observed, shown[low:high]) if seen})
+        for index, surfaces in surfaces_of.items():
+            view = views[index]
+            observer_uuid, senses = view.owner.uuid, view.senses
+            volumes, upper, _ = sights[index]
+            touched = touched_of[index]
+            visible_now = now[index]
 
-        def at(mask: np.ndarray, position: Position) -> bool:
-            i, j = position[0] - box[0], position[1] - box[1]
-            return 0 <= i < mask.shape[0] and 0 <= j < mask.shape[1] and bool(mask[i, j])
+            def is_visible(position: Position) -> bool:
+                i, j = position[0] - box[0], position[1] - box[1]
+                return 0 <= i < visible_now.shape[0] and 0 <= j < visible_now.shape[1] and bool(visible_now[i, j])
 
-        def is_visible(position: Position) -> bool:
-            return at(now, position)
-
-        surfaces = {row.position for rows in upper.values() for row in rows}
-        surfaces.update(*volumes.values())
-        touched: Set[UUID] = set()
-        any_changed = bool(changed.any())
-        for identity, previous in senses.spatial_effects.items():
-            if (previous.visible_volume_positions or previous.upper_volume_surfaces
-                    or any(row.positions for row in previous.suppressions)):
-                touched.add(identity)
-            elif any_changed and previous.positions and _gather(changed, box, previous.positions).any():
-                touched.add(identity)
-        if not reobserved.any() and not surfaces:
+            if not any_reobserved[index] and not surfaces:
+                before_values = {identity: senses.spatial_effects.get(identity) for identity in touched}
+                for identity in touched:
+                    previous = senses.spatial_effects[identity]
+                    if previous.visible_volume_positions or previous.upper_volume_surfaces or any(row.positions for row in previous.suppressions):
+                        senses.spatial_effects[identity] = previous.model_copy(update={
+                            "visible_volume_positions": (),
+                            "upper_volume_surfaces": (),
+                            "suppressions": tuple(row.model_copy(update={"positions": tuple(
+                                position for position in row.positions if is_visible(position))})
+                                                  for row in previous.suppressions)})
+                results[index] = before_values
+                continue
+            candidates = candidates_of[index]
+            observations: Dict[UUID, PerceivedSpatialEffect] = {}
+            for condition, observed_positions, observed_visible in candidates.values():
+                volume_positions = observed_positions & volumes.get(condition.uuid, frozenset())
+                observation = condition.get_spatial_observation(
+                    observed_visible, observer_uuid=observer_uuid,
+                    discovered=condition.uuid in senses.spatial_effects,
+                )
+                if observation is not None:
+                    observations[condition.uuid] = observation.model_copy(update={
+                        "owner_revision": condition.observation_revision,
+                        "duration": condition.snapshot_duration(),
+                        "positions": tuple(sorted(set(observation.positions) | volume_positions)),
+                        "visible_volume_positions": tuple(sorted(volume_positions)),
+                        "upper_volume_surfaces": upper.get(condition.uuid, ()),
+                    })
+            # Resolve references after all candidates: a first observation must not
+            # depend on whether the provider or its affected field was visited first.
+            for identity, observation in observations.items():
+                previous = senses.spatial_effects.get(identity)
+                retained_suppressions = ({row.provider_uuid: row for row in previous.suppressions}
+                    if previous is not None and previous.area_geometry == observation.area_geometry else {})
+                suppressions = []
+                for outcome in candidates[identity][0].spatial_suppressions:
+                    retained = retained_suppressions.get(outcome.provider_uuid)
+                    provider = observations.get(outcome.provider_uuid, senses.spatial_effects.get(outcome.provider_uuid))
+                    if retained is None:
+                        if provider is None or provider.area_geometry is None:
+                            continue
+                        retained = outcome.model_copy(update={
+                            "provider_content_ref": provider.content_ref,
+                            "area_geometry": provider.area_geometry,
+                            "anchor_elevation_steps": provider.anchor_elevation_steps})
+                    # Only currently admitted geometry is added, never hidden ground.
+                    own_volume = volumes.get(identity, frozenset())
+                    admitted = {position for position in outcome.positions if is_visible(position) or position in own_volume}
+                    suppressions.append(retained.model_copy(update={"positions": tuple(sorted(admitted))}))
+                observations[identity] = observation.model_copy(update={"suppressions": tuple(suppressions)})
+            touched.update(observations)
             before_values = {identity: senses.spatial_effects.get(identity) for identity in touched}
             for identity in touched:
-                previous = senses.spatial_effects[identity]
-                if previous.visible_volume_positions or previous.upper_volume_surfaces or any(row.positions for row in previous.suppressions):
-                    senses.spatial_effects[identity] = previous.model_copy(update={
-                        "visible_volume_positions": (),
-                        "upper_volume_surfaces": (),
-                        "suppressions": tuple(row.model_copy(update={"positions": tuple(
-                            position for position in row.positions if is_visible(position))})
-                                              for row in previous.suppressions)})
-            return before_values
-        candidates: Dict[UUID, Tuple[SpatialConditionOwner, Set[Position], Set[Position]]] = {}
-        surface_mask = _cells_mask(surfaces, box)
-        # Only a footprint meeting a re-observed cell or a volume surface can be observed now.
-        rx, ry = np.nonzero(reobserved)
-        reobserved_positions = set(zip((rx + box[0]).tolist(), (ry + box[1]).tolist()))
-        corners = [(int(rx.min()) + box[0], int(ry.min()) + box[1]), (int(rx.max()) + box[0], int(ry.max()) + box[1])] \
-            if rx.size else []
-        corners.extend(surfaces)
-        interest = ((min(x for x, _ in corners), min(y for _, y in corners), max(x for x, _ in corners),
-                     max(y for _, y in corners)) if corners else None)
-        for condition in grid.get_spatial_conditions() if interest is not None else ():
-            footprint = grid.condition_footprint(condition.uuid)
-            if footprint is None or not boxes_intersect(footprint.box, interest):
-                continue
-            inside = embed(footprint, box, np.dtype(bool))
-            seen_on = now
-            if condition.uuid in volumes or condition.uuid in upper:
-                seen_on = now | _cells_mask(volumes.get(condition.uuid, frozenset()), box) | _cells_mask(
-                    [row.position for row in upper.get(condition.uuid, ())], box)
-            ox, oy = np.nonzero(inside & (reobserved | (surface_mask & seen_on)))
-            if ox.size:
-                shown = now[ox, oy].tolist()
-                observed = list(zip((ox + box[0]).tolist(), (oy + box[1]).tolist()))
-                candidates[condition.uuid] = (condition, set(observed),
-                                              {position for position, seen in zip(observed, shown) if seen})
-        observations: Dict[UUID, PerceivedSpatialEffect] = {}
-        for condition, observed_positions, observed_visible in candidates.values():
-            volume_positions = observed_positions & volumes.get(condition.uuid, frozenset())
-            observation = condition.get_spatial_observation(
-                observed_visible, observer_uuid=observer_uuid,
-                discovered=condition.uuid in senses.spatial_effects,
-            )
-            if observation is not None:
-                observations[condition.uuid] = observation.model_copy(update={
-                    "owner_revision": condition.observation_revision,
-                    "duration": condition.snapshot_duration(),
-                    "positions": tuple(sorted(set(observation.positions) | volume_positions)),
-                    "visible_volume_positions": tuple(sorted(volume_positions)),
-                    "upper_volume_surfaces": upper.get(condition.uuid, ()),
-                })
-        # Resolve references after all candidates: a first observation must not
-        # depend on whether the provider or its affected field was visited first.
-        for identity, observation in observations.items():
-            previous = senses.spatial_effects.get(identity)
-            retained_suppressions = ({row.provider_uuid: row for row in previous.suppressions}
-                if previous is not None and previous.area_geometry == observation.area_geometry else {})
-            suppressions = []
-            for outcome in candidates[identity][0].spatial_suppressions:
-                retained = retained_suppressions.get(outcome.provider_uuid)
-                provider = observations.get(outcome.provider_uuid, senses.spatial_effects.get(outcome.provider_uuid))
-                if retained is None:
-                    if provider is None or provider.area_geometry is None:
-                        continue
-                    retained = outcome.model_copy(update={
-                        "provider_content_ref": provider.content_ref,
-                        "area_geometry": provider.area_geometry,
-                        "anchor_elevation_steps": provider.anchor_elevation_steps})
-                # Only currently admitted geometry is added, never hidden ground.
-                own_volume = volumes.get(identity, frozenset())
-                admitted = {position for position in outcome.positions if is_visible(position) or position in own_volume}
-                suppressions.append(retained.model_copy(update={"positions": tuple(sorted(admitted))}))
-            observations[identity] = observation.model_copy(update={"suppressions": tuple(suppressions)})
-        touched.update(observations)
-        before_values = {identity: senses.spatial_effects.get(identity) for identity in touched}
-        for identity in touched:
-            previous = senses.spatial_effects.get(identity)
-            if previous is None:
-                continue
-            # Inspect only newly seen/changed visible cells. Hidden parts retain
-            # their last observation, even when the objective owner was removed.
-            kept = {position for position in previous.positions if position not in reobserved_positions}
-            observed = observations.pop(identity, None)
-            if observed is not None and observed.positions:
-                kept.update(observed.positions)
-            if kept:
-                senses.spatial_effects[identity] = (observed or previous).model_copy(
-                    update={"positions": tuple(sorted(kept)),
-                            "visible_volume_positions": observed.visible_volume_positions if observed is not None else (),
-                            "upper_volume_surfaces": observed.upper_volume_surfaces if observed is not None else (),
-                            "suppressions": observed.suppressions if observed is not None else tuple(
-                                row.model_copy(update={"positions": tuple(position for position in row.positions
-                                    if is_visible(position))}) for row in previous.suppressions)},
-                )
-            else:
-                senses.spatial_effects.pop(identity)
-        senses.spatial_effects.update(observations)
-        return before_values
+                previous = senses.spatial_effects.get(identity)
+                if previous is None:
+                    continue
+                # Inspect only newly seen/changed visible cells. Hidden parts retain
+                # their last observation, even when the objective owner was removed.
+                kept = {position for position, again in zip(previous.positions,
+                                                        _gather(reobserved[index], box, previous.positions).tolist())
+                    if not again}
+                observed = observations.pop(identity, None)
+                if observed is not None and observed.positions:
+                    kept.update(observed.positions)
+                if kept:
+                    senses.spatial_effects[identity] = (observed or previous).model_copy(
+                        update={"positions": tuple(sorted(kept)),
+                                "visible_volume_positions": observed.visible_volume_positions if observed is not None else (),
+                                "upper_volume_surfaces": observed.upper_volume_surfaces if observed is not None else (),
+                                "suppressions": observed.suppressions if observed is not None else tuple(
+                                    row.model_copy(update={"positions": tuple(position for position in row.positions
+                                        if is_visible(position))}) for row in previous.suppressions)},
+                    )
+                else:
+                    senses.spatial_effects.pop(identity)
+            senses.spatial_effects.update(observations)
+            results[index] = before_values
+        return results
 
     # ------------------------------------------------------------------ light sources and helpers
 
