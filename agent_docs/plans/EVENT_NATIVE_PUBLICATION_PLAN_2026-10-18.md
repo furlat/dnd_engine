@@ -216,6 +216,24 @@ The revision-2 plan gets one confirming pass from each reviewer, on whether the 
 - **`_world_update` today is 85–98 % sensory-driven** (re-observing objects at every member cell, per member event) and is deleted by the composed-entering rule. A mock of the replacement costs ≤0.9 ms per op.
 - **Side lane, started:** skip settling observers for inert tile facts (measured: Magic Missile settlement 9.6 → 4.5 ms, digest and wire identical), with full recorder gates.
 
+- **Q5: shared vision per side for human clients (human, 2026-10-18; decided in principle, NOT to be built until the E3 lanes finish, the measured numbers are in and the human confirms: "not sure bro we are risking some stuff here").** "shared vision across factions is not 'realistic' but that is how bg3 and 2 works i think we could think it like that -- from the human client perspective that is what we want to do."
+  - Every human seat on a side gets the side's composed view, with member bits per row. Only the controller-only part is per seat: HUD, own items and durations, Choices.
+  - Rules stay per character: targeting, advantage and stealth use each creature's own senses. A creature seen only by A (See Invisibility) is shown to the whole side labelled "seen by A only", and B's action menu never offers it.
+  - The client must render member bits. This goes in the Godot note.
+  - The engine is unchanged: every rule already uses each creature's own senses (targeting, unseen-attacker advantage, stealth against passive perception, reactions, the AI's knowledge). Only what human seats are shown changes.
+  - Still open: whether teammates see each other's controller-only details (inventory, slots). O4 guards anything not decided.
+  - Measurement layout "character-shared": one seat per character, with `observers` = the faction.
+  - Publication is then computed once per distinct audience, with the per-seat part on top.
+- **Q6: stamps for re-entry (human, 2026-10-18): approved, as VALUE DIGESTS ("ok for digest").** Per seat, a stable digest of each record as last sent; a re-entering record travels whole only if its current digest differs. This closes the "written while unseen" side channel that revision stamps had, and also skips records changed while watching but now equal. Originally drafted as: Per seat, the last revision sent per record. Knowledge only, never values. A re-entering record is re-sent only if its revision changed. Restore rebuilds the stamps from the seat's spool; the fallback is a full send.
+- **Q7: settlement fast path (human principle, 2026-10-18):** "decide what objectively happened for everyone --> what each one has seen of that". The objective change is computed once per settlement. An observer whose own sight inputs held derives its change from it; every other observer takes the full path. Lane codex/settle-fast, exact.
+
+- **Q8: combat log built once, anonymized per seat before transmission (human, 2026-10-18):** "let's do it only once then anonymize before transmission".
+  - Each native log entry is projected once per event, with identity placeholders.
+  - Each seat fills or hides names from what it knows, as a cheap lookup.
+  - The text stays identical (gate: log entries identical). Log bytes stay deferred.
+  - It runs after E3-bodies' admissions follow-up (names table at births).
+- **Leadership "understand" (human: "whatever"):** keep "hear only"; the language gate is logged as a gap until languages are authored.
+
 ## 9. Review findings → resolution
 
 | Finding | Resolution |

@@ -861,14 +861,15 @@ Hard rules:
   - **Seeded long game:** Choices −13.6 %, advances −5.2 %. ai_decision op 4: 179 → 172 ms.
   - **Profile of op 4:** of 447 ms profiled, 164 ms is sensory settlement over 6 steps (~0.9 ms per observer settlement). All 30 observers re-settle fully at every step. For 29 of them the only change is the mover's contact position and its torch's light.
   - **Proposed next (for the human):** a settlement fast path. Observers whose sight inputs held update only the moved contact and the cells inside the light's old and new radius.
-- 2026-10-18: **E3-world encoding follow-ups (codex/enp-e3-world-encoding, from e85b4af33: 26b4cd834, 85bc0cfcd, 11a37f971, 25cb86820; not merged).** Encoding only, no rule change.
+- 2026-10-18: **E3-world encoding follow-ups (codex/enp-e3-world-encoding, from e85b4af33: 26b4cd834, 85bc0cfcd, 11a37f971, 25cb86820; merged as 7feebee85).** Encoding only, no rule change.
   - **1. Tile looks are content-addressed.** A tile's surface and name travel once per value per seat (`tile_looks`, keyed by a digest), and a tile's static row names its look. On its own this took mass_healing_word G2 from 382.7 to 312.5 KB: its 1,070 tile static rows share one look.
   - **2. Object rows travel as columns** (`ObjectColumns`, `PlacementColumns`, `Column`: `rows` left out selects every row; a column with no non-default value is left out). Vectors (w13 added: placed and unplaced rows in one update) and the Godot note are updated. On small updates the per-column wrappers cost a little: Fireball's 11 object rows, spread over several updates, go 4.6 → 5.7 KB.
   - **3. The missing tests.**
     - **T6** (`tests/player/test_object_look_static.py`): a door opened, closed, damaged and destroyed; a chest looted with its contents; a Wall of Stone section cut by Disintegrate. Each scenario's completed versions are folded with `world_facts`, and every object's look stays its first.
       - It failed on the cut: a construction's geometry (`removed_sections`) changes in place, so a seat kept drawing the uncut wall. As the brief's R3 prescribes, `construction_geometry` moved from `ObjectLook` to `ObjectState`. No gallery case cuts a wall, so O1 never saw it.
     - **T8:** `world_placement.boundary_sides` is the one definition of a boundary's faces and incident cells. Publication, the fold's support cells and the seat oracle all use it. An architecture test forbids the direction tables in those modules; the only exception is world_facts iterating neighbours.
-      - The test covers the player modules, world_facts and the seat oracle. `dnd/core/gridmap.py` has a second definition, which it does not cover: `BOUNDARY_FACING` plus `contact_surface`, the cells a contact lands on. Replacing it touches gridmap and is left to the coordinator.
+      - The test covers the player modules, world_facts and the seat oracle. `dnd/core/gridmap.py` has a second definition, which it does not cover: `BOUNDARY_FACING` plus `contact_surface`, the cells a contact lands on.
+      - **Follow-up:** replace gridmap's `BOUNDARY_FACING` and `contact_surface` with `world_placement.boundary_sides`, and extend the test to gridmap.
       - The extended import rule `projection` ↛ `reduction` waits on E3-bodies. The projection still imports reduction's body fold: `apply_record_fact`, `change_membership`, `commit_current`, `fold_senses`, `observe_body`, `observed_actor`, `occurrence_order`.
     - **T9:** O1 names an object kept at its old placement on a re-entered cell, and a stale suppressed cell on a re-entered cell.
   - **4. Review fixes (antislop and anti-OOP).**
@@ -902,6 +903,26 @@ Hard rules:
     - Each field's default is still written in the pack filter, the unpack default and the dataclass. The round-trip test pins them.
     - `content_composition` and `projection` read column internals.
     - `facts.py` still holds the column types; they could live in a module below it.
+  - **Rulings (coordinator, at the merge):**
+    - `construction_geometry` moves to `ObjectState`: accepted. It fixes a bug merged with e85b4af33: after a Disintegrate cut, a seat kept drawing the uncut wall.
+    - `player_schema_version` stays 16, although the wire and the protocol digest changed: accepted, because the E-series is unreleased.
+    - No squash. Commit 3 alone fails `test_recorded_world_object_queries`; commit 4 fixes it.
+- 2026-10-18: **Shared-vision prototype (Q5; test-only, codex/shared-vision-proto 09b97617f..8da90b428, NOT merged).**
+  - **What it adds:** the `--seats character-shared` layout (one seat per character, observers = the side), a 3-faction roster, and a dedupe that composes once per audience in the event-major walk.
+  - **Gates:** exactness against the naive shared run (every seat's frames and client digests identical); O1–O4 equal; 0 controller-only leaks to teammates.
+  - **Publication ms (G1 / G2 / naive shared / deduped shared, loaded machine):**
+    - Fireball 67 / 463 / 934 / 452;
+    - CoD 60 / 437 / 824 / 486;
+    - SG step 53 / 177 / 1057 / 276.
+  - **Deduped ≈ G2, not G1.** Occurrence numbering and controller-only nodes are per seat, so encoding and the per-seat node walk can't be shared. The per-seat combat log is 413 of 1,478 profiled ms (Q8 addresses it).
+  - **Proposal for the human:** per-side occurrence numbering plus a per-seat controller-only overlay. That makes a side's publication ≈ G1 plus the overlay. It is a wire change after E3-sensory.
+- 2026-10-18: **Settlement fast path merged (4cefc2424; Q7).**
+  - **Mechanism:** the objective light change is computed once per settlement. An observer whose sight inputs held keeps its view and is re-lit only at the changed rows. The proof is `_changed_light_rows`' docstring.
+  - **Fast-path rate:** ai_decision 177 of 183, SG walk 553 of 571. Fireball, Wall of Stone, Sleet and Daylight take the full path by design.
+  - **Gates:** exact; recorder and transcripts 0 differences on 10 cases.
+  - **Timing:** ai_decision op 4 203 → 185 ms (settlement only 184 → 141); SG moves −3 to −14 %.
+  - **What remains for op 4:** passive perception re-read (~9 ms; values have no revision key); building SensoryUpdateEvent (~7); identity grants at register (~7); contacts (~24); the AI decision itself.
+  - **Tooling:** scratchpad fanout/record_steps.py needs the new `measured_request(driver, mode, kind, request)` signature (fixed copy in sf/). wf/fov_oracle_batch.py is stale.
     - The wire changed and the protocol digest with it, but `player_schema_version` stays 16. That is fine as long as no client consumes 16 yet.
     - Commit 3 alone fails `test_recorded_world_object_queries` (commit 4 fixes it). Squash commit 4 into commits 1-3 if one commit per item matters at merge.
     - `construction_geometry` as state is a public wire change. It fixes a bug merged with e85b4af33, which is also on codex/enp-e3-bodies: after a Disintegrate cut, a seat keeps drawing the uncut wall.
