@@ -32,7 +32,7 @@ def initialization(sequence=0):
 
 def operation(sequence):
     return {'kind': 'operation', 'protocol': sdk.IDENTITY, 'cursor': cursor(sequence), 'state_revision': 'r', 'command_number': None,
-        'boundary': BOUNDARY, 'audience': {'controlled': [UUID], 'observers': [UUID]}, 'lineages': [], 'hud': None,
+        'boundary': BOUNDARY, 'generation': UUID, 'observer_uuid': UUID, 'lineages': [], 'hud': None,
         'combat_log_appends': [], 'content_additions': []}
 
 

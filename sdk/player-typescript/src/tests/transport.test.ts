@@ -15,7 +15,7 @@ const initial = (sequence = 0): sdk.InitializationResponse => ({kind: 'initializ
   initialization: {generation: uuid, observer_uuid: uuid, world: {battlefield_id: 'test', battlefield_name: 'é', bounds: [-1, -1, 1, 1], width: 3, height: 3},
     nodes: [], version_rows: {}, end_cursor: 0, world_updates: []}});
 const operation = (sequence: number): sdk.PlayerOperation => ({kind: 'operation', protocol, cursor: cursor(sequence), state_revision: 'r', command_number: null, boundary,
-  audience: {controlled: [uuid], observers: [uuid]}, lineages: [], hud: null, combat_log_appends: [], content_additions: []});
+  generation: uuid, observer_uuid: uuid, lineages: [], hud: null, combat_log_appends: [], content_additions: []});
 const event = (name: string, value: unknown, sequence?: number) => `event: ${name}\n${sequence === undefined ? '' : `id: ${sequence}\n`}data: ${JSON.stringify(value)}\n\n`;
 const ready = (final?: number, after = 0) => event('ready', {kind: 'ready', protocol, after: cursor(after), head: cursor(final ?? 0), status: status(final)});
 function deferred() {let resolve!: () => void; const promise = new Promise<void>(r => {resolve = r;}); return {promise, resolve};}
