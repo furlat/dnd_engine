@@ -1015,6 +1015,10 @@ class SpatialSensesSystem:
         self._settled_with_light = False
         # The settled observers' grants (written by each settlement, dropped with their fields).
         self._grants: Optional[GrantTable] = None
+        # The identity grants of a creature at a cell, valid while no observer's published
+        # perception changes: every perception write (register, unregister, recompute,
+        # reset, a replaced map) clears them with the grant table's write.
+        self._identity_grants: Dict[Tuple[UUID, Tuple[int, int]], FrozenSet[str]] = {}
         # Contact targets' ids (each target once, in first-seen order): their keys compare by value
         # across settlements. Append-only; reset clears it with every field that holds a key.
         self._target_ids: Dict[UUID, int] = {}
@@ -1053,6 +1057,7 @@ class SpatialSensesSystem:
         self._absorbing_light = False
         self._settled_with_light = False
         self._grants = None
+        self._identity_grants.clear()
         self._target_ids.clear()
         self._light_table = None
         self._table = None
@@ -1132,6 +1137,7 @@ class SpatialSensesSystem:
         self.senses_by_observer[observer_uuid] = senses
         if self.fields.pop(observer_uuid, None) is not None:
             self._grants = _replace_grants(self._grants, {observer_uuid: None})
+        self._identity_grants.clear()
 
     def unregister_observer(self, observer_uuid: UUID) -> None:
         """Remove an observer and its field."""
@@ -1139,6 +1145,7 @@ class SpatialSensesSystem:
         self.published_observers.discard(observer_uuid)
         if self.fields.pop(observer_uuid, None) is not None:
             self._grants = _replace_grants(self._grants, {observer_uuid: None})
+            self._identity_grants.clear()
 
     # ------------------------------------------------------------------ selection
 
@@ -1155,15 +1162,19 @@ class SpatialSensesSystem:
         return {identity for identity, senses in self.senses_by_observer.items()
                 if entity and subject_uuid in senses.entities or item and subject_uuid in senses.objects}
 
-    def identifying_observers(self, subject_uuid: UUID, position: Tuple[int, int]) -> Set[UUID]:
-        """The creature itself and each observer granted its cell holding its contact.
+    def identifying_observers(self, subject_uuid: UUID, position: Tuple[int, int]) -> FrozenSet[str]:
+        """String ids of the creature itself and each observer granted its cell holding its contact.
 
         Every holder is a registered Entity: only entities register as
         observers, and an entity leaves the registry after it unregisters here.
         """
-        holders = self.contact_holders(subject_uuid, _granted_at(self._grants, (position,)))
-        holders.add(subject_uuid)
-        return holders
+        grants = self._identity_grants.get((subject_uuid, position))
+        if grants is None:
+            holders = self.contact_holders(subject_uuid, _granted_at(self._grants, (position,)))
+            holders.add(subject_uuid)
+            grants = self._identity_grants[(subject_uuid, position)] = frozenset(
+                str(holder) for holder in holders)
+        return grants
 
     def contact_holders(self, subject_uuid: UUID, observers: AbstractSet[UUID]) -> Set[UUID]:
         """Those observers whose current entity contacts include this subject."""
@@ -1412,6 +1423,7 @@ class SpatialSensesSystem:
             # A replaced map: every field and table read the old one.
             self.fields.clear()
             self._grants = None
+            self._identity_grants.clear()
             self._light_table = None
             self._table = None
             self._map = grid
@@ -1535,6 +1547,7 @@ class SpatialSensesSystem:
             touched[observer_uuid] = effect_before
         # The grants are written once the settlement is published.
         self._grants = _replace_grants(self._grants, grants)
+        self._identity_grants.clear()
         return touched
 
     def _view(self, observer_uuid: UUID, world: SettlementWorld) -> ObserverView:

@@ -640,11 +640,13 @@ P4a's obscurement and light items fold into PV1, so that storage migrates once. 
 
 **PV1a-2 fan-out (codex/single-pass-fanout, 2026-10-18).**
 
-- Identity grants: the `_identity_grants` memo is deleted. The settled observers' granted cells are one frozen
-  `GrantTable` owned by SpatialSensesSystem and their only holder (`ObserverField.grants` is gone).
-  Invalidation: each settlement replaces its observers' rows after it publishes; register and unregister drop
-  the observer's row with its field; reset and a replaced map empty it. `observers_granted` and
-  `identifying_observers` read it with one gather.
+- Identity grants: the settled observers' granted cells are one frozen `GrantTable` owned by
+  SpatialSensesSystem and their only holder (`ObserverField.grants` is gone; no table while no observer holds a
+  row). Invalidation: each settlement replaces its observers' rows after it publishes; register and unregister
+  drop the observer's row with its field; reset and a replaced map empty it. `observers_granted` reads it with
+  one gather. The `_identity_grants` (subject, cell) memo stays and is cleared with every table write and on
+  register: Fireball asks `identifying_observers` 1,577 times for 30 keys (without the memo, +17 ms native);
+  its misses read the table.
 - A settlement publishes stage by stage over every view; the fixture (spatial-effect) and emitter stages are
   each one array pass over the stacked views, with per-view rule calls and dict writes only.
 - Measured and not done: a stacked per-cell delta (2.1 ms per 30-observer settlement against 1.3 ms per
