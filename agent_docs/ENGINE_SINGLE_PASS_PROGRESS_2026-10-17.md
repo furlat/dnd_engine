@@ -856,3 +856,8 @@ Hard rules:
 
   - **Follow-ups, encoding only:** content-addressed tile static rows and columnar object rows (measured: Sleet drop G2 → 79, Daylight G2 → 102), plus tests T6, T8 and T9.
   - **Native follow-up:** `BaseItem.destroy` and the torch's `put_out` write the same object's FLOOR fact two or three times.
+- 2026-10-18: **AI-step round 2 merged (b53e533c6).**
+  - Three changes: one contact trace per subjective attack admission (`ObjectContact` through `rule_admission`); an incremental AI fold that keeps rows whose inputs are unchanged, with cell lists moved by deltas; and Jump range once per scan.
+  - **Seeded long game:** Choices −13.6 %, advances −5.2 %. ai_decision op 4: 179 → 172 ms.
+  - **Profile of op 4:** of 447 ms profiled, 164 ms is sensory settlement over 6 steps (~0.9 ms per observer settlement). All 30 observers re-settle fully at every step. For 29 of them the only change is the mover's contact position and its torch's light.
+  - **Proposed next (for the human):** a settlement fast path. Observers whose sight inputs held update only the moved contact and the cells inside the light's old and new radius.
