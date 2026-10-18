@@ -1,0 +1,654 @@
+{
+ "name": "v5_rows_apply_in_the_engines_dict_order",
+ "rule": "An actor change applies its entering items, then each actor's rows in order: a set keeps its key's place or appends, an end removes its key, the end of an absent key changes nothing; re-equipping a slot moves it last.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "controlled": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "body": {
+    "occurrence": 0,
+    "actor_uuid": "00000000-0000-4000-8000-00000000000a",
+    "birth": {
+     "name": "Hero",
+     "character_body_id": null,
+     "creature_content_ref": null,
+     "appearance": {
+      "portrait_key": null,
+      "presentation_kind": "layered",
+      "visual_scale": 1.0,
+      "visual_scale_x": 1.0,
+      "placeholder_tint": 3604322,
+      "body_category": "NakedBody",
+      "skin_tint": 14527112,
+      "head_category": null,
+      "hair_tint": 0,
+      "has_beard": false,
+      "beard_tint": 0
+     },
+     "structural_base_size": "Medium"
+    },
+    "body": {
+     "visual_loadout": {
+      "active_weapon_set": "melee",
+      "layers": [
+       {
+        "slot": "Head",
+        "item_uuid": "00000000-0000-4000-8000-000000001002",
+        "item_id": "apparel.helm",
+        "is_lit": null
+       },
+       {
+        "slot": "Body",
+        "item_uuid": "00000000-0000-4000-8000-000000001003",
+        "item_id": "apparel.robe",
+        "is_lit": null
+       }
+      ]
+     },
+     "normal_hp": 10,
+     "maximum_hp": 10,
+     "temporary_hp": 0,
+     "life_state": "alive",
+     "armor_class": 12,
+     "conditions": [
+      {
+       "condition_uuid": "00000000-0000-4000-8000-000000003001",
+       "name": "Poisoned",
+       "category": "status",
+       "behavior_id": null,
+       "state": {
+        "duration": null,
+        "condition_uuid": "00000000-0000-4000-8000-000000003001",
+        "name": "Poisoned",
+        "category": "status",
+        "semantic_key": "condition.fold_vectors.poisoned",
+        "behavior_id": null,
+        "tags": [],
+        "removal_triggers": [],
+        "agency_denial": "none",
+        "outcome_protections": [],
+        "applied_source_event_cursor": null,
+        "duplicate_count": null,
+        "size_change": null,
+        "energy_type": null,
+        "metamagic_mode": null,
+        "affected_item_uuid": null,
+        "enhanced_ability": null,
+        "concentration_slots": []
+       }
+      },
+      {
+       "condition_uuid": "00000000-0000-4000-8000-000000003002",
+       "name": "Blessed",
+       "category": "status",
+       "behavior_id": null,
+       "state": {
+        "duration": {
+         "duration_type": "rounds",
+         "remaining_rounds": 3
+        },
+        "condition_uuid": "00000000-0000-4000-8000-000000003002",
+        "name": "Blessed",
+        "category": "status",
+        "semantic_key": "condition.fold_vectors.blessed",
+        "behavior_id": null,
+        "tags": [],
+        "removal_triggers": [],
+        "agency_denial": "none",
+        "outcome_protections": [],
+        "applied_source_event_cursor": null,
+        "duplicate_count": null,
+        "size_change": null,
+        "energy_type": null,
+        "metamagic_mode": null,
+        "affected_item_uuid": null,
+        "enhanced_ability": null,
+        "concentration_slots": []
+       }
+      }
+     ],
+     "controlled_items": [
+      "00000000-0000-4000-8000-000000001002",
+      "00000000-0000-4000-8000-000000001003"
+     ],
+     "remains_disposition": "intact",
+     "spatial_disposition": "present"
+    },
+    "items": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000001002",
+      "look": {
+       "item_id": "apparel.helm",
+       "item_kind": "item",
+       "visual_item_name": "helm",
+       "visual_variant_id": null,
+       "equipped_visual_policy": "visible",
+       "item_effects": [],
+       "very_bright_radius_feet": null,
+       "bright_radius_feet": null,
+       "dim_radius_feet": null
+      },
+      "profile": {
+       "name": "Item",
+       "description": null,
+       "rarity": "common",
+       "weight": 1.0,
+       "value": 0,
+       "tags": [],
+       "is_pickable": true,
+       "is_equippable": true,
+       "is_usable": false,
+       "is_targetable": false,
+       "door_mechanism": null,
+       "door_swing": null,
+       "stack_id": null,
+       "damage_dice": null,
+       "damage_type": null,
+       "weapon_properties": [],
+       "armor_type": null,
+       "armor_ac": null,
+       "shield_ac_bonus": null,
+       "max_charges": null,
+       "max_stack": 1,
+       "is_consumable": false,
+       "map_char": "i",
+       "include_in_senses_objects": true,
+       "include_in_adjacent_senses_objects": false,
+       "include_in_available_object_actions": true,
+       "maximum_hit_points": null,
+       "concentration_capacity": 0,
+       "boundary_structure": null
+      },
+      "state": {
+       "stack_count": 1,
+       "charges": null,
+       "integrity": "intact",
+       "destruction_outcome": null,
+       "remnant_state": null,
+       "current_hit_points": null,
+       "concentration_slots": [],
+       "construction_owner_uuid": null,
+       "construction_geometry": null,
+       "construction_suppressions": [],
+       "known_to_creator": false,
+       "supported_by_uuid": null,
+       "contact_passage": "structural",
+       "surface_residues": [],
+       "linked_spatial_condition_uuid": null,
+       "is_open": null,
+       "is_engaged": null,
+       "blocks_movement": false,
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "is_lit": null
+      }
+     },
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000001003",
+      "look": {
+       "item_id": "apparel.robe",
+       "item_kind": "item",
+       "visual_item_name": "robe",
+       "visual_variant_id": null,
+       "equipped_visual_policy": "visible",
+       "item_effects": [],
+       "very_bright_radius_feet": null,
+       "bright_radius_feet": null,
+       "dim_radius_feet": null
+      },
+      "profile": {
+       "name": "Item",
+       "description": null,
+       "rarity": "common",
+       "weight": 1.0,
+       "value": 0,
+       "tags": [],
+       "is_pickable": true,
+       "is_equippable": true,
+       "is_usable": false,
+       "is_targetable": false,
+       "door_mechanism": null,
+       "door_swing": null,
+       "stack_id": null,
+       "damage_dice": null,
+       "damage_type": null,
+       "weapon_properties": [],
+       "armor_type": null,
+       "armor_ac": null,
+       "shield_ac_bonus": null,
+       "max_charges": null,
+       "max_stack": 1,
+       "is_consumable": false,
+       "map_char": "i",
+       "include_in_senses_objects": true,
+       "include_in_adjacent_senses_objects": false,
+       "include_in_available_object_actions": true,
+       "maximum_hit_points": null,
+       "concentration_capacity": 0,
+       "boundary_structure": null
+      },
+      "state": {
+       "stack_count": 1,
+       "charges": null,
+       "integrity": "intact",
+       "destruction_outcome": null,
+       "remnant_state": null,
+       "current_hit_points": null,
+       "concentration_slots": [],
+       "construction_owner_uuid": null,
+       "construction_geometry": null,
+       "construction_suppressions": [],
+       "known_to_creator": false,
+       "supported_by_uuid": null,
+       "contact_passage": "structural",
+       "surface_residues": [],
+       "linked_spatial_condition_uuid": null,
+       "is_open": null,
+       "is_engaged": null,
+       "blocks_movement": false,
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "is_lit": null
+      }
+     }
+    ]
+   },
+   "expected": {
+    "actors": {
+     "00000000-0000-4000-8000-00000000000a": {
+      "name": "Hero",
+      "hp": [
+       10,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": null,
+      "conditions": [
+       [
+        "00000000-0000-4000-8000-000000003001",
+        "Poisoned",
+        null
+       ],
+       [
+        "00000000-0000-4000-8000-000000003002",
+        "Blessed",
+        3
+       ]
+      ],
+      "weapon_set": "melee",
+      "layers": [
+       [
+        "Head",
+        "00000000-0000-4000-8000-000000001002",
+        null
+       ],
+       [
+        "Body",
+        "00000000-0000-4000-8000-000000001003",
+        null
+       ]
+      ],
+      "inventory": [
+       "00000000-0000-4000-8000-000000001002",
+       "00000000-0000-4000-8000-000000001003"
+      ],
+      "size": null,
+      "disposition": "present"
+     }
+    },
+    "items": {}
+   }
+  },
+  {
+   "change": {
+    "kind": "actor_change",
+    "actors": [
+     {
+      "actor_uuid": "00000000-0000-4000-8000-00000000000a",
+      "rows": [
+       {
+        "field": "condition",
+        "condition_uuid": "00000000-0000-4000-8000-000000003001",
+        "member": {
+         "condition_uuid": "00000000-0000-4000-8000-000000003001",
+         "name": "Poisoned",
+         "category": "status",
+         "behavior_id": null,
+         "state": {
+          "duration": {
+           "duration_type": "rounds",
+           "remaining_rounds": 2
+          },
+          "condition_uuid": "00000000-0000-4000-8000-000000003001",
+          "name": "Poisoned",
+          "category": "status",
+          "semantic_key": "condition.fold_vectors.poisoned",
+          "behavior_id": null,
+          "tags": [],
+          "removal_triggers": [],
+          "agency_denial": "none",
+          "outcome_protections": [],
+          "applied_source_event_cursor": null,
+          "duplicate_count": null,
+          "size_change": null,
+          "energy_type": null,
+          "metamagic_mode": null,
+          "affected_item_uuid": null,
+          "enhanced_ability": null,
+          "concentration_slots": []
+         }
+        }
+       },
+       {
+        "field": "condition",
+        "condition_uuid": "00000000-0000-4000-8000-000000003003",
+        "member": {
+         "condition_uuid": "00000000-0000-4000-8000-000000003003",
+         "name": "Hasted",
+         "category": "status",
+         "behavior_id": null,
+         "state": {
+          "duration": {
+           "duration_type": "rounds",
+           "remaining_rounds": 10
+          },
+          "condition_uuid": "00000000-0000-4000-8000-000000003003",
+          "name": "Hasted",
+          "category": "status",
+          "semantic_key": "condition.fold_vectors.hasted",
+          "behavior_id": null,
+          "tags": [],
+          "removal_triggers": [],
+          "agency_denial": "none",
+          "outcome_protections": [],
+          "applied_source_event_cursor": null,
+          "duplicate_count": null,
+          "size_change": null,
+          "energy_type": null,
+          "metamagic_mode": null,
+          "affected_item_uuid": null,
+          "enhanced_ability": null,
+          "concentration_slots": []
+         }
+        }
+       },
+       {
+        "field": "condition",
+        "condition_uuid": "00000000-0000-4000-8000-000000003004"
+       },
+       {
+        "field": "layer",
+        "slot": "Head"
+       },
+       {
+        "field": "layer",
+        "slot": "Head",
+        "layer": {
+         "slot": "Head",
+         "item_uuid": "00000000-0000-4000-8000-000000001002",
+         "item_id": "apparel.helm",
+         "is_lit": null
+        }
+       },
+       {
+        "field": "inventory",
+        "item_uuid": "00000000-0000-4000-8000-000000001002",
+        "held": true
+       },
+       {
+        "field": "inventory",
+        "item_uuid": "00000000-0000-4000-8000-000000002001",
+        "held": true
+       }
+      ]
+     }
+    ],
+    "items": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000002001",
+      "look": {
+       "item_id": "light.torch",
+       "item_kind": "item",
+       "visual_item_name": "torch",
+       "visual_variant_id": null,
+       "equipped_visual_policy": "visible",
+       "item_effects": [],
+       "very_bright_radius_feet": null,
+       "bright_radius_feet": null,
+       "dim_radius_feet": null
+      },
+      "profile": {
+       "name": "Item",
+       "description": null,
+       "rarity": "common",
+       "weight": 1.0,
+       "value": 0,
+       "tags": [],
+       "is_pickable": true,
+       "is_equippable": true,
+       "is_usable": false,
+       "is_targetable": false,
+       "door_mechanism": null,
+       "door_swing": null,
+       "stack_id": null,
+       "damage_dice": null,
+       "damage_type": null,
+       "weapon_properties": [],
+       "armor_type": null,
+       "armor_ac": null,
+       "shield_ac_bonus": null,
+       "max_charges": null,
+       "max_stack": 1,
+       "is_consumable": false,
+       "map_char": "i",
+       "include_in_senses_objects": true,
+       "include_in_adjacent_senses_objects": false,
+       "include_in_available_object_actions": true,
+       "maximum_hit_points": null,
+       "concentration_capacity": 0,
+       "boundary_structure": null
+      },
+      "state": {
+       "stack_count": 1,
+       "charges": null,
+       "integrity": "intact",
+       "destruction_outcome": null,
+       "remnant_state": null,
+       "current_hit_points": null,
+       "concentration_slots": [],
+       "construction_owner_uuid": null,
+       "construction_geometry": null,
+       "construction_suppressions": [],
+       "known_to_creator": false,
+       "supported_by_uuid": null,
+       "contact_passage": "structural",
+       "surface_residues": [],
+       "linked_spatial_condition_uuid": null,
+       "is_open": null,
+       "is_engaged": null,
+       "blocks_movement": false,
+       "blocks_optics": false,
+       "blocks_propagation": false,
+       "is_lit": null
+      }
+     }
+    ]
+   },
+   "expected": {
+    "actors": {
+     "00000000-0000-4000-8000-00000000000a": {
+      "name": "Hero",
+      "hp": [
+       10,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": null,
+      "conditions": [
+       [
+        "00000000-0000-4000-8000-000000003001",
+        "Poisoned",
+        2
+       ],
+       [
+        "00000000-0000-4000-8000-000000003002",
+        "Blessed",
+        3
+       ],
+       [
+        "00000000-0000-4000-8000-000000003003",
+        "Hasted",
+        10
+       ]
+      ],
+      "weapon_set": "melee",
+      "layers": [
+       [
+        "Body",
+        "00000000-0000-4000-8000-000000001003",
+        null
+       ],
+       [
+        "Head",
+        "00000000-0000-4000-8000-000000001002",
+        null
+       ]
+      ],
+      "inventory": [
+       "00000000-0000-4000-8000-000000001002",
+       "00000000-0000-4000-8000-000000001003",
+       "00000000-0000-4000-8000-000000002001"
+      ],
+      "size": null,
+      "disposition": "present"
+     }
+    },
+    "items": {
+     "00000000-0000-4000-8000-000000002001": {
+      "item_id": "light.torch",
+      "profile": true,
+      "state": {
+       "charges": null,
+       "stack_count": 1,
+       "is_lit": null
+      },
+      "effects": []
+     }
+    }
+   }
+  },
+  {
+   "change": {
+    "kind": "actor_change",
+    "actors": [
+     {
+      "actor_uuid": "00000000-0000-4000-8000-00000000000a",
+      "rows": [
+       {
+        "field": "condition",
+        "condition_uuid": "00000000-0000-4000-8000-000000003002",
+        "consumed": true
+       },
+       {
+        "field": "layer",
+        "slot": "Body"
+       },
+       {
+        "field": "inventory",
+        "item_uuid": "00000000-0000-4000-8000-000000001003",
+        "held": false
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "actors": {
+     "00000000-0000-4000-8000-00000000000a": {
+      "name": "Hero",
+      "hp": [
+       10,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": null,
+      "conditions": [
+       [
+        "00000000-0000-4000-8000-000000003001",
+        "Poisoned",
+        2
+       ],
+       [
+        "00000000-0000-4000-8000-000000003003",
+        "Hasted",
+        10
+       ]
+      ],
+      "weapon_set": "melee",
+      "layers": [
+       [
+        "Head",
+        "00000000-0000-4000-8000-000000001002",
+        null
+       ]
+      ],
+      "inventory": [
+       "00000000-0000-4000-8000-000000001002",
+       "00000000-0000-4000-8000-000000002001"
+      ],
+      "size": null,
+      "disposition": "present"
+     }
+    },
+    "items": {
+     "00000000-0000-4000-8000-000000001002": {
+      "item_id": "apparel.helm",
+      "profile": true,
+      "state": {
+       "charges": null,
+       "stack_count": 1,
+       "is_lit": null
+      },
+      "effects": []
+     },
+     "00000000-0000-4000-8000-000000001003": {
+      "item_id": "apparel.robe",
+      "profile": true,
+      "state": {
+       "charges": null,
+       "stack_count": 1,
+       "is_lit": null
+      },
+      "effects": []
+     },
+     "00000000-0000-4000-8000-000000002001": {
+      "item_id": "light.torch",
+      "profile": true,
+      "state": {
+       "charges": null,
+       "stack_count": 1,
+       "is_lit": null
+      },
+      "effects": []
+     }
+    }
+   }
+  }
+ ]
+}

@@ -1,0 +1,269 @@
+{
+ "name": "v3_leaving_view_changes_nothing",
+ "rule": "Bodies and items are never pruned: a body that leaves view keeps its values and its last position.",
+ "observers": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "controlled": [
+  "00000000-0000-4000-8000-00000000000a"
+ ],
+ "steps": [
+  {
+   "body": {
+    "occurrence": 0,
+    "actor_uuid": "00000000-0000-4000-8000-00000000000b",
+    "birth": {
+     "name": "Goblin",
+     "character_body_id": null,
+     "creature_content_ref": null,
+     "appearance": {
+      "portrait_key": null,
+      "presentation_kind": "layered",
+      "visual_scale": 1.0,
+      "visual_scale_x": 1.0,
+      "placeholder_tint": 3604322,
+      "body_category": "NakedBody",
+      "skin_tint": 14527112,
+      "head_category": null,
+      "hair_tint": 0,
+      "has_beard": false,
+      "beard_tint": 0
+     },
+     "structural_base_size": "Medium"
+    },
+    "body": {
+     "visual_loadout": {
+      "active_weapon_set": "melee",
+      "layers": [
+       {
+        "slot": "MELEE_MAIN",
+        "item_uuid": "00000000-0000-4000-8000-000000001001",
+        "item_id": "weapon.dagger",
+        "is_lit": null
+       }
+      ]
+     },
+     "normal_hp": 7,
+     "maximum_hp": 10,
+     "temporary_hp": 0,
+     "life_state": "alive",
+     "armor_class": 12,
+     "conditions": [
+      {
+       "condition_uuid": "00000000-0000-4000-8000-000000003001",
+       "name": "Poisoned",
+       "category": "status",
+       "behavior_id": null,
+       "state": {
+        "duration": null,
+        "condition_uuid": "00000000-0000-4000-8000-000000003001",
+        "name": "Poisoned",
+        "category": "status",
+        "semantic_key": "condition.fold_vectors.poisoned",
+        "behavior_id": null,
+        "tags": [],
+        "removal_triggers": [],
+        "agency_denial": "none",
+        "outcome_protections": [],
+        "applied_source_event_cursor": null,
+        "duplicate_count": null,
+        "size_change": null,
+        "energy_type": null,
+        "metamagic_mode": null,
+        "affected_item_uuid": null,
+        "enhanced_ability": null,
+        "concentration_slots": []
+       }
+      }
+     ],
+     "remains_disposition": "intact",
+     "spatial_disposition": "present"
+    },
+    "items": [
+     {
+      "item_uuid": "00000000-0000-4000-8000-000000001001",
+      "look": {
+       "item_id": "weapon.dagger",
+       "item_kind": "item",
+       "visual_item_name": "dagger",
+       "visual_variant_id": null,
+       "equipped_visual_policy": "visible",
+       "item_effects": [],
+       "very_bright_radius_feet": null,
+       "bright_radius_feet": null,
+       "dim_radius_feet": null
+      },
+      "effects": [
+       {
+        "duration": null,
+        "effect_uuid": "00000000-0000-4000-8000-000000004001",
+        "contribution_uuid": null,
+        "behavior_id": "condition.fold_vectors.flame",
+        "display_name": "Flame",
+        "description": "",
+        "damage_type": null,
+        "applied_source_event_cursor": null
+       }
+      ]
+     }
+    ]
+   },
+   "expected": {
+    "actors": {
+     "00000000-0000-4000-8000-00000000000b": {
+      "name": "Goblin",
+      "hp": [
+       7,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": null,
+      "conditions": [
+       [
+        "00000000-0000-4000-8000-000000003001",
+        "Poisoned",
+        null
+       ]
+      ],
+      "weapon_set": "melee",
+      "layers": [
+       [
+        "MELEE_MAIN",
+        "00000000-0000-4000-8000-000000001001",
+        null
+       ]
+      ],
+      "inventory": null,
+      "size": null,
+      "disposition": "present"
+     }
+    },
+    "items": {}
+   }
+  },
+  {
+   "seen": {
+    "visible": [
+     [
+      4,
+      5
+     ]
+    ],
+    "contacts": {
+     "00000000-0000-4000-8000-00000000000b": {
+      "position": [
+       4,
+       5
+      ],
+      "visual": true
+     }
+    }
+   },
+   "expected": {
+    "actors": {
+     "00000000-0000-4000-8000-00000000000b": {
+      "name": "Goblin",
+      "hp": [
+       7,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": [
+       4,
+       5
+      ],
+      "conditions": [
+       [
+        "00000000-0000-4000-8000-000000003001",
+        "Poisoned",
+        null
+       ]
+      ],
+      "weapon_set": "melee",
+      "layers": [
+       [
+        "MELEE_MAIN",
+        "00000000-0000-4000-8000-000000001001",
+        null
+       ]
+      ],
+      "inventory": null,
+      "size": null,
+      "disposition": "present"
+     }
+    },
+    "items": {}
+   }
+  },
+  {
+   "seen": {
+    "visible": [
+     [
+      8,
+      8
+     ]
+    ],
+    "contacts": {}
+   },
+   "expected": {
+    "actors": {
+     "00000000-0000-4000-8000-00000000000b": {
+      "name": "Goblin",
+      "hp": [
+       7,
+       10,
+       0
+      ],
+      "grant": null,
+      "armor_class": 12,
+      "life": "alive",
+      "present": true,
+      "position": [
+       4,
+       5
+      ],
+      "conditions": [
+       [
+        "00000000-0000-4000-8000-000000003001",
+        "Poisoned",
+        null
+       ]
+      ],
+      "weapon_set": "melee",
+      "layers": [
+       [
+        "MELEE_MAIN",
+        "00000000-0000-4000-8000-000000001001",
+        null
+       ]
+      ],
+      "inventory": null,
+      "size": null,
+      "disposition": "present"
+     }
+    },
+    "items": {
+     "00000000-0000-4000-8000-000000001001": {
+      "item_id": "weapon.dagger",
+      "profile": false,
+      "state": null,
+      "effects": [
+       [
+        "00000000-0000-4000-8000-000000004001",
+        null
+       ]
+      ]
+     }
+    }
+   }
+  }
+ ]
+}

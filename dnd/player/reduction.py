@@ -5,6 +5,9 @@ import json
 from types import MappingProxyType
 from typing import Collection, Iterator, Mapping, Sequence
 from dnd.types.actor import SpatialDisposition
+from dnd.types.actor_facts import (ChangeField, ChangeRow, ConditionMember, ConditionRow, DispositionRow, DurationRow,
+    GrantRow, InventoryRow, ItemEffectsRow, ItemStateRow, LayerRow, NumberRow, SizeRow, WeaponSetRow, dropped, upserted)
+from dnd.types.item_parts import VisualItem
 from dnd.core.cells import (CellRows, bit_rows, layer_rows, mask_positions, mask_rows, selected_mask, selected_values,
     values_items)
 from dnd.core.sensory_fold import copy_senses_snapshot
@@ -12,14 +15,16 @@ from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.descriptors import ContentDescriptor
-from dnd.types.cells import CellMask, CellValues
+from dnd.core.item_types import ItemEffectPresentationState
+from dnd.core.life_types import LifeState
+from dnd.types.cells import CellMask, CellValues, cell_in
 from dnd.types.event_facts import EventType, SpatialChangeType
 from dnd.types.world import LightLevel
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SensoryDelta
 from dnd.player.audience import (AudienceComposition, apply_current_audience, audience_view,
     begin_audience_composition, observe_audience, perceived_entities, resolve_audience)
 from dnd.player.facts import (
-    AttackFact, ConditionChangeFact, ConditionFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
+    ActorBirth, ActorChangeFact, BodyRecord, ItemRecord, AttackFact, ConditionChangeFact, ConditionFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, ItemPatch, LifeFact, PlayerItem,
     ActorChanges, PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, SheetPatch, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialEffectSighting, SpatialFact, TurnFact,
     VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact,
@@ -187,6 +192,173 @@ def _observe(target: PlayerState, observation: PlayerObservation, *,
         target.senses.entities[observation.actor_uuid] = observation.contact
         if audience_composition is not None:
             audience_composition.contact_overrides.add(observation.actor_uuid)
+
+
+def enter_item(target: PlayerState, record: ItemRecord) -> None:
+    """An item entering the seat's view: static parts kept from the first time, dynamic parts replaced whole.
+
+    The seat's item records are never pruned; a record without a look needs one the seat already holds.
+    """
+    previous = target.items.get(record.item_uuid)
+    look = record.look if record.look is not None else previous.look if previous is not None else None
+    if look is None:
+        raise ValueError("An item's first record requires its look")
+    target.items[record.item_uuid] = PlayerItem(look=look,
+        profile=record.profile if record.profile is not None else previous.profile if previous is not None else None,
+        state=record.state if record.state is not None else previous.state if previous is not None else None,
+        effects=record.effects)
+
+
+def _birth(actor: PlayerActor) -> ActorBirth:
+    """The birth fields a seat holds for a body."""
+    return ActorBirth(name=actor.name, character_body_id=actor.character_body_id,
+        creature_content_ref=actor.creature_content_ref, appearance=actor.appearance,
+        structural_base_size=actor.structural_base_size, manifestation=actor.manifestation)
+
+
+def enter_body(target: PlayerState, record: BodyRecord) -> None:
+    """A body entering the seat's view: every changeable field replaced, its birth held from the first record.
+
+    The last visual position stays perception (contacts set it); a terminal lifetime ignores the record.
+    """
+    previous = target.actors.get(record.actor_uuid)
+    if previous is not None and not previous.present:
+        return
+    birth = record.birth if record.birth is not None else _birth(previous) if previous is not None else None
+    if birth is None:
+        raise ValueError("A body's first record requires its birth")
+    body = record.body
+    target.actors[record.actor_uuid] = PlayerActor(uuid=record.actor_uuid, name=birth.name,
+        character_body_id=birth.character_body_id, creature_content_ref=birth.creature_content_ref,
+        appearance=birth.appearance, structural_base_size=birth.structural_base_size,
+        manifestation=birth.manifestation, visual_loadout=body.visual_loadout, normal_hp=body.normal_hp,
+        maximum_hp=body.maximum_hp, temporary_hp=body.temporary_hp, temporary_hp_grant=body.temporary_hp_grant,
+        life_state=body.life_state, armor_class=body.armor_class,
+        conditions=tuple(_held(member) for member in body.conditions),
+        controlled_items=body.controlled_items, occupancy_layer=body.occupancy_layer,
+        resolved_size=body.resolved_size, faction=body.faction, remains_disposition=body.remains_disposition,
+        spatial_disposition=body.spatial_disposition,
+        last_visual_position=previous.last_visual_position if previous is not None else None)
+    for item in record.items:
+        enter_item(target, item)
+
+
+def _condition_key(member: ConditionFact) -> UUID:
+    return member.condition_uuid
+
+
+def _held(member: ConditionMember) -> ConditionFact:
+    """A membership as the seat holds it until the schema-16 projector switch (no event payload)."""
+    return ConditionFact(event_uuid=None, condition_uuid=member.condition_uuid, name=member.name,
+        category=member.category, behavior_id=member.behavior_id, resulting_max_hp=None, resulting_ac=None,
+        state=member.state)
+
+
+def _layer_slot(layer: VisualItem) -> str:
+    return layer.slot
+
+
+def _item_uuid(identity: UUID) -> UUID:
+    return identity
+
+
+def _effect_key(effect: ItemEffectPresentationState) -> UUID:
+    return effect.effect_uuid
+
+
+def _changed_item(target: PlayerState, row: DurationRow | ItemEffectsRow | ItemStateRow) -> None:
+    """An item row's change to the seat's record of that item; a record the seat lacks stays absent."""
+    item_uuid = row.item_uuid
+    record = target.items.get(item_uuid) if item_uuid is not None else None
+    if item_uuid is None or record is None:
+        return
+    match row:
+        case DurationRow():
+            effect = next((effect for effect in record.effects if effect.effect_uuid == row.key), None)
+            if effect is not None:
+                target.items[item_uuid] = replace(record, effects=upserted(record.effects, _effect_key,
+                    effect.model_copy(update={"duration": row.duration})))
+        case ItemEffectsRow():
+            target.items[item_uuid] = replace(record, effects=row.effects)
+        case ItemStateRow():
+            if record.state is not None:
+                target.items[item_uuid] = replace(record, state=replace(record.state, **row.changes))
+
+
+def _changed_actor(target: PlayerState, actor: PlayerActor, row: ChangeRow) -> PlayerActor:
+    """One row applied to a body (or, for an item row, to the seat's record of that item), in dict order."""
+    match row:
+        case NumberRow(field=ChangeField.NORMAL_HP):
+            return replace(actor, normal_hp=row.value)
+        case NumberRow(field=ChangeField.MAXIMUM_HP):
+            return replace(actor, maximum_hp=row.value)
+        case NumberRow(field=ChangeField.TEMPORARY_HP):
+            return replace(actor, temporary_hp=row.value)
+        case NumberRow(field=ChangeField.ARMOR_CLASS):
+            return replace(actor, armor_class=row.value)
+        case GrantRow():
+            return replace(actor, temporary_hp_grant=row.value)
+        case SizeRow():
+            return replace(actor, resolved_size=row.value)
+        case DispositionRow():
+            return replace(actor, spatial_disposition=row.value)
+        case WeaponSetRow():
+            return replace(actor, visual_loadout=replace(actor.visual_loadout, active_weapon_set=row.value))
+        case ConditionRow(member=None):
+            return replace(actor, conditions=dropped(actor.conditions, _condition_key, row.condition_uuid))
+        case ConditionRow(member=ConditionMember() as member):
+            return replace(actor, conditions=upserted(actor.conditions, _condition_key, _held(member)))
+        case DurationRow(field=ChangeField.CONDITION_DURATION):
+            held = next((member for member in actor.conditions if member.condition_uuid == row.key), None)
+            if held is None or held.state is None:
+                return actor
+            return replace(actor, conditions=upserted(actor.conditions, _condition_key,
+                replace(held, state=held.state.model_copy(update={"duration": row.duration}))))
+        case LayerRow(layer=None):
+            return replace(actor, visual_loadout=replace(actor.visual_loadout,
+                layers=dropped(actor.visual_loadout.layers, _layer_slot, row.slot)))
+        case LayerRow(layer=VisualItem() as layer):
+            return replace(actor, visual_loadout=replace(actor.visual_loadout,
+                layers=upserted(actor.visual_loadout.layers, _layer_slot, layer)))
+        case InventoryRow():
+            if actor.controlled_items is None:
+                raise ValueError("inventory rows require the controlled actor's inventory")
+            return replace(actor, controlled_items=upserted(actor.controlled_items, _item_uuid, row.item_uuid)
+                if row.held else dropped(actor.controlled_items, _item_uuid, row.item_uuid))
+        case DurationRow() | ItemEffectsRow() | ItemStateRow():
+            _changed_item(target, row)
+    return actor
+
+
+def apply_actor_change_fact(target: PlayerState, fact: ActorChangeFact) -> None:
+    """An event's change to the seat's bodies: the items entering its view, then each actor's rows in order.
+
+    A terminal lifetime ignores its rows.
+    """
+    for record in fact.items:
+        enter_item(target, record)
+    for change in fact.actors:
+        actor = target.actors[change.actor_uuid]
+        if not actor.present:
+            continue
+        for row in change.rows:
+            actor = _changed_actor(target, actor, row)
+        target.actors[actor.uuid] = actor
+
+
+def clear_unseen_positions(target: PlayerState) -> None:
+    """A cell the seat sees shows what is there: a living body last seen on a visible cell that is no longer a
+    contact is no longer drawn there (its other values stay remembered)."""
+    senses = target.senses
+    if senses is None:
+        return
+    audience = target.viewing_audience
+    for identity, actor in tuple(target.actors.items()):
+        position = actor.last_visual_position
+        if (position is not None and actor.present and actor.life_state is not LifeState.DEAD
+                and not audience.controls(identity) and identity not in senses.entities
+                and cell_in(senses.visible, position)):
+            target.actors[identity] = replace(actor, last_visual_position=None)
 
 
 def stage_actors(target: PlayerState, observations: tuple[PlayerObservation, ...]) -> PlayerState:
