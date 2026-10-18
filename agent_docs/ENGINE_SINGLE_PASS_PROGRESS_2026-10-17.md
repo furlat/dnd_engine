@@ -680,3 +680,10 @@ Hard rules:
   - Projected after E3, quiet machine: Wall of Stone ≈98 and Fireball ≈103. What remains:
     - Wall of Stone: the formation settlement (PV1), the zone install with its relight (P7), and the escape Move.
     - Fireball: per-target rules (PR, PD1c), the settlement (PV1), and per-version event machinery (P6, P7b).
+- 2026-10-18: **The long-game case is real (c256ba3e8).**
+  - Setup: the `immune_party` roster, 50 of 50 human turns over 13–14 rounds, about 5 min wall time. The old setup now fails its ≥45-turn assertion.
+  - Per round, on a loaded machine:
+    - AI advances average 130–200 ms;
+    - Choices goes 62 → 110–124 ms over the game (to investigate);
+    - RSS grows ~105–123 MB per round (0.57 → 1.94 GB) with `cycles_found` 0 throughout, so it is retained state.
+  - Seeded runs reproduce the game exactly.

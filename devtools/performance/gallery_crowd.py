@@ -41,16 +41,16 @@ from dnd.content.items.environment_item_builders import build_oil_barrel
 from dnd.controller import HumanController
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import build_creatable_models
-from dnd.core.content.encounters import (AuthoredCreatureRosterSource, EncounterDeploymentSpec,
+from dnd.core.content.encounters import (AuthoredCreatureRosterSource, DamageAffinityStatus, EncounterDeploymentSpec,
     EncounterDeploymentZone, EncounterRecipe, EncounterRosterMember, EncounterRosterRecipe,
-    PremadeCharacterRosterSource, RosterControllerDefaults, RosterControllerKind, RosterSpellGrant,
-    RosterStartingDamage)
+    PremadeCharacterRosterSource, RosterControllerDefaults, RosterControllerKind, RosterDamageAffinity,
+    RosterSpellGrant, RosterStartingDamage)
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
-from dnd.encounter import TurnState
+from dnd.encounter import EncounterState, TurnState
 from dnd.items.torches import WallTorch
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.player import application, session
@@ -170,7 +170,19 @@ def damaged_party_roster(caster):
     return _party(caster, PARTY_DAMAGE), _crowd(CROWD)
 
 
-ROSTERS = {'crowd': crowd_roster, 'wall': wall_roster, 'undead': undead_roster, 'damaged_party': damaged_party_roster}
+def immune_party_roster(caster):
+    """The GC roster with every party member immune to every damage type (`RosterDamageAffinity`, applied before
+    initiative). The crowd's attacks still roll to hit and for damage, and the caster's area spells still reach
+    the allies; the damage is reduced to 0, so no party member goes down."""
+    (party, party_slots), crowd = crowd_roster(caster)
+    immunity = tuple(RosterDamageAffinity(status=DamageAffinityStatus.IMMUNITY, damage_type=damage_type,
+        label='Gallery party immunity') for damage_type in DamageType)
+    return (tuple(member.model_copy(update={'scenario_setup_effects': (*member.scenario_setup_effects, *immunity)})
+        for member in party), party_slots), crowd
+
+
+ROSTERS = {'crowd': crowd_roster, 'wall': wall_roster, 'undead': undead_roster, 'damaged_party': damaged_party_roster,
+           'immune_party': immune_party_roster}
 
 
 def crowd_recipe(seed, *, godmode, roster='crowd', blue_ai=False):
@@ -795,22 +807,37 @@ def memory_census(kind, started_round, found, cycles, elapsed):
 def long_game_case(turns):
     """Seeded play for `turns` human turns. Each turn makes up to three Choices → Preview → Command rounds with a
     random affordable row and target, then ends the turn; the native AI plays every other turn. At each round end
-    the worker's round check runs (`worker.collect_frozen_cycles`) and the memory census is recorded."""
+    the worker's round check runs (`worker.collect_frozen_cycles`) and the memory census is recorded.
+
+    The case runs on the `immune_party` roster: on the plain roster the crowd downs the whole party in round 1
+    (dying, then stable), the basic policy never finishes a downed character and every later round is AI-only.
+    Roster immunity is the one existing setup effect that keeps all four members up and acting while the crowd
+    still attacks them (each attack rolls to hit and for damage; the damage is reduced to 0); starting damage
+    only lowers hit points and healing items run out.
+
+    The game stops after `turns` human turns, when the encounter ends, or after a full round in which no seat had
+    input; fewer than 90% of `turns` human turns fails the case (the rules may still take a turn: a Haste potion's
+    lethargy). The last row is the per-round curve: each request kind's count, mean and max ms and the cycles its
+    collections found, and the round check's RSS; and the case's wall time."""
 
     def case(runtime, driver, mode, caster_uuid):
+        case_started = perf_counter()
         rng = Random(20261017)
         encounter = runtime.session.encounter
         operations = []
+        human_turns = Counter()  # by round
+        last_input_round = encounter.round_number - 1  # past last_input_round + 1, a full round had no input
 
-        def request(kind, call):
+        def request(kind, call, **fields):
             """(accepted, response); an Advance is accepted with no response body."""
             round_before = encounter.round_number
             try:
                 response, row = measured_request(mode, kind, call)
             except AssertionError as error:
-                operations.append({'kind': 'rejected', 'request': kind, 'error': str(error)[:200]})
+                operations.append({'kind': 'rejected', 'request': kind, 'round': round_before,
+                    'error': str(error)[:200]})
                 return False, None
-            operations.append(row)
+            operations.append({**row, **fields, 'round': round_before})
             if encounter.round_number != round_before:
                 started = perf_counter()
                 found, cycles = worker.collect_frozen_cycles()
@@ -818,15 +845,25 @@ def long_game_case(turns):
                     (perf_counter() - started) * 1000))
             return True, response
 
-        for _ in range(turns):
-            while worker.needs_advance(runtime.session):
+        stop = f'{turns} human turns'
+        while sum(human_turns.values()) < turns:
+            while worker.needs_advance(runtime.session) and encounter.round_number <= last_input_round + 1:
                 if not request('advance', lambda: driver.dispatch(Advance()))[0]:
                     break
+            if encounter.state is not EncounterState.ACTIVE:
+                stop = 'the encounter ended'
+                break
+            if encounter.round_number > last_input_round + 1:
+                stop = f'round {encounter.round_number - 1} had no input'
+                break
             holders = [(seat, publication.boundary.input_actor_uuid) for seat, publication in runtime.publications.items()
                 if publication.boundary.input_actor_uuid is not None]
             if not holders:
+                stop = 'no seat holds input'
                 break
             seat, actor_uuid = holders[0]
+            last_input_round = encounter.round_number
+            human_turns[encounter.round_number] += 1
             for _ in range(3):
                 accepted, response = request('choices', lambda: driver.choices(seat, actor_uuid))
                 if not accepted:
@@ -844,8 +881,9 @@ def long_game_case(turns):
                     choices.discovery_generation, selection))
                 if not accepted or not preview.preview.can_confirm:
                     continue
-                request(f'command {action.behavior_id}', lambda: driver.command(seat, actor_uuid,
-                    ExecuteSelectionIntent(discovery_generation=choices.discovery_generation, selection=selection)))
+                request('command', lambda: driver.command(seat, actor_uuid,
+                    ExecuteSelectionIntent(discovery_generation=choices.discovery_generation, selection=selection)),
+                    behavior=action.behavior_id)
                 if runtime.publications[seat].boundary.input_actor_uuid != actor_uuid:
                     break
             if runtime.publications[seat].boundary.input_actor_uuid == actor_uuid:
@@ -854,6 +892,26 @@ def long_game_case(turns):
         found, cycles = worker.collect_frozen_cycles()
         operations.append(memory_census('final_check', encounter.round_number, found, cycles,
             (perf_counter() - started) * 1000))
+        checks = {row['round']: row for row in operations if row['kind'] in ('round_check', 'final_check')}
+        curve = []
+        for round_number, check in sorted(checks.items()):
+            requests = [row for row in operations if row['round'] == round_number and 'total_ms' in row]
+            kinds = {}
+            for kind in dict.fromkeys(row['kind'] for row in requests):
+                times = [row['total_ms'] for row in requests if row['kind'] == kind]
+                kinds[kind] = {'count': len(times), 'mean_ms': sum(times) / len(times), 'max_ms': max(times),
+                    'cycles_found': sum(row['gc']['cycles_found'] for row in requests if row['kind'] == kind)}
+            curve.append({'round': round_number, 'human_turns': human_turns[round_number], 'requests': kinds,
+                'rejected': sum(row['round'] == round_number for row in operations if row['kind'] == 'rejected'),
+                'request_cycles_found': sum(row['gc']['cycles_found'] for row in requests),
+                'check': check['kind'], 'check_ms': check['ms'], 'check_cycles_found': check['cycles_found'],
+                'rss_mb': check['rss_mb']})
+        played = sum(human_turns.values())
+        operations.append({'kind': 'round_curve', 'human_turns': played, 'expected_turns': turns, 'stop': stop,
+            'wall_ms': (perf_counter() - case_started) * 1000, 'rounds': curve})
+        if played < 0.9 * turns:
+            raise AssertionError(f'long_game: the human seat had {played} of {turns} turns ({stop}); '
+                f'turns by round {dict(sorted(human_turns.items()))}')
         return operations
     return case
 
@@ -907,7 +965,7 @@ CASES = {
     'mass_healing_word': (False, sequence_case(cast('spell.mass_healing_word', targets=ALLY_NAMES)),
         {'roster': 'damaged_party'}),
     'ai_decision': (False, ai_turn_case, {'blue_ai': True}),
-    'long_game': (True, long_game_case(50), {'blue_ai': True}),
+    'long_game': (True, long_game_case(50), {'blue_ai': True, 'roster': 'immune_party'}),
     # Gate (b) of PD1b: discovery and Command agree.
     'agreement_caster': (True, agreement_case(lambda seat, actor: actor.name == CASTER_NAME, True)),
     'agreement_fighter': (False, agreement_case(lambda seat, actor: seat == 'blue', False)),
