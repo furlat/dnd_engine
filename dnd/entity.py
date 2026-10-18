@@ -1,6 +1,6 @@
 from dnd.core.effect_types import EventResolutionRef, EffectOrigin
 from dnd.core.damage import DamageResolution
-from dnd.core.attack_types import NaturalWeaponSpec
+from dnd.core.attack_types import NaturalWeaponSpec, ShieldAttackSpec
 from typing import cast, Callable, AbstractSet, Dict, FrozenSet, Hashable, Iterable, Mapping, Optional, Any, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
@@ -46,6 +46,7 @@ from dnd.core.content.runtime import (
 )
 from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
 from dnd.core.saving_throw_types import (
+    DamageSaveContext,
     SAVING_THROW_CONTEXT_KEY,
     SavingThrowContext,
 )
@@ -3118,7 +3119,7 @@ class Entity(BaseBlock):
         return (part(self.proficiency_bonus, saving_throw._get_proficiency_converter()), part(saving_throw.bonus),
                 *self.ability_scores.get_ability(ability_name).combined_value(read))
 
-    def _get_attack_bonuses(self, read: ValueRead, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Tuple[Part, Tuple[Part, ...], List[ModifiableValue], Tuple[Part, ...], Range]:
+    def _get_attack_bonuses(self, read: ValueRead, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None, shield_attack: Optional[ShieldAttackSpec] = None) -> Tuple[Part, Tuple[Part, ...], List[ModifiableValue], Tuple[Part, ...], Range]:
         """Return the parts of a weapon attack bonus in one read.
 
         Args:
@@ -3136,7 +3137,7 @@ class Entity(BaseBlock):
                 weapon_slot,
                 read,
                 override_ability,
-                natural_weapon=natural_weapon,
+                natural_weapon=natural_weapon, shield_attack=shield_attack,
             )
         )
         proficiency_bonus = part(self.proficiency_bonus)
@@ -3148,7 +3149,10 @@ class Entity(BaseBlock):
             proficiency_bonus = part(self.proficiency_bonus, lambda _bonus: 0)
 
         weapon_bonuses = parts(weapon_bonus)
-        if natural_weapon is not None and natural_weapon.fixed_attack_bonus is not None:
+        if shield_attack is not None:
+            proficiency_bonus = part(ModifiableValue(source_entity_uuid=self.uuid,
+                name="Shield Bash fixed proficiency", base=0, use_register=False))
+        elif natural_weapon is not None and natural_weapon.fixed_attack_bonus is not None:
             intrinsic = ModifiableValue(source_entity_uuid=self.uuid, name="Intrinsic attack bonus",
                 base=natural_weapon.fixed_attack_bonus, use_register=False)
             # Keep independent actor/target effects; fixed baseline replaces STR/proficiency.
@@ -3332,6 +3336,7 @@ class Entity(BaseBlock):
     def weapon_attack_value(self, read: ValueRead, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN,
                             override_ability: Optional[AbilityName] = None,
                             natural_weapon: Optional[NaturalWeaponSpec] = None,
+                            shield_attack: Optional[ShieldAttackSpec] = None,
                             ) -> Tuple[Tuple[Part, ...], Optional[Dict[str, Any]]]:
         """Compose the weapon attack bonus for one read, with the context its own rows read.
 
@@ -3357,7 +3362,7 @@ class Entity(BaseBlock):
             read,
             weapon_slot,
             override_ability=override_ability,
-            natural_weapon=natural_weapon,
+            natural_weapon=natural_weapon, shield_attack=shield_attack,
         )
         return composed((proficiency_bonus, *weapon_bonuses, *parts(*attack_bonuses), *ability_bonuses)), {
             "attack_ability": self.equipment.get_weapon_attack_ability_name(
@@ -3389,6 +3394,7 @@ class Entity(BaseBlock):
         weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN,
         override_ability: Optional[AbilityName] = None,
         natural_weapon: Optional[NaturalWeaponSpec] = None,
+        shield_attack: Optional[ShieldAttackSpec] = None,
     ) -> AttackRollBaseline:
         """Read actor-side weapon attack values without allocating engine objects.
 
@@ -3411,7 +3417,7 @@ class Entity(BaseBlock):
             self.ability_scores,
             weapon_slot,
             override_ability,
-            natural_weapon=natural_weapon,
+            natural_weapon=natural_weapon, shield_attack=shield_attack,
         )
         weapon = None if natural_weapon else self.equipment.get_weapon(weapon_slot)
         proficiency_score = (
@@ -3422,7 +3428,7 @@ class Entity(BaseBlock):
             )
             else 0
         )
-        if natural_weapon is not None and natural_weapon.fixed_attack_bonus is not None:
+        if shield_attack is not None or (natural_weapon is not None and natural_weapon.fixed_attack_bonus is not None):
             proficiency_score = 0
         advantage_sum = equipment_advantage + self.proficiency_bonus.advantage_sum
         if advantage_sum > 0:
@@ -3443,6 +3449,7 @@ class Entity(BaseBlock):
         weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN,
         override_ability: Optional[AbilityName] = None,
         natural_weapon: Optional[NaturalWeaponSpec] = None,
+        shield_attack: Optional[ShieldAttackSpec] = None,
     ) -> tuple[DamageRollProfile, ...]:
         """Read actor-side weapon damage formulas without transient damage objects.
 
@@ -3463,7 +3470,7 @@ class Entity(BaseBlock):
             weapon_slot,
             DamageRollProfile,
             override_ability,
-            natural_weapon=natural_weapon,
+            natural_weapon=natural_weapon, shield_attack=shield_attack,
         )
         size_dice = self.get_size_damage_dice(weapon_slot, natural_weapon=natural_weapon)
         if size_dice > 0 and profiles:
@@ -3520,10 +3527,10 @@ class Entity(BaseBlock):
         idx = size_order.index(self.size)
         weapon = self.equipment.get_weapon(weapon_slot) if natural_weapon is None else None
         base_idx = (size_order.index(self.structural_base_size)
-                    if weapon is not None and weapon.is_body_attack else 2)
+                    if natural_weapon is not None or (weapon is not None and weapon.is_body_attack) else 2)
         return max(0, idx - base_idx)
 
-    def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> List[Damage]:
+    def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None, shield_attack: Optional[ShieldAttackSpec] = None) -> List[Damage]:
         """Build weapon damage packets for this entity.
 
         Args:
@@ -3541,7 +3548,7 @@ class Entity(BaseBlock):
                 damage_bonus=self.get_spell_damage_bonus(),effect_origin=weapon.spell_attack_profile.effect_origin)]
 
         damages = self.equipment.get_damages(weapon_slot, self.ability_scores, ValueRead(self.uuid, target_entity_uuid),
-                                             override_ability=override_ability, natural_weapon=natural_weapon)
+                                             override_ability=override_ability, natural_weapon=natural_weapon, shield_attack=shield_attack)
         size_dice = self.get_size_damage_dice(weapon_slot, natural_weapon=natural_weapon)
         if size_dice > 0 and damages:
             primary_type = damages[0].damage_type
@@ -3667,6 +3674,7 @@ class Entity(BaseBlock):
         damages: Optional[List[Damage]] = None,
         parent_event: Optional[UUID] = None,
         critical_hit: bool = False,
+        damage_save: DamageSaveContext | None = None,
         effect_id: Optional[str] = None,
         impact_direction: tuple[float, float] | None = None,
         spatial_source: SpatialDamageSource | None = None,
@@ -3724,6 +3732,8 @@ class Entity(BaseBlock):
             target_entity_uuid=self.uuid,
             target_entity_name=self.name,
             total_damage=amount,
+            critical_hit=critical_hit,
+            damage_save=damage_save,
             normal_hit_point_damage_cap=normal_hit_point_damage_cap,
             zero_hp_disposition=zero_hp_disposition,
             damage_rolls=damage_rolls or [],

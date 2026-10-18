@@ -9,12 +9,24 @@ from pydantic import (
     ValidationInfo,
     field_validator,
     model_validator,
+    Field,
 )
 
 from dnd.core.content.identities import validate_namespaced_id
+from dnd.types.abilities import AbilityName
 
 
 SAVING_THROW_CONTEXT_KEY = "saving_throw_context"
+
+
+class DamageSaveContext(BaseModel):
+    """Save facts for incoming damage already reduced by its ordinary save rule."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    ability: AbilityName
+    success: bool
+    success_fraction: float = Field(ge=0, le=1)
 
 
 class SavingThrowEffectTag(str, Enum):
@@ -64,6 +76,7 @@ class SavingThrowContext(BaseModel):
 
 
 __all__ = [
+    "DamageSaveContext",
     "SAVING_THROW_CONTEXT_KEY",
     "SavingThrowContext",
     "SavingThrowEffectTag",

@@ -28,7 +28,7 @@ from dnd.core.action_types import ActionAffordance, ActionSelection
 from dnd.types.discovery import ActorScan
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.entity import Entity
-from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, AllyHelp, Hide, Attack, Jump, Shove, PickUp, Drop, SpellAction, TraverseConnector
+from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, AllyHelp, HelpAttack, Hide, Attack, Jump, Shove, PickUp, Drop, SpellAction, TraverseConnector
 from dnd.summoning.actions import DismissSummon
 from dnd.conditions import (
     create_has_attacked_handler,
@@ -112,6 +112,7 @@ def setup_standard_actions(entity: Entity) -> None:
             "action.shake_awake",
         ),
         (AllyHelp(source_entity_uuid=entity.uuid,template=True),"action.ally_help"),
+        (HelpAttack(source_entity_uuid=entity.uuid,template=True),"action.help_attack"),
         (Shove(source_entity_uuid=entity.uuid, template=True), "action.shove"),
         (PickUp(source_entity_uuid=entity.uuid, template=True,
             interaction_affordance=ActionAffordance(surface="world", default_priority=100)), "action.pick_up"),

@@ -21,6 +21,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.view import cell_visible
 from dnd.core.presentation_geometry import WallPresentationGeometry, WallRing, WallSegment
 from dnd.core.wall_geometry import wall_shell_cells, wall_side_cells
+from dnd.core.saving_throw_types import DamageSaveContext
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.ignition import ignite_surface_contacts
@@ -148,6 +149,7 @@ class WallOfFireZone(AreaCondition):
             roll.total // 2 if success else roll.total, DamageType.FIRE, self.source_entity_uuid,
             damage_rolls=[roll], damages=[damage], parent_event=parent_event.uuid,
             effect_id="wall_of_fire.appearance" if appearance else "wall_of_fire.exposure",
+            damage_save=DamageSaveContext(ability="dexterity", success=success, success_fraction=0.5) if appearance else None,
             independent_resolution=not appearance, effect_origin=self.effect_origin,
             spatial_source=SpatialDamageSource(spatial_effect_uuid=self.uuid, position=contact,
                 target_position=entity.position, base_height_steps=self.geometry.base_height_steps,

@@ -61,6 +61,7 @@ from dnd.core.content.registration import (
     get_content_declaration,
 )
 from dnd.types.abilities import AbilityName
+from dnd.core.proficiency_types import ProficiencyMode
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
@@ -653,6 +654,7 @@ def _configure_knight(context: CreatureBuildContext) -> Entity:
         hit_die_count=8,
         proficiency_bonus=2,
     )
+    entity.creature_proficiencies.add_language_source(entity.uuid, "language.common")
     _equip(
         entity,
         armor=_default_possession(
@@ -1563,6 +1565,10 @@ def create_creature_entity(
     immunities: tuple[DamageType, ...] = (),
     resistances: tuple[DamageType, ...] = (),
     hit_points: int | None = None,
+    save_proficiencies: tuple[AbilityName, ...] = (),
+    languages: tuple[str, ...] = (),
+    vulnerabilities: tuple[DamageType, ...] = (),
+    nonmagical_attack_resistances: tuple[DamageType, ...] = (),
 ) -> Entity:
     """Compose an ordinary creature; an authored HP total uses the existing bonus.
 
@@ -1604,6 +1610,8 @@ def create_creature_entity(
                 ],
                 immunities=list(immunities),
                 resistances=list(resistances),
+                vulnerabilities=list(vulnerabilities),
+                nonmagical_attack_resistances=frozenset(nonmagical_attack_resistances),
             ),
             action_economy=ActionEconomyConfig(
                 movement=movement,
@@ -1621,6 +1629,10 @@ def create_creature_entity(
         content_ref=context.requested_ref,
     )
     setup_standard_actions(entity)
+    for ability in save_proficiencies:
+        entity.saving_throws.get_saving_throw(ability).add_proficiency_source(entity_uuid, ProficiencyMode.FULL)
+    for language in languages:
+        entity.creature_proficiencies.add_language_source(entity_uuid, language)
     if darkvision:
         entity.senses.sense_modes.append(SenseMode(sense_type=SensesType.DARKVISION, range_feet=60))
     return entity

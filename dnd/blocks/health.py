@@ -3,6 +3,7 @@ from uuid import UUID, uuid4, uuid5
 from pydantic import BaseModel, Field, computed_field, field_validator
 from dnd.action_timing import record_action_count
 from dnd.core.damage import DamageComponentResolution, DamageResolution
+from dnd.core.effect_types import EffectOriginKind
 from dnd.core.life_types import LifeState, RemainsDisposition
 from dnd.core.values import (
     ModifiableValue,
@@ -330,6 +331,8 @@ class Health(BaseBlock):
     """
 
     nonmagical_attack_resistances: frozenset[DamageType] = frozenset()
+    evasion_sources: set[UUID] = Field(default_factory=set)
+    spell_damage_resistance_sources: set[UUID] = Field(default_factory=set)
 
     name: str = Field(default="Health", description="Block name used in entity composition indexes.")
     life_state: LifeState = Field(
@@ -355,10 +358,11 @@ class Health(BaseBlock):
             self.max_hit_points_bonus, self.temporary_hit_points, self.death_save_bonus,
             self.damage_reduction)
 
-    def get_resistance(self,damage_type: DamageType, *, attack_magical: bool | None = None) -> ResistanceStatus:
+    def get_resistance(self,damage_type: DamageType, *, attack_magical: bool | None = None, from_spell: bool = False) -> ResistanceStatus:
         record_action_count("health.resistance_evaluation", 1)
         status = self.damage_reduction.resistance[damage_type]
-        if attack_magical is False and damage_type in self.nonmagical_attack_resistances:
+        if ((attack_magical is False and damage_type in self.nonmagical_attack_resistances)
+                or (from_spell and self.spell_damage_resistance_sources)):
             if status is ResistanceStatus.IMMUNITY: return status
             return ResistanceStatus.NONE if status is ResistanceStatus.VULNERABILITY else ResistanceStatus.RESISTANCE
         return status
@@ -540,6 +544,7 @@ class Health(BaseBlock):
         normal_hit_point_damage_cap: Optional[int] = None,
         normal_hit_points_available: Optional[int] = None,
         attack_magical: tuple[bool | None, ...] = (),
+        from_spell: tuple[bool, ...] = (),
         ignores_resistance_immunity: bool = False,
     ) -> DamageApplicationPreview:
         """Resolve typed components through affinities, defenses, and HP pools."""
@@ -552,7 +557,10 @@ class Health(BaseBlock):
                     "Damage must use a DamageType instead of "
                     f"{damage_type!r}"
                 )
-            resistance_status = self.get_resistance(damage_type, attack_magical=attack_magical[index] if attack_magical else None)
+            resistance_status = self.get_resistance(
+                damage_type, attack_magical=attack_magical[index] if attack_magical else None,
+                from_spell=from_spell[index] if from_spell else False,
+            )
             if ignores_resistance_immunity and resistance_status in (ResistanceStatus.RESISTANCE, ResistanceStatus.IMMUNITY):
                 resistance_status = ResistanceStatus.NONE
             multiplier = {ResistanceStatus.IMMUNITY:0, ResistanceStatus.RESISTANCE:0.5, ResistanceStatus.VULNERABILITY:2, ResistanceStatus.NONE:1}[resistance_status]
@@ -676,10 +684,20 @@ class Health(BaseBlock):
         else:
             components = [(event.get_effective_damage(), event.damages[0].damage_type)]
             identities = [event.damages[0].uuid]
+        save = event.damage_save
+        if (self.evasion_sources and save is not None
+                and save.ability == "dexterity" and save.success_fraction == 0.5):
+            components = [(0 if save.success else amount // 2, damage_type)
+                          for amount, damage_type in components]
         resolution = self.preview_damage_components(
             components, event.normal_hit_point_damage_cap,
             declared_damage=event.total_damage,
             attack_magical=tuple(damage.attack_magical for damage in event.damages[:len(components)]),
+            from_spell=tuple(
+                (damage.effect_origin or event.effect_origin) is not None
+                and (damage.effect_origin or event.effect_origin).kind is EffectOriginKind.SPELL
+                for damage in event.damages[:len(components)]
+            ),
             normal_hit_points_available=normal_hit_points_available,
             ignores_resistance_immunity=event.ignores_resistance_immunity,
         )
@@ -695,6 +713,7 @@ class Health(BaseBlock):
         declared_damage: Optional[int] = None,
         normal_hit_points_available: Optional[int] = None,
         attack_magical: tuple[bool | None, ...] = (),
+        from_spell: tuple[bool, ...] = (),
         ignores_resistance_immunity: bool = False,
     ) -> DamageApplicationPreview:
         """Preview mixed typed damage without mutating health state."""
@@ -702,6 +721,7 @@ class Health(BaseBlock):
         return self._preview_damage_components(
             components,
             attack_magical=attack_magical,
+            from_spell=from_spell,
             ignores_resistance_immunity=ignores_resistance_immunity,
             declared_damage=(incoming_damage if declared_damage is None else declared_damage),
             normal_hit_point_damage_cap=normal_hit_point_damage_cap,

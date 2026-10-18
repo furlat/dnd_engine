@@ -23,7 +23,7 @@ from dnd.core.base_actions import (
     spell_slot_cost_type,
     TargetEffectDisposition,
 )
-from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec
+from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, ShieldAttackSpec
 from dnd.core.values import (
     ModifiableValue,
     ValueRead,
@@ -128,7 +128,7 @@ from dnd.blocks.action_economy import (
 )
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.sensory import spatial_senses_system
-from dnd.conditions import ExtraAttacksGranted, Dashing, Dodging, Disengaging, Prone, Hidden, Concentrating
+from dnd.conditions import AttackAssistance, ExtraAttacksGranted, Dashing, Dodging, Disengaging, Prone, Hidden, Concentrating
 from dnd.core.base_object import empty_list
 
 
@@ -218,6 +218,7 @@ def build_weapon_attack_outcome_profile(
     weapon_slot: WeaponSlot,
     override_ability: Optional[AbilityName] = None,
     natural_weapon: Optional[NaturalWeaponSpec] = None,
+    shield_attack: Optional[ShieldAttackSpec] = None,
 ) -> Optional[ActionOutcomeProfile]:
     """Build one actor-baseline weapon profile for all attack wrappers.
 
@@ -232,12 +233,12 @@ def build_weapon_attack_outcome_profile(
     baseline = actor.weapon_attack_outcome_baseline(
         weapon_slot,
         override_ability,
-        natural_weapon=natural_weapon,
+        natural_weapon=natural_weapon, shield_attack=shield_attack,
     )
     damage_rolls = actor.weapon_damage_outcome_baseline(
         weapon_slot,
         override_ability,
-        natural_weapon=natural_weapon,
+        natural_weapon=natural_weapon, shield_attack=shield_attack,
     )
     if not damage_rolls:
         return None
@@ -1673,6 +1674,7 @@ class AttackEvent(ActionEvent):
     target_base_height_steps: Optional[int] = None
     attack_source_kind: Literal["equipped", "unarmed", "natural"] = "equipped"
     natural_weapon: Optional[NaturalWeaponSpec] = None
+    shield_attack: Optional[ShieldAttackSpec] = None
     additional_damages: List[Damage] = Field(default_factory=list)
     costs: List[BaseCost] = Field(default_factory=list, description="Costs attached to this attack event.")
     weapon_slot: WeaponSlot = Field(description="Weapon slot used for the attack.")
@@ -1960,14 +1962,20 @@ def weapon_slot_is_eligible(source: Entity, weapon_slot: WeaponSlot, target_uuid
     return weapon is None or weapon_slot in source.equipment.compatible_slots_for_actor(weapon)
 
 
-def weapon_attack_range(source: Entity, weapon_slot: WeaponSlot, natural: Optional[NaturalWeaponSpec]) -> Range:
-    """The range one weapon attack is measured against: the natural weapon's, else the slot's weapon or unarmed reach."""
+def weapon_attack_range(
+    source: Entity, weapon_slot: WeaponSlot, natural: Optional[NaturalWeaponSpec],
+    shield_attack: Optional[ShieldAttackSpec] = None,
+) -> Range:
+    """The range one weapon attack is measured against: the shield attack's or the natural weapon's, else the
+    slot's weapon or unarmed reach."""
+    if shield_attack is not None:
+        return shield_attack.range
     return natural.range if natural is not None else source.get_weapon_range(weapon_slot)
 
 
 def weapon_reach(
     source: Entity, weapon_slot: WeaponSlot, natural: Optional[NaturalWeaponSpec],
-    target_uuid: Optional[UUID], name: str,
+    target_uuid: Optional[UUID], name: str, shield_attack: Optional[ShieldAttackSpec] = None,
 ) -> Tuple[Optional[str], Optional[Range], Optional[Tuple[int, int]], bool, Optional[ObjectContact]]:
     """One weapon's reach to one target: (error, weapon range, attacked position, long range, object contact).
 
@@ -1979,7 +1987,7 @@ def weapon_reach(
     """
     creature = Entity.get(target_uuid) if target_uuid is not None else None
     target = BaseBlock.get(target_uuid) if target_uuid is not None else None
-    weapon_range = weapon_attack_range(source, weapon_slot, natural)
+    weapon_range = weapon_attack_range(source, weapon_slot, natural, shield_attack)
     if weapon_range is None:
         return f"Weapon range not found for {name}", None, None, False, None
     contact: Optional[ObjectContact] = None
@@ -1989,7 +1997,8 @@ def weapon_reach(
         if not target.is_active or not target.is_targetable:
             return "Object cannot be attacked", weapon_range, None, False, None
         access = ((PhysicalAccess.PROJECTILE if weapon_range.type is RangeType.RANGE else PhysicalAccess.NATURAL)
-                  if natural is not None else source.get_weapon_physical_access(weapon_slot))
+                  if natural is not None else PhysicalAccess.WEAPON if shield_attack is not None
+                  else source.get_weapon_physical_access(weapon_slot))
         range_feet, origin = weapon_range.long or weapon_range.normal, source.position
         contact = ObjectContact(source.uuid, target.uuid, range_feet, access, True, origin, get_map().attack_object_contact(
             source.uuid, target.uuid, range_feet=range_feet, access=access, subjective=True, origin=origin))
@@ -2012,13 +2021,15 @@ def weapon_reach(
 
 def weapon_attack_admission(
     scan: ActorScan, source: Entity, weapon_slot: WeaponSlot, natural: Optional[NaturalWeaponSpec],
-    target_uuid: Optional[UUID], name: str,
+    target_uuid: Optional[UUID], name: str, shield_attack: Optional[ShieldAttackSpec] = None,
 ) -> Tuple[Optional[str], Optional[ObjectContact]]:
-    """Hand permission, range or reach, and sight of a creature target for one weapon attack,
+    """Shield or hand permission, range or reach, and sight of a creature target for one weapon attack,
     with the object contact `weapon_reach` traced."""
-    if natural is None and not weapon_slot_is_eligible(source, weapon_slot, target_uuid):
+    if shield_attack is not None and not source.equipment.shield_attack_is_eligible(shield_attack):
+        return "Declared shield is no longer equipped", None
+    if natural is None and shield_attack is None and not weapon_slot_is_eligible(source, weapon_slot, target_uuid):
         return "Declared weapon or hand permission is unavailable", None
-    error, _, _, _, contact = weapon_reach(source, weapon_slot, natural, target_uuid, name)
+    error, _, _, _, contact = weapon_reach(source, weapon_slot, natural, target_uuid, name, shield_attack)
     if error is not None or target_uuid is None or Entity.get(target_uuid) is None:
         return error, contact
     record = scan.creatures.get(target_uuid)
@@ -2098,10 +2109,17 @@ class Attack(BaseAction):
     def get_natural_weapon(self) -> Optional[NaturalWeaponSpec]:
         return None
 
+    def get_shield_attack(self) -> Optional[ShieldAttackSpec]:
+        return None
+
     def get_attack_source_metadata(self) -> Optional[AttackSourceMetadata]:
         source = Entity.get(self.source_entity_uuid)
         if source is None:
             return None
+        shield = self.get_shield_attack()
+        if shield is not None:
+            return AttackSourceMetadata(kind="equipped", weapon_slot=self.weapon_slot,
+                name=shield.name, damage_types=(shield.damage_type,), item_uuid=shield.item_uuid)
         natural = self.get_natural_weapon()
         if natural is not None:
             return AttackSourceMetadata(kind="natural", weapon_slot=self.weapon_slot,
@@ -2118,10 +2136,12 @@ class Attack(BaseAction):
         source = Entity.get(self.source_entity_uuid)
         if source is None:
             return None
-        weapon_range = weapon_attack_range(source, self.weapon_slot, self.get_natural_weapon())
+        weapon_range = weapon_attack_range(source, self.weapon_slot, self.get_natural_weapon(), self.get_shield_attack())
         return max(weapon_range.normal, weapon_range.long or 0)
 
     def get_physical_access(self) -> Optional[PhysicalAccess]:
+        if self.get_shield_attack() is not None:
+            return PhysicalAccess.WEAPON
         source = Entity.get(self.source_entity_uuid)
         return source.get_weapon_physical_access(self.weapon_slot) if source is not None else None
 
@@ -2154,7 +2174,7 @@ class Attack(BaseAction):
             actor,
             self.weapon_slot,
             self.override_ability,
-            natural_weapon=self.get_natural_weapon(),
+            natural_weapon=self.get_natural_weapon(), shield_attack=self.get_shield_attack(),
         )
         if profile is None:
             return profile
@@ -2201,6 +2221,10 @@ class Attack(BaseAction):
     @staticmethod
     def equipped_source_is_eligible(event: AttackEvent, source: Entity) -> bool:
         """Recheck the declared physical weapon and actor-owned hand permission."""
+        if event.shield_attack is not None:
+            return (event.weapon_slot is WeaponSlot.MELEE_OFF
+                and event.source_item_uuid == event.shield_attack.item_uuid
+                and source.equipment.shield_attack_is_eligible(event.shield_attack))
         if event.natural_weapon is not None:
             return True
         weapon = source.equipment.get_weapon(event.weapon_slot)
@@ -2269,7 +2293,7 @@ class Attack(BaseAction):
             weapon = None if execution_event.natural_weapon else source_entity.equipment.get_weapon(weapon_slot)
             attack_value, attack_value_context = source_entity.weapon_attack_value(
                 ValueRead(source_entity_uuid, target_entity_uuid), weapon_slot,
-                override_ability=override_ability, natural_weapon=execution_event.natural_weapon)
+                override_ability=override_ability, natural_weapon=execution_event.natural_weapon, shield_attack=execution_event.shield_attack)
             ac_value = (target_entity.armor_class_value(ValueRead(target_entity_uuid, source_entity_uuid))
                         if isinstance(target_entity, Entity)
                         else parts(ModifiableValue(source_entity_uuid=target_entity.uuid,
@@ -2318,6 +2342,8 @@ class Attack(BaseAction):
             )
             record_action_timing("attack.phase_to_roll_ms", started)
 
+            if attack_event.shield_attack is not None and not Attack.equipped_source_is_eligible(attack_event, source_entity):
+                return attack_event.cancel(status_message="Declared shield is no longer equipped")
             if not attack_event.canceled and not Attack._contact_remains_reachable(
                 attack_event, source_entity, target_entity,
                 physical_access or source_entity.get_weapon_physical_access(weapon_slot),
@@ -2362,6 +2388,8 @@ class Attack(BaseAction):
                                 else f"Attack rolled {dice_roll.total} and {attack_outcome}")
             )
             record_action_timing("attack.post_attack_roll_ms", started)
+            if attack_event.shield_attack is not None and not Attack.equipped_source_is_eligible(attack_event, source_entity):
+                return attack_event.cancel(status_message="Declared shield is no longer equipped")
             if not attack_event.canceled and not Attack._contact_remains_reachable(
                 attack_event, source_entity, target_entity,
                 physical_access or source_entity.get_weapon_physical_access(weapon_slot),
@@ -2391,7 +2419,7 @@ class Attack(BaseAction):
                 if attack_event.canceled:
                     return attack_event
             started = time.perf_counter()
-            damages = source_entity.get_damages(weapon_slot, target_entity_uuid, override_ability=override_ability, natural_weapon=execution_event.natural_weapon)
+            damages = source_entity.get_damages(weapon_slot, target_entity_uuid, override_ability=override_ability, natural_weapon=execution_event.natural_weapon, shield_attack=execution_event.shield_attack)
             magical_attack = execution_event.attack_is_magical
             for damage in damages: damage.attack_magical = magical_attack
             damages.extend(attack_event.additional_damages)
@@ -2436,9 +2464,10 @@ class Attack(BaseAction):
                     target_entity_name=target_entity.name,
                     weapon_slot=None if weapon is not None and weapon.spell_attack_profile is not None else weapon_slot,
                     attack_kind=("spell" if weapon is not None and weapon.spell_attack_profile is not None else "natural" if execution_event.natural_weapon else
-                        "unarmed" if weapon is None or weapon.is_body_attack else "weapon"),
-                    source_item_uuid=weapon.uuid if weapon is not None else None,
+                        "weapon" if execution_event.shield_attack is not None else "unarmed" if weapon is None or weapon.is_body_attack else "weapon"),
+                    source_item_uuid=execution_event.shield_attack.item_uuid if execution_event.shield_attack is not None else weapon.uuid if weapon is not None else None,
                     attack_outcome=attack_event.attack_outcome,
+                    attack_advantage=dice_roll.advantage_status,
                     damage_packets=damage_packets,
                     parent_event=attack_event.uuid,
                     phase=EventPhase.DECLARATION
@@ -2547,6 +2576,15 @@ class Attack(BaseAction):
             override_ability=self.override_ability,
             append_weapon_to_name=self.append_weapon_to_name,
         )
+        shield = self.get_shield_attack()
+        if shield is not None:
+            source = Entity.get(self.source_entity_uuid)
+            item = source.equipment.get_equipped_shield() if source is not None else None
+            event = event.model_copy(update={"shield_attack": shield, "range": shield.range,
+                "weapon_name": shield.name, "attack_source_kind": "equipped",
+                "source_item_uuid": shield.item_uuid,
+                "source_item_presentation": item.to_item_presentation_state() if item is not None else None,
+                "damage_types": [shield.damage_type], "attack_is_magical": False})
         natural = self.get_natural_weapon()
         if natural is not None:
             event = event.model_copy(update={"natural_weapon": natural, "range": natural.range,
@@ -2559,7 +2597,7 @@ class Attack(BaseAction):
         source = Entity.get(self.source_entity_uuid)
         if source is not None:
             _, weapon_range, target_position, is_long_range, _ = weapon_reach(source, self.weapon_slot, natural,
-                event.target_entity_uuid, self.declaration_name or self.name)
+                event.target_entity_uuid, self.declaration_name or self.name, shield)
             update.update(target_position=target_position, range=weapon_range, is_long_range=is_long_range,
                 is_threatened=weapon_range is not None and weapon_range.type == RangeType.RANGE and source.is_threatened())
         return event.model_copy(update=update)
@@ -2576,7 +2614,8 @@ class Attack(BaseAction):
         if source is None:
             return "Declared weapon or hand permission is unavailable", None
         return weapon_attack_admission(scan, source, self.weapon_slot, self.get_natural_weapon(),
-            selection.target_uuids[0] if selection.target_uuids else None, self.declaration_name or self.name)
+            selection.target_uuids[0] if selection.target_uuids else None, self.declaration_name or self.name,
+            self.get_shield_attack())
 
     def _apply(self, execution_event: AttackEvent) -> Optional[AttackEvent]:
         """Apply the attack action."""
@@ -3003,6 +3042,73 @@ class AllyHelp(ShakeAwake):
         if caster.senses.get_feet_distance(target.position)>7 or not self._wakeable_condition_uuids(target):
             return "No eligible effect within Help reach"
         return None
+
+
+@_core_action_identity(
+    content_id="action.help_attack",
+    display_name="Help Attack",
+    description="Distract an adjacent enemy to aid one selected ally's next attack.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Help",
+    sort_order=86,
+)
+class HelpAttack(BaseAction):
+    """Select the adjacent enemy, then the allied attacker to assist."""
+
+    creates = (AttackAssistance,)
+    name: str = "Help Attack"
+    description: str = "Help an ally's next attack against an enemy within 5 feet."
+    target_type: TargetType = TargetType.MULTI_ENTITY
+    action_category: ActionCategory = ActionCategory.ABILITY
+    valid_target_filter: str = "all"
+    allow_same_target: bool = False
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Help Attack Cost", cost_type="actions", cost=1,
+            evaluator=entity_action_economy_cost_evaluator)])
+
+    def get_multi_target_count(self) -> int:
+        return 2
+
+    def get_all_targets(self) -> List[UUID]:
+        # The enemy owns the one effect; the second selection identifies who
+        # may use it and must not create an empty ally application.
+        return [self.target_entity_uuid] if self.target_entity_uuid is not None else []
+
+    def _declared_target_entity_uuids(self) -> List[UUID]:
+        return list(self.current_selection().target_uuids)
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        if not selection.target_uuids or len(selection.target_uuids) > 2:
+            return "Select an adjacent enemy and an allied attacker"
+        helper = Entity.get(self.source_entity_uuid)
+        enemy = Entity.get(selection.target_uuids[0])
+        if helper is None or enemy is None or not helper.is_enemy(enemy):
+            return "Help Attack requires an enemy"
+        if helper.senses.get_feet_distance(enemy.position) > 5:
+            return "Help Attack enemy is not adjacent"
+        if len(selection.target_uuids) == 1:
+            return None if scan.subjective and self.template else "Select an allied attacker"
+        ally = Entity.get(selection.target_uuids[1])
+        if ally is None or ally.uuid == helper.uuid or not helper.is_ally(ally):
+            return "Help Attack requires another allied attacker"
+        return None
+
+    def _apply(self, event: ActionEvent) -> ActionEvent:
+        helper = Entity.get(self.source_entity_uuid)
+        enemy = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+        if helper is None or enemy is None or len(self.extra_target_entity_uuids) != 1:
+            return event.cancel(status_message="Help Attack selection is no longer available")
+        ally = Entity.get(self.extra_target_entity_uuids[0])
+        if (not helper.is_enemy(enemy) or helper.senses.get_feet_distance(enemy.position) > 5
+                or ally is None or ally.uuid == helper.uuid or not helper.is_ally(ally)):
+            return event.cancel(status_message="Help Attack pair is no longer eligible")
+        result = enemy.add_condition(AttackAssistance(source_entity_uuid=helper.uuid,
+            target_entity_uuid=enemy.uuid, assisted_ally_uuid=self.extra_target_entity_uuids[0]), parent_event=event)
+        if result is None or result.canceled:
+            return event.cancel(status_message="Attack assistance was refused")
+        return event.phase_to(EventPhase.EFFECT, status_message=f"Distracted {enemy.name} for an ally")
+
+    def _apply_costs(self, event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(event, self.source_entity_uuid)
 
 
 @_core_action_identity(
@@ -5703,6 +5809,7 @@ _CORE_STANDARD_ACTION_TYPES = (
         DropConcentration,
         ShakeAwake,
         AllyHelp,
+        HelpAttack,
         Hide,
         Jump,
         Shove,
