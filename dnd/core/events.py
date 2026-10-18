@@ -2971,13 +2971,12 @@ class EventQueue:
 
         Returns:
             True if no other events with the same lineage_uuid exist at this phase
-            (considering only events registered before this one).
+            (only versions stored before it; the lineage index is in store order).
         """
-        history = cls._events_by_lineage.get(event.lineage_uuid, [])
-        for e in history:
+        for e in cls._events_by_lineage.get(event.lineage_uuid, []):
             if e.uuid == event.uuid:
-                continue
-            if e.phase == event.phase and e.timestamp < event.timestamp:
+                return True
+            if e.phase == event.phase:
                 return False
         return True
 
