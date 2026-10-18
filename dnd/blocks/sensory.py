@@ -1311,15 +1311,14 @@ class SpatialSensesSystem:
         refresh, registered at once. Returns the settled events (registered by the caller as one
         completion sequence)."""
         diagnostic = action_timing_enabled()
-        started = time.perf_counter() if diagnostic else 0.0
-        afters = [published_senses(self.senses_by_observer[identity]) for identity in observers]
-        initials = [identity not in self.published_observers for identity in observers]
-        changes = [_cell_change(settled[identity][0], after, initial)
-                   for identity, after, initial in zip(observers, afters, initials)]
-        if diagnostic:
-            record_action_timing("sensory.settlement.cell_changes_ms", started)
         sensory_events: List[SensoryUpdateEvent] = []
-        for observer_uuid, after, initial, change in zip(observers, afters, initials, changes):
+        for observer_uuid in observers:
+            started = time.perf_counter() if diagnostic else 0.0
+            after = published_senses(self.senses_by_observer[observer_uuid])
+            initial = observer_uuid not in self.published_observers
+            change = _cell_change(settled[observer_uuid][0], after, initial)
+            if diagnostic:
+                record_action_timing("sensory.settlement.cell_changes_ms", started)
             if not events[observer_uuid]:
                 self._emit_refresh(observer_uuid, settled[observer_uuid][0], after, initial, change)
                 continue
