@@ -597,3 +597,20 @@ Hard rules:
   - Magic Missile settlement 30 → 3 observers, native 22 → 17 ms. Other rows are within noise.
   - Dead code noted: `GridMap.publish_tile_state_changed` (the cleanup lane deletes it).
 - 2026-10-18: **Test memory re-measured:** the former 15–20 GB spell tests peak at 0.23 GB, and a 25-file sweep chunk at 0.29 GB. Parallel test lanes are fine; the caps stay as a safety net.
+- 2026-10-18: **Correction to the PT-navigation entry ("`AreaCondition.crossing_channels` defaults to None"):** stale.
+  - `AreaCondition` declares `frozenset()` (area_conditions.py:1061), and so do the trap and mechanism families. Only the base `SpatialCondition` keeps `None`, restored in b98543e50 because the contract test `test_undeclared_custom_rule_still_blocks_outside_registered_footprint` requires undeclared rules to stay global.
+  - Crossing oracle (enp-crossing lane):
+    - 66 zone classes;
+    - gallery, 9 cases: 46,272 crossing queries, 0 with a global owner;
+    - tests: 1,575,580 queries, global owners only the contract test's remote rule and bare test conditions;
+    - 0 unconsulted zones that would block.
+  - Decision (integrator): no change; the gain is zero.
+  - Open: whatever made navigation take Python per-step checks in Gust is something else (to look at in the native study).
+- 2026-10-18: **E1 merged into codex/event-native-deltas (78ecee85c … ae39ca050).**
+  - **Startup:** capture admits LIGHT_CHANGED and TILES_CHANGED, so seats no longer start with stale light (lantern crypt: 49 first-seen tiles were DARKNESS against BRIGHT) or without startup residues. This is player-visible.
+  - **Connectors:** the projector reads the recorded connectors instead of the init event's, so changes after init reach seats at the projection boundary. **Open:** on the live path a connector edit still raises "Unprojected committed state" (application.py ~77; `TraversalConnectorChangeEvent` is an unsupported header). Nothing edits connectors outside tests today. Assigned to E3-world.
+  - **Strict xfails** (hand-built facts, latent on head) for the temp-HP/INTERNAL fold disagreement and the destroyed-item ghost layer. Kept as the "client fold == engine fold" contract; they turn green with E3-bodies.
+  - **Transcript differences**, all classified: a constant occurrence shift (amber +28, blue +44, from the larger initialization), removed light corrections, true first-sight light, and no residue re-sends.
+  - **O3 baselines** must be recorded on this head.
+  - Not admitted at startup (out of scope): TILE_CHANGED / TILE_REMOVED.
+- 2026-10-18: **FOV-rows merge re-gated by the integrator:** recorder 0 differences on 6 cases; transcripts byte-identical; sweep = r21.
