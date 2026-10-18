@@ -673,3 +673,10 @@ Hard rules:
   - Memory grows ~100 MB per round.
   - In the long game, ~50 % of an AI advance is the action menu: ~1,200 attack admissions per decision, with `attack_object_contact` 14 s profiled per 90 decisions.
   - New lanes: codex/long-game-case (a real game with a per-round curve) and codex/ai-step (an exact reach prefilter in discovery).
+- 2026-10-18: **Native-exact merged into codex/event-native-deltas (ba7861260).**
+  - Eleven byte-identical native fixes; the item list and dispositions are in scratchpad `native/ITEMS.md`. Item 11 is skipped because the light-row inputs have writers that can't all bump a revision.
+  - Kept state lives only in owning systems: the registry's attachment index, `SpatialSensesSystem.identity_epoch` and `_id_texts`, the encounter's `_IDENTITY_CARRY`, and `EventQueue._contained_grants`.
+  - Native ms, loaded machine: Wall of Stone 91 → 86, Fireball 88 → 79, Circle of Death 82 → 72, SG move 91 → 85.
+  - Projected after E3, quiet machine: Wall of Stone ≈98 and Fireball ≈103. What remains:
+    - Wall of Stone: the formation settlement (PV1), the zone install with its relight (P7), and the escape Move.
+    - Fireball: per-target rules (PR, PD1c), the settlement (PV1), and per-version event machinery (P6, P7b).
