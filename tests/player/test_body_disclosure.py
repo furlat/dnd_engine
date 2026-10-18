@@ -7,6 +7,7 @@ see sends no fact at all.
 """
 
 from dataclasses import replace
+import random
 from uuid import uuid4, uuid5
 
 import pytest
@@ -22,15 +23,28 @@ from dnd.player.bodies import change_fact, change_rows, change_views
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import ActorChangeFact, PlayerUpdate
 from dnd.player.reduction import reduce_initialization, reduce_operation
-from dnd.player.session import Session, publish_sheets
+from dnd.player.session import Session, close_session, create_session, publish_sheets
 from dnd.player.static_sent import StaticSent
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import Darkness
 from dnd.spells.evocation import Fireball
 from dnd.types.actor_facts import ActorFactChange, ActorState, ChangeField, ConditionRow
 from tests.player.test_body_fold_agreement import (charges, condition_fact, lit, new_item_worn, released, rounds,
     stats_of, ward, ward_ticks)
-from tests.player.test_emitted_update_replica import (INITIALIZATION, Step, cast, enemies, operation_since,
-    session)  # noqa: F401  (the session fixture)
+from tests.player.test_emitted_update_replica import INITIALIZATION, Step, cast, enemies, operation_since
+
+
+@pytest.fixture
+def session():
+    state = random.getstate()
+    random.seed(0)
+    value = create_session()
+    try:
+        yield value
+    finally:
+        close_session(value)
+        reset_engine_runtime()
+        random.setstate(state)
 
 
 def watched(session: Session):

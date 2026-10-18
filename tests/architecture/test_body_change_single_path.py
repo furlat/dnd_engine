@@ -82,7 +82,7 @@ def test_an_item_state_row_compares_every_item_state_field():
     """`ItemStateRow` changes are written field by field: the comparison names each `ItemState` field once."""
     function = next(node for node in ast.walk(_modules()["dnd/player/bodies.py"])
                     if isinstance(node, ast.FunctionDef) and node.name == "_state_changes")
-    written = [node.slice.value for node in ast.walk(function) if isinstance(node, ast.Subscript)
+    written: list[str] = [node.slice.value for node in ast.walk(function) if isinstance(node, ast.Subscript)
                and isinstance(node.value, ast.Name) and node.value.id == "changes"
-               and isinstance(node.slice, ast.Constant)]
+               and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str)]
     assert sorted(written) == sorted(row.name for row in fields(ItemState))

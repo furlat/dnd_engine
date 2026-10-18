@@ -6,7 +6,10 @@ when one of them regains it, without its birth, and replaces what the client rem
 body the seat no longer perceives reaches the seat not at all (leaving view sends nothing).
 """
 
+import random
 from uuid import uuid5
+
+import pytest
 
 from dnd.conditions import Invisible, Prone
 from dnd.core.dice import fixed_dice_faces
@@ -15,11 +18,25 @@ from dnd.player.application import capture_application_operation, initialize_aud
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import ActorChangeFact, BodyRecord, PlayerState, PlayerUpdate
 from dnd.player.reduction import reduce_initialization, reduce_operation
-from dnd.player.session import Session, publish_sheets
+from dnd.player.session import Session, close_session, create_session, publish_sheets
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import Darkness
 from dnd.spells.enchantment import HoldPerson
 from tests.player.test_emitted_update_replica import (INITIALIZATION, Step, cast, darkness_ends, enemies, entity,
-    move, operation_since, session)  # noqa: F401  (the session fixture)
+    move, operation_since)
+
+
+@pytest.fixture
+def session():
+    state = random.getstate()
+    random.seed(0)
+    value = create_session()
+    try:
+        yield value
+    finally:
+        close_session(value)
+        reset_engine_runtime()
+        random.setstate(state)
 
 
 def play(session: Session, steps: tuple[Step, ...]) -> tuple[tuple[BodyRecord, ...], dict[str, PlayerUpdate],
