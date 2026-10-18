@@ -29,7 +29,7 @@ export type Kind = "health";
 export type Status = "ok";
 export type Kind1 = "bootstrap";
 export type ProtocolVersion = 1;
-export type PlayerSchemaVersion = 13;
+export type PlayerSchemaVersion = 14;
 export type SchemaDigest = string;
 export type GameId = string;
 export type GameEpoch = string;
@@ -1200,33 +1200,16 @@ export type Height1 = number;
 export type Bits = string;
 export type Values = string;
 export type CauseOccurrence = number | null;
-/**
- * Observed grid position.
- *
- * @minItems 2
- * @maxItems 2
- */
-export type Position5 = [number, number];
-/**
- * Whether a visual route establishes this contact.
- */
-export type Visual = boolean;
-/**
- * Special sense categories supported by the perception pipeline.
- */
-export type SensesType = "Blindsight" | "Darkvision" | "Tremorsense" | "Truesight" | "Devils Sight" | "See Invisible";
-/**
- * Special senses which independently establish this contact.
- */
-export type SpecialSenses = SensesType[];
-export type EntityContactsRemoved = string[];
-export type ObjectContactsRemoved = string[];
+export type EntityContactsChanged = number[];
+export type EntityContactsRemoved = number[];
+export type ObjectContactsChanged = number[];
+export type ObjectContactsRemoved = number[];
 export type SenseModesChanged = boolean;
 export type SenseModes = SenseMode[] | null;
 /**
- * Special sense categories supported by the perception pipeline.
+ * Special sense category.
  */
-export type SensesType1 = "Blindsight" | "Darkvision" | "Tremorsense" | "Truesight" | "Devils Sight" | "See Invisible";
+export type SensesType = "Blindsight" | "Darkvision" | "Tremorsense" | "Truesight" | "Devils Sight" | "See Invisible";
 /**
  * Range in feet; zero means unlimited.
  */
@@ -1236,61 +1219,12 @@ export type PassivePerception = number | null;
 export type VisualAccessChanged = boolean;
 export type VisualAccess = number | null;
 export type PathsDirty = boolean;
-export type Positions2 = [number, number][];
-export type OwnerRevision = number | null;
-export type ApparentPresence = boolean;
-export type Pressed = boolean | null;
-export type Direction4 = [number, number] | null;
-export type AnchorItemUuid = string | null;
-export type AnchorEntityUuid = string | null;
-export type PresenceMode = ("awe" | "fear") | null;
-export type SustainerItemUuid = string | null;
-export type ConcentrationSlotUuid = string | null;
-export type AnchorPosition = [number, number] | null;
-export type AnchorElevationSteps1 = number | null;
-export type AreaGeometry2 =
-  | (
-      | SpherePresentationGeometry
-      | ConePresentationGeometry
-      | LinePresentationGeometry
-      | CubePresentationGeometry
-      | CylinderPresentationGeometry
-      | WallPresentationGeometry
-      | WallAssemblyPresentationGeometry
-    )
-  | null;
-export type ConstructionSections = WallAssemblyPresentationGeometry[];
-export type AreaPropagation1 = ("line_of_effect" | "connected" | "ignore_barriers") | null;
-export type VisibleVolumePositions = [number, number][];
-/**
- * @minItems 2
- * @maxItems 2
- */
-export type Position6 = [number, number];
-/**
- * @minItems 1
- */
-export type LowerHeightPlanes = [[number, number, number], ...[number, number, number][]];
-export type UpperVolumeSurfaces = VolumeSurfaceSight[];
-export type Suppressions1 = SpellSuppression[];
+export type SpatialEffectSightings = number[];
 export type Name9 = string;
 export type Description8 = string;
-export type SpatialEffectsRemoved = string[];
-export type SourceUuid = string;
-export type Revision1 = number;
-/**
- * @minItems 2
- * @maxItems 2
- */
-export type Position7 = [number, number];
-export type BaseHeightSteps5 = number;
-export type VeryBrightRadiusFeet2 = number;
-export type BrightRadiusFeet2 = number;
-export type DimRadiusFeet2 = number;
-export type Appearance = "torch" | "neutral";
-export type ActorAnchored = boolean;
-export type AnchorEntityUuid1 = string | null;
-export type AnchorItemUuid1 = string | null;
+export type SpatialEffectsRemoved = number[];
+export type LightSourcesChanged = number[];
+export type LightSourcesRemoved = number[];
 export type Kind28 = "item_charge";
 export type SourceEntityUuid11 = string;
 export type ItemUuid4 = string;
@@ -1303,9 +1237,9 @@ export type ItemDestroyed = boolean;
 export type ItemResourceChange = "consume" | "recharge";
 export type Kind29 = "spatial_effect_state";
 export type SpatialEffectUuid1 = string;
-export type Positions3 = [number, number][];
+export type Positions2 = [number, number][];
 export type PreviousPressed = boolean | null;
-export type Pressed1 = boolean | null;
+export type Pressed = boolean | null;
 /**
  * Observable lifecycle operations for a spatial condition.
  */
@@ -1330,19 +1264,19 @@ export type TileUuid1 = string;
  * @minItems 2
  * @maxItems 2
  */
-export type Position8 = [number, number];
+export type Position5 = [number, number];
 /**
  * Whether a world object is placed at a Tile center or boundary.
  */
 export type WorldPlacementKind = "center" | "boundary";
 export type OccupiesBands = boolean;
-export type BaseHeightSteps6 = number;
+export type BaseHeightSteps5 = number;
 export type TopHeightSteps = number;
 /**
  * @minItems 2
  * @maxItems 2
  */
-export type Position9 = [number, number];
+export type Position6 = [number, number];
 export type TileUuid2 = string;
 export type CoveredSupports = WorldObjectSupport[];
 export type RemovedBands = [number, number, number][];
@@ -1360,9 +1294,9 @@ export type VisualVariantId2 = string | null;
 export type MapChar2 = string;
 export type IsOpen2 = boolean | null;
 export type IsLit3 = boolean | null;
-export type VeryBrightRadiusFeet3 = number | null;
-export type BrightRadiusFeet3 = number | null;
-export type DimRadiusFeet3 = number | null;
+export type VeryBrightRadiusFeet2 = number | null;
+export type BrightRadiusFeet2 = number | null;
+export type DimRadiusFeet2 = number | null;
 export type StackCount2 = number;
 export type IsPickable2 = boolean;
 export type ItemEffects3 = ItemEffectPresentationState[];
@@ -1403,7 +1337,7 @@ export type OriginPosition = [number, number] | null;
  * @minItems 2
  * @maxItems 2
  */
-export type Direction5 = [number, number];
+export type Direction4 = [number, number];
 export type AffectedPositions = [number, number][];
 export type EndPosition3 = [number, number] | null;
 export type Committed2 = boolean;
@@ -1447,7 +1381,7 @@ export type CombatLogEntryType =
   | "roll_modification"
   | "spatial_effect";
 export type SourceName = string;
-export type SourceUuid1 = string;
+export type SourceUuid = string;
 export type TargetName = string | null;
 export type TargetUuid = string | null;
 export type Compact = string;
@@ -2027,7 +1961,7 @@ export type HazardName = string;
 /**
  * Admitted hazard position, or unknown.
  */
-export type Position10 = [number, number] | null;
+export type Position7 = [number, number] | null;
 /**
  * Passive Perception score that detected the hazard.
  */
@@ -2275,7 +2209,7 @@ export type Cause = string;
  * @minItems 2
  * @maxItems 2
  */
-export type Direction6 = [number, number];
+export type Direction5 = [number, number];
 export type IntendedDistance = number;
 export type ActualDistance1 = number;
 export type Blocked1 = boolean;
@@ -2341,6 +2275,25 @@ export type VersionRows = VersionRow[];
 export type EndCursor = number;
 export type Occurrence1 = number;
 export type ActorUuid = string;
+/**
+ * Observed grid position.
+ *
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position8 = [number, number];
+/**
+ * Whether a visual route establishes this contact.
+ */
+export type Visual = boolean;
+/**
+ * Special sense categories supported by the perception pipeline.
+ */
+export type SensesType1 = "Blindsight" | "Darkvision" | "Tremorsense" | "Truesight" | "Devils Sight" | "See Invisible";
+/**
+ * Special senses which independently establish this contact.
+ */
+export type SpecialSenses = SensesType1[];
 export type Items1 = ItemPatch[];
 export type Observations = PlayerObservation[];
 export type Occurrence2 = number;
@@ -2379,7 +2332,7 @@ export type Connectors = WorldConnectorState[];
  * @minItems 2
  * @maxItems 2
  */
-export type Position11 = [number, number];
+export type Position9 = [number, number];
 export type Name12 = string;
 export type BlocksOptics3 = boolean;
 export type BlocksPropagation4 = boolean;
@@ -2394,7 +2347,7 @@ export type TileChanges = TileFieldUpdate[];
 export type WorldUpdates = WorldUpdate[];
 export type Generation1 = string;
 export type ObserverUuid4 = string;
-export type Revision2 = number;
+export type Revision1 = number;
 export type Initiative = string[] | null;
 export type SheetOrder = string[] | null;
 export type ActorUuid1 = string;
@@ -2491,6 +2444,66 @@ export type SourceId1 = string;
 export type SpellIds = string[];
 export type PreparedSpellSelections = PreparedSpellSelection[];
 export type Sheets = SheetPatch[];
+export type Uuids = string[];
+export type ContactUuidIndex = number[];
+export type Contacts = PerceivedContact[];
+export type SightingUuidIndex = number[];
+export type Positions3 = [number, number][];
+export type OwnerRevision = number | null;
+export type ApparentPresence = boolean;
+export type Pressed1 = boolean | null;
+export type Direction6 = [number, number] | null;
+export type AnchorItemUuid = string | null;
+export type AnchorEntityUuid = string | null;
+export type PresenceMode = ("awe" | "fear") | null;
+export type SustainerItemUuid = string | null;
+export type ConcentrationSlotUuid = string | null;
+export type AnchorPosition = [number, number] | null;
+export type AnchorElevationSteps1 = number | null;
+export type AreaGeometry2 =
+  | (
+      | SpherePresentationGeometry
+      | ConePresentationGeometry
+      | LinePresentationGeometry
+      | CubePresentationGeometry
+      | CylinderPresentationGeometry
+      | WallPresentationGeometry
+      | WallAssemblyPresentationGeometry
+    )
+  | null;
+export type ConstructionSections = WallAssemblyPresentationGeometry[];
+export type AreaPropagation1 = ("line_of_effect" | "connected" | "ignore_barriers") | null;
+export type VisibleVolumePositions = [number, number][];
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position10 = [number, number];
+/**
+ * @minItems 1
+ */
+export type LowerHeightPlanes = [[number, number, number], ...[number, number, number][]];
+export type UpperVolumeSurfaces = VolumeSurfaceSight[];
+export type Suppressions1 = SpellSuppression[];
+export type Sightings = SpatialEffectSighting[];
+export type SourceUuid1 = string;
+export type Revision2 = number;
+/**
+ * @minItems 2
+ * @maxItems 2
+ */
+export type Position11 = [number, number];
+export type BaseHeightSteps6 = number;
+export type VeryBrightRadiusFeet3 = number;
+export type BrightRadiusFeet3 = number;
+export type DimRadiusFeet3 = number;
+export type Appearance = "torch" | "neutral";
+export type ActorAnchored = boolean;
+export type AnchorEntityUuid1 = string | null;
+export type AnchorItemUuid1 = string | null;
+export type LightSources = PerceivedLightSource[];
+export type LightRemovalUuidIndex = number[];
+export type LightRemovalRevisions = number[];
 export type Kind65 = "ack";
 export type ActorUuid2 = string;
 export type StateRevision1 = string;
@@ -3631,6 +3644,7 @@ export interface PlayerInitialization {
   world_updates: WorldUpdates;
   hud?: PlayerHUDPatch | null;
   audience?: PlayerAudience | null;
+  sensory_rows?: SensoryRows;
 }
 export interface PlayerWorld {
   battlefield_id: BattlefieldId;
@@ -4496,28 +4510,37 @@ export interface FontConversion {
   sorcery_points_delta?: SorceryPointsDelta;
   spell_slots_delta?: SpellSlotsDelta;
 }
+/**
+ * One observer's sensory after-values; its changed and removed values are rows of its group's `SensoryRows`.
+ *
+ * `entity_contacts_changed` / `object_contacts_changed` index contact rows,
+ * `spatial_effect_sightings` sighting rows, `light_sources_changed` light
+ * sources, `light_sources_removed` light removal rows; the three other removed
+ * lists index `uuids`. A list never names two rows of one identity. (While
+ * projection builds a group, the indices name its `SensoryTable` rows.)
+ */
 export interface SensoryFact {
   kind?: Kind27;
   observer_uuid: ObserverUuid1;
-  initial: Initial;
+  initial?: Initial;
   observer_position: ObserverPosition;
-  observer_position_changed: ObserverPositionChanged;
+  observer_position_changed?: ObserverPositionChanged;
   effective_light_levels_changed?: CellValues;
-  cause_occurrence: CauseOccurrence;
+  cause_occurrence?: CauseOccurrence;
   visible_cells_added?: CellMask1;
   visible_cells_removed?: CellMask2;
   seen_cells_added?: CellMask3;
-  entity_contacts_changed: EntityContactsChanged;
-  entity_contacts_removed: EntityContactsRemoved;
-  object_contacts_changed: ObjectContactsChanged;
-  object_contacts_removed: ObjectContactsRemoved;
-  sense_modes_changed: SenseModesChanged;
-  sense_modes: SenseModes;
-  passive_perception_changed: PassivePerceptionChanged;
-  passive_perception: PassivePerception;
-  visual_access_changed: VisualAccessChanged;
-  visual_access: VisualAccess;
-  paths_dirty: PathsDirty;
+  entity_contacts_changed?: EntityContactsChanged;
+  entity_contacts_removed?: EntityContactsRemoved;
+  object_contacts_changed?: ObjectContactsChanged;
+  object_contacts_removed?: ObjectContactsRemoved;
+  sense_modes_changed?: SenseModesChanged;
+  sense_modes?: SenseModes;
+  passive_perception_changed?: PassivePerceptionChanged;
+  passive_perception?: PassivePerception;
+  visual_access_changed?: VisualAccessChanged;
+  visual_access?: VisualAccess;
+  paths_dirty?: PathsDirty;
   hazardous_cells_changed?: CellValues1;
   spatial_effect_sightings?: SpatialEffectSightings;
   spatial_effect_content?: SpatialEffectContent;
@@ -4576,25 +4599,11 @@ export interface CellMask3 {
   height: Height1;
   bits: Bits;
 }
-export interface EntityContactsChanged {
-  [k: string]: PerceivedContact;
-}
-/**
- * One identified entity or object perceived by an observer.
- */
-export interface PerceivedContact {
-  position: Position5;
-  visual: Visual;
-  special_senses?: SpecialSenses;
-}
-export interface ObjectContactsChanged {
-  [k: string]: PerceivedContact;
-}
 /**
  * A special sense and its effective range in feet; zero is unlimited.
  */
 export interface SenseMode {
-  sense_type: SensesType1;
+  sense_type: SensesType;
   range_feet?: RangeFeet;
 }
 /**
@@ -4603,48 +4612,6 @@ export interface SenseMode {
 export interface CellValues1 {
   cells: CellMask;
   values: Values;
-}
-export interface SpatialEffectSightings {
-  [k: string]: SpatialEffectSighting;
-}
-/**
- * One observation of a spatial effect without its static content (`PerceivedSpatialEffect`'s other fields).
- */
-export interface SpatialEffectSighting {
-  duration?: ConditionDurationSummary | null;
-  positions: Positions2;
-  owner_revision?: OwnerRevision;
-  apparent_presence?: ApparentPresence;
-  trap_state?: TrapState | null;
-  pressed?: Pressed;
-  direction?: Direction4;
-  anchor_item_uuid?: AnchorItemUuid;
-  anchor_entity_uuid?: AnchorEntityUuid;
-  energy_type?: DamageType | null;
-  presence_mode?: PresenceMode;
-  sustainer_item_uuid?: SustainerItemUuid;
-  concentration_slot_uuid?: ConcentrationSlotUuid;
-  anchor_position?: AnchorPosition;
-  anchor_elevation_steps?: AnchorElevationSteps1;
-  area_geometry?: AreaGeometry2;
-  construction_sections?: ConstructionSections;
-  area_propagation?: AreaPropagation1;
-  deposit_source?: MaterialDepositSource | null;
-  visible_volume_positions?: VisibleVolumePositions;
-  upper_volume_surfaces?: UpperVolumeSurfaces;
-  suppressions?: Suppressions1;
-}
-/**
- * Upper volume permission; never permission to see its ground or occupants.
- *
- * A sample is visible above every plane: height > a*x + b*y + c.
- * Coordinates and height use native grid/elevation steps, before animation.
- * Multiple entries for the same cell represent alternative observations:
- * satisfying one complete entry is sufficient; planes within it remain AND.
- */
-export interface VolumeSurfaceSight {
-  position: Position6;
-  lower_height_planes: LowerHeightPlanes;
 }
 export interface SpatialEffectContent {
   [k: string]: SpatialEffectContent1;
@@ -4656,35 +4623,6 @@ export interface SpatialEffectContent1 {
   content_ref: ContentRef;
   name: Name9;
   description: Description8;
-}
-export interface LightSourcesChanged {
-  [k: string]: PerceivedLightSource;
-}
-/**
- * One optical emitter, without undisclosed actor or inventory identities.
- *
- * Footprint levels are this source's actual occluded contribution before
- * tile MAX/caps; WorldTileState.resolved_light is the final objective level.
- */
-export interface PerceivedLightSource {
-  source_uuid: SourceUuid;
-  revision: Revision1;
-  position: Position7;
-  base_height_steps: BaseHeightSteps5;
-  very_bright_radius_feet: VeryBrightRadiusFeet2;
-  bright_radius_feet: BrightRadiusFeet2;
-  dim_radius_feet: DimRadiusFeet2;
-  appearance?: Appearance;
-  actor_anchored?: ActorAnchored;
-  anchor_entity_uuid?: AnchorEntityUuid1;
-  anchor_item_uuid?: AnchorItemUuid1;
-  affected_tiles?: AffectedTiles;
-}
-export interface AffectedTiles {
-  [k: string]: LightLevel;
-}
-export interface LightSourcesRemoved {
-  [k: string]: number;
 }
 export interface ItemChargeFact {
   kind?: Kind28;
@@ -4701,11 +4639,11 @@ export interface ItemChargeFact {
 export interface SpatialEffectStateFact {
   kind?: Kind29;
   spatial_effect_uuid: SpatialEffectUuid1;
-  positions: Positions3;
+  positions: Positions2;
   previous_state: TrapState | null;
   state: TrapState | null;
   previous_pressed?: PreviousPressed;
-  pressed?: Pressed1;
+  pressed?: Pressed;
   operation?: SpatialEffectChangeOperation;
   interaction_operation?: SpatialEffectInteractionOperation | null;
   removed_positions?: RemovedPositions;
@@ -4742,11 +4680,11 @@ export interface ObjectDestroyedFact {
 export interface WorldObjectPlacement {
   object_uuid: ObjectUuid3;
   tile_uuid: TileUuid1;
-  position: Position8;
+  position: Position5;
   kind: WorldPlacementKind;
   occupies_bands: OccupiesBands;
   boundary_direction?: CardinalDirection | null;
-  base_height_steps: BaseHeightSteps6;
+  base_height_steps: BaseHeightSteps5;
   top_height_steps: TopHeightSteps;
   orientation?: CardinalDirection | null;
   covered_supports?: CoveredSupports;
@@ -4756,7 +4694,7 @@ export interface WorldObjectPlacement {
  * One existing Tile supporting a committed object footprint.
  */
 export interface WorldObjectSupport {
-  position: Position9;
+  position: Position6;
   tile_uuid: TileUuid2;
 }
 export interface FloorItem {
@@ -4769,9 +4707,9 @@ export interface FloorItem {
   boundary_structure: BoundaryStructure | null;
   is_open: IsOpen2;
   is_lit: IsLit3;
-  very_bright_radius_feet?: VeryBrightRadiusFeet3;
-  bright_radius_feet?: BrightRadiusFeet3;
-  dim_radius_feet?: DimRadiusFeet3;
+  very_bright_radius_feet?: VeryBrightRadiusFeet2;
+  bright_radius_feet?: BrightRadiusFeet2;
+  dim_radius_feet?: DimRadiusFeet2;
   stack_count?: StackCount2;
   is_pickable?: IsPickable2;
   item_effects?: ItemEffects3;
@@ -4803,7 +4741,7 @@ export interface MechanismActivationFact {
   mechanism_content_id: MechanismContentId;
   target_entity_uuid: TargetEntityUuid10;
   origin_position: OriginPosition;
-  direction: Direction5;
+  direction: Direction4;
   affected_positions: AffectedPositions;
   end_position: EndPosition3;
   committed: Committed2;
@@ -4848,7 +4786,7 @@ export interface ActionCancellation {
 export interface PlayerLogEntry {
   entry_type: CombatLogEntryType;
   source_name: SourceName;
-  source_uuid: SourceUuid1;
+  source_uuid: SourceUuid;
   target_name: TargetName;
   target_uuid: TargetUuid;
   compact: Compact;
@@ -5190,7 +5128,7 @@ export interface HazardDetectedLogData {
   observer_name: ObserverName1;
   observer_uuid: ObserverUuid3;
   hazard_name: HazardName;
-  position: Position10;
+  position: Position7;
   passive_perception: PassivePerception2;
   stealth_dc: StealthDc1;
 }
@@ -5387,7 +5325,7 @@ export interface ForcedMovementLogData {
   kind?: Kind59;
   type?: Type1;
   cause: Cause;
-  direction: Direction6;
+  direction: Direction5;
   intended_distance: IntendedDistance;
   actual_distance: ActualDistance1;
   blocked: Blocked1;
@@ -5462,6 +5400,14 @@ export interface PlayerObservation {
   contact: PerceivedContact | null;
   items?: Items1;
 }
+/**
+ * One identified entity or object perceived by an observer.
+ */
+export interface PerceivedContact {
+  position: Position8;
+  visual: Visual;
+  special_senses?: SpecialSenses;
+}
 export interface WorldUpdate {
   occurrence: Occurrence2;
   tiles: Tiles;
@@ -5494,7 +5440,7 @@ export interface WorldConnectorState {
   provocation_policy: ConnectorProvocationPolicy;
 }
 export interface TileFieldUpdate {
-  position: Position11;
+  position: Position9;
   changes: WorldTileChanges;
 }
 /**
@@ -5527,7 +5473,7 @@ export interface WorldTileChanges {
 export interface PlayerHUDPatch {
   generation: Generation1;
   observer_uuid: ObserverUuid4;
-  revision: Revision2;
+  revision: Revision1;
   initiative?: Initiative;
   sheet_order?: SheetOrder;
   sheets?: Sheets;
@@ -5618,6 +5564,89 @@ export interface AvailableHandlerInfo {
 export interface PreparedSpellSelection {
   source_id: SourceId1;
   spell_ids: SpellIds;
+}
+/**
+ * The distinct perceived values a group's sensory facts name, each once, as columns.
+ *
+ * Every identity a removed list or a keyed row names is in `uuids` once.
+ * Contact row i is the entity or object `uuids[contact_uuid_index[i]]`
+ * perceived as `contacts[i]`; sighting row i is the effect
+ * `uuids[sighting_uuid_index[i]]` seen as `sightings[i]`; light removal row i
+ * is the source `uuids[light_removal_uuid_index[i]]` gone at revision
+ * `light_removal_revisions[i]`. A light source row is the record itself; it
+ * carries its `source_uuid`.
+ */
+export interface SensoryRows {
+  uuids?: Uuids;
+  contact_uuid_index?: ContactUuidIndex;
+  contacts?: Contacts;
+  sighting_uuid_index?: SightingUuidIndex;
+  sightings?: Sightings;
+  light_sources?: LightSources;
+  light_removal_uuid_index?: LightRemovalUuidIndex;
+  light_removal_revisions?: LightRemovalRevisions;
+}
+/**
+ * One observation of a spatial effect without its static content (`PerceivedSpatialEffect`'s other fields).
+ */
+export interface SpatialEffectSighting {
+  duration?: ConditionDurationSummary | null;
+  positions: Positions3;
+  owner_revision?: OwnerRevision;
+  apparent_presence?: ApparentPresence;
+  trap_state?: TrapState | null;
+  pressed?: Pressed1;
+  direction?: Direction6;
+  anchor_item_uuid?: AnchorItemUuid;
+  anchor_entity_uuid?: AnchorEntityUuid;
+  energy_type?: DamageType | null;
+  presence_mode?: PresenceMode;
+  sustainer_item_uuid?: SustainerItemUuid;
+  concentration_slot_uuid?: ConcentrationSlotUuid;
+  anchor_position?: AnchorPosition;
+  anchor_elevation_steps?: AnchorElevationSteps1;
+  area_geometry?: AreaGeometry2;
+  construction_sections?: ConstructionSections;
+  area_propagation?: AreaPropagation1;
+  deposit_source?: MaterialDepositSource | null;
+  visible_volume_positions?: VisibleVolumePositions;
+  upper_volume_surfaces?: UpperVolumeSurfaces;
+  suppressions?: Suppressions1;
+}
+/**
+ * Upper volume permission; never permission to see its ground or occupants.
+ *
+ * A sample is visible above every plane: height > a*x + b*y + c.
+ * Coordinates and height use native grid/elevation steps, before animation.
+ * Multiple entries for the same cell represent alternative observations:
+ * satisfying one complete entry is sufficient; planes within it remain AND.
+ */
+export interface VolumeSurfaceSight {
+  position: Position10;
+  lower_height_planes: LowerHeightPlanes;
+}
+/**
+ * One optical emitter, without undisclosed actor or inventory identities.
+ *
+ * Footprint levels are this source's actual occluded contribution before
+ * tile MAX/caps; WorldTileState.resolved_light is the final objective level.
+ */
+export interface PerceivedLightSource {
+  source_uuid: SourceUuid1;
+  revision: Revision2;
+  position: Position11;
+  base_height_steps: BaseHeightSteps6;
+  very_bright_radius_feet: VeryBrightRadiusFeet3;
+  bright_radius_feet: BrightRadiusFeet3;
+  dim_radius_feet: DimRadiusFeet3;
+  appearance?: Appearance;
+  actor_anchored?: ActorAnchored;
+  anchor_entity_uuid?: AnchorEntityUuid1;
+  anchor_item_uuid?: AnchorItemUuid1;
+  affected_tiles?: AffectedTiles;
+}
+export interface AffectedTiles {
+  [k: string]: LightLevel;
 }
 export interface AckRequest {
   cursor: PlayerCursor;
@@ -6250,6 +6279,28 @@ export interface PlayerLineage {
   observations?: Observations1;
   world_updates?: WorldUpdates1;
   audience?: PlayerAudience | null;
+  sensory_rows?: SensoryRows1;
+}
+/**
+ * The distinct perceived values a group's sensory facts name, each once, as columns.
+ *
+ * Every identity a removed list or a keyed row names is in `uuids` once.
+ * Contact row i is the entity or object `uuids[contact_uuid_index[i]]`
+ * perceived as `contacts[i]`; sighting row i is the effect
+ * `uuids[sighting_uuid_index[i]]` seen as `sightings[i]`; light removal row i
+ * is the source `uuids[light_removal_uuid_index[i]]` gone at revision
+ * `light_removal_revisions[i]`. A light source row is the record itself; it
+ * carries its `source_uuid`.
+ */
+export interface SensoryRows1 {
+  uuids?: Uuids;
+  contact_uuid_index?: ContactUuidIndex;
+  contacts?: Contacts;
+  sighting_uuid_index?: SightingUuidIndex;
+  sightings?: Sightings;
+  light_sources?: LightSources;
+  light_removal_uuid_index?: LightRemovalUuidIndex;
+  light_removal_revisions?: LightRemovalRevisions;
 }
 export interface CombatLogAppend {
   generation: Generation3;

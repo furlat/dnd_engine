@@ -751,42 +751,112 @@ def joined_effect(sighting: SpatialEffectSighting, content: SpatialEffectContent
         upper_volume_surfaces=sighting.upper_volume_surfaces, suppressions=sighting.suppressions)
 
 
+RowIndex = Annotated[int, Field(ge=0)]
+Revision = Annotated[int, Field(ge=0)]
+
+
+def _no_rows(rows: tuple | dict) -> bool:
+    return not rows
+
+
+def _unflagged(flag: bool) -> bool:
+    return not flag
+
+
+def _unset(value: object) -> bool:
+    return value is None
+
+
+# A sensory field holding its default (no rows, false, none) is left out of a dump
+# and decodes to that default, as the packed cell fields do.
+# Indices into the group's `SensoryRows`.
+RowIndices = Annotated[tuple[RowIndex, ...], Field(exclude_if=_no_rows)]
+SensoryFlag = Annotated[bool, Field(exclude_if=_unflagged)]
+SensoryNumber = Annotated[int | None, Field(exclude_if=_unset)]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SensoryRows:
+    """The distinct perceived values a group's sensory facts name, each once, as columns.
+
+    Every identity a removed list or a keyed row names is in `uuids` once.
+    Contact row i is the entity or object `uuids[contact_uuid_index[i]]`
+    perceived as `contacts[i]`; sighting row i is the effect
+    `uuids[sighting_uuid_index[i]]` seen as `sightings[i]`; light removal row i
+    is the source `uuids[light_removal_uuid_index[i]]` gone at revision
+    `light_removal_revisions[i]`. A light source row is the record itself; it
+    carries its `source_uuid`.
+    """
+
+    uuids: Annotated[tuple[UUID, ...], Field(exclude_if=_no_rows)] = ()
+    contact_uuid_index: RowIndices = ()
+    contacts: Annotated[tuple[PerceivedContact, ...], Field(exclude_if=_no_rows)] = ()
+    sighting_uuid_index: RowIndices = ()
+    sightings: Annotated[tuple[SpatialEffectSighting, ...], Field(exclude_if=_no_rows)] = ()
+    light_sources: Annotated[tuple[PerceivedLightSource, ...], Field(exclude_if=_no_rows)] = ()
+    light_removal_uuid_index: RowIndices = ()
+    light_removal_revisions: Annotated[tuple[Revision, ...], Field(exclude_if=_no_rows)] = ()
+
+    def __post_init__(self) -> None:
+        if (len(self.contact_uuid_index) != len(self.contacts) or len(self.sighting_uuid_index) != len(self.sightings)
+                or len(self.light_removal_uuid_index) != len(self.light_removal_revisions)
+                or any(index >= len(self.uuids) for index in
+                       (*self.contact_uuid_index, *self.sighting_uuid_index, *self.light_removal_uuid_index))):
+            raise ValueError("Sensory rows pair equal-length columns and name only their own uuids")
+
+
+NO_SENSORY_ROWS = SensoryRows()
+
+
+def _no_sensory_rows(rows: SensoryRows) -> bool:
+    # Every keyed row names a uuid, so rows without uuids or light sources are empty.
+    return not rows.uuids and not rows.light_sources
+
+
+# A group's rows: none is the default and is left out of a dump.
+SensoryRowsField = Annotated[SensoryRows, Field(exclude_if=_no_sensory_rows)]
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SensoryFact:
+    """One observer's sensory after-values; its changed and removed values are rows of its group's `SensoryRows`.
+
+    `entity_contacts_changed` / `object_contacts_changed` index contact rows,
+    `spatial_effect_sightings` sighting rows, `light_sources_changed` light
+    sources, `light_sources_removed` light removal rows; the three other removed
+    lists index `uuids`. A list never names two rows of one identity. (While
+    projection builds a group, the indices name its `SensoryTable` rows.)
+    """
+
     kind: Literal["sensory"] = "sensory"
     observer_uuid: UUID
-    initial: bool
+    initial: SensoryFlag = False
     observer_position: tuple[int, int]
-    observer_position_changed: bool
+    observer_position_changed: SensoryFlag = False
     effective_light_levels_changed: CellValuesField = EMPTY_VALUES
-    cause_occurrence: int | None
+    cause_occurrence: SensoryNumber = None
     visible_cells_added: CellMaskField = EMPTY_CELLS
     visible_cells_removed: CellMaskField = EMPTY_CELLS
     seen_cells_added: CellMaskField = EMPTY_CELLS
-    entity_contacts_changed: dict[UUID, PerceivedContact]
-    entity_contacts_removed: frozenset[UUID]
-    object_contacts_changed: dict[UUID, PerceivedContact]
-    object_contacts_removed: frozenset[UUID]
-    sense_modes_changed: bool
-    sense_modes: tuple[SenseMode, ...] | None
-    passive_perception_changed: bool
-    passive_perception: int | None
-    visual_access_changed: bool
-    visual_access: int | None
-    paths_dirty: bool
+    entity_contacts_changed: RowIndices = ()
+    entity_contacts_removed: RowIndices = ()
+    object_contacts_changed: RowIndices = ()
+    object_contacts_removed: RowIndices = ()
+    sense_modes_changed: SensoryFlag = False
+    sense_modes: Annotated[tuple[SenseMode, ...] | None, Field(exclude_if=_unset)] = None
+    passive_perception_changed: SensoryFlag = False
+    passive_perception: SensoryNumber = None
+    visual_access_changed: SensoryFlag = False
+    visual_access: SensoryNumber = None
+    paths_dirty: SensoryFlag = False
     hazardous_cells_changed: CellValuesField = EMPTY_VALUES
-    spatial_effect_sightings: dict[UUID, SpatialEffectSighting] = field(default_factory=dict)
-    # The content of each sighted effect the seat does not hold yet; a folded fact holds every sighting's content.
-    spatial_effect_content: dict[UUID, SpatialEffectContent] = field(default_factory=dict)
-    spatial_effects_removed: frozenset[UUID] = frozenset()
-    light_sources_changed: dict[UUID, PerceivedLightSource] = field(default_factory=dict)
-    light_sources_removed: dict[UUID, int] = field(default_factory=dict)
-
-    @property
-    def spatial_effects_changed(self) -> dict[UUID, PerceivedSpatialEffect]:
-        """The perceived effects the shared sensory reducer reads: each sighting with its content."""
-        return {identity: joined_effect(row, self.spatial_effect_content[identity])
-                for identity, row in self.spatial_effect_sightings.items()}
+    spatial_effect_sightings: RowIndices = ()
+    # The content of each sighted effect the seat does not hold yet.
+    spatial_effect_content: Annotated[dict[UUID, SpatialEffectContent], Field(exclude_if=_no_rows)] = field(
+        default_factory=dict)
+    spatial_effects_removed: RowIndices = ()
+    light_sources_changed: RowIndices = ()
+    light_sources_removed: RowIndices = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -994,6 +1064,8 @@ class PlayerLineage:
     observations: tuple[PlayerObservation, ...] = ()
     world_updates: tuple[WorldUpdate, ...] = ()
     audience: PlayerAudience | None = None
+    # The perceived values its sensory facts name, each once.
+    sensory_rows: SensoryRowsField = NO_SENSORY_ROWS
 
 
 
@@ -1009,11 +1081,13 @@ class PlayerInitialization:
     world_updates: tuple[WorldUpdate, ...]
     hud: PlayerHUDPatch | None = None
     audience: PlayerAudience | None = None
+    # The perceived values its sensory facts name, each once.
+    sensory_rows: SensoryRowsField = NO_SENSORY_ROWS
 
 
 class PlayerSequence(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schema_version: Literal[6] = 6
+    schema_version: Literal[7] = 7
     initialization: PlayerInitialization
     lineages: tuple[PlayerLineage, ...]
     combat_log_appends: tuple[CombatLogAppend, ...] = ()

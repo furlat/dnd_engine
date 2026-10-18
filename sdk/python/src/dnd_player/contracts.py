@@ -1395,7 +1395,7 @@ class PreviewRequest(TypedDict):
 
 class ProtocolIdentity(TypedDict):
     protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[13]]
+    player_schema_version: NotRequired[Literal[14]]
     schema_digest: str
 
 
@@ -2526,6 +2526,36 @@ class SenseMode(TypedDict):
     range_feet: NotRequired[int]
 
 
+class SensoryFact(TypedDict):
+    kind: NotRequired[Literal['sensory']]
+    observer_uuid: str
+    initial: NotRequired[bool]
+    observer_position: list[ObserverPositionItem]
+    observer_position_changed: NotRequired[bool]
+    effective_light_levels_changed: NotRequired[CellValues]
+    cause_occurrence: NotRequired[int | None]
+    visible_cells_added: NotRequired[CellMask]
+    visible_cells_removed: NotRequired[CellMask]
+    seen_cells_added: NotRequired[CellMask]
+    entity_contacts_changed: NotRequired[list[int]]
+    entity_contacts_removed: NotRequired[list[int]]
+    object_contacts_changed: NotRequired[list[int]]
+    object_contacts_removed: NotRequired[list[int]]
+    sense_modes_changed: NotRequired[bool]
+    sense_modes: NotRequired[list[SenseMode] | None]
+    passive_perception_changed: NotRequired[bool]
+    passive_perception: NotRequired[int | None]
+    visual_access_changed: NotRequired[bool]
+    visual_access: NotRequired[int | None]
+    paths_dirty: NotRequired[bool]
+    hazardous_cells_changed: NotRequired[CellValues]
+    spatial_effect_sightings: NotRequired[list[int]]
+    spatial_effect_content: NotRequired[dict[str, SpatialEffectContent]]
+    spatial_effects_removed: NotRequired[list[int]]
+    light_sources_changed: NotRequired[list[int]]
+    light_sources_removed: NotRequired[list[int]]
+
+
 class SheetChanges(TypedDict):
     species: NotRequired[Species | None]
     species_variant: NotRequired[SpeciesVariant | None]
@@ -3359,34 +3389,15 @@ class ItemPatch(TypedDict):
     state: NotRequired[ItemState | None]
 
 
-class SensoryFact(TypedDict):
-    kind: NotRequired[Literal['sensory']]
-    observer_uuid: str
-    initial: bool
-    observer_position: list[ObserverPositionItem]
-    observer_position_changed: bool
-    effective_light_levels_changed: NotRequired[CellValues]
-    cause_occurrence: int | None
-    visible_cells_added: NotRequired[CellMask]
-    visible_cells_removed: NotRequired[CellMask]
-    seen_cells_added: NotRequired[CellMask]
-    entity_contacts_changed: dict[str, PerceivedContact]
-    entity_contacts_removed: list[str]
-    object_contacts_changed: dict[str, PerceivedContact]
-    object_contacts_removed: list[str]
-    sense_modes_changed: bool
-    sense_modes: list[SenseMode] | None
-    passive_perception_changed: bool
-    passive_perception: int | None
-    visual_access_changed: bool
-    visual_access: int | None
-    paths_dirty: bool
-    hazardous_cells_changed: NotRequired[CellValues]
-    spatial_effect_sightings: NotRequired[dict[str, SpatialEffectSighting]]
-    spatial_effect_content: NotRequired[dict[str, SpatialEffectContent]]
-    spatial_effects_removed: NotRequired[list[str]]
-    light_sources_changed: NotRequired[dict[str, PerceivedLightSource]]
-    light_sources_removed: NotRequired[dict[str, int]]
+class SensoryRows(TypedDict):
+    uuids: NotRequired[list[str]]
+    contact_uuid_index: NotRequired[list[int]]
+    contacts: NotRequired[list[PerceivedContact]]
+    sighting_uuid_index: NotRequired[list[int]]
+    sightings: NotRequired[list[SpatialEffectSighting]]
+    light_sources: NotRequired[list[PerceivedLightSource]]
+    light_removal_uuid_index: NotRequired[list[int]]
+    light_removal_revisions: NotRequired[list[int]]
 
 
 class ActorChanges(TypedDict):
@@ -3494,6 +3505,7 @@ class PlayerInitialization(TypedDict):
     world_updates: list[WorldUpdate]
     hud: NotRequired[PlayerHUDPatch | None]
     audience: NotRequired[PlayerAudience | None]
+    sensory_rows: NotRequired[SensoryRows]
 
 
 class PlayerLineage(TypedDict):
@@ -3508,6 +3520,7 @@ class PlayerLineage(TypedDict):
     observations: NotRequired[list[PlayerObservation]]
     world_updates: NotRequired[list[WorldUpdate]]
     audience: NotRequired[PlayerAudience | None]
+    sensory_rows: NotRequired[SensoryRows]
 
 
 class PlayerOperation(TypedDict):

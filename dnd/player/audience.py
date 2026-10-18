@@ -519,21 +519,68 @@ def _current_contact(current: AudienceComposition, identity: UUID, *,
     return selected, holder
 
 
+def _rank_of(row: PerceivedSpatialEffect, cursor: int, observer: UUID) -> tuple[int, int, int]:
+    """A member's claim to show an effect: its row's newest revision, then its latest sighting, then the smaller uuid."""
+    return (row.owner_revision if row.owner_revision is not None else -1, cursor, -observer.int)
+
+
+def _effect_rank(perception: AudiencePerception, observer: UUID, identity: UUID) -> tuple[int, int, int]:
+    return _rank_of(perception.members[observer].spatial_effects[identity],
+                    perception.effect_cursors.get((observer, identity), -1), observer)
+
+
 def _current_effect(current: AudienceComposition, identity: UUID) -> PerceivedSpatialEffect | None:
     owners = current.effect_members.get(identity, ())
     if not owners:
         return None
     perception = current.perception
-    owner = max(owners, key=lambda observer: (
-        perception.members[observer].spatial_effects[identity].owner_revision
-            if perception.members[observer].spatial_effects[identity].owner_revision is not None else -1,
-        perception.effect_cursors.get((observer, identity), -1), -observer.int))
+    owner = max(owners, key=lambda observer: _effect_rank(perception, observer, identity))
     merged = _join_effects(perception.members[owner].spatial_effects[identity],
         (perception.members[observer].spatial_effects[identity] for observer in sorted(owners, key=lambda value: value.int)))
     positions = {position for position in merged.positions if (identity, position) not in perception.effect_absences}
     if positions or merged.visible_volume_positions or merged.upper_volume_surfaces:
         return merged.model_copy(update={'positions': tuple(sorted(positions))})
     return None
+
+
+def _keeps_composed_effect(current: AudienceComposition, observer: UUID, identity: UUID,
+                           sighting: PerceivedSpatialEffect, prior: PerceivedSpatialEffect | None,
+                           prior_cursor: int) -> bool:
+    """Whether `observer` now seeing `sighting` (instead of `prior`, sighted at `prior_cursor`) leaves the composed effect as it is.
+
+    It does when the newest row among the other members equals it: the newest
+    row is then this value before and after, a row equal to the join's first
+    is a no-op in the join wherever it sorts, and the observer's prior row
+    either equals it, was absent, or neither led nor joined (another revision,
+    ranked below). The caller has checked that no absence of the effect
+    appeared or retired.
+    """
+    perception = current.perception
+    others = [owner for owner in current.effect_members.get(identity, ()) if owner != observer]
+    if not others:
+        return False
+    newest = max(others, key=lambda owner: _effect_rank(perception, owner, identity))
+    row = perception.members[newest].spatial_effects[identity]
+    if not (row is sighting or row == sighting):
+        return False
+    if prior is None or prior is sighting or prior == sighting:
+        return True
+    return (prior.owner_revision != sighting.owner_revision
+            and _rank_of(prior, prior_cursor, observer) < _effect_rank(perception, newest, identity))
+
+
+def _keeps_composed_light(view: SensesSnapshot, identity: UUID, source: PerceivedLightSource,
+                          prior: PerceivedLightSource | None) -> bool:
+    """Whether a member now holding `source` (instead of `prior`) leaves the composed light as it is.
+
+    It does when the view already shows `source`: the newest revision is then
+    its own, and `_merged_light` of rows merging to `source` gains one more
+    equal row (or swaps an equal one), unless the member's prior row of that
+    revision differs.
+    """
+    held = view.light_sources.get(identity)
+    return (held is not None and (held is source or held == source)
+            and (prior is None or prior.revision != source.revision or prior is source or prior == source))
 
 
 def apply_current_audience(current: AudienceComposition, audience: PlayerAudience, observer_uuid: UUID,
@@ -580,7 +627,8 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
     for position in mask_positions(added):
         candidates.update(current.effects_at.get(position, ()))
     absence_updates: dict[tuple[UUID, tuple[int, int]], int | None] = {}
-    recompute_effects = set(effects)
+    # Effects whose absent cells appear or retire.
+    absence_changed: set[UUID] = set()
     for identity in candidates:
         positions = visible_positions(current.effect_positions.get(identity, set()))
         present = observed_positions(identity)
@@ -596,14 +644,20 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
             if position in present:
                 if old is not None:
                     absence_updates[key] = None
-                    recompute_effects.add(identity)
+                    absence_changed.add(identity)
             elif apparent or position in prior:
                 absence_updates[key] = cursor
                 if old is None:
-                    recompute_effects.add(identity)
+                    absence_changed.add(identity)
+    recompute_effects = effects | absence_changed
     effect_cursors = {identity: cursor for identity, effect in event.spatial_effects_changed.items()
         if any(visible(position) for position in effect.positions)
         or effect.visible_volume_positions or effect.upper_volume_surfaces}
+    # The member's rows before this delta (its snapshot's containers are advanced in place below).
+    prior_effects = ({identity: (before.spatial_effects.get(identity), perception.effect_cursors.get((observer, identity), -1))
+                      for identity in event.spatial_effects_changed} if before is not None and not event.initial else {})
+    prior_lights = ({identity: before.light_sources.get(identity) for identity in event.light_sources_changed}
+                    if before is not None and not event.initial else {})
 
     member = apply_current_senses(before, event, prepared)
     perception.members[observer] = member
@@ -680,6 +734,11 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
                 destination[identity] = contact
                 current.contact_holders[key] = holder
     for identity in recompute_effects:
+        if (identity in prior_effects and identity not in absence_changed
+                and identity not in event.spatial_effects_removed
+                and _keeps_composed_effect(current, observer, identity, event.spatial_effects_changed[identity],
+                                           *prior_effects[identity])):
+            continue
         effect = _current_effect(current, identity)
         if effect is None:
             view.spatial_effects.pop(identity, None)
@@ -691,12 +750,12 @@ def apply_current_audience(current: AudienceComposition, audience: PlayerAudienc
     # Only the sources this delta names can change their composed row.
     if event.initial:
         lights, removals = light_sources(perception)
-    elif event.light_sources_changed or event.light_sources_removed:
-        lights, removals = update_light_sources(perception,
-            set(event.light_sources_changed) | set(event.light_sources_removed),
-            view.light_sources, view.light_source_removals)
     else:
-        lights, removals = view.light_sources, view.light_source_removals
+        # A source the view already shows as this member's new row keeps its composed row.
+        names = set(event.light_sources_removed) | {identity for identity, source in event.light_sources_changed.items()
+            if not _keeps_composed_light(view, identity, source, prior_lights.get(identity))}
+        lights, removals = (update_light_sources(perception, names, view.light_sources, view.light_source_removals)
+                            if names else (view.light_sources, view.light_source_removals))
     current.view = replace(view, light_sources=lights, light_source_removals=removals,
         position=anchor.position, passive_perception=anchor.passive_perception,
         sense_modes_hash=anchor.sense_modes_hash, sense_modes=anchor.sense_modes,
