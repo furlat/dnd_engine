@@ -4,6 +4,10 @@ Two seats perceive the same party member: the party seat controls it, a goblin's
 receives the member's inventory, item state and durations; the observer its memberships without durations, its
 stats, layers and the effects of what it wears; nobody receives an INTERNAL membership, and a change nobody may
 see sends no fact at all.
+
+The first test is the feature evidence: live play through capture, projection and the client fold. The
+parametrized one is the disclosure table's unit test: one change per row class, given to `bodies` directly, and
+the fields each view receives.
 """
 
 from dataclasses import replace
@@ -118,7 +122,7 @@ CASES = (
 
 
 @pytest.mark.parametrize("name, build, controller, observer", CASES, ids=[row[0] for row in CASES])
-def test_each_view_receives_the_rows_disclosed_to_it(session, name, build, controller, observer):
+def test_the_disclosure_table_gives_each_view_its_fields(session, name, build, controller, observer):
     runtimes, _ = watched(session)
     actors = runtimes['party'].session.actors
     identity = next(identity for identity, actor in actors.items() if identity in session.player_uuids
