@@ -78,6 +78,7 @@ from dnd.core.events import ReviveEvent, PortalTransferEvent
 from dnd.spells.spell_utils import spell_valid_positions
 from dnd.core.life_types import LifeState
 from dnd.conditions import Poisoned
+from dnd.core.base_object import empty_set
 
 class FalseLife(SpellAction):
     """Grant temporary hit points through a self-targeted necromancy spell.
@@ -1190,7 +1191,7 @@ class EyebiteCastingState(ConcentrationActionMarker):
         description="Rules-facing summary of the casting state.",
     )
     successful_save_target_uuids: Set[UUID] = Field(
-        default_factory=set,
+        default_factory=empty_set,
         description="Creature UUIDs that succeeded on a save against this Eyebite casting.",
     )
 

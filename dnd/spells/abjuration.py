@@ -124,6 +124,7 @@ from dnd.spells.effect_ids import (
     SANCTUARY_INTERRUPTION_OUTCOME_CODE,
 )
 from dnd.spatial.area_conditions import AreaCondition
+from dnd.core.base_object import empty_set
 from dnd.types.spatial_effects import (
     SpatialEffectAnchorKind,
     SpatialEffectLayer,
@@ -3608,7 +3609,7 @@ class HolyAuraEffect(BaseCondition):
     name: str = "Holy Aura"
     description: str = "Advantage on saves and incoming attack disadvantage; fiend/undead melee hitters risk blindness."
     spell_dc: int
-    seen_hits: set[UUID] = Field(default_factory=set, exclude=True)
+    seen_hits: set[UUID] = Field(default_factory=empty_set, exclude=True)
     light_source_uuid: UUID | None = None
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.PERMANENT))
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
@@ -3768,7 +3769,7 @@ class BreakEnchantment(BaseAction):
 
 class DispelEvilAndGoodEffect(ProtectionFromEvilAndGoodEffect):
     creates = (BreakEnchantment,)
-    granted_action_uuids: set[UUID] = Field(default_factory=set)
+    granted_action_uuids: set[UUID] = Field(default_factory=empty_set)
     name: str = "Dispel Evil and Good"
     description: str = "Six supernatural creature types attack with disadvantage; grants Break Enchantment."
     duration: Duration = Field(default_factory=lambda: Duration(duration=10, duration_type=DurationType.ROUNDS))

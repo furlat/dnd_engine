@@ -648,3 +648,12 @@ Hard rules:
   - **Static-look census:** no held item's look or profile changes over 29 gallery cases and 4,139 tests.
   - **Ruling (a):** one per-event conversion turns E2's named after-values into keyed rows, shared by every seat.
 - 2026-10-18: **E3-sensory prep (codex/enp-e3-sensory, 314105098):** the native settlement marker, with native events identical apart from it and the wire byte-identical; schema-16 sensory types in a staging module; the client fold; vectors V1–V8.
+- 2026-10-18: **Free-aim per point and GC alarms (codex/enp-freeaim: f02305211, 2b3fc5be6, 0405ae2d6), merged with 6810854a2 (c903b3dce).**
+  - **Free aim:** Create or Destroy Water, Call Lightning and its Strike answer each aim point by one per-point rule (`valid_positions_among`), and `get_valid_positions` lists that rule's cells. Caster menu `_collect_aoe_actions` 41 → 32 ms (minimum of 30 in-process repeats).
+  - **GC alarms:** pydantic reads a default factory's signature at every schema build in play and every `model_construct`. A C callable's (`list`/`set`/`frozenset`/`tuple`, `time.time`) leaves a class cycle (`inspect._signature_fromstr`).
+    - The 71 fields of models built in play and `DecisionEpoch.created_at` use Python factories (`dnd/core/base_object.py`).
+    - The content registry's recursive closure is a module function.
+    - Per-op `cycles_found` is 0 on 31 gallery cases (AI decisions 15 → 0). Start 11,947 → 317.
+  - **Known Start garbage:** 317 objects, once per process. numpy 2.5's `np.unique` reads `np.ma`, so numpy imports numpy.ma at the first `np.unique` (`view.py` `frame_rows`, at Start), and that import parses 5 C signatures. Integrator: no eager import; the alarm stays an alarm.
+  - **Gates vs 6810854a2:** discovery dumps equal on 3 cases; seeded agreement reports equal; transcripts byte-identical on 4 cases; sweep = r29; pyright 0 new.
+  - **Schema builds (measured, not changed):** none inside a timed gallery op. The harness builds each case's cast spells before its ops, as character creation would: 1–9 builds, 2.6–19.5 ms per case. Start plus setup: 81 builds, 137–204 ms (godmode 194 builds, 358–378 ms).

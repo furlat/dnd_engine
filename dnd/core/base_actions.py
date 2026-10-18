@@ -25,7 +25,7 @@ from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRe
 from dnd.types.discovery import ActorScan, Relationship, ScanRecord, relationship
 from dnd.types.event_facts import GroupEntryKind
 from dnd.core.events import ActionApplicationCommittedEvent, ActionCostsCommittedEvent, Event, EventType, EventPhase, EventProcessor, Range, EventQueue
-from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute, empty_list
 from dnd.types.world import MovementMode
 from dnd.types.class_features import FontConversion
 from dnd.core.base_block import BaseBlock, resolution_order_key
@@ -57,6 +57,7 @@ from typing import (
     OrderedDict,
     List,
     Dict,
+    Iterable,
     Literal,
     Protocol,
     Sequence,
@@ -1022,7 +1023,7 @@ class BaseAction(BaseObject):
             "implementation identity."
         ),
     )
-    costs: List[Cost] = Field(default_factory=list, description="Runtime costs required by this action.")
+    costs: List[Cost] = Field(default_factory=empty_list, description="Runtime costs required by this action.")
     harmful: bool | None = False
     object_target_policy: Literal["damageable", "active"] = "damageable"
     include_owned_item_targets: bool = Field(default=False,
@@ -1179,7 +1180,7 @@ class BaseAction(BaseObject):
         description="Grid position selected for position-targeted actions.",
     )
     extra_target_positions: List[Tuple[int, int]] = Field(
-        default_factory=list, description="Ordered additional positions for path selection.",
+        default_factory=empty_list, description="Ordered additional positions for path selection.",
     )
     discovery_target_types: tuple[TargetType,...] = ()
 
@@ -1192,7 +1193,7 @@ class BaseAction(BaseObject):
         description="Shape template used to resolve affected cells and entities for AoE actions.",
     )
     extra_target_entity_uuids: List[UUID] = Field(
-        default_factory=list,
+        default_factory=empty_list,
         description="Additional target UUIDs beyond the primary target for multi-entity actions.",
     )
     allow_same_target: bool = Field(
@@ -1221,13 +1222,14 @@ class BaseAction(BaseObject):
         description="Whether preterminal action settlement invokes concentration cleanup.",
     )
     alt_cost_type: Optional[str] = Field(default=None, description="Temporary replacement for primary action cost type.")
-    alt_extra_costs: List[Cost] = Field(default_factory=list, description="Temporary additional costs.")
+    alt_extra_costs: List[Cost] = Field(default_factory=empty_list, description="Temporary additional costs.")
     alt_target_type: Optional[TargetType] = Field(default=None, description="Temporary replacement target type.")
     alt_target_count: Optional[int] = Field(default=None, description="Temporary multi-target count override.")
     alt_skip_slot: bool = Field(default=False, description="Whether temporary overrides skip spell-slot costs.")
 
     # Compile a behavior's validation schema when it is first used, not merely
-    # because the built-in catalog imports its definition.
+    # because the built-in catalog imports its definition. Its default factories
+    # are Python functions (`dnd.core.base_object.empty_list`, ...).
     model_config = ConfigDict(arbitrary_types_allowed=True, defer_build=True)
 
     @model_validator(mode="after")
@@ -1596,39 +1598,55 @@ class BaseAction(BaseObject):
         """Get valid target positions for POSITION_LOS and POSITION_AOE actions.
 
         Override in subclasses to provide custom position filtering.
-        Default implementation uses senses.visible + get_range().
+        Default implementation: the visible cells `in_visible_region` holds.
 
         Returns:
             List of valid positions this action can target.
         """
+        senses = self._region_senses()
+        if senses is None:
+            return []
+        selection = self.get_position_selection()
+        return [position for position in visible_positions(senses.cells)
+                if self._visible_cell_in_region(senses, selection, position)]
+
+    def valid_positions_among(self, points: Iterable[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        """The given points that `get_valid_positions` lists, in the order given.
+
+        An action whose region is one per-point rule overrides this to answer
+        each point by that rule, without enumerating the region.
+        """
+        region = set(self.get_valid_positions())
+        return [point for point in points if point in region]
+
+    @final
+    def in_visible_region(self, position: Tuple[int, int]) -> bool:
+        """The default region's rule for one point (`BaseAction.get_valid_positions`):
+        a visible cell that `_visible_cell_in_region` holds."""
+        senses = self._region_senses()
+        return (senses is not None and cell_visible(senses.cells, position)
+                and self._visible_cell_in_region(senses, self.get_position_selection(), position))
+
+    def _visible_cell_in_region(self, senses: Senses, selection: Optional[PositionSelection],
+                                position: Tuple[int, int]) -> bool:
+        """For a visible cell: in range, and not the source's own cell unless the action selects a path."""
+        if position == senses.position and (selection is None or selection.kind != "path"):
+            return False
+        return self.target_position_error(position) is None
+
+    def _region_senses(self) -> Optional[Senses]:
+        """The senses whose visible cells hold the default region.
+
+        None when the action has no such region: neither a position action nor
+        a creature's destination, or a source without senses.
+        """
         selection = self.get_position_selection()
         if (self.effective_target_type not in (TargetType.POSITION_LOS, TargetType.POSITION_AOE)
                 and (selection is None or selection.kind != "entity_destination")):
-            return []
-
+            return None
         entity = BaseBlock.get(self.source_entity_uuid)
-        if entity is None:
-            return []
-
-        senses_block = entity.get_senses()
-        if not isinstance(senses_block, Senses):
-            return []
-
-        valid: List[Tuple[int, int]] = []
-        visible = visible_positions(senses_block.cells)
-        position = senses_block.position
-        selection = self.get_position_selection()
-
-        if not visible:
-            return []
-
-        for pos in visible:
-            if pos == position and (selection is None or selection.kind != "path"):
-                continue
-            if self.target_position_error(pos) is not None:
-                continue
-            valid.append(pos)
-        return valid
+        senses = entity.get_senses() if entity is not None else None
+        return senses if isinstance(senses, Senses) else None
 
     def get_disclosed_movement_path(
         self,
