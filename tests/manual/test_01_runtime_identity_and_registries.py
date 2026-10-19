@@ -24,7 +24,6 @@ def reset_identity_state() -> None:
     ModifiableValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
 
 
 def test_first_runtime_object_prints_inspection_output(capsys) -> None:

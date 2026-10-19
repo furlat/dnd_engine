@@ -34,7 +34,6 @@ def reset_spell_feature_state(width: int = 8, height: int = 6) -> None:
     BaseCondition._registry.clear()
     ModifiableValue._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
     GridMap.reset()
     get_map().create_rectangle(0, 0, width, height)
 

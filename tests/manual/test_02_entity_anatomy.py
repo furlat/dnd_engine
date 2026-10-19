@@ -25,7 +25,6 @@ def reset_entity_anatomy_state() -> None:
     ModifiableValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
 
 
 def create_tutorial_hero() -> Entity:

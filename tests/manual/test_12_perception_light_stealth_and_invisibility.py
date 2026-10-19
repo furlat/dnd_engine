@@ -43,7 +43,6 @@ def reset_perception_tutorial_state(
     BaseCondition._registry.clear()
     ModifiableValue._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
     GridMap.reset()
     grid = get_map()
     grid.create_rectangle(0, 0, width, height)

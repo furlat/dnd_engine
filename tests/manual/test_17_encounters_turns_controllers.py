@@ -78,7 +78,6 @@ def reset_encounter_tutorial_state(width: int = 16, height: int = 10) -> None:
     BaseCondition._registry.clear()
     ModifiableValue._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
     Controller.clear_registry()
     Encounter.clear_registry()
     Encounter._combat_log_listeners.clear()
