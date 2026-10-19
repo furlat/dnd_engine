@@ -2,13 +2,24 @@
 
 `player-api-v1.schema.json` is exported directly from existing native/player type
 owners and the finite `server/protocol.py` envelopes. It has 19 public roots,
-334 shared definitions and 1,797 object-field rows. `protocol-identity.json` binds
-protocol 1 and player schema 15 to the exact canonical schema digest.
+378 shared definitions and 1,909 field-ledger rows. `protocol-identity.json` binds
+protocol 1 and player schema 16 to the exact canonical schema digest (`26c806949cd5…`).
 
 - `openapi.json`: actual HTTP paths, request/response types, identity headers,
   finite errors and SSE record types. Also served at the running host's `/openapi.json`.
 - `field-ledger.json`: each reachable field, required/default shape and source owner.
 - The Python and TypeScript packages carry the same schema and digest.
+
+## Event-native publication (schema 16)
+
+The server keeps no per-seat client state: each update is built from the session's one world and actor
+fold, event by event. A settlement's senses arrive as one composed `SensoryFact` per seat, with member
+bitsets on multi-observer seats; bodies arrive as body records (birth, change rows, item records), each
+loadout named by content id; static values (tile and object looks, boundary structures, effect content,
+visual loadouts) are sent once per seat; the combat log is rendered once per distinct disclosure.
+Position rows may carry a free-aim `position_region` and no listed cells: the client aims a cell and
+preview validates it. The complete client specification is
+[the schema-16 handout](../../agent_docs/GODOT_CLIENT_SCHEMA_16_HANDOUT_2026-10-19.md).
 
 ## Shared cells, rows and references (schema 15)
 

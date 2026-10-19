@@ -659,7 +659,7 @@ class BaseBlock(BaseModel):
         """Override in Entity to return Senses block for subjective perception."""
         return None
 
-    def action_scan(self, *, subjective: bool, with_navigation: bool = False) -> ActorScan:
+    def action_scan(self, *, subjective: bool) -> ActorScan:
         """The actor scan admission reads (plan §14.2); only creatures act."""
         raise ValueError(f"{self.name} does not perform actions")
 

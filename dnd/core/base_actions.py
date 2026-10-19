@@ -4,7 +4,7 @@ import time
 from dataclasses import replace
 from math import hypot
 
-from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, computed_field, field_validator, model_validator
+from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, field_validator, model_validator
 from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.attack_types import AttackSourceMetadata
 from dnd.core.creature_types import DamageType
@@ -24,7 +24,7 @@ from dnd.core.action_types import (
 from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRef, EventResolutionRef, EffectPropagationLink, EffectOrigin, EffectOriginKind
 from dnd.types.discovery import ActorScan, Relationship, ScanRecord, relationship
 from dnd.types.event_facts import GroupEntryKind
-from dnd.core.events import ActionApplicationCommittedEvent, ActionCostsCommittedEvent, Event, EventType, EventPhase, EventProcessor, Range, EventQueue
+from dnd.core.events import ActionApplicationCommittedEvent, ActionCostsCommittedEvent, Event, EventType, EventPhase, Range, EventQueue
 from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY, read_private_attribute, empty_list
 from dnd.types.world import MovementMode
 from dnd.types.class_features import FontConversion
@@ -54,7 +54,6 @@ from typing import (
     Optional,
     Callable,
     ClassVar,
-    OrderedDict,
     List,
     Dict,
     Iterable,
@@ -1060,9 +1059,6 @@ class BaseAction(BaseObject):
         default=False,
         description="Whether this action can be used while the source cannot take actions.",
     )
-    # Only an action whose costs depend on its selected target (Jump) needs
-    # its costs checked per discovery candidate.
-    target_dependent_costs: ClassVar[bool] = False
     position_discovery: Optional[PositionDiscoveryContract] = Field(
         default=None,
         description="Typed subjective candidate contract for plain position actions.",
@@ -2335,21 +2331,6 @@ class BaseAction(BaseObject):
             return self.get_all_targets()
         return [self.target_entity_uuid] if self.target_entity_uuid is not None else []
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        """Admit this executable instance's own selection through the one shared path (plan §14.3b).
-
-        Args:
-            declaration_event: Declaration-phase event to advance or cancel.
-
-        Returns:
-            Execution event on success, canceled event on validation failure, or
-            `None` if a subclass declines validation.
-        """
-        source = BaseBlock.get(self.source_entity_uuid)
-        if source is None:
-            return declaration_event.cancel(status_message="Source entity not found")
-        return self._admit(declaration_event, source.action_scan(subjective=False))
-
     def _admit(self, declaration_event: ActionEvent, scan: ActorScan) -> ActionEvent:
         """Every requirement of this instance's own selection, then handler admission, on the action's one scan."""
         error = (self.requirements_error(scan, self.current_selection())
@@ -2823,99 +2804,6 @@ class BaseAction(BaseObject):
                         for event in history):
                     history[-1].cancel(status_message="Owning action ended before item release")
 
-
-
-class StructuredAction(BaseAction):
-    """Action implementation backed by prerequisite and consequence processors."""
-
-    prerequisites: OrderedDict[str,EventProcessor] = Field(
-        default_factory=OrderedDict,
-        exclude=True,
-        description="Ordered prerequisite processors keyed by prerequisite name.",
-    )
-    consequences: OrderedDict[str,EventProcessor] = Field(
-        default_factory=OrderedDict,
-        exclude=True,
-        description="Ordered consequence processors keyed by consequence name.",
-    )
-    revalidate_prerequisites: bool = Field(
-        default=True,
-        description="Whether prerequisites are revalidated after each consequence.",
-    )
-    cost_applier: Optional[EventProcessor] = Field(
-        default=None,
-        exclude=True,
-        description="Optional processor used to apply action costs.",
-    )
-
-    @computed_field
-    @property
-    def prerequisite_names(self) -> List[str]:
-        """Serializable list of prerequisite names."""
-        return list(self.prerequisites.keys())
-
-    @computed_field
-    @property
-    def consequence_names(self) -> List[str]:
-        """Serializable list of consequence names."""
-        return list(self.consequences.keys())
-
-    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
-        """Run the consequence application pipeline."""
-        if execution_event.phase != EventPhase.EXECUTION:
-            raise ValueError(f"Action {self.name} consequences can only be applied in execution phase")
-
-        current_event = execution_event
-        effect_event = current_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applying consequences for {self.name}"
-        )
-        if effect_event.canceled:
-            return effect_event
-
-        current_event = effect_event
-        for consequence_name, consequence_function in self.consequences.items():
-            consequence_event = consequence_function(current_event, current_event.source_entity_uuid)
-            if consequence_event is None:
-                return current_event.cancel(status_message=f"Consequence {consequence_name} failed for {self.name}")
-            elif consequence_event.canceled:
-                return consequence_event
-
-            if self.revalidate_prerequisites:
-                if consequence_event.phase not in [EventPhase.EXECUTION, EventPhase.EFFECT]:
-                    raise ValueError(f"Consequence {consequence_name} returned event in invalid phase {consequence_event.phase}")
-                validated_event = self._validate(consequence_event)
-                if validated_event is None or validated_event.canceled:
-                    return validated_event
-                current_event = validated_event
-            else:
-                current_event = consequence_event
-
-        if current_event.phase is EventPhase.EXECUTION:
-            return current_event.phase_to(
-                EventPhase.EFFECT,
-                status_message=(
-                    f"Applied structured action {self.name} for "
-                    f"{current_event.source_entity_uuid}"
-                ),
-            )
-        if current_event.phase is not EventPhase.EFFECT:
-            raise ValueError(
-                f"Structured action {self.name} ended in invalid phase "
-                f"{current_event.phase}"
-            )
-        return current_event.with_updates(
-            status_message=(
-                f"Applied structured action {self.name} for "
-                f"{current_event.source_entity_uuid}"
-            ),
-        )
-
-    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
-        """Apply costs through the configured processor when present."""
-        if self.cost_applier is not None:
-            return self.cost_applier(execution_event, self.source_entity_uuid)
-        return execution_event
 
 
 class OpportunityAttackExposure(BaseModel):

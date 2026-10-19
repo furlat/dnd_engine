@@ -18,6 +18,10 @@ Legacy-case coverage map:
 * position-AoE event metadata: EX-F18
 """
 
+from dataclasses import replace
+
+from dnd.core.action_types import HasteActionPolicy
+from dnd.spells.transmutation import HasteEffect
 from typing import cast
 from uuid import UUID, uuid4
 
@@ -44,11 +48,6 @@ from dnd.blocks.action_economy import (
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.aoe import Sphere
-from dnd.core.action_types import (
-    ActionEconomyCostType,
-    RestrictedActionGrant,
-    RestrictedActionKind,
-)
 from dnd.core.base_actions import (
     AvailableActionInfo,
     Cost,
@@ -451,11 +450,7 @@ def test_target_count_routing_and_cleanup_follow_effective_target_type() -> None
     assert template.get_multi_target_count() is None
     assert restored.target_type is TargetType.CREATURE_OR_OBJECT
 
-    template.aoe_shape = Sphere(
-        source_entity_uuid=caster.uuid,
-        target=(2, 0),
-        radius_feet=10,
-    )
+    template.aoe_shape = Sphere(radius_feet=10)
     aoe_modified = apply_action_overrides(
         caster,
         lambda action: action.name == "Fire Bolt",
@@ -626,50 +621,39 @@ def test_upcast_variants_preserve_cost_swap_and_skip_slot_overrides() -> None:
         for cost in template.effective_costs
     )
 
-    template.alt_cost_type = "bonus_actions"
-    variants = template.generate_variants(caster)
+    # D17: one row lists the castable levels; the selection names the level.
+    def at_level(level: int):
+        return template.with_selection(replace(template.current_selection(), cast_at_level=level))
 
-    assert [variant.cast_at_level for variant in variants] == [2, 3, 4]
-    for variant in variants:
-        assert variant.registered_template_uuid == template.uuid
+    template.alt_cost_type = "bonus_actions"
+    for level in (2, 3, 4):
+        variant = at_level(level)
         assert any(
             cost.cost_type == "bonus_actions" and cost.cost == 1
             for cost in variant.effective_costs
         )
         assert any(
-            cost.cost_type == f"spell_slot_{variant.cast_at_level}"
+            cost.cost_type == f"spell_slot_{level}"
             for cost in variant.effective_costs
         )
 
     template.alt_cost_type = None
-    caster.action_economy.add_restricted_action_grant(
-        RestrictedActionGrant(
-            grant_id="test_spell_action",
-            owner_uuid=uuid4(),
-            resource_name="test_spell_action",
-            display_name="Test Spell Action",
-            allowed_kinds=frozenset({RestrictedActionKind.STANDARD_ACTION}),
-            replaced_cost_types=frozenset({ActionEconomyCostType.ACTIONS}),
-        ),
-    )
-    composed_variants = template.get_discovery_variants(caster)
-    assert len(composed_variants) == 6
-    assert all(
-        variant.registered_template_uuid == template.uuid
-        for variant in composed_variants
-    )
+    # A restricted grant counts while its owner condition is active: Haste's action, which may cast under
+    # the BG3 policy.
+    caster.action_economy.haste_action_policy = HasteActionPolicy.BG3_HONOUR
+    caster.add_condition(HasteEffect(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
+                                     apply_lethargy=False))
+    # The ordinary form and the one the restricted grant pays for, each listing every level.
+    assert len(template.discovery_forms(caster.action_scan(subjective=True))) == 2
 
     template.alt_cost_type = "bonus_actions"
     template.alt_skip_slot = True
-    slotless_variants = template.generate_variants(caster)
-
-    assert [variant.cast_at_level for variant in slotless_variants] == [2, 3, 4]
     assert all(
         not any(
             cost.cost_type.startswith("spell_slot_")
-            for cost in variant.effective_costs
+            for cost in at_level(level).effective_costs
         )
-        for variant in slotless_variants
+        for level in (2, 3, 4)
     )
     assert not any(
         cost.cost_type.startswith("spell_slot_")
@@ -851,11 +835,7 @@ def test_entity_to_position_aoe_uses_shape_for_convolution(
         template=False,
         alt_target_type=TargetType.POSITION_AOE,
         aoe_shape=(
-            Sphere(
-                source_entity_uuid=caster.uuid,
-                target=(3, 0),
-                radius_feet=10,
-            )
+            Sphere(radius_feet=10)
             if with_shape
             else None
         ),
@@ -1235,11 +1215,7 @@ def test_magic_missile_owns_projectile_count_and_target_resolution() -> None:
             cast_at_level=1,
             template=False,
             alt_target_type=TargetType.POSITION_AOE,
-            aoe_shape=Sphere(
-                source_entity_uuid=caster.uuid,
-                target=primary.position,
-                radius_feet=10,
-            ),
+            aoe_shape=Sphere(radius_feet=10),
         ).apply()
 
     event = assert_completed(result)

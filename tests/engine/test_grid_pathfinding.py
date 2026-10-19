@@ -597,7 +597,7 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
     jump_attempt = Jump(source_entity_uuid=actor.uuid, end_position=(3, 1))
     declaration = jump_attempt._create_declaration_event(use_register=False)
     assert declaration is not None
-    validated = jump_attempt._validate(declaration)
+    validated = jump_attempt._admit(declaration, actor.action_scan(subjective=False))
 
     assert validated.canceled is True
     assert validated.status_message is not None

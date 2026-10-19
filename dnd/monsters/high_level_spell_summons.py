@@ -505,16 +505,20 @@ def _declare(body: SpellBody):
                 )
             }
         )
-        saving = SavingThrowSetConfig()
-        for name in (
-            ("wisdom", "charisma")
-            if body.key == "deva"
-            else ("strength", "constitution", "intelligence", "charisma")
-            if body.key == "cambion"
-            else ()
-        ):
-            saving_value = SavingThrowConfig(proficiency=True)
-            setattr(saving, name + "_saving_throw", saving_value)
+        if body.key == "deva":
+            saving = SavingThrowSetConfig(
+                wisdom_saving_throw=SavingThrowConfig(proficiency=True),
+                charisma_saving_throw=SavingThrowConfig(proficiency=True),
+            )
+        elif body.key == "cambion":
+            saving = SavingThrowSetConfig(
+                strength_saving_throw=SavingThrowConfig(proficiency=True),
+                constitution_saving_throw=SavingThrowConfig(proficiency=True),
+                intelligence_saving_throw=SavingThrowConfig(proficiency=True),
+                charisma_saving_throw=SavingThrowConfig(proficiency=True),
+            )
+        else:
+            saving = SavingThrowSetConfig()
         entity = Entity.create(
             context.runtime_entity_uuid,
             context.display_name,

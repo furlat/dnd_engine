@@ -13,8 +13,7 @@ from typing import FrozenSet, Optional, Tuple
 from uuid import UUID
 
 from dnd.core.action_types import RestrictedActionGrant
-from dnd.core.creature_types import CreatureType, Size
-from dnd.core.life_types import LifeState
+from dnd.core.creature_types import CreatureType
 
 Position = Tuple[int, int]
 
@@ -41,14 +40,8 @@ def relationship(source_uuid: UUID, source_faction: Optional[str],
 class CreatureFacts:
     """Target-only facts the rules read, independent of any observer."""
 
-    uuid: UUID
     position: Position
     creature_type: CreatureType
-    life_state: LifeState
-    condition_names: FrozenSet[str]
-    blocks_external_contact: bool
-    faction: Optional[str]
-    size: Size
     has_positive_hp: bool
 
 
@@ -77,9 +70,6 @@ class ActorScan:
     `subjective` is the knowledge every check reads the world with: discovery
     and preview see what the actor perceives, execution sees the world.
 
-    `reach_cells` and `threat_domains` are navigation: only a
-    discovery scan carries them; an executed action's scan leaves them empty.
-
     `jump_feet` is the actor's jump distance (`Entity.jump_distance_feet`),
     read once for every landing a Jump admits.
     """
@@ -91,11 +81,6 @@ class ActorScan:
     creatures: Mapping[UUID, ScanRecord]
     objects: Mapping[UUID, ObjectRecord]
     carried_items: FrozenSet[UUID]
-    reach_cells: FrozenSet[Position]
-    threat_domains: Mapping[UUID, FrozenSet[Position]]
-    slot_capacity: Mapping[int, int]
     restricted_grants: Tuple[RestrictedActionGrant, ...]
-    free_cast_grants: FrozenSet[UUID]
-    source_item_charges: Mapping[UUID, int]
     active_encounter_uuid: Optional[UUID]
     jump_feet: int

@@ -155,9 +155,9 @@ def layer_value(layer: CellLayer, position: Position) -> int:
     return int(layer.values[i, j]) if 0 <= i < width and 0 <= j < height else 0
 
 
-def layer_positions(layer: CellLayer, mask: Optional[np.ndarray] = None) -> List[Position]:
-    """Map cells where the layer (or the given same-shaped mask) is nonzero, x-major sorted."""
-    xs, ys = np.nonzero(layer.values if mask is None else mask)
+def layer_positions(layer: CellLayer) -> List[Position]:
+    """Map cells where the layer is nonzero, x-major sorted."""
+    xs, ys = np.nonzero(layer.values)
     return list(zip((xs + layer.x0).tolist(), (ys + layer.y0).tolist()))
 
 

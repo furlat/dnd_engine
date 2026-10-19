@@ -175,7 +175,9 @@ def validate_attack_declaration(attack: Attack) -> AttackEvent | None:
     if declaration is None:
         return None
     assert isinstance(declaration, AttackEvent)
-    return attack._validate(declaration)
+    source = Entity.get(attack.source_entity_uuid)
+    assert source is not None
+    return attack._admit(declaration, source.action_scan(subjective=False))
 
 
 def strong_entity(

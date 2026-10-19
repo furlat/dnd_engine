@@ -4389,35 +4389,22 @@ class Entity(BaseBlock):
 
     def creature_facts(self) -> CreatureFacts:
         """Target-only facts the rules read about this creature (plan §14.2)."""
-        return CreatureFacts(uuid=self.uuid, position=self.position, creature_type=self.creature_type,
-            life_state=self.health.life_state, condition_names=frozenset(self.active_conditions),
-            blocks_external_contact=any(condition.blocks_external_contact and condition.contributions_active()
-                for condition in self.active_conditions_by_uuid.values()),
-            faction=self.faction, size=self.size, has_positive_hp=self._has_positive_normal_hp_for_discovery(self))
+        return CreatureFacts(position=self.position, creature_type=self.creature_type,
+            has_positive_hp=self._has_positive_normal_hp_for_discovery(self))
 
-    def action_scan(self, *, subjective: bool, with_navigation: bool = False) -> ActorScan:
+    def action_scan(self, *, subjective: bool) -> ActorScan:
         """Everything the admission checks read, built once per discovery call or action (plan §14.2).
 
         `subjective` is stated by every caller: discovery and preview read what
         this creature perceives, execution reads the world.
-
-        Admission reads perception, grants and charges. Navigation (reachable
-        costs, the reach mask, threat domains) is built only when discovery
-        asks for it: an executed action never pays for it.
         """
         record_action_count("discovery.action_scan", 1)
-        grid = get_map()
         creatures: Dict[UUID, ScanRecord] = {}
         for identity, contact in self.senses.entities.items():
             other = Entity.get(identity)
             if other is not None:
                 creatures[identity] = ScanRecord(facts=other.creature_facts(), position=contact.position,
                     visual=contact.visual, relationship=relationship(self.uuid, self.faction, identity, other.faction))
-        x, y = self.position
-        reach_cells = frozenset(cell for cell in ((x + dx, y + dy) for dx in range(-2, 3) for dy in range(-2, 3))
-            if cell != self.position and grid.has_tile(*cell)
-            and grid.can_reach_between(self.position, cell, PhysicalAccess.HAND, self.uuid,
-                                       subjective=subjective)) if with_navigation else frozenset()
         carried = (*self.inventory.items.values(), *self.equipment.get_all_equipped_items())
         return ActorScan(
             actor_uuid=self.uuid,
@@ -4428,13 +4415,7 @@ class Entity(BaseBlock):
             objects={identity: ObjectRecord(uuid=identity, position=contact.position)
                      for identity, contact in self.senses.objects.items()},
             carried_items=frozenset(item.uuid for item in carried),
-            reach_cells=reach_cells,
-            threat_domains=({reactor.uuid: frozenset(cells) for reactor, cells in self._visible_hostile_threat_domains()}
-                            if with_navigation else {}),
-            slot_capacity={level: self.action_economy.spell_slot_value(level).normalized_score for level in range(1, 10)},
             restricted_grants=self.get_restricted_action_grants(),
-            free_cast_grants=frozenset(self.spellcasting.free_cast_grants),
-            source_item_charges={item.uuid: item.charges for item in carried if isinstance(item, UsableItem)},
             active_encounter_uuid=self.active_encounter_uuid,
             jump_feet=self.jump_distance_feet(),
         )
@@ -5734,8 +5715,6 @@ class Entity(BaseBlock):
             if error is not None:
                 continue
             rules_valid_count += 1
-            if template.target_dependent_costs and not template.with_selection(selection).check_costs():
-                continue
             target_entity = BaseBlock.get(target_uuid)
             if contact is not None:
                 target_pos = contact
@@ -6494,8 +6473,8 @@ class Entity(BaseBlock):
                         exits = threats()
                         base = template.current_selection()
                         # Costs that do not depend on the destination are checked once per template.
-                        fixed_cost = (None if template.target_dependent_costs else (template.check_costs(), sum(
-                            cost.cost for cost in template.effective_costs if cost.cost_type == "movement")))
+                        affordable, path_cost = template.check_costs(), sum(
+                            cost.cost for cost in template.effective_costs if cost.cost_type == "movement")
                         for index, position in enumerate(route_destinations(paths_by_position)):
                             if position == self.senses.position:
                                 continue
@@ -6504,13 +6483,6 @@ class Entity(BaseBlock):
                             if template.discovery_error(scan, selection) is not None:
                                 continue
                             rules_valid_count += 1
-                            if fixed_cost is None:
-                                executable = template.with_selection(selection)
-                                affordable = executable.check_costs()
-                                path_cost = sum(cost.cost for cost in executable.effective_costs
-                                                if cost.cost_type == "movement")
-                            else:
-                                affordable, path_cost = fixed_cost
                             if not affordable:
                                 continue
                             normal_path = destination_path(paths_by_position, index)
@@ -7016,8 +6988,7 @@ class Entity(BaseBlock):
                     continue
                 selection = replace(base, target_uuids=(obj_uuid,))
                 record_action_count("discovery.validation", 1)
-                if template.discovery_error(scan, selection) is None and (
-                        not template.target_dependent_costs or template.with_selection(selection).check_costs()):
+                if template.discovery_error(scan, selection) is None:
                     obj_name = obj_block.name if obj_block else "Object"
                     distance = self.senses.get_feet_distance(obj_pos)
                     valid_targets.append(AvailableTarget(
@@ -7376,9 +7347,7 @@ class Entity(BaseBlock):
                         continue
                     selection = replace(use_base, positions=(pos,))
                     record_action_count("discovery.validation", 1)
-                    if use_template.discovery_error(scan, selection) is None and (
-                            not use_template.target_dependent_costs
-                            or use_template.with_selection(selection).check_costs()):
+                    if use_template.discovery_error(scan, selection) is None:
                         use_valid_positions_pos.append(AvailableTarget(
                             index=use_idx,
                             position=pos,

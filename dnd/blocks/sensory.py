@@ -492,7 +492,6 @@ def emit_sensory_update_delta(
     initial: bool = False,
     cells: CellChange,
     settlement: int,
-    contact_changes: Optional[Tuple[FrozenSet[UUID], FrozenSet[UUID]]] = None,
     shared: Optional[SharedValues] = None,
     contact_deltas: Optional[Tuple[Tuple[Dict[UUID, PerceivedContact], Set[UUID]],
                                    Tuple[Dict[UUID, PerceivedContact], Set[UUID]]]] = None,
@@ -509,7 +508,6 @@ def emit_sensory_update_delta(
         initial: Publish the complete after-state without an unrecorded seed.
         cells: The cell change of this before and after (`_cell_change`), against no cells when initial.
         settlement: The settlement the transition belongs to (`SpatialSensesSystem._settlement`).
-        contact_changes: The entities and objects whose contacts can differ, when known.
         shared: The settlement's shared values: equal change references are built once.
         contact_deltas: The entity and object contact deltas, when the caller computed them.
 
@@ -523,11 +521,8 @@ def emit_sensory_update_delta(
     light_changed, hazards_changed = cells.light_changed, cells.hazards_changed
 
     if contact_deltas is None:
-        contact_deltas = (
-            _contact_delta(before.entities, after.entities, initial,
-                           contact_changes[0] if contact_changes is not None else None),
-            _contact_delta(before.objects, after.objects, initial,
-                           contact_changes[1] if contact_changes is not None else None))
+        contact_deltas = (_contact_delta(before.entities, after.entities, initial, None),
+                          _contact_delta(before.objects, after.objects, initial, None))
     (entity_changed, entity_removed), (object_changed, object_removed) = contact_deltas
     effects_changed = {
         identity: value for identity, value in after.spatial_effects.items()

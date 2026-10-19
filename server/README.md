@@ -2,9 +2,8 @@
 
 The service hosts independent encounters in exclusively leased Python workers. It exposes
 authorized player values over HTTP and one SSE stream per attached seat. It does
-not import the old `server_obsolete/`, render assets, make rules decisions, or wait for
-animations. `dnd/player` is the shared application, capture, projection and reducer
-used by the desktop and headless clients.
+not render assets, make rules decisions, or wait for animations. `dnd/player` is the
+shared application, capture, projection and reducer used by the headless clients.
 
 ## Start
 
@@ -118,7 +117,7 @@ Concrete working configurations are in
 ## Protocol
 
 The authoritative export is [sdk/protocol](../sdk/protocol/README.md): protocol 1,
-player schema 8. Both SDKs validate the same digest and types. Transport operations,
+player schema 16. Clients validate the same digest and types. Transport operations,
 disclosed event occurrence indices and native private history indices are distinct.
 Native history indices never become public sequence counters.
 

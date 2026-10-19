@@ -1509,9 +1509,10 @@ def test_weapon_attack_events_have_one_metadata_snapshot_boundary() -> None:
     )
 
 
-# The modules that publish, fold or check a seat's world; the AI's movement edges and the fold's changed-cell
-# neighbours iterate the direction tables for adjacency, which is not a boundary's incident cells.
-BOUNDARY_READERS = ("dnd/player", "dnd/world_facts.py", "devtools/performance/seat_oracle.py")
+# The modules that publish, fold or check a seat's world, and the grid's object contact; the AI's movement edges
+# and the fold's changed-cell neighbours iterate the direction tables for adjacency, which is not a boundary's
+# incident cells.
+BOUNDARY_READERS = ("dnd/player", "dnd/world_facts.py", "devtools/performance/seat_oracle.py", "dnd/core/gridmap.py")
 DIRECTION_TABLES = frozenset({"CARDINAL_DELTAS", "OPPOSITE_DIRECTION"})
 
 

@@ -304,44 +304,22 @@ def main():
         increment('world_update.visible_tiles_available', mask_count(view.visible))
         increment('world_update.applied_records', len(applied))
 
-    def audience_count(composition, audience, observer_uuid, event, cursor):
-        increment('audience.current.visible_added', mask_count(event.visible_cells_added))
-        increment('audience.current.visible_removed', mask_count(event.visible_cells_removed))
-        increment('audience.current.seen_added', mask_count(event.seen_cells_added))
-        increment('audience.current.entity_changed', len(event.entity_contacts_changed))
-        increment('audience.current.object_changed', len(event.object_contacts_changed))
-        increment('audience.current.effect_changed', len(event.spatial_effects_changed))
-        increment('audience.current.visible_effect_candidates',
-            len(composition.visible_effects.get(event.observer_uuid, ())))
-        increment('audience.current.retained_seen_available', mask_count(composition.view.seen) if composition.view else 0)
-
     modules = (
         (worker, 'execute_player_action', 'action.execute', worker.execute_player_action, None),
         (worker, 'capture_application_operation', 'audience.capture_project', worker.capture_application_operation, None),
         (sensory, 'capture_senses_snapshot', 'sensory.snapshot', sensory.capture_senses_snapshot, snapshot_count),
         (sensory, 'emit_sensory_update_delta', 'sensory.delta', sensory.emit_sensory_update_delta, None),
-        (capture, 'copy_target', 'capture.copy_target', capture.copy_target, target_count),
-        (capture, '_copy_snapshot', 'capture.copy_snapshot', capture._copy_snapshot, snapshot_count),
         (reduction, 'copy_target', 'reduction.copy_target', reduction.copy_target, target_count),
         (reduction, 'reduce_nodes', 'reduction.nodes', reduction.reduce_nodes, None),
         (application, 'capture_lineages', 'capture.lineages', application.capture_lineages, None),
         (application, 'project_lineages', 'projection.lineage', application.project_lineages, None),
         (projection, 'seat_world_update', 'projection.world_update', projection.seat_world_update, world_count),
         (projection, '_public_occurrences', 'projection.occurrences', projection._public_occurrences, None),
-        (projection, '_disclosed_actor', 'projection.disclosed_actor', projection._disclosed_actor, None),
-        (reduction, 'apply_current_audience', 'audience.current', reduction.apply_current_audience, audience_count),
         (audience, 'apply_current_senses', 'audience.current_member_senses', audience.apply_current_senses, None),
-        (audience, '_current_effect', 'audience.current_effect', audience._current_effect, None),
-        (audience, '_join_effect', 'audience.join_effect', audience._join_effect, None),
-        (reduction, 'audience_view', 'audience.view', reduction.audience_view, None),
-        (reduction, 'observe_audience', 'audience.observe', reduction.observe_audience, None),
-        (audience, 'reduce_senses_snapshot', 'audience.reduce_member_senses', audience.reduce_senses_snapshot,
-            lambda observer, before, event: snapshot_count(before)),
     )
     methods = (
         (sensory.SpatialSensesSystem, '__call__', 'sensory.callback', sensory.SpatialSensesSystem.__call__),
         (sensory.SpatialSensesSystem, 'recompute_observer', 'sensory.full_solve', sensory.SpatialSensesSystem.recompute_observer),
-        (sensory.SpatialSensesSystem, '_collect_boundary_evidence', 'sensory.boundaries', sensory.SpatialSensesSystem._collect_boundary_evidence),
         (GridMap, 'move_light_source', 'grid.move_light', GridMap.move_light_source),
         (GridMap, 'compute_fov_cells', 'grid.fov', GridMap.compute_fov_cells),
         (GridMap, 'compute_paths', 'grid.paths', GridMap.compute_paths),

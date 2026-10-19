@@ -726,11 +726,6 @@ class BaseCondition(BaseObject):
         self.context = context
         self.duration.context = context
 
-    def clear_context(self) -> None:
-        """Clear runtime context from the condition and duration."""
-        self.context = None
-        self.duration.context = None
-
     def supports_level_reduction(self) -> bool:
         """Return whether this condition can be replaced by a lower level."""
         return False

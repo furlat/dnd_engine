@@ -249,12 +249,3 @@ class BaseObject(BaseModel):
                     del obj
                 else:
                     obj.remove_from_register()
-
-    def set_context(self, context: Dict[str, Any]) -> None:
-        """Set runtime context for this object.
-
-        Args:
-            context: Context dictionary to attach.
-        """
-        self.context = context
-

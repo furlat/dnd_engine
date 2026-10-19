@@ -8,7 +8,7 @@ from devtools.generate_event_contract import import_dnd_modules
 
 
 from dnd.actions import SpellAction
-from dnd.core.base_actions import BaseAction, StructuredAction
+from dnd.core.base_actions import BaseAction
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.items.consumables import _PotionDrinkAction
@@ -16,7 +16,6 @@ from dnd.items.consumables import _PotionDrinkAction
 
 EXPECTED_ABSTRACT_ACTION_MECHANISMS = frozenset({
     SpellAction,
-    StructuredAction,
     _PotionDrinkAction,
 })
 
