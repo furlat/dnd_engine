@@ -7,7 +7,7 @@ the seat's stamp only through `world_stamps.unchanged_since`), the seat's compos
 and the seat's knowledge (the objects it observes, the containers whose contents it sees and the static rows it
 was sent), which `seat_world_update` advances. The client's memory is never read: what it holds follows from the
 rules
-(EVENT_NATIVE_PUBLICATION_PLAN_2026-10-18 §3.2-§3.5; world brief §2-§3):
+(EVENT_NATIVE_PUBLICATION_PLAN_2026-10-18 §3.2-§3.5; GODOT_CLIENT_SCHEMA_16_HANDOUT_2026-10-19 §2.4):
 
 - a record perceived before and after the occurrence travels as its keyed change;
 - a record entering perception travels whole: a cell entering the composed view (or a visible tile replaced),
@@ -143,7 +143,7 @@ def object_members(world: WorldFacts, perception: AudiencePerception, audience: 
                    identity: UUID) -> int | None:
     """Which observers observe the object (bit i: `audience.observers[i]`); None for a one-observer seat.
 
-    Exact whenever an object row is sent; between rows the client holds the bits of its last row (D2), and a
+    Exact whenever an object row is sent; between rows the client holds the bits of its last row (plan §8, Q1), and a
     contact's members are the sensory contact rows' (`object_contact_members`, E3-sensory)."""
     if len(audience.observers) == 1:
         return None

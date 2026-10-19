@@ -112,7 +112,7 @@ class WorldInterval:
     retained bodies (a sensory version's payload left out) and condition facts.
 
     Server-side projection input only: it reaches no seat's wire, spool or replay. Every seat of a session starts
-    from the same one (EVENT_NATIVE_PUBLICATION_PLAN §5b; coordinator, 2026-10-18).
+    from the same one (EVENT_NATIVE_PUBLICATION_PLAN §5b).
     """
 
     events: tuple[tuple[int, RecordedEvent], ...] = ()

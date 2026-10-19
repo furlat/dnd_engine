@@ -161,7 +161,7 @@ def update_light_sources(
     """Recompose only the named sources; every other source keeps its composed row.
 
     A source's composed row depends only on the members' rows for that source,
-    so this equals `light_sources(perception)` restricted to `identities`.
+    so this equals the cold composition (`composed_view`) restricted to `identities`.
     """
     lights, removals = dict(lights), dict(removals)
     observers = sorted(perception.members, key=lambda value: value.int)
@@ -382,8 +382,8 @@ def composed_view(perception: AudiencePerception, observer_uuid: UUID) -> Senses
 
     Each visible cell shows the observation of the member seeing it in the brightest light (ties: the smaller
     uuid); each contact, its visual holder's (ties: the smaller uuid); each effect, its members' visible parts
-    (`_composed_effect`); each light source, its newest rows. The seen cells are every member's; the scalar
-    capabilities stay the stream observer's (the first member's before it perceives). It grants no actor
+    (`_composed_effect`); each light source, its newest rows. The view keeps no seen cells and no path flag (the
+    client folds seen; a settlement's `paths_dirty` travels on its change); the scalar capabilities stay the stream observer's (the first member's before it perceives). It grants no actor
     additional senses or actions. `apply_settlement` keeps it incrementally.
     """
     if not perception.members:
@@ -401,9 +401,8 @@ def composed_view(perception: AudiencePerception, observer_uuid: UUID) -> Senses
     names = {identity for senses in members.values() for identity in (*senses.light_sources, *senses.light_source_removals)}
     lights, removals = update_light_sources(perception, names, {}, {})
     return replace(anchor, light_sources=lights, light_source_removals=removals, visible=visible,
-        seen=mask_union(*(senses.seen for senses in members.values())), entities=entities, objects=objects,
-        effective_light_levels=light, hazardous_cells=hazards, spatial_effects=effects,
-        paths_dirty=any(senses.paths_dirty for senses in members.values()))
+        seen=EMPTY_CELLS, paths_dirty=False, entities=entities, objects=objects,
+        effective_light_levels=light, hazardous_cells=hazards, spatial_effects=effects)
 
 
 @dataclass(slots=True)
@@ -428,7 +427,6 @@ class AudienceComposition:
     entity_members: dict[UUID, set[UUID]] = field(default_factory=dict)
     object_members: dict[UUID, set[UUID]] = field(default_factory=dict)
     effect_members: dict[UUID, set[UUID]] = field(default_factory=dict)
-    dirty_members: set[UUID] = field(default_factory=set)
 
 
 def _membership(index: dict, key, identity: UUID, present: bool) -> None:
@@ -524,7 +522,6 @@ def apply_settlement(current: AudienceComposition, audience: PlayerAudience, obs
     light_names: set[UUID] = set()
     retired: dict[UUID, set[Position]] = {}
     initial = any(event.initial for event in events)
-    seen_added = []
     for event in events:
         if not audience.observes(event.observer_uuid):
             raise ValueError("Sensory observation does not belong to this audience")
@@ -576,13 +573,8 @@ def apply_settlement(current: AudienceComposition, audience: PlayerAudience, obs
                 if gone:
                     retired.setdefault(identity, set()).update(gone)
         light_names.update(event.light_sources_changed, event.light_sources_removed)
-        seen_added.append(event.seen_cells_added)
-        if member.paths_dirty:
-            current.dirty_members.add(observer)
-        else:
-            current.dirty_members.discard(observer)
         if current.view is None:
-            current.view = replace(member, visible=EMPTY_CELLS, seen=EMPTY_CELLS, entities={}, objects={},
+            current.view = replace(member, visible=EMPTY_CELLS, seen=EMPTY_CELLS, paths_dirty=False, entities={}, objects={},
                 effective_light_levels=EMPTY_VALUES, hazardous_cells=EMPTY_VALUES, spatial_effects={},
                 light_sources={}, light_source_removals={})
         _fold_view_cells(current, observer, before, member, cells, hazards_only=not (event.initial or added.width
@@ -624,11 +616,9 @@ def apply_settlement(current: AudienceComposition, audience: PlayerAudience, obs
     anchor = perception.members.get(observer_uuid) or next(iter(perception.members.values()))
     current.view = replace(view, entities=entities_after, objects=objects_after, spatial_effects=effects_after,
         light_sources=lights, light_source_removals=removals,
-        seen=(mask_union(*(senses.seen for senses in perception.members.values())) if initial
-              else mask_union(view.seen, *seen_added)),
         position=anchor.position, passive_perception=anchor.passive_perception,
         sense_modes_key=anchor.sense_modes_key, sense_modes=anchor.sense_modes,
-        visual_access=anchor.visual_access, paths_dirty=bool(current.dirty_members))
+        visual_access=anchor.visual_access)
     after_view = current.view
     added_cells, removed_cells, light_values, hazard_values = _cells_change(before_view, after_view)
     entered = before_view is None

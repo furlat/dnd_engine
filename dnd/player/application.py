@@ -20,8 +20,9 @@ from dnd.player.session import Operation, Session
 class AudienceRuntime:
     """One seat's projection: its knowledge (control, perception, what static content it was sent).
 
-    `capture` is the session's one recorded fold and `session` what its seats share in projection: the same
-    values for every seat.
+    `capture` is the session's recorded evidence (births, pending trees, initiative) and `session`
+    (`SessionProjection`) the folds every seat shares in projection: the world and the actors as of each
+    occurrence, the same values for every seat.
     """
 
     projection: ProjectionState

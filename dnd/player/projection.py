@@ -1,8 +1,9 @@
 """Project private recorded facts into the public player packet.
 
 Perception is already resolved by native events. This module selects existing
-authority, remembers last-observed world values, and copies committed facts;
-it never asks the live engine what an observer can see.
+authority and publishes each event's change to every seat from the session folds
+and each seat's knowledge; it keeps no copy of a seat's values and never asks the
+live engine what an observer can see.
 """
 
 from collections.abc import Callable, Collection, Iterable, Mapping
@@ -292,7 +293,7 @@ def _settlement_fact(change: ComposedChange, view: SensesSnapshot, state: "Proje
     disclosed fields); a record entering perception whole (an effect with its content the first time the seat
     sees it); a record leaving perception by key. Contacts and effects carry the members perceiving them (bit i:
     the audience's `observers[i]`). An effect's duration is shown only to the seat owning it, so a non-owner's
-    duration tick sends nothing. Retired cells (D1 (a)) name only effects the seat was sent, outside their
+    duration tick sends nothing. Retired cells (plan §8, found-effect memory) name only effects the seat was sent, outside their
     perceived cells after the settlement."""
     table = walk.table
     bits = {member: 1 << index for index, member in enumerate(state.audience.observers)}
@@ -1231,7 +1232,7 @@ def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event,
         observed_objects=set(state.observed_objects))
 
 
-def _enter_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", world: WorldFacts, event: Event) -> None:
+def _enter_event(walk: SeatWalk, state: "ProjectionState", world: WorldFacts, event: Event) -> None:
     """A seat's part of an event before the session folds take its after-values: the captures due at its cursor."""
     view = state.audience_composition.view
     for identity in walk.removals_at.get(event.uuid, ()):
@@ -1970,7 +1971,7 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
         condition = conditions.get(event.uuid)
         due = steps.get(index, ())
         for seat, row in due:
-            _enter_event(walks[seat], group, states[seat], session.world, row)
+            _enter_event(walks[seat], states[seat], session.world, row)
         step = _fold_actors(session.actors, session.names, folded, event, changes, condition)
         applied = _fold_version(session, folded, event, condition)
         for seat, row in due:
@@ -2043,7 +2044,7 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
             source = next(sources, None)
         condition = walks[0].facts.get(event.uuid)
         for walk, state in zip(walks, states):
-            _enter_event(walk, group, state, session.world, walk.events[position])
+            _enter_event(walk, state, session.world, walk.events[position])
         step = _fold_actors(session.actors, session.names, folded, event, walks[0].actor_fact_changes, condition)
         applied = _fold_version(session, folded, event, condition)
         for walk, state in zip(walks, states):

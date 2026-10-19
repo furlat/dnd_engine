@@ -365,7 +365,7 @@ def _patched_light(before: PlayerLightSource, patch: LightPatch, uuids: tuple[UU
 def _remember_effects(memory: dict[UUID, PerceivedSpatialEffect], effects: Mapping[UUID, PerceivedSpatialEffect],
                       left: Mapping[UUID, tuple[PerceivedSpatialEffect, set[tuple[int, int]]]],
                       retired: Mapping[UUID, set[tuple[int, int]]], visible: CellMask) -> None:
-    """The client's effect memory after a change (plan §3.2, decision D1 (a)).
+    """The client's effect memory after a change (plan §3.2; found effects are kept until a member saw their cells empty).
 
     Cells that left an effect's visible part are remembered with the effect as last perceived. A remembered
     cell is forgotten when it is in the effect's visible part again (it is perceived), when a member saw the

@@ -780,7 +780,7 @@ class SensoryRows:
     `contact_members[i]`. Sighting row i is the effect `uuids[sighting_uuid_index[i]]` entering perception as
     `sightings[i]`, by the members `sighting_members[i]`. Patch row i changes the perceived effect
     `uuids[patch_uuid_index[i]]` by `sighting_patches[i]`. Retired row i: the effect `uuids[retired_uuid_index[i]]`
-    left the cells `retired_cells[i]` as a member saw them (plan D1 (a)). `light_sources[i]` is a source entering
+    left the cells `retired_cells[i]` as a member saw them (plan §3.2, found-effect memory). `light_sources[i]` is a source entering
     perception, `light_patches[i]` the change of one perceived before and after.
 
     A seat with one observer leaves out both member columns: every row is perceived by that observer. Otherwise

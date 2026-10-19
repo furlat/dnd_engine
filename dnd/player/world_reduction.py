@@ -1,6 +1,6 @@
 """The client's world fold of the schema-16 wire: what it holds of tiles, objects, contents and connectors.
 
-The memory rules the client owns (plan §3.2, §3.4; world brief §3.3):
+The memory rules the client owns (plan §3.2, §3.4; GODOT_CLIENT_SCHEMA_16_HANDOUT_2026-10-19 §3):
 
 - what the seat saw go is dropped first (`objects_removed`, `connectors_removed`);
 - entering cells are authoritative: everything held there is dropped and replaced by what the update carries,

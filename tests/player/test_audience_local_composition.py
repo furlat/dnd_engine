@@ -88,7 +88,6 @@ def test_shared_light_contact_ties_and_member_reset_keep_other_evidence():
         delta(FIRST, effective_light_levels_changed={(0, 0): LightLevel.BRIGHT_LIGHT.value}),
         delta(FIRST, initial=True, visible_cells_added=[(2, 0)], seen_cells_added=[(2, 0)]),
     ])
-    assert cells(current.view.seen) == {(0, 0), (2, 0)}
     assert value_at(current.view.hazardous_cells, (0, 0)) == 1
     assert current.view.entities[SUBJECT] == distant
     assert cells(current.view.visible) == {(0, 0), (2, 0)}
@@ -190,4 +189,5 @@ def test_rejected_delta_does_not_mutate():
         apply_settlement(current, AUDIENCE, FIRST, [delta(SECOND, visible_cells_added=[(2, 0)])])
     assert current == before
     apply_settlement(current, AUDIENCE, FIRST, [delta(FIRST, seen_cells_added=[(2, 0)])])
-    assert cells(current.view.seen) == {(0, 0), (2, 0)}
+    # The server keeps no seen cells: the client folds them (plan §3.2).
+    assert cells(current.view.seen) == set()

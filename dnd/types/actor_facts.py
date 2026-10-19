@@ -145,8 +145,6 @@ class ChangeField(StrEnum):
     RESOLVED_SIZE = "resolved_size"
     SPATIAL_DISPOSITION = "spatial_disposition"
     WEAPON_SET = "active_weapon_set"
-    HEALING_BLOCKED = "healing_blocked"
-    DAMAGE_AFFINITIES = "damage_affinities"
     CONDITION = "condition"
     CONDITION_DURATION = "condition_duration"
     LAYER = "layer"

@@ -41,7 +41,6 @@ class Disclosure(StrEnum):
 
     CONTROLLER = "controller"  # the seat controls the actor
     OBSERVER = "observer"  # the seat perceives the actor at the event (its controller too)
-    NOBODY = "nobody"  # the session and AI folds only: no row
 
 
 DISCLOSURE: Mapping[ChangeField, Disclosure] = MappingProxyType({
@@ -61,8 +60,6 @@ DISCLOSURE: Mapping[ChangeField, Disclosure] = MappingProxyType({
     ChangeField.INVENTORY: Disclosure.CONTROLLER,
     ChangeField.ITEM_STATE: Disclosure.CONTROLLER,
     ChangeField.ITEM_EFFECT_DURATION: Disclosure.CONTROLLER,
-    ChangeField.HEALING_BLOCKED: Disclosure.NOBODY,
-    ChangeField.DAMAGE_AFFINITIES: Disclosure.NOBODY,
 })
 
 
@@ -247,8 +244,8 @@ def change_rows(change: ActorFactChange, actors: Mapping[UUID, ActorState], *, c
 
     `actors` is the session fold before the event. Only the fields the record names are read, each against the
     session fold's value of that same field: a scalar becomes a row when its after-value differs from it; the
-    memberships, holdings and item operations are keyed against it. The engine-only scalars (`DISCLOSURE` NOBODY) have no row, and the
-    ones the event's own presentation fact carries (faction, life state, remains, occupancy) none either.
+    memberships, holdings and item operations are keyed against it. The ones the event's own presentation fact
+    carries (faction, life state, remains, occupancy) none either.
     `consumed` tells how an ended membership ended (its event's presentation; the record names only its key).
     """
     result: list[ActorRows] = []
