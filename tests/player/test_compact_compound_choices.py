@@ -2,7 +2,7 @@
 
 import pytest
 
-from dnd.actions_functional import get_available_actions, preview_available_selection, register_spell
+from dnd.actions_functional import free_aim_target, get_available_actions, preview_available_selection, register_spell
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.entity import Entity
 from dnd.player.choice_projection import project_choices, project_selection_preview
@@ -13,6 +13,7 @@ from dnd.spells.transmutation import Telekinesis
 from dnd.spells.walls import WallOfFire
 from tests.manual.spell_regression_support import create_spell_regression_actor, reset_spell_regression_arena
 from tests.player.test_compact_choices import native_value
+from tests.player.test_high_level_spell_transport import region_aims
 
 
 @pytest.fixture
@@ -78,7 +79,17 @@ def test_ordered_position_preview_uses_its_own_coordinates(scene, spell, behavio
     caster, (near, _, _), _ = scene
     near.faction = caster.faction
     native, row, compact = discover(scene, spell, behavior)
-    selected = native.valid_targets[0]
+    if native.valid_targets:
+        selected = native.valid_targets[0]
+    else:
+        # A free-aim start (Wall of Fire): the nearest aimed cell whose preview offers an endpoint.
+        assert native.position_region is not None
+        selected = None
+        for aim in region_aims(caster, native.position_region):
+            if preview_available_selection(caster, native, (free_aim_target(native, aim),)).next_positions:
+                selected = free_aim_target(native, aim)
+                break
+        assert selected is not None
     expected = preview_available_selection(caster, native, (selected,))
     assert expected.next_positions
     preview = PlayerSelectionPreview.model_validate_json(project_selection_preview(expected).model_dump_json())

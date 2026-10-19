@@ -8,8 +8,8 @@ import pytest
 
 from dnd.actions import SpellEvent
 from dnd.actions_functional import (
-    execute_available_action, get_available_actions, preview_available_selection,
-    register_spell, setup_standard_actions,
+    execute_available_action, free_aim_target, get_available_actions, preview_available_selection,
+    register_spell, selection_admission_error, setup_standard_actions,
 )
 from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.aoe import (
@@ -122,7 +122,7 @@ def test_empty_selected_blast_is_computed_and_required_targets_still_gate_aims(s
     register_spell(caster, Fireball)
     Entity.update_all_entities_senses(max_distance=120)
     bare = area_rows(get_available_actions(caster, include_aoe_preview=False), "Fireball")[0]
-    empty = next(target for target in bare.valid_targets if target.position == (11, 9))
+    empty = free_aim_target(bare, (11, 9))
     preview = preview_available_selection(caster, bare, (empty,))
     assert preview.can_confirm and preview.area_preview == "computed"
     assert preview.affected_entity_uuids == () and preview.affected_entity_names == ()
@@ -133,6 +133,8 @@ def test_empty_selected_blast_is_computed_and_required_targets_still_gate_aims(s
     required = area_rows(get_available_actions(caster, include_aoe_preview=False), "Fireball")
     assert [row.model_dump() for row in required] == [row.model_dump() for row in rich]
     assert not any(target.position == empty.position for row in required for target in row.valid_targets)
+    assert not any(row.position_region is not None and selection_admission_error(caster, row,
+        (free_aim_target(row, (11, 9)),)) is None for row in required)
 
 
 def test_item_area_aims_keep_details_optional_and_execute_without_preview(scene):
@@ -167,9 +169,10 @@ def test_item_area_range_origin_and_firing_sector_survive_deferred_discovery(sce
     bare = next(row for row in get_available_actions(caster, include_aoe_preview=False).position_actions
         if row.source_item_uuid == device.uuid)
     assert admission([rich]) == admission([bare])
-    selected = next(target for target in bare.valid_targets if target.position == (4, 4))
-    assert selected.distance == 5
-    assert not any(target.position == (3, 5) for target in bare.valid_targets)
+    # Free aims: 5 ft from the device inside its sector is admitted; the adjacent cell outside the sector is not.
+    selected = free_aim_target(bare, (4, 4))
+    assert selection_admission_error(caster, bare, (selected,)) is None
+    assert selection_admission_error(caster, bare, (free_aim_target(bare, (3, 5)),)) is not None
     assert bare.execution_template.get_target_origin() == device.position
     preview = preview_available_selection(caster, bare, (selected,))
     assert preview.can_confirm and preview.area_preview == "computed"

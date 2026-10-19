@@ -12,6 +12,7 @@ from dnd.core.base_block import MovementMode
 from dnd.core.base_tiles import floor_factory, wall_factory
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.events import EventQueue
+from dnd.actions_functional import free_aim_target, selection_admission_error
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -22,20 +23,9 @@ from tests.engine.test_sensory_initial_replay import sensory_since
 from dnd.types.cells import cell_in
 from dnd.core.cells import mask_positions
 from dnd.core.sensory_fold import reduce_senses_snapshot
-from dnd.core.navigation import has_route, route
+from dnd.core.navigation import has_route, route, route_destinations
 from dnd.core.view import layer_positions
 from tests.engine.support import route_paths, search_tables
-
-
-class ReachableVariant(BaseAction):
-    """A visible template whose actual discovery form consumes known paths."""
-
-    target_type: TargetType = TargetType.POSITION
-    position_discovery: PositionDiscoveryContract = PositionDiscoveryContract()
-
-    def get_discovery_variants(self, entity):
-        return [self.model_copy(update={"position_discovery": PositionDiscoveryContract(
-            candidate_source="reachable")})]
 
 
 def make_actor():
@@ -66,15 +56,22 @@ def move_to(actor, destination, **kwargs):
 def targets(actor, name):
     result = actor.get_available_actions()
     row = next(row for row in result.position_actions if row.template_name == name)
-    return {target.position for target in row.valid_targets}
+    region = row.position_region
+    if row.valid_targets or region is None:
+        return {target.position for target in row.valid_targets}
+    # A free-aim row lists no cells (D13): a reachable region is the known route destinations in range, as a
+    # client reads it; a visible one the cells preview admits (plan §14.4).
+    if region.candidate_source == "reachable":
+        return {position for position in route_destinations(actor.senses.paths)
+                if not (region.exclude_source_position and position == actor.position)
+                and (region.range_feet is None or actor.senses.get_feet_distance(position) <= region.range_feet)}
+    return {position for position in get_map().get_all_tiles()
+            if selection_admission_error(actor, row, (free_aim_target(row, position),)) is None}
 
 
 def path_consumer(actor, kind):
     binding = BehaviorBinding(behavior_id="test.navigation.path_consumer",
         provided_by_id="test.navigation.path_consumer", runtime_owner_uuid=actor.uuid)
-    if kind == "variant":
-        return ReachableVariant(name="Path consumer", source_entity_uuid=actor.uuid,
-            template=True, behavior_binding=binding)
     return BaseAction(name="Path consumer", source_entity_uuid=actor.uuid, template=True,
         behavior_binding=binding,
         target_type=(TargetType.POSITION_PATH if kind == "path" else
@@ -108,7 +105,7 @@ def test_dash_reestablishes_affordable_paths_after_exhaustion(actor):
 
 
 # A position action without a discovery contract is a free-aim region, not a path consumer (plan §14.4).
-@pytest.mark.parametrize("kind", ["reachable", "los_reachable", "path", "variant"])
+@pytest.mark.parametrize("kind", ["reachable", "los_reachable", "path"])
 @pytest.mark.parametrize("register_after_move", [False, True])
 def test_custom_path_consumers_keep_the_legacy_domain(actor, kind, register_after_move):
     if not register_after_move:

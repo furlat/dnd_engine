@@ -7317,7 +7317,8 @@ class Entity(BaseBlock):
                         source_item_uuid=item_uuid,
                         item_stack_count=stack_count_field,
                     ))
-                elif is_inventory_source and not legal_only:
+                elif (is_inventory_source or use_template.position_region() is not None) and not legal_only:
+                    # Nothing listed: an inventory item still shows; a device keeps its free-aim region.
                     self._append_unavailable_item_use_action(
                         result,
                         template=use_template,

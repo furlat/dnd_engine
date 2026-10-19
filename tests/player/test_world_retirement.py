@@ -14,6 +14,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from server.protocol import ChoicesRequest, CommandRequest, EndTurnIntent, ExecuteSelectionIntent, PreviewRequest
 from server.worker import dispatch, needs_advance, start
 from server.worker_protocol import Advance, Choices, Command, Preview, Start
+from tests.player.test_high_level_spell_transport import region_aims
 
 
 def used_world(config, *, summon=False):
@@ -33,17 +34,25 @@ def used_world(config, *, summon=False):
             force_attack=False, correlation_id=uuid4())))
         row = next(row for row in (*discovered.choices.entity_actions, *discovered.choices.position_actions,
             *discovered.choices.self_actions, *discovered.choices.object_actions)
-            if row.behavior_id == 'spell.conjure_animals' and row.can_afford and discovered.choices.target_sets[row.target_set])
-        selection = ActionSelection(action_index=row.discovery_index, target_indices=(discovered.choices.target_sets[row.target_set][0].index,),
-            extra_target_positions=())
-        for _ in range(12):
-            reply, records, response = dispatch(runtime, Preview(seat_id=seat, request=PreviewRequest(
-                actor_uuid=actor, state_revision=publication.state_revision, correlation_id=uuid4(),
-                discovery_generation=discovered.choices.discovery_generation, selection=selection)))
+            if row.behavior_id == 'spell.conjure_animals' and row.can_afford
+            and (discovered.choices.target_sets[row.target_set] or row.position_region is not None))
+        bindings = discovered.choices.target_sets[row.target_set]
+        # A listed target, or (a free-aim row) cells aimed in its region as a client does.
+        starts = ([ActionSelection(action_index=row.discovery_index, target_indices=(bindings[0].index,),
+                                   extra_target_positions=())] if bindings or row.position_region is None
+            else [ActionSelection(action_index=row.discovery_index, target_indices=(), extra_target_positions=(aim,))
+                  for aim in region_aims(runtime.session.game.entities[actor], row.position_region)[:12]])
+        for selection in starts:
+            for _ in range(12):
+                reply, records, response = dispatch(runtime, Preview(seat_id=seat, request=PreviewRequest(
+                    actor_uuid=actor, state_revision=publication.state_revision, correlation_id=uuid4(),
+                    discovery_generation=discovered.choices.discovery_generation, selection=selection)))
+                if response.preview.can_confirm or not response.preview.next_positions:
+                    break
+                selection = selection.model_copy(update={'extra_target_positions':
+                    (*selection.extra_target_positions, response.preview.positions[response.preview.next_positions[0]])})
             if response.preview.can_confirm:
                 break
-            selection = selection.model_copy(update={'extra_target_positions':
-                (*selection.extra_target_positions, response.preview.positions[response.preview.next_positions[0]])})
         assert response.preview.can_confirm
         reply, records, response = dispatch(runtime, Command(seat_id=seat, request=CommandRequest(
             command_number=1, actor_uuid=actor, state_revision=publication.state_revision,

@@ -2,7 +2,8 @@
 
 import pytest
 
-from dnd.actions_functional import execute_available_action, get_available_actions, register_spell
+from dnd.actions_functional import (execute_available_action, free_aim_target, get_available_actions, register_spell,
+    selection_admission_error)
 from dnd.actions import ActionEvent
 from dnd.actions import SpellEvent
 from dnd.blocks.base_item import BaseItem
@@ -66,10 +67,9 @@ def test_burning_hands_is_discoverable_without_creatures_and_ignites_only_its_co
     material = surface(caster, {(3, 1), (1, 4)})
     register_spell(caster, BurningHands)
     caster.update_entity_senses()
-    options = [(action, target) for action in get_available_actions(caster).all_actions
-               if action.behavior_id == "spell.burning_hands" for target in action.valid_targets
-               if target.position == (2, 1)]
-    assert options
+    options = [(action, free_aim_target(action, (2, 1))) for action in get_available_actions(caster).all_actions
+               if action.behavior_id == "spell.burning_hands" and action.position_region is not None]
+    assert options and selection_admission_error(caster, options[0][0], (options[0][1],)) is None
     with fixed_dice_faces(*([4] * 200)):
         cast = execute_available_action(caster, *options[0])
     assert cast is not None and not cast.canceled
@@ -181,10 +181,9 @@ def test_lightning_bolt_ignites_only_its_admitted_empty_line(caster):
     material = surface(caster, {(3, 1), (3, 2)})
     register_spell(caster, LightningBolt)
     caster.update_entity_senses()
-    options = [(action, target) for action in get_available_actions(caster).all_actions
-               if action.behavior_id == 'spell.lightning_bolt' for target in action.valid_targets
-               if target.position == (2, 1)]
-    assert options
+    options = [(action, free_aim_target(action, (2, 1))) for action in get_available_actions(caster).all_actions
+               if action.behavior_id == 'spell.lightning_bolt' and action.position_region is not None]
+    assert options and selection_admission_error(caster, options[0][0], (options[0][1],)) is None
     result = execute_available_action(caster, *options[0])
     assert isinstance(result, SpellEvent) and not result.canceled
     assert (3, 1) in (result.resolved_area_positions or ())

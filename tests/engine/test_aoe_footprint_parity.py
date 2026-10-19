@@ -12,7 +12,8 @@ from dataclasses import dataclass
 import pytest
 
 from dnd.actions import ActionEvent
-from dnd.actions_functional import execute_available_action, get_available_actions, register_spell
+from dnd.actions_functional import (execute_available_action, free_aim_target, get_available_actions,
+    preview_available_selection, register_spell)
 from dnd.core.base_actions import TargetType
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import fixed_dice_faces
@@ -90,8 +91,11 @@ def cast_at(spell_type, aim) -> Outcome:
     """Discover the aim, execute it in the same room and read its applications."""
     caster = room(spell_type)
     row = area_row(caster, spell_type)
-    target = next(target for target in row.valid_targets if target.position == aim)
-    discovered = names(target.affected_entity_uuids or ())
+    listed = next((target for target in row.valid_targets if target.position == aim), None)
+    # A free-aim row lists no cells: the aim's hit set is its preview's.
+    target = listed if listed is not None else free_aim_target(row, aim)
+    discovered = names(listed.affected_entity_uuids or () if listed is not None
+        else preview_available_selection(caster, row, (target,)).affected_entity_uuids)
     cause = AREA_SPELLS[spell_type].content_id
     cursor = EventQueue.event_cursor()
     with fixed_dice_faces(*([4] * 800)):

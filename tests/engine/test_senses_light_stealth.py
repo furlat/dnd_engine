@@ -7,6 +7,7 @@ from pydantic import Field
 
 from dnd.core.aoe import AoEShape, Sphere
 from dnd.actions import Move
+from dnd.actions_functional import free_aim_target, preview_available_selection
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.sensory import spatial_senses_system, capture_senses_snapshot
 from dnd.conditions import Hidden, Invisible, InvisibilityEffect
@@ -1070,7 +1071,7 @@ def test_eb_12_017_multi_entity_spell_cancels_when_target_becomes_hidden() -> No
     result = spell.apply()
 
     assert result is not None and result.canceled
-    assert result.status_message == "Stale Target not in line of sight"
+    assert result.status_message == "Stale Target is not visible"
     assert visible_target.get_hp() == visible_hp_before
     assert stale_target.get_hp() == stale_hp_before
     assert caster.action_economy.actions.normalized_score == 1
@@ -1100,10 +1101,9 @@ def test_eb_12_018_aoe_preview_hides_hidden_entities_but_execution_hits_them() -
         action for action in available.position_actions
         if action.template_name == "Fireball__slot_3"
     )
-    blast_preview = next(
-        target for target in fireball_info.valid_targets
-        if target.position == hidden_target.position
-    )
+    # A free aim at the hidden creature's cell: the preview shows what the caster perceives.
+    blast_preview = preview_available_selection(
+        caster, fireball_info, (free_aim_target(fireball_info, hidden_target.position),))
 
     assert hidden_target.uuid not in (blast_preview.affected_entity_uuids or [])
     assert "Hidden Target" not in (blast_preview.affected_entity_names or [])

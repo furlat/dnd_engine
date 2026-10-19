@@ -2,7 +2,8 @@
 import pytest
 
 from dnd.actions import Move, SpellEvent
-from dnd.actions_functional import execute_available_action, get_available_actions
+from dnd.actions_functional import (execute_available_action, free_aim_target, get_available_actions,
+    selection_admission_error)
 from dnd.conditions import Blinded
 from dnd.classes.fighter import ActionSurge, ActionSurgeFeature, ExtraAttackFeature
 from dnd.core.action_types import HasteActionPolicy
@@ -152,9 +153,11 @@ def test_activation_uses_existing_haste_policy_without_an_extra_spell_slot(polic
     caster.add_condition(HasteEffect(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid, apply_lethargy=False))
     CallLightning(source_entity_uuid=caster.uuid, end_position=(12, 8)).apply()
     available = get_available_actions(caster)
+    # A free aim at the storm cell, admitted only when the haste action may pay for the strike.
     choices = [(action, target) for action in available.all_actions
-               if action.template_name == 'Call Lightning Strike__grant_haste'
-               for target in action.valid_targets if target.position == (12, 8)]
+               if action.template_name == 'Call Lightning Strike__grant_haste' and action.position_region is not None
+               for target in (free_aim_target(action, (12, 8)),)
+               if selection_admission_error(caster, action, (target,)) is None]
     assert bool(choices) is permitted
     if permitted:
         repeated = execute_available_action(caster, *choices[0])

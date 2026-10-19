@@ -6,7 +6,8 @@ from uuid import UUID, uuid4
 import pytest
 
 from dnd.actions import AttackEvent, SpellEvent
-from dnd.actions_functional import execute_by_index, get_available_actions, register_spell, setup_standard_actions
+from dnd.actions_functional import (execute_available_action, free_aim_target, get_available_actions, register_spell,
+    selection_admission_error, setup_standard_actions)
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.blocks.spellcasting import SpellcastingConfig
@@ -56,8 +57,9 @@ def casters() -> Iterator[tuple[UUID, UUID]]:
 def discovered_cast(caster: Entity, destination: tuple[int, int]) -> SpellEvent:
     available = get_available_actions(caster)
     row = next(row for row in available.all_actions if row.behavior_id == "spell.misty_step")
-    target = next(target for target in row.valid_targets if target.position == destination)
-    result = execute_by_index(caster, row.template_name, target.index, available=available)
+    target = free_aim_target(row, destination)
+    assert selection_admission_error(caster, row, (target,)) is None
+    result = execute_available_action(caster, row, target)
     assert isinstance(result, SpellEvent) and not result.canceled
     assert result.phase is EventPhase.COMPLETION
     return result
@@ -112,10 +114,8 @@ def test_misty_step_discovers_a_visible_landing_across_unwalkable_water(
     assert MistyStep(source_entity_uuid=caster.uuid, end_position=destination).pre_validate()
     available = get_available_actions(caster)
     row = next(row for row in available.all_actions if row.behavior_id == "spell.misty_step")
-    landings = {target.position: target for target in row.valid_targets}
-    assert destination in landings
-    assert landings[destination].path is None
-    assert landings[destination].opportunity_attack_exposures == []
+    # A free-aim landing: preview admits the visible cell the caster has no route to.
+    assert selection_admission_error(caster, row, (free_aim_target(row, destination),)) is None
     discovered_cast(caster, destination)
     assert caster.position == destination
 
@@ -133,7 +133,7 @@ def test_misty_step_refuses_invalid_landings_without_position_or_resource_change
     caster.update_entity_senses()
     available = get_available_actions(caster)
     row = next(row for row in available.all_actions if row.behavior_id == "spell.misty_step")
-    assert destination not in {target.position for target in row.valid_targets}
+    assert selection_admission_error(caster, row, (free_aim_target(row, destination),)) is not None
     before = (caster.position, caster.action_economy.bonus_actions.normalized_score,
               caster.action_economy.spell_slot_2.normalized_score)
     cursor = EventQueue.event_cursor()

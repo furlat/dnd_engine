@@ -5,9 +5,9 @@ from collections.abc import Iterator
 import pytest
 
 from dnd.actions import SpellEvent
-from dnd.actions_functional import execute_available_action, get_available_actions, register_spell
+from dnd.actions_functional import execute_available_action, free_aim_target, get_available_actions, register_spell
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import DamageAppliedEvent, Event, EventPhase, EventQueue, EventType
+from dnd.core.events import DamageAppliedEvent, Event, EventPhase, EventQueue, EventType, SpatialChangeEvent, SpatialChangeType
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
@@ -32,7 +32,7 @@ def cast_fireball(caster: Entity, position: tuple[int, int]) -> tuple[SpellEvent
     Entity.update_all_entities_senses()
     available = get_available_actions(caster)
     action = next(row for row in available.all_actions if row.behavior_id == "spell.fireball")
-    target = next(row for row in action.valid_targets if row.position == position)
+    target = free_aim_target(action, position)
     cursor = EventQueue.event_cursor()
     # Every creature rolls a failed save followed by eight damage dice of one.
     # Each contacted door now receives its own eight-die structural packet too.
@@ -63,12 +63,12 @@ def test_empty_visible_area_records_footprint_and_causal_tile_conditions(caster:
     assert caster.action_economy.actions.normalized_score == 0
     assert caster.action_economy.spell_slot_3.normalized_score == 2
     assert get_map().movement_revision == revision
-    applied = [event for event in events if event.event_type is EventType.CONDITION_APPLICATION]
-    assert len(applied) == len(expected)
-    assert all(event.parent_event is not None for event in applied)
-    for event in applied:
-        parent = EventQueue.get_event_by_uuid(event.parent_event)
-        assert parent is not None and parent.lineage_uuid == result.lineage_uuid
+    # The area's tile conditions commit as one batch: a keyed change per footprint tile, caused by the cast.
+    batch, = [event for event in events if isinstance(event, SpatialChangeEvent)
+              and event.change_type is SpatialChangeType.TILES_CHANGED]
+    assert {row.position for row in batch.keyed_tile_changes} == expected
+    parent = EventQueue.get_event_by_uuid(batch.parent_event) if batch.parent_event is not None else None
+    assert parent is not None and parent.lineage_uuid == result.lineage_uuid
     assert not any(isinstance(event, DamageAppliedEvent) for event in events)
 
 

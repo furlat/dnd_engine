@@ -1,7 +1,7 @@
 """Committed actor concentration state exposes slot identity without recipient links."""
 
 from dnd.actions import DropConcentration
-from dnd.actions_functional import register_spell, get_available_actions, execute_available_action
+from dnd.actions_functional import register_spell, get_available_actions, execute_available_action, free_aim_target
 from dnd.spells.catalog_content import SPELL_CONTENT_IDENTITY_BY_NAME
 from dnd.conditions import Concentrating
 from dnd.core.base_conditions import ConditionRemovalEvent, ConditionStateChangedEvent
@@ -27,9 +27,11 @@ def two_spells():
     for name in ('Web','Hold Person'):
         register_spell(caster,SPELL_CONTENT_IDENTITY_BY_NAME[name].spell_type,caster_level=7)
     def cast(behavior,target):
-        row,choice=next((row,choice) for row in get_available_actions(caster).all_actions
-            if row.behavior_id==behavior for choice in row.valid_targets
-            if choice.position==target.position or choice.target_uuid==target.uuid)
+        # The caster's own spell (not the device's): a listed creature, or a free aim at its cell.
+        row=next(row for row in get_available_actions(caster).all_actions
+            if row.behavior_id==behavior and not row.is_item_use)
+        choice=next((choice for choice in row.valid_targets if choice.target_uuid==target.uuid),None) \
+            or free_aim_target(row,target.position)
         with fixed_dice_faces(*([10]*30)):
             return execute_available_action(caster,row,choice)
     cursor=EventQueue.event_cursor()

@@ -113,7 +113,8 @@ def test_release_uses_one_native_save_and_distinguishes_poison_immunities(
     assert not cloud.magical_origin and not cloud.linked_conditions
 
 
-def test_appearance_entry_and_turn_start_share_one_exposure_per_turn(arena):
+def test_appearance_and_entry_share_one_exposure_and_turn_start_is_its_own_trigger(arena):
+    # Arrival and start of turn are separate SRD triggers, each with its own first-per-turn fence (human Q2).
     target = actor(arena, (3, 2))
     vent = materialize_gas_vent((3, 2), gas=GasCloudSpec(radius_feet=0))
     turn = EventQueue.begin_turn_execution()
@@ -122,16 +123,18 @@ def test_appearance_entry_and_turn_start_share_one_exposure_per_turn(arena):
         command = cause(target.uuid)
         Entity.update_entity_position(target, (4, 2), parent_event=command.uuid)
         Entity.update_entity_position(target, (3, 2), parent_event=command.uuid)
-        target.on_turn_start(round_number=1)
         command.phase_to(EventPhase.COMPLETION)
         assert target.get_hp() == 76
+        with fixed_dice_faces(1, 4):
+            target.on_turn_start(round_number=1)
+        assert target.get_hp() == 72
     finally:
         EventQueue.end_turn_execution(turn)
     next_turn = EventQueue.begin_turn_execution()
     try:
         with fixed_dice_faces(1, 4):
             target.on_turn_start(round_number=2)
-        assert target.get_hp() == 72
+        assert target.get_hp() == 68
     finally:
         EventQueue.end_turn_execution(next_turn)
 

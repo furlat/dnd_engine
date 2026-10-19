@@ -98,9 +98,10 @@ def test_discovery_has_per_form_destination_choices_without_creating_creatures(b
     register_spell(caster, ConjureAnimals, caster_level=17)
     before = (set(game.entities), EventQueue.event_cursor())
     available = get_available_actions(caster, legal_only=True)
-    rows = [row for row in available.all_actions if "__summon_" in row.template_name]
-    assert rows and any("__summon_raptor" in row.template_name for row in rows)
-    assert all(row.valid_targets for row in rows)
+    rows = [row for row in available.all_actions if row.behavior_id == "spell.conjure_animals"]
+    assert rows and any((facet.key, facet.value) == ("form", "wolf") for row in rows for facet in row.variant_facets)
+    # Each form's destination is a free-aim region (no cells listed) or listed choices.
+    assert all(row.valid_targets or row.position_region is not None for row in rows)
     assert before == (set(game.entities), EventQueue.event_cursor())
     assert not system.memberships
 

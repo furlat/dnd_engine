@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 
 from dnd.actions import PickUp
-from dnd.actions_functional import execute_by_index, execute_use_action, setup_standard_actions
+from dnd.actions_functional import execute_available_action, execute_use_action, free_aim_target, setup_standard_actions
 from dnd.blocks.base_item import BaseItem, ItemHoldingsReleasedEvent, ItemLocationStateEvent, UsableItem, WorldItem
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import build_storage_chest
@@ -332,8 +332,7 @@ def test_discovered_drop_executes_the_bound_item_and_expires_its_affordance():
     rows = [row for row in available.all_actions if row.behavior_id == "action.core.drop"]
     assert len(rows) == 2 and {row.source_item_uuid for row in rows} == {first.uuid, second.uuid}
     row = next(row for row in rows if row.source_item_uuid == first.uuid)
-    target = next(target for target in row.valid_targets if target.position == entity.position)
-    result = execute_by_index(entity, row.template_name, target.index, available=available)
+    result = execute_available_action(entity, row, free_aim_target(row, entity.position))
     assert result is not None and not result.canceled, result.status_message if result else "No result"
     assert get_map().get_object_position(first.uuid) == entity.position
     assert entity.inventory.items[second.uuid] is second
