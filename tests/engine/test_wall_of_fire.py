@@ -385,8 +385,6 @@ def test_fire_wall_rejects_excess_position_allocation_before_cost(form, side):
     assert caster.action_economy.actions.normalized_score == 1 and caster.has_spell_slot(4)
 
 
-@pytest.mark.xfail(strict=True, reason="Known gap: item-use rows are discovered without facet domains, so a device's "
-                   "Wall of Fire row names no form (\"The selection names no form facet\")")
 def test_device_wall_extra_position_dispatch_and_origin_shorthand_share_the_route():
     caster = scene()
     grant = WallOfFire(source_entity_uuid=caster.uuid, template=True, cast_origin="source_item")

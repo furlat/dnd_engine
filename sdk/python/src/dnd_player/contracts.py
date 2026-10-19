@@ -163,6 +163,19 @@ class AvailableHandlerInfo(TypedDict):
 type ContactPosition = int
 
 
+class AvailableWorldInteraction(TypedDict):
+    subject_uuid: str
+    behavior_id: str
+    label: str
+    description: NotRequired[str]
+    default_priority: NotRequired[int]
+    contact_positions: NotRequired[list[list[ContactPosition]]]
+    connector_uuid: NotRequired[str | None]
+    template_name: NotRequired[str | None]
+    variant_facets: NotRequired[list[ActionVariantFacet]]
+    reason: NotRequired[str | None]
+
+
 type Background = Literal['background.acolyte', 'background.adventurer']
 
 
@@ -2254,20 +2267,6 @@ class AttachmentResponse(TypedDict):
     status: StatusSnapshot
 
 
-class AvailableWorldInteraction(TypedDict):
-    subject_uuid: str
-    behavior_id: str
-    label: str
-    description: NotRequired[str]
-    default_priority: NotRequired[int]
-    contact_positions: NotRequired[list[list[ContactPosition]]]
-    connector_uuid: NotRequired[str | None]
-    template_name: NotRequired[str | None]
-    configured_action_ref: NotRequired[ContentRef | None]
-    variant_facets: NotRequired[list[ActionVariantFacet]]
-    reason: NotRequired[str | None]
-
-
 class BodyReleaseRegion(TypedDict):
     ellipse: ResidueEllipse
     positions: list[list[Position]]
@@ -3056,7 +3055,6 @@ class PlayerAction(TypedDict):
     behavior_id: str
     provided_by_id: str
     origin_root_id: NotRequired[str | None]
-    configured_action_ref: NotRequired[ContentRef | None]
     target_type: TargetType
     position_selection: NotRequired[
         SinglePositionSelection

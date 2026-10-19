@@ -30,7 +30,7 @@ from dnd.types.world import MovementMode
 from dnd.types.class_features import FontConversion
 from dnd.core.base_block import BaseBlock, resolution_order_key
 from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType, MultiEntityLogData, md_color
-from dnd.core.content.identities import ContentRef, validate_namespaced_id
+from dnd.core.content.identities import validate_namespaced_id
 from dnd.core.content.runtime import (
     BehaviorBinding,
     active_runtime_behavior_binding,
@@ -1011,15 +1011,6 @@ class BaseAction(BaseObject):
         description=(
             "Validated runtime content binding installed once before this "
             "action becomes observable."
-        ),
-    )
-    configured_action_ref: Optional[ContentRef] = Field(
-        default=None,
-        description=(
-            "Exact authored configuration specializing a reusable action "
-            "behavior. When present, this is the catalog identity of the "
-            "configured affordance; behavior_binding remains the engine "
-            "implementation identity."
         ),
     )
     costs: List[Cost] = Field(default_factory=empty_list, description="Runtime costs required by this action.")
@@ -2109,7 +2100,7 @@ class BaseAction(BaseObject):
         forms: List[BaseAction] = []
         for listed in self.discovery_selections(scan):
             domain = self.facet_domain(scan, listed.cast_at_level, None)
-            ordinary = [self._discovery_form(replace(listed, facets=facets)) for facets in domain]
+            ordinary = self._facet_forms(listed, domain)
             forms.extend(ordinary)
             if not ordinary:
                 continue
@@ -2118,6 +2109,17 @@ class BaseAction(BaseObject):
                 forms.extend(self._discovery_form(replace(listed, cost_source=paid, facets=facets))
                              for facets in domain)
         return forms
+
+    @final
+    def facet_forms(self, scan: ActorScan) -> List["BaseAction"]:
+        """This action's own selection with each authored choice open now, one read-only form each: how an
+        item's use action is listed (its rows otherwise follow the item, not `discovery_forms`)."""
+        listed = self.current_selection()
+        return self._facet_forms(listed, self.facet_domain(scan, listed.cast_at_level, None))
+
+    def _facet_forms(self, listed: ActionSelection,
+                     domain: Tuple[Tuple[ActionVariantFacet, ...], ...]) -> List["BaseAction"]:
+        return [self._discovery_form(replace(listed, facets=facets)) for facets in domain]
 
     def _discovery_form(self, selection: ActionSelection) -> "BaseAction":
         return self if selection == self.current_selection() else self._bound(selection, executable=False)
@@ -2887,14 +2889,6 @@ class AvailableActionMetadata(BaseModel):
         default=None,
         description="Optional durable primitive root of the provider chain.",
     )
-    configured_action_ref: Optional[ContentRef] = Field(
-        default=None,
-        description=(
-            "Exact authored configuration for a parameterized action. "
-            "Clients resolve this catalog row instead of inferring a variant "
-            "from execution tokens, display names, or outcome identifiers."
-        ),
-    )
     target_type: TargetType = Field(description="What kind of target this action needs")
     position_selection: Optional[PositionSelection] = Field(
         default=None, description="Position input required after choosing a discovery target.",
@@ -3091,7 +3085,6 @@ class AvailableWorldInteraction(BaseModel):
     contact_positions: tuple[tuple[int, int], ...] = ()
     connector_uuid: UUID | None = None
     template_name: str | None = None
-    configured_action_ref: ContentRef | None = None
     variant_facets: tuple[ActionVariantFacet, ...] = ()
     reason: str | None = None
 

@@ -2132,17 +2132,6 @@
           "default": null,
           "title": "Template Name"
         },
-        "configured_action_ref": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ContentRef"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "variant_facets": {
           "default": [],
           "items": {
@@ -13106,18 +13095,6 @@
           "default": null,
           "description": "Optional durable primitive root of the provider chain.",
           "title": "Origin Root Id"
-        },
-        "configured_action_ref": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ContentRef"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Exact authored configuration for a parameterized action. Clients resolve this catalog row instead of inferring a variant from execution tokens, display names, or outcome identifiers."
         },
         "target_type": {
           "$ref": "#/$defs/TargetType",

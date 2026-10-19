@@ -1,7 +1,7 @@
 # Godot client: integrating player schema 16 (one handout)
 
 Engine: `codex/event-native-deltas` at c66ea3de5. Identity: protocol 1, player schema 16, digest
-`26c806949cd5ac2aca481c937b2c01d9ad8e9d821e486fdbf1d2cca618a99532`. Saved `PlayerSequence` files are schema 9.
+`49d14bc20920f5698eb4f09e3aeece442380242cd1453893d45f94ea9fb0c8a5`. Saved `PlayerSequence` files are schema 9.
 
 This handout replaces the five fold notes (`GODOT_CLIENT_FOLD_{SCHEMA_14,SCHEMA_15,WORLD,BODIES,HUD}_2026-10-18.md`).
 Where it disagrees with them, it follows the later code. The executable spec is `dnd/player/reduction.py` (bodies,

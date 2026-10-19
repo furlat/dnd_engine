@@ -5522,7 +5522,6 @@ class Entity(BaseBlock):
             behavior_id=behavior_binding.behavior_id,
             provided_by_id=behavior_binding.provided_by_id,
             origin_root_id=behavior_binding.origin_root_id,
-            configured_action_ref=template.configured_action_ref,
             target_type=target_type,
             position_selection=template.get_position_selection(),
             position_region=template.position_region(),
@@ -7112,7 +7111,7 @@ class Entity(BaseBlock):
                 behavior_id=action.behavior_binding.behavior_id, label=action.name or "Use",
                 description=action.description or "",
                 template_name=f"{action.get_discovery_template_name()}__item_{identity}",
-                configured_action_ref=action.configured_action_ref, variant_facets=action.row_facets(),
+                variant_facets=action.row_facets(),
                 contact_positions=grid.manual_object_contact_origins(self.uuid, identity, candidates,
                     subjective=scan.subjective)))
         for identity in self.senses.objects:
@@ -7135,6 +7134,10 @@ class Entity(BaseBlock):
         for use_template, obj_uuid, item_name in observed_sources:
             if grid.manual_object_contact(self.uuid, obj_uuid, subjective=scan.subjective) is not None:
                 use_sources.append((use_template, obj_uuid, item_name, None, False))
+        # Each authored choice of a use action is its own row, as for a registered action.
+        use_sources = [(form, item_uuid, item_name, item_stack, is_inventory_source)
+                       for use_template, item_uuid, item_name, item_stack, is_inventory_source in use_sources
+                       for form in use_template.facet_forms(scan)]
 
         for (
             use_template,

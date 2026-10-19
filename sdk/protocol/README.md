@@ -2,8 +2,8 @@
 
 `player-api-v1.schema.json` is exported directly from existing native/player type
 owners and the finite `server/protocol.py` envelopes. It has 19 public roots,
-378 shared definitions and 1,909 field-ledger rows. `protocol-identity.json` binds
-protocol 1 and player schema 16 to the exact canonical schema digest (`26c806949cd5…`).
+378 shared definitions and 1,907 field-ledger rows. `protocol-identity.json` binds
+protocol 1 and player schema 16 to the exact canonical schema digest (`49d14bc20920…`).
 
 - `openapi.json`: actual HTTP paths, request/response types, identity headers,
   finite errors and SSE record types. Also served at the running host's `/openapi.json`.
