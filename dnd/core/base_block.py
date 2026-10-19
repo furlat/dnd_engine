@@ -959,17 +959,6 @@ class BaseBlock(BaseModel):
         """
         return {block.name: block.uuid for block in self.get_blocks()}
 
-    def get_value_from_uuid(self, uuid: UUID) -> Optional[ModifiableValue]:
-        """Return a direct value by UUID.
-
-        Args:
-            uuid: UUID of the direct value to retrieve.
-
-        Returns:
-            Matching direct value, or `None`.
-        """
-        return next((value for value in self.value_fields() if value.uuid == uuid), None)
-
     def get_value_from_name(self, name: str) -> Optional[ModifiableValue]:
         """Return a direct value by name.
 

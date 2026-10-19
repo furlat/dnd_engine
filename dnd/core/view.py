@@ -84,7 +84,6 @@ VISUAL_SENSES = ((SensesType.DARKVISION, DARKVISION), (SensesType.DEVILS_SIGHT, 
                  (SensesType.TRUESIGHT, TRUESIGHT))
 UNSEEN = 255
 MAGICAL_DARKNESS_BIT = OBSCUREMENT_BITS[OpticalObscurement.MAGICAL_DARKNESS]
-HEAVY_BIT = OBSCUREMENT_BITS[OpticalObscurement.HEAVY]
 LIGHT_LEVELS = tuple(LightLevel(value) for value in range(len(LightLevel)))
 
 
@@ -326,16 +325,6 @@ def range_bits(modes: Mapping[SensesType, int], ordinary_sight: bool, distance: 
             continue
         bits |= bit if sense_range == 0 else np.where(distance <= sense_range, bit, 0).astype(np.uint8)
     return bits
-
-
-def reach_mask(modes: Mapping[SensesType, int], sense_type: SensesType, distance: np.ndarray) -> np.ndarray:
-    """Where one sense reaches (bool, aligned with the distances)."""
-    sense_range = modes.get(sense_type)
-    if sense_range is None:
-        return np.zeros(distance.shape, dtype=bool)
-    if sense_range == 0:
-        return np.ones(distance.shape, dtype=bool)
-    return distance <= sense_range
 
 
 @dataclass(frozen=True)
@@ -590,11 +579,6 @@ def cell_visible(cells: PerceivedCells, position: Position) -> bool:
 def cell_light(cells: PerceivedCells, position: Position) -> Optional[LightLevel]:
     """The observer-effective light of a visible cell, None for a cell it does not see."""
     return LIGHT_LEVELS[layer_value(cells.light, position)] if layer_value(cells.visible, position) else None
-
-
-def cell_hazard(cells: PerceivedCells, position: Position) -> Optional[bool]:
-    """Whether a visible cell is known hazardous, None for a cell the observer does not see."""
-    return bool(layer_value(cells.hazard, position)) if layer_value(cells.visible, position) else None
 
 
 def visible_positions(cells: PerceivedCells) -> List[Position]:

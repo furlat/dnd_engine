@@ -250,28 +250,6 @@ class BaseObject(BaseModel):
                 else:
                     obj.remove_from_register()
 
-    def set_source_entity(self, source_entity_uuid: UUID, source_entity_name: Optional[str] = None) -> None:
-        """Set the source entity identity for this object.
-
-        Args:
-            source_entity_uuid: UUID of the source entity.
-            source_entity_name: Optional display name of the source entity.
-        """
-        self.source_entity_uuid = source_entity_uuid
-        self.source_entity_name = source_entity_name
-
-    def validate_source_id(self, source_id: UUID) -> None:
-        """Validate that a UUID matches this object's source entity UUID.
-
-        Args:
-            source_id: Source UUID to validate.
-
-        Raises:
-            ValueError: If the UUIDs do not match.
-        """
-        if self.source_entity_uuid != source_id:
-            raise ValueError("Source entity UUIDs do not match")
-
     def set_context(self, context: Dict[str, Any]) -> None:
         """Set runtime context for this object.
 

@@ -1505,10 +1505,6 @@ class BaseAction(BaseObject):
             return [ray[selection.origin_start_offset_cells], end_position]
         return None
 
-    def position_selection_error(self) -> Optional[str]:
-        """Validate actual submitted positions before action-specific rules or costs."""
-        return self._position_selection_error(self.current_selection())
-
     def _position_selection_error(self, chosen: ActionSelection) -> Optional[str]:
         selection = self.get_position_selection()
         extra_positions = chosen.positions[1:]

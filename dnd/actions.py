@@ -254,36 +254,6 @@ def build_weapon_attack_outcome_profile(
 PolymorphicActionEvent = TypeVar('PolymorphicActionEvent', bound='ActionEvent')
 
 
-def validate_line_of_sight(declaration_event: PolymorphicActionEvent, source_entity_uuid: UUID) -> Optional[PolymorphicActionEvent]:
-    """Validate that the action target is visible to the source entity.
-
-    Args:
-        declaration_event: Declaration event being validated.
-        source_entity_uuid: Acting entity UUID.
-
-    Returns:
-        Updated declaration event, canceled event, or `None` if a subclass does.
-    """
-    source_entity = Entity.get(source_entity_uuid)
-    if not source_entity:
-        return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
-    if not isinstance(source_entity, Entity):
-        return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
-    if not declaration_event.target_entity_uuid:
-        return declaration_event.cancel(status_message=f"Target entity uuid not present for {declaration_event.name}")
-    target_entity = Entity.get(declaration_event.target_entity_uuid)
-    if not target_entity:
-        return declaration_event.cancel(status_message=f"Target entity not found for {declaration_event.name}")
-    if not isinstance(target_entity, Entity):
-        return declaration_event.cancel(status_message=f"Target entity not found for {declaration_event.name}")
-
-    contact = source_entity.senses.entities.get(target_entity.uuid)
-    if contact is None or not contact.visual:
-        return declaration_event.cancel(status_message=f"Target entity not in line of sight for {declaration_event.name}")
-    return declaration_event.with_updates(
-        status_message=f"Validated line of sight for {declaration_event.name}"
-    )
-
 def _consume_entity_action_economy_costs(
     action_event: PolymorphicActionEvent,
     source_entity_uuid: UUID,
@@ -4912,11 +4882,7 @@ class SpellAction(BaseAction):
         return (None, contact) if contact is not None else ("Object is out of spell reach", None)
 
     def single_recipient_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        """The rule-error twin of `validate_single_recipient`: one creature or object, read from the selection.
-
-        It omits the declaration's object contact position, which
-        `validate_single_recipient` also records on the event.
-        """
+        """One creature or object recipient, read from the selection: the spell's single-recipient rule."""
         source = Entity.get(self.source_entity_uuid)
         target_uuid = selection.target_uuids[0] if selection.target_uuids else None
         target = BaseBlock.get(target_uuid) if target_uuid is not None else None
@@ -4934,25 +4900,6 @@ class SpellAction(BaseAction):
         if self.get_target_distance(target.position) > self.effective_range:
             return "Target is out of spell range"
         return None
-
-    def validate_single_recipient(self, declaration: SpellEvent) -> Optional[SpellEvent]:
-        source = Entity.get(self.source_entity_uuid)
-        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if source is None or target is None:
-            return declaration.cancel(status_message="Caster or target not found")
-        if isinstance(target, BaseItem):
-            error, contact = self._object_recipient_contact(source, target)
-            if error is not None:
-                return declaration.cancel(status_message=error)
-            return declaration.with_updates(target_kind="object", target_position=contact)
-        if target.uuid==source.uuid:
-            return declaration if self.include_self else declaration.cancel(status_message="This spell does not allow self targeting")
-        visible = validate_line_of_sight(declaration, source.uuid)
-        if visible is None or visible.canceled:
-            return visible
-        if self.get_target_distance(target.position) > self.effective_range:
-            return visible.cancel(status_message="Target is out of spell range")
-        return visible
 
     def get_range(self) -> Range:
         """Return spell range with alt_range override for position filtering."""

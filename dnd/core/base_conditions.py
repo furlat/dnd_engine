@@ -748,15 +748,6 @@ class BaseCondition(BaseObject):
         """
         return None
 
-    def set_source_entity(self, source_entity_uuid: UUID) -> None:
-        """Set source entity UUID on the condition and duration.
-
-        Args:
-            source_entity_uuid: Source entity UUID.
-        """
-        self.source_entity_uuid = source_entity_uuid
-        self.duration.source_entity_uuid = source_entity_uuid
-
     def set_target_entity(self, target_entity_uuid: UUID) -> None:
         """Set target entity UUID on the condition and duration.
 

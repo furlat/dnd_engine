@@ -16,10 +16,10 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from dnd.types.event_facts import GroupEntryKind, LandingKind, KeyedResidueChange, KeyedTileChange, KeyedTileFields
-from dnd.core.geometry import circle_positions, grid_distance_feet, supercover_line
+from dnd.core.geometry import grid_distance_feet, supercover_line
 from dnd.core.view import (CARDINAL_DIRECTIONS, CARDINAL_STEPS, EDGE_SHIFTS, NO_POSITIONS, OPPOSITE_CARDINAL, Box,
     CellLayer, boxes_intersect, cell_visible, cells_layer, compact_window_groups, covering_box, embed, entered_by,
-    layer_value, layer_window, positions_list, union_box, wall_visibility)
+    layer_value, layer_window, positions_list, wall_visibility)
 from dnd.core.elevation import support_distance_feet
 from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.shadowcast import compute_fov
@@ -68,8 +68,7 @@ from dnd.types.world import (
     WorldEdgeChannel,
     edge_revision_channels,
 )
-from dnd.types.senses import (OBSCUREMENT_BITS, OpticalObscurement, PerceivedContact,
-    PerceivedLightSource, PerceivedSpatialEffect)
+from dnd.types.senses import OBSCUREMENT_BITS, OpticalObscurement, PerceivedSpatialEffect
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.residues import ResidueFieldState
 from dnd.types.spatial_effects import (
@@ -724,12 +723,6 @@ class GridMap:
         words = slots.values[box[0] - slots.x0:box[2] - slots.x0 + 1, box[1] - slots.y0:box[3] - slots.y0 + 1].view()
         words.flags.writeable = False
         return words
-
-    def light_sources_in_slots(self, words: np.ndarray) -> Set[UUID]:
-        """The emitters whose slot bit is set in lit-slot words."""
-        lit = words.tolist()
-        return {identity for identity, slot in self._light_slot_of.items()
-                if slot // 64 < len(lit) and lit[slot // 64] >> (slot % 64) & 1}
 
     def contact_cells_in_box(self, box: Box) -> List[Tuple[Tuple[int, int], Tuple[Tuple[UUID, ...], Tuple[UUID, ...]]]]:
         """Occupied cells in an inclusive box with their str-ordered entities and center objects."""
@@ -3165,21 +3158,6 @@ class GridMap:
                 raise RuntimeError(
                     f"Tile membership {entity_uuid} does not match {position}"
                 )
-
-    def get_ordered_entities_at(self, position: Tuple[int, int]) -> Tuple[UUID, ...]:
-        """Read settled entity membership, authenticating it before any consumer."""
-        self.validate_entity_position(position, allow_none=False)
-        rows = self._contact_candidate_cells.get(self._spatial_chunk(position))
-        row = rows.get(position) if rows is not None else None
-        entities = row[0] if row is not None else ()
-        self._validate_entity_membership(position, entities)
-        return entities
-
-    def get_ordered_center_objects_at(self, position: Tuple[int, int]) -> Tuple[UUID, ...]:
-        """Read the current immutable union of a cell's center bands."""
-        rows = self._contact_candidate_cells.get(self._spatial_chunk(position))
-        row = rows.get(position) if rows is not None else None
-        return row[1] if row is not None else ()
 
     def refresh_object_known_source(self, obj: BaseBlock) -> None:
         """Keep placed creator candidates aligned with the object's declared source."""
@@ -6139,19 +6117,6 @@ class GridMap:
         elif all_changed:
             self._bump_spatial_revisions(frozenset({SpatialChannel.ILLUMINATION}), set(all_changed))
         return all_changed
-
-    def get_positions_near_entities(
-        self, entity_positions: Set[Tuple[int, int]], radius: int
-    ) -> Set[Tuple[int, int]]:
-        """Union of all positions within radius tiles of any entity position.
-
-        Used by AoE prefilter to skip shape computation at positions that
-        can't possibly hit any entity.
-        """
-        candidates: Set[Tuple[int, int]] = set()
-        for ent_pos in entity_positions:
-            candidates |= circle_positions(ent_pos, radius)
-        return candidates
 
     def is_blocking_propagation(
         self, x: int, y: int, *, observer_uuid: Optional[UUID] = None,

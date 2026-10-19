@@ -35,7 +35,7 @@ from dnd.types.discovery import ActorScan
 
 
 def line_of_sight_error(scan: ActorScan, target_uuid: Optional[UUID]) -> Optional[str]:
-    """The rule-error twin of `validate_line_of_sight`: a creature target the actor sees."""
+    """A creature target the actor sees (the line-of-sight rule)."""
     if target_uuid is None:
         return "Target entity uuid not present"
     if Entity.get(target_uuid) is None:
