@@ -6,7 +6,6 @@ dependencies = [
     "fastapi",
     "httpx",
     "numpy",
-    "pygame-ce==2.5.8",
     "pydantic",
     "requests",
     "rich",
