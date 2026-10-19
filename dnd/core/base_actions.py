@@ -2052,11 +2052,8 @@ class BaseAction(BaseObject):
             cost_source=CostSource(restricted_grant_id=grant.grant_id if grant is not None else None))
 
     def position_region(self) -> Optional[PositionRegion]:
-        """The free-aim region of a position action, from its discovery contract and range. An area that requires
-        an affected creature has none: its aims are the listed ones, each holding one."""
+        """The free-aim region of a position action, from its discovery contract and range."""
         if self.effective_target_type not in (TargetType.POSITION, TargetType.POSITION_LOS, TargetType.POSITION_AOE):
-            return None
-        if self.effective_target_type is TargetType.POSITION_AOE and self.aoe_require_targets:
             return None
         contract = self.position_discovery or PositionDiscoveryContract()
         action_range = self.get_range()

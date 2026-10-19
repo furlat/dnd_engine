@@ -572,6 +572,11 @@ def _admitted_selection(
         # The instance Command would execute, admitted through the one admission path (plan §14.3b).
         bound = performed_action(entity, action_info).with_selection(selection)
         reason = bound.requirements_error(scan, selection) or bound.handler_admission_error(subjective=True)
+        if (reason is None and action_info.target_type is TargetType.POSITION_AOE and template.aoe_require_targets
+                and is_free_aim(action_info, primary) and not entity.preview_aoe_target(
+                    template, primary, include_dead=action_info._aoe_include_dead).affected_entity_uuids):
+            # An area that requires a creature admits a free aim only where its area holds one, as discovery lists.
+            reason = "No creature in the area"
     except ValueError as error:
         return _SelectionAdmission(str(error))
     return _SelectionAdmission(reason, template, bound, scan)
