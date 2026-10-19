@@ -6,8 +6,9 @@ from uuid import uuid4
 import pytest
 
 from dnd.actions import SpellEvent
-from dnd.actions_functional import performed_action, register_spell
+from dnd.actions_functional import register_spell
 from dnd.conditions import Charmed, Prone
+from dnd.core.base_actions import PositionRegion
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.dice import fixed_dice_faces
@@ -15,6 +16,8 @@ from dnd.core.events import EventQueue
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.gridmap import get_map
 from dnd.core.view import visible_positions
+from dnd.encounter import EncounterState
+from dnd.entity import Entity
 from dnd.player.commands import ActionSelection, ToggleHandler
 from dnd.reactions import add_stand_when_healed_handler
 from dnd.spells.abjuration import DispelEvilAndGood
@@ -38,6 +41,18 @@ from server.worker import dispatch
 from server.worker_protocol import Command, Preview
 from tests.engine.test_high_level_spell_controls import high_actor
 from tests.player.test_compact_choices import request_choices, rows, world
+
+
+def region_aims(actor: Entity, region: PositionRegion) -> list[tuple[int, int]]:
+    """Cells a client aims in a free-aim region: visible, in range, open where the region requires it, nearest
+    first (preview validates each)."""
+    grid = get_map()
+    return sorted((position for position in visible_positions(actor.senses.cells)
+        if not (region.exclude_source_position and position == actor.position)
+        and (region.range_feet is None or actor.senses.get_feet_distance(position) <= region.range_feet)
+        and not (region.requires_unoccupied and grid.get_entities_at(position))
+        and not (region.requires_walkable and not grid.is_walkable_for(*position, requesting_entity_uuid=actor.uuid))),
+        key=actor.senses.get_feet_distance)
 
 
 @pytest.mark.parametrize(
@@ -146,14 +161,13 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
             for binding in bindings
         ]
     else:
+        assert row.position_region is not None, behavior
         # A free-aim row lists no cells (its `position_region`): the client aims a cell in the region,
         # sent as the first extra position with no target index; preview validates it.
-        native_row = runtime.session.discovery.original.all_actions[row.discovery_index]
-        aims = performed_action(actor, native_row).get_valid_positions()
         selections = [
             ActionSelection(action_index=row.discovery_index, cast_at_level=cast_at_level, target_indices=(),
                             extra_target_positions=(aim,))
-            for aim in aims[:12]
+            for aim in region_aims(actor, row.position_region)[:12]
         ]
     for selection in selections:
         _, _, response = dispatch(
@@ -214,7 +228,9 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
             ),
         )
     assert reply.rejection is None and records, behavior
-    assert actor.action_economy.actions.normalized_score == costs[0] - 1, (
+    # The cast spends its action; a cast that ends the encounter resets every turn cost (no turn outside combat).
+    ended = runtime.session.encounter.state is EncounterState.ENDED
+    assert actor.action_economy.actions.normalized_score == costs[0] - (0 if ended else 1), (
         costs,
         actor.action_economy.actions.normalized_score,
         [
@@ -268,16 +284,21 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
             for candidate in rows(choices)
             if candidate.behavior_id == followup
             and candidate.can_afford
-            and choices.target_sets[candidate.target_set]
+            and (choices.target_sets[candidate.target_set] or candidate.position_region is not None)
         ]
         assert options, followup
         candidate = options[0]
         selection = None
         cursor = EventQueue.event_cursor()
-        for binding in choices.target_sets[candidate.target_set]:
-            proposed = ActionSelection(
-                action_index=candidate.discovery_index, target_indices=(binding.index,)
-            )
+        followup_bindings = choices.target_sets[candidate.target_set]
+        proposals = (
+            [ActionSelection(action_index=candidate.discovery_index, target_indices=(binding.index,))
+             for binding in followup_bindings]
+            if followup_bindings or candidate.position_region is None
+            else [ActionSelection(action_index=candidate.discovery_index, target_indices=(), extra_target_positions=(aim,))
+                  for aim in region_aims(actor, candidate.position_region)[:12]]
+        )
+        for proposed in proposals:
             _, _, response = dispatch(
                 runtime,
                 Preview(
@@ -295,6 +316,7 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
                 proposed = replace(
                     proposed,
                     extra_target_positions=(
+                        *proposed.extra_target_positions,
                         response.preview.positions[response.preview.next_positions[0]],
                     ),
                 )
