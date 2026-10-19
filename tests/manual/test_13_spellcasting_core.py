@@ -19,9 +19,9 @@ from dnd.core.base_actions import (
     OutcomeResolution,
     TargetEffectDisposition,
 )
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, MultiEntityLogData
+from dnd.core.combat_log import (CombatLogEntry, CombatLogEntryType, ConditionRemovedLogData, MultiEntityLogData,
+    SpellDamageLogData, summarize_target_entries)
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
-from dnd.core.events import _enrich_multi_entity_log_from_children
 from dnd.core.creature_types import CreatureType
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
@@ -303,7 +303,7 @@ def test_necrotic_bless_combat_log_preserves_each_target_identity() -> None:
 
 
 def test_multi_target_summary_excludes_auxiliary_cleanup_from_target_data() -> None:
-    """Causal cleanup stays nested without becoming a spell target."""
+    """Causal cleanup stays nested without becoming a spell target: only captured target applications count."""
     damage_children = [
         CombatLogEntry(
             entry_type=CombatLogEntryType.SPELL_DAMAGE,
@@ -314,7 +314,8 @@ def test_multi_target_summary_excludes_auxiliary_cleanup_from_target_data() -> N
             compact=f"Magic Missile hits {target_name}",
             verbose=f"Magic Missile hits {target_name}",
             detailed=f"Magic Missile hits {target_name}",
-            data={"final_damage": damage},
+            data=SpellDamageLogData(spell_name="Magic Missile", target_name=target_name, damage=damage,
+                                    damage_type="force"),
             success=True,
         )
         for target_name, target_uuid, damage in (
@@ -331,31 +332,18 @@ def test_multi_target_summary_excludes_auxiliary_cleanup_from_target_data() -> N
         compact="Sorcerer is no longer MetamagicActive",
         verbose="Sorcerer is no longer MetamagicActive",
         detailed="Sorcerer is no longer MetamagicActive",
-        data={},
+        data=ConditionRemovedLogData(condition_name="MetamagicActive", reveals_target=False),
         success=True,
     )
-    parent = CombatLogEntry(
-        entry_type=CombatLogEntryType.MULTI_ENTITY_ACTION,
-        source_name="Sorcerer",
-        source_uuid="sorcerer",
-        compact="Sorcerer uses Magic Missile",
-        verbose="Sorcerer uses Magic Missile",
-        detailed="Sorcerer uses Magic Missile",
-        data=MultiEntityLogData(
-            action_name="Magic Missile",
-            caster_name="Sorcerer",
-            total_targets=2,
-        ).model_dump(),
-        success=True,
-        sub_entries=[*damage_children, cleanup],
-    )
+    entries = [*damage_children, cleanup]
 
-    _enrich_multi_entity_log_from_children(parent, parent.sub_entries)
+    summary = summarize_target_entries(
+        MultiEntityLogData(action_name="Magic Missile", caster_name="Sorcerer", total_targets=2), entries, (0, 1))
 
-    assert parent.data["target_names"] == ["Warrior", "Archer"]
-    assert parent.data["per_target_damage"] == [4, 5]
-    assert len(parent.data["per_target_logs"]) == 2
-    assert parent.sub_entries == [*damage_children, cleanup]
+    assert summary.target_names == ["Warrior", "Archer"]
+    assert summary.per_target_damage == [4, 5]
+    assert summary.total_targets == 2
+    assert entries == [*damage_children, cleanup]
 
 
 def reset_spell_tutorial_state(width: int = 10, height: int = 6) -> None:

@@ -40,7 +40,7 @@ So implement the fold from §2 as a full spec. §1 is only a map of what moved.
 | Enums | — | `ConditionRemovalTrigger` + `encounter_end`. `EventType` + `actor_sheet`, `initiative_order_changed` |
 | 14 → 15 (still in force) | — | `RowBits` subsets, group cell tables, contact columns, `LightRow`, sightings as `CellMask`, `PlayerNode.resolution` index, `version_rows` as two columns, `WorldUpdate.resolved_light` |
 
-Combat-log types and Choices did not change.
+Combat-log types did not change; Choices did not change between 15 and 16, but see §2.9 for free aim, which a schema-9 client has never seen.
 
 ---
 
@@ -331,6 +331,49 @@ Layer and weapon-set rows change the body's own loadout value, never the store e
   already held.
 
 ---
+
+### 2.9 Addendum: free-aim targeting in Choices (position spells)
+
+Not a 15 → 16 change: it landed earlier (PD1b and the free-aim lane). A schema-9 client has never seen it.
+
+**Which rows.** A Choices row whose `target_type` is `position`, `position_los` or `position_aoe` carries a
+`position_region` (`PositionRegion`). Examples: Wall of Fire, Freezing Sphere, Forcecage, Delayed Blast Fireball,
+Conjure Elemental, Planar Ally, Summon Dragon, Create or Destroy Water, Call Lightning.
+
+**The row lists no cells.** Discovery no longer enumerates every legal cell; enumerating the whole region cost
+most of Choices for zone spells. The row's target set is often **empty**. That does not mean unavailable:
+read `availability_status`, never infer availability from an empty target list.
+
+**Two ways to aim:**
+
+| Way | When | Selection to send |
+|---|---|---|
+| A listed target | AoE rows also list one aim point per perceived creature, each with its hit set | `target_indices=[i]`, as for any row |
+| Free aim | Any point inside the region, including any row with an empty target list | `target_indices=[]`, `extra_target_positions=[aim, ...]`: the first position is the aim, the rest are the row's further positions if it needs any |
+
+The worker rejects a free aim with no position as `invalid_selection` (server/worker.py `retained_selection`).
+
+**`PositionRegion` fields** (dnd/core/base_actions.py `PositionRegion`). Use them to highlight and pre-filter
+cells for the player. The server is the authority:
+
+| Field | Meaning |
+|---|---|
+| `range_feet` | Maximum distance from the caster; `null` means the action states no range limit |
+| `candidate_source` | `visible`: cells the actor sees; `reachable`: cells it can reach |
+| `requires_unoccupied` | The cell must look unoccupied to the actor |
+| `requires_walkable` | The cell must look walkable to the actor |
+| `requires_axis_or_diagonal_alignment` | Straight or diagonal line from the caster only |
+| `exclude_source_position` | The caster's own cell is not allowed |
+
+**Flow.**
+1. Choices: the player picks the row.
+2. The player clicks a cell; filter it locally with the region fields.
+3. Preview with the free-aim selection. The server validates that exact point with the same per-point legality
+   rule execution uses (`valid_positions_among` / `in_visible_region`) and returns the preview footprint.
+   Show `can_confirm` and the footprint.
+4. Command (`ExecuteSelectionIntent`) with the same selection. Execution validates the aim again.
+
+Verify against the worker: the exact preview payload for an illegal aim (an error string, or `can_confirm=false`).
 
 ## 3. Memory rules (what the client keeps)
 

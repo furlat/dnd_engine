@@ -88,6 +88,8 @@ def test_dynamic_cost_hooks_have_one_explicit_source_or_target_ownership() -> No
 
     assert owners == {
         "get_source_dynamic_costs": [
+            (Path("classes/paladin.py"), "LayOnHands"),
+            (Path("classes/wizard.py"), "ArcaneRecovery"),
             (Path("core/base_actions.py"), "BaseAction"),
             (Path("monsters/traits.py"), "DivineEminenceAction"),
         ],
