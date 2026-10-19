@@ -66,7 +66,6 @@ from dnd.core.item_types import ItemIntegrity
 from dnd.core.events import WorldConnectorState, WorldTileState
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
-from dnd.player.actor_facts import ActorState
 from dnd.player.audience import AudiencePerception, PlayerAudience, composed_view
 from dnd.player.facts import (PlayerActor, PlayerCharacterSheet, PlayerItem, PlayerLightSource, PlayerObject,
     PlayerState, SpatialEffectContent)
@@ -76,7 +75,7 @@ from dnd.player.static_sent import StaticSent
 from dnd.player.world_stamps import WorldStamps
 from dnd.player.world_publication import disclosed_world_object, object_observed
 from dnd.player.session import Session
-from dnd.types.actor_facts import ConditionMember
+from dnd.types.actor_facts import ActorState, ConditionMember
 from dnd.types.cells import CellMask, cell_in
 from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SensesSnapshot
 from dnd.types.world import CardinalDirection
@@ -487,15 +486,14 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
             actors[str(identity)] = None
             continue
         contact = senses.entities.get(identity)
-        state = replace(state, last_visual_position=(contact.position if contact is not None else entity.position)
-                        if visual else None)
+        position = (contact.position if contact is not None else entity.position) if visual else None
         # The seat's body record of this body entering its view now, as its client folds it.
         record = entering_body(0, state, audience, visual=visual, birth=True, sent=StaticSent(), pending=StaticSent(),
             loadout_ids={})
         held = PlayerState(generation=client.generation, observer_uuid=client.observer_uuid, world=client.world,
             audience=audience)
         enter_body(held, record)
-        body = replace(held.actors[identity], last_visual_position=state.last_visual_position)
+        body = replace(held.actors[identity], last_visual_position=position)
         actors[str(identity)] = {'body': _body(body, visual), 'items': _items({
             str(row.item_uuid): ITEM.dump_python(held.items[row.item_uuid], mode='json') for row in record.items})}
     return {

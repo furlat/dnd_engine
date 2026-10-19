@@ -20,15 +20,14 @@ from dnd.core.events import DamageAppliedEvent, EventPhase, EventQueue
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
-from dnd.player.capture import capture_interval, reduce_interval
-from dnd.player.recorded import CapturedHistory, ObserverCapture, capture_history
+from dnd.player.capture import CompletedLineage, capture_lineages
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.evocation import register_true_strike
 
 
-def true_strike_history(*, ranged: bool, miss: bool) -> CapturedHistory:
-    """Cast a discovered True Strike with a shortsword, or a shortbow at 20 ft, and capture both views."""
+def true_strike_history(*, ranged: bool, miss: bool) -> tuple[CompletedLineage, ...]:
+    """Cast a discovered True Strike with a shortsword, or a shortbow at 20 ft, and capture the caster's view."""
     previous_random = random.getstate()
     reset_engine_runtime()
     battlefield_id = "battlefield.open_floor_bright"
@@ -68,9 +67,6 @@ def true_strike_history(*, ranged: bool, miss: bool) -> CapturedHistory:
         while encounter.get_current_entity() is not caster:
             encounter.next_turn()
         baseline = EventQueue.event_cursor()
-        initial = capture_interval(name="True Strike initialization", start_cursor=0, end_cursor=baseline,
-            observer_uuid=caster.uuid, battlefield_id=battlefield_id)
-        before, _ = reduce_interval(None, initial)
         choices = [(action, target) for action in get_available_actions(caster).all_actions
                    if action.behavior_id == "spell.true_strike"
                    for target in action.valid_targets if target.target_uuid == recipient.uuid]
@@ -91,10 +87,9 @@ def true_strike_history(*, ranged: bool, miss: bool) -> CapturedHistory:
         assert len(attacks) == 1 and attacks[0].attack_outcome is (
             AttackOutcome.CRIT_MISS if miss else AttackOutcome.HIT)
         assert recipient.get_hp() == 60 - (0 if miss else 12)
-        captured = capture_history(before, (), observers=tuple(
-            ObserverCapture(role, actor.uuid, baseline) for role, actor in actors.items()))
-        view = captured.views["caster"]
-        return CapturedHistory(view.initialization, before, view.lineages, captured.views)
+        roots = tuple(event for _, event in EventQueue.iter_events_since(baseline) if event.parent_lineage is None
+                      and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
+        return capture_lineages(roots, observer_uuid=caster.uuid)
     finally:
         game.close()
         reset_engine_runtime()
@@ -104,8 +99,7 @@ def true_strike_history(*, ranged: bool, miss: bool) -> CapturedHistory:
 @pytest.mark.parametrize("ranged", (False, True))
 @pytest.mark.parametrize("miss", (False, True))
 def test_discovered_true_strike_retains_weapon_attack_identity_damage_and_parent(ranged, miss):
-    history = true_strike_history(ranged=ranged, miss=miss)
-    lineage, = [row for row in history.lineages if isinstance(row.root, SpellEvent)]
+    lineage, = [row for row in true_strike_history(ranged=ranged, miss=miss) if isinstance(row.root, SpellEvent)]
     spell = lineage.root
     assert isinstance(spell, SpellEvent) and spell.behavior_id == "spell.true_strike"
     attack, = [event for event in lineage.events if isinstance(event, AttackEvent)]

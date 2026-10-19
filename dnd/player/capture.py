@@ -1,4 +1,4 @@
-"""Finite Event capture and passive subjective target reduction for pygame."""
+"""Finite Event capture: the seat-independent recorded versions each seat's projection walks."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from uuid import UUID
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, TraverseConnectorEvent, ShoveEvent, SpellEvent
 from dnd.blocks.base_item import ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
-from dnd.core.sensory_fold import copy_senses_snapshot, reduce_senses_snapshot
 from dnd.core.base_actions import ActionEvent, BaseCost
 from dnd.core.combat_log import CombatLogEntry
 from dnd.spells.abjuration import CounterspellReactionEvent
@@ -32,7 +31,6 @@ from dnd.core.events import (
     Event,
     EventPhase,
     EventQueue,
-    EventType,
     ExposedFlameEvent,
     ForcedMovementEvent,
     PortalTransferEvent, MechanismActivationEvent, StandOfferEvent,
@@ -57,30 +55,23 @@ from dnd.core.events import (
 )
 from dnd.core.item_types import ItemLocation
 from dnd.subjective_combat_log import SharedRenders, project_combat_log
-from dnd.types.senses import PerceivedContact
-from dnd.world_facts import copy_world_facts, apply_world_fact as apply_recorded_world_fact
 from dnd.player.audience import PlayerAudience, resolve_audience
 
 from dnd.player.event_record import RecordedCombatLog, RecordedEvent
 from dnd.player.sheet_facts import sheet_fact
 from dnd.types.actor_sheet import ActorSheetChange
 from dnd.player.facts import PlayerLogEntry
-from dnd.player.actor_facts import ActorState, ConditionFact, PresentationTarget
-from dnd.actor_projection import actor_fact_change, actor_fact_owner, actor_from_birth
+from dnd.actor_projection import actor_fact_change, actor_fact_owner
 from dnd.actor_projection import condition_fact as committed_condition_fact
-from dnd.player.actor_projection import apply_presented_change, ended_lifetime, fold_birth, fold_completed_actors
-from dnd.types.actor_facts import ActorFactChange
+from dnd.types.actor_facts import ActorFactChange, ConditionFact
 
 
 class Disposition(StrEnum):
-    """Honest final or pending presentation disposition for one source row."""
+    """A retained header-only version's disposition: a foreign sensory payload no seat consumes, or an
+    unsupported payload (publication refuses it)."""
 
-    PENDING_DISPLAY = "pending_display"
-    REPRESENTED = "represented"
-    STATE_ONLY = "state_only"
     NOT_DISCLOSED = "not_disclosed"
     UNSUPPORTED = "unsupported"
-    FAILED = "failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,75 +122,31 @@ class IntervalEnvelope:
     end_cursor: int
     observer_uuid: UUID
     battlefield_id: str
-    door_uuid: UUID | None
-    standing_torch_uuid: UUID | None
     objective_rows: tuple[ObjectiveRow, ...]
     admitted: tuple[tuple[int, RecordedEvent], ...]
-    dispositions: tuple[tuple[int, Disposition], ...]
     conditions: tuple[ConditionFact, ...] = ()
-    admissions: tuple[ActorAdmission, ...] = ()
     audience: PlayerAudience | None = None
     # The audience's combat-log entry of each admitted event that has one.
     logs: dict[UUID, PlayerLogEntry] = field(default_factory=dict)
-    # The shared fold's actor change of each admitted event that has one, by event uuid.
-    actor_fact_changes: Mapping[UUID, ActorFactChange] = field(default_factory=dict)
     # The interval's world as every seat's session folds it.
     world_interval: WorldInterval = field(default_factory=WorldInterval)
 
 
-@dataclass(frozen=True, slots=True)
-class ActorAdmission:
-    """Actor state at an actual observation version in the received lineage."""
-
-    event_uuid: UUID
-    actor: ActorState
-    contact: PerceivedContact | None
-    observer_uuid: UUID | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class AdmissionEvidence:
-    """One version's seat-independent capture evidence, read at that version.
-
-    `observer` is the tracked observer of a completed sensory delta (else
-    None), `observed` its changed contacts plus itself. `candidates` are the participants and
-    the fact owner. For each of these identities: its actor (before a
-    completed version's fold; after an arrival's or departure's fold at its
-    effect), the tracked observers holding it as a contact, and its own last
-    sensory position. `actor_fact_change` is the record of a completed
-    version's actor change (plan §4), the one the shared fold and the
-    session projection's actor fold apply.
-    """
-
-    observer: UUID | None
-    observed: frozenset[UUID]
-    candidates: frozenset[UUID]
-    actors: Mapping[UUID, ActorState]
-    holders: Mapping[UUID, Mapping[UUID, PerceivedContact]]
-    positions: Mapping[UUID, tuple[int, int]]
-    actor_fact_change: ActorFactChange | None = None
-
-
 @dataclass(slots=True)
 class CaptureCheckpoint:
-    """The recorded actor/contact fold of the EventQueue, advanced once per version for every audience.
+    """The EventQueue's actor change records, advanced once per version for every audience.
 
-    Contacts and positions are kept for every tracked observer (the union of
-    the audiences sharing it). `root_of` and `trees` place the lineages of
-    each still-open root; `pending` keeps the evidence of that root's folded
-    versions until it completes, so a root's capture never folds history again.
+    Each non-canceled version has one record: the actor change of a completed version (plan §4), else None.
+    `root_of` and `trees` place the lineages of each still-open root; `pending` keeps the records of that
+    root's folded versions until it completes, so a root's capture never reads history again.
     `initiative` is the encounter's order (its start, then each join or leave); a session has one encounter.
     """
 
     generation: UUID
-    observers: frozenset[UUID]
     cursor: int = 0
-    actors: dict[UUID, ActorState] = field(default_factory=dict)
-    contacts: dict[UUID, dict[UUID, PerceivedContact]] = field(default_factory=dict)
-    positions: dict[UUID, tuple[int, int]] = field(default_factory=dict)
     root_of: dict[UUID, UUID] = field(default_factory=dict)
     trees: dict[UUID, list[UUID]] = field(default_factory=dict)
-    pending: dict[UUID, dict[UUID, AdmissionEvidence]] = field(default_factory=dict)
+    pending: dict[UUID, dict[UUID, ActorFactChange | None]] = field(default_factory=dict)
     initiative: tuple[UUID, ...] = ()
 
 
@@ -228,29 +175,6 @@ class CompletedLineage:
     native_logs: Mapping[UUID, RecordedCombatLog] = field(default_factory=dict)
     # The shared fold's actor change of each retained event that has one, by event uuid.
     actor_fact_changes: Mapping[UUID, ActorFactChange] = field(default_factory=dict)
-
-
-@dataclass(frozen=True, slots=True)
-class ReducedInterval:
-    """Reduction result awaiting one exact displayed frame."""
-
-    envelope: IntervalEnvelope
-    dispositions: Mapping[int, Disposition]
-    pending_display: frozenset[int]
-
-
-@dataclass(frozen=True, slots=True)
-class IntervalTerminal:
-    """One terminal emitted only after display and finite hold."""
-
-    generation: UUID
-    name: str
-    start_cursor: int
-    end_cursor: int
-    settled: bool
-    failed: bool
-    cancelled: bool
-    failure: str | None = None
 
 
 def _objective_row(index: int, event: Event) -> ObjectiveRow:
@@ -343,15 +267,13 @@ def capture_interval(
     end_cursor: int,
     observer_uuid: UUID,
     battlefield_id: str,
-    door_uuid: UUID | None = None,
-    standing_torch_uuid: UUID | None = None,
     audience: PlayerAudience | None = None,
     context: CaptureContext | None = None,
 ) -> IntervalEnvelope:
     """Synchronously copy one exact already-committed EventQueue interval.
 
-    `context` carries the shared fold's evidence for the interval; without it
-    this audience folds the history from its start.
+    `context` carries the shared fold's records for the interval; without it
+    this capture reads the history from its start.
     """
     audience = resolve_audience(observer_uuid, audience)
     generation = EventQueue.generation_id()
@@ -370,7 +292,6 @@ def capture_interval(
 
     admitted: list[tuple[int, Event]] = []
     admitted_original: list[tuple[int, Event]] = []
-    dispositions: list[tuple[int, Disposition]] = []
     logs: dict[UUID, PlayerLogEntry] = {}
     for index, event in indexed:
         # A controlled actor's birth and sheet facts, for its sheet (`sheet_facts`).
@@ -383,20 +304,8 @@ def capture_interval(
             entry = seat_log_entry(event.combat_log, audience)
             if entry is not None:
                 logs[event.uuid] = entry
-            disposition = (
-                Disposition.STATE_ONLY
-                if isinstance(event, (EntityCreatedEvent, SensoryUpdateEvent, TurnEvent, RoundEvent, EncounterEvent))
-                or actor_fact_owner(event) is not None or sheet is not None
-                else Disposition.PENDING_DISPLAY
-            )
-        else:
-            disposition = Disposition.UNSUPPORTED
-        dispositions.append((index, disposition))
 
-    evidence: Mapping[UUID, AdmissionEvidence] = {}
-    if admitted_original:
-        evidence = (context or capture_context(
-            CaptureCheckpoint(generation, frozenset(audience.observers)), end_cursor=end_cursor)).evidence
+    records = (context or capture_context(CaptureCheckpoint(generation), end_cursor=end_cursor)).records
     bodies = context.bodies if context is not None else {}
     completed = tuple((index, event) for index, event in indexed if event.phase is EventPhase.COMPLETION)
     return IntervalEnvelope(
@@ -407,207 +316,15 @@ def capture_interval(
         observer_uuid=observer_uuid,
         audience=audience,
         battlefield_id=battlefield_id,
-        door_uuid=door_uuid,
-        standing_torch_uuid=standing_torch_uuid,
         objective_rows=tuple(_objective_row(index, event) for index, event in indexed),
         admitted=tuple(admitted),
-        dispositions=tuple(dispositions),
         conditions=tuple(fact for _, event in admitted_original if (fact := _condition_fact(event)) is not None),
-        admissions=_derive_admissions(tuple(admitted_original), audience, evidence) if admitted_original else (),
         logs=logs,
-        actor_fact_changes=_actor_fact_changes(evidence, (event for _, event in admitted_original)),
         world_interval=WorldInterval(events=tuple((index, _cached_body(event, None, True, bodies))
                 for index, event in completed),
             conditions=tuple(fact for _, event in completed if (fact := _condition_fact(event)) is not None),
-            actor_fact_changes=_actor_fact_changes(evidence, (event for _, event in completed))),
+            actor_fact_changes=_actor_fact_changes(records, (event for _, event in completed))),
     )
-
-
-def apply_world_fact(target: PresentationTarget, event: Event, condition: ConditionFact | None = None) -> bool:
-    """Fold recorded world after-values, reporting whether any were applied (actors take their own changes)."""
-    if not apply_recorded_world_fact(target.recorded_world, event, condition):
-        return False
-    if target.door_uuid is not None and (door := target.objects.get(target.door_uuid)) is not None:
-        target.door_placement = door.placement
-        target.door_is_open = door.item.is_open
-    if target.standing_torch_uuid is not None:
-        fixture = target.objects.get(target.standing_torch_uuid)
-        if fixture is not None:
-            target.standing_torch_state = fixture.item
-    return True
-
-
-def reduce_interval(
-    target: PresentationTarget | None,
-    envelope: IntervalEnvelope,
-) -> tuple[PresentationTarget, ReducedInterval]:
-    """Reduce admitted detached values in source order without live queries."""
-    if target is None:
-        target = PresentationTarget(
-            generation=envelope.generation,
-            observer_uuid=envelope.observer_uuid,
-            door_uuid=envelope.door_uuid,
-            standing_torch_uuid=envelope.standing_torch_uuid,
-            reducer_cursor=envelope.start_cursor,
-        )
-    if target.generation != envelope.generation:
-        raise RuntimeError("stale presentation interval generation")
-    if target.observer_uuid != envelope.observer_uuid:
-        raise RuntimeError("presentation observer changed")
-    if target.reducer_cursor != envelope.start_cursor:
-        raise RuntimeError("presentation interval is not contiguous")
-
-    dispositions = dict(envelope.dispositions)
-    pending: set[int] = set()
-    condition_facts = {fact.event_uuid: fact for fact in envelope.conditions}
-    admissions: dict[UUID, list[ActorAdmission]] = {}
-    for row in envelope.admissions:
-        admissions.setdefault(row.event_uuid, []).append(row)
-    for index, event in envelope.admitted:
-        for row in admissions.get(event.uuid, ()):
-            _admit_actor(target, row)
-        if event.canceled:
-            continue
-        if (change := recorded_actor_change(envelope.actor_fact_changes, event)) is not None:
-            apply_presented_change(target.actors, change)
-        condition = condition_facts.get(event.uuid)
-        if condition is not None and (condition.resulting_tile is not None or condition.resulting_item is not None):
-            apply_world_fact(target, event, condition)
-            pending.add(index)
-            continue
-        if actor_fact_owner(event) is not None:
-            dispositions[index] = Disposition.STATE_ONLY
-            continue
-        if isinstance(event, EntityCreatedEvent):
-            # Composition is folded into observed admissions, never revealed
-            # merely because a private birth exists in the recorded interval.
-            dispositions[index] = Disposition.STATE_ONLY
-        elif type(event) is WorldInitializedEvent:
-            apply_world_fact(target, event)
-            if envelope.door_uuid is not None:
-                door = target.objects.get(envelope.door_uuid)
-                if door is None:
-                    raise RuntimeError("admitted world lacks the exact door")
-                target.door_placement = door.placement
-                target.door_is_open = door.item.is_open
-            if envelope.standing_torch_uuid is not None:
-                fixture = target.objects.get(envelope.standing_torch_uuid)
-                if fixture is None:
-                    raise RuntimeError("admitted world lacks the exact standing fixture")
-                target.standing_torch_state = fixture.item
-            pending.add(index)
-        elif type(event) is ItemLocationStateEvent:
-            apply_world_fact(target, event)
-            pending.add(index)
-        elif isinstance(event, (SpatialChangeEvent, WorldModifiedEvent, TileElevationChangeEvent,
-                                SpatialEffectChangeEvent, SpatialEffectInteractionEvent)):
-            apply_world_fact(target, event)
-            pending.add(index)
-        elif type(event) is SensoryUpdateEvent:
-            _reduce_sensory_fact(target, event)
-            dispositions[index] = Disposition.STATE_ONLY
-        elif isinstance(event, (TurnEvent, RoundEvent, EncounterEvent)):
-            _reduce_turn_fact(target, event)
-            dispositions[index] = Disposition.STATE_ONLY
-        elif sheet_fact(event) is not None:
-            # A sheet fact; the HUD projection reads it from the admitted events.
-            dispositions[index] = Disposition.STATE_ONLY
-        else:
-            raise RuntimeError("capture admitted an unsupported Event subclass")
-    target.reducer_cursor = envelope.end_cursor
-    return target, ReducedInterval(
-        envelope=envelope,
-        dispositions=dispositions,
-        pending_display=frozenset(pending),
-    )
-
-
-def settle_dispositions(
-    reduced: ReducedInterval,
-    *,
-    represented: set[int],
-    not_disclosed: set[int],
-) -> dict[int, Disposition]:
-    """Finalize only display obligations proven by the published frame."""
-    if represented & not_disclosed:
-        raise ValueError("one source cannot be represented and not disclosed")
-    if represented | not_disclosed != set(reduced.pending_display):
-        raise ValueError("display evidence does not cover every pending source")
-    result = dict(reduced.dispositions)
-    for index in represented:
-        result[index] = Disposition.REPRESENTED
-    for index in not_disclosed:
-        result[index] = Disposition.NOT_DISCLOSED
-    return result
-
-
-def copy_target(target: PresentationTarget) -> PresentationTarget:
-    """Own the mutable indexes at one reduction position, sharing cold facts."""
-    return replace(
-        target,
-        recorded_world=copy_world_facts(target.recorded_world),
-        actors=dict(target.actors),
-        senses=copy_senses_snapshot(target.senses) if target.senses is not None else None,
-    )
-
-
-def _reduce_sensory_fact(target: PresentationTarget, event: SensoryUpdateEvent) -> None:
-    """Apply the observer's native after-values, retaining last visual placement."""
-    if event.observer_uuid != target.observer_uuid:
-        return
-    event.validate_replay_payload()
-    target.senses = reduce_senses_snapshot(target.observer_uuid, target.senses, event)
-    if event.observer_position_changed and target.observer_uuid in target.actors:
-        observer = target.actors[target.observer_uuid]
-        target.actors[observer.uuid] = replace(observer, last_visual_position=event.observer_position)
-    for identity, contact in event.entity_contacts_changed.items():
-        actor = target.actors.get(identity)
-        if actor is not None and contact.visual:
-            target.actors[identity] = replace(actor, last_visual_position=contact.position)
-
-
-def _reduce_turn_fact(target: PresentationTarget, event: TurnEvent | RoundEvent | EncounterEvent) -> None:
-    if isinstance(event, TurnEvent):
-        target.round_number = event.round_number
-        # Encounter transitions remain available; the acting identity follows
-        # the existing event-time grant, as in the subjective encounter mapper.
-        identified = (event.entity_uuid == target.observer_uuid
-                      or str(target.observer_uuid) in event.identified_entity_observer_uuids.get(
-                          str(event.entity_uuid), set()))
-        target.current_actor_uuid = (event.entity_uuid
-                                     if event.event_type is EventType.TURN_START and identified else None)
-    elif isinstance(event, RoundEvent):
-        target.round_number = event.round_number
-    elif event.event_type is EventType.ENCOUNTER_END:
-        target.current_actor_uuid = None
-
-
-def seed_actors(
-    target: PresentationTarget,
-    births: tuple[EntityCreatedEvent, ...],
-) -> PresentationTarget:
-    """Establish the selected known actors at the explicit startup baseline.
-
-    The caller supplies unchanged composition facts for this explicit startup
-    baseline. Contact acquisition is not treated as observation of their birth
-    or as a general rule for disclosing later actor state.
-    """
-    if target.senses is None:
-        raise ValueError("actor startup requires an observer baseline")
-    result = copy_target(target)
-    for birth in births:
-        if birth.phase is not EventPhase.COMPLETION:
-            raise ValueError("actor startup requires completed composition")
-        if birth.entity_uuid != target.observer_uuid:
-            contact = target.senses.entities.get(birth.entity_uuid)
-            if contact is None or not contact.visual:
-                raise ValueError("selected actor startup requires a known visual contact")
-        result.actors[birth.entity_uuid] = replace(
-            actor_from_birth(birth),
-            last_visual_position=(target.senses.position if birth.entity_uuid == target.observer_uuid
-                                  else target.senses.entities[birth.entity_uuid].position),
-        )
-    return result
 
 
 def _event_header(event: Event) -> Event:
@@ -795,35 +512,6 @@ def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload:
     return copied
 
 
-def _actor_participants(event: Event) -> tuple[UUID, ...]:
-    """Existing families distinguish actor subjects from neutral event sources."""
-    match event:
-        case TurnEvent() | RoundEvent() | EncounterEvent() | SensoryUpdateEvent():
-            return ()
-        case ItemResourceChangeEvent() | ItemHoldingsReleasedEvent():
-            return (event.source_entity_uuid,) if event.source_entity_uuid is not None else ()
-        case SpatialChangeEvent(change_type=SpatialChangeType.LIGHT_CHANGED):
-            # light_changed() stores the affected tile UUID in entity_uuid.
-            # Its sensory children provide observer-specific light after-values.
-            return ()
-        case EntityFactionChangedEvent() | LifeStateChangeEvent() | DeathEvent() | ReviveEvent() | InstantDeathEvent() | TemporaryHitPointsChangedEvent():
-            return (event.entity_uuid,)
-        case SpatialChangeEvent(change_type=(
-            SpatialChangeType.PERCEIVABILITY_CHANGED | SpatialChangeType.ENTITY_ENTERED
-            | SpatialChangeType.ENTITY_LEFT | SpatialChangeType.MOVEMENT_COLLISION
-        )):
-            return (event.entity_uuid,) if event.entity_uuid is not None else ()
-        case ConditionApplicationEvent() | ConditionRemovalEvent() | ConditionStateChangedEvent() | TakeDamageEvent() | DamageAppliedEvent() | HealEvent() | PortalTransferEvent() | StandOfferEvent():
-            return (event.target_entity_uuid,) if event.target_entity_uuid is not None else ()
-        case ActionEvent() | StepMovementEvent() | ForcedMovementEvent() | D20Event() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent():
-            return tuple(identity for identity in (event.source_entity_uuid, event.target_entity_uuid)
-                         if identity is not None)
-        case _:
-            # Unsupported payloads expose only the already-subjective log and
-            # diagnostic header; their unknown source schema cannot name actors.
-            return ()
-
-
 def _condition_fact(event: Event) -> ConditionFact | None:
     if (recorded := committed_condition_fact(event)) is not None:
         return recorded
@@ -847,44 +535,22 @@ def recorded_actor_change(changes: Mapping[UUID, ActorFactChange], event: Event)
     return change
 
 
-def _actor_fact_changes(evidence: Mapping[UUID, AdmissionEvidence], events: Iterable[Event]
+def _actor_fact_changes(records: Mapping[UUID, ActorFactChange | None], events: Iterable[Event]
                         ) -> dict[UUID, ActorFactChange]:
-    """These retained events' actor changes, read from the one record of each: its version's evidence row."""
-    return {event.uuid: change for event in events
-            if (row := evidence.get(event.uuid)) is not None and (change := row.actor_fact_change) is not None}
+    """These retained events' actor changes, read from the one record of each."""
+    return {event.uuid: change for event in events if (change := records.get(event.uuid)) is not None}
 
 
-def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, AdmissionEvidence]:
-    """Fold versions up to `end` once for every audience; their evidence and that of roots completing here."""
+def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, ActorFactChange | None]:
+    """Read versions up to `end` once for every audience: their records and those of roots completing here."""
     if checkpoint.generation != EventQueue.generation_id():
         raise ValueError("capture checkpoint belongs to another EventQueue generation")
-    actors, contacts, positions = checkpoint.actors, checkpoint.contacts, checkpoint.positions
-    observers, root_of, trees, pending = checkpoint.observers, checkpoint.root_of, checkpoint.trees, checkpoint.pending
-    evidence: dict[UUID, AdmissionEvidence] = {}
+    root_of, trees, pending = checkpoint.root_of, checkpoint.trees, checkpoint.pending
+    records: dict[UUID, ActorFactChange | None] = {}
     for index, event in EventQueue.iter_events_since(checkpoint.cursor):
         if index >= end:
             break
         completed = event.phase is EventPhase.COMPLETION and not event.canceled
-        if completed:
-            fold_birth(actors, event)
-        if (not event.canceled and event.phase is EventPhase.EFFECT
-                and isinstance(event, SpatialChangeEvent)
-                and event.change_type in (SpatialChangeType.ENTITY_LEFT, SpatialChangeType.ENTITY_ENTERED)
-                and event.entity_uuid is not None and event.entity_uuid in actors
-                and (arrival := actor_fact_change(event)) is not None):
-            # The committed arrival or departure is the actor's at its effect, before its sensory children;
-            # seats fold the completed version's record.
-            apply_presented_change(actors, arrival)
-        observer: UUID | None = None
-        observed: frozenset[UUID] = frozenset()
-        if completed and isinstance(event, SensoryUpdateEvent) and event.observer_uuid in observers:
-            observer = event.observer_uuid
-            member = contacts.setdefault(observer, {})
-            positions[observer] = event.observer_position
-            for identity in event.entity_contacts_removed:
-                member.pop(identity, None)
-            member.update(event.entity_contacts_changed)
-            observed = frozenset((*event.entity_contacts_changed, observer))
         lineage = event.lineage_uuid
         root = root_of.get(lineage)
         if root is None:
@@ -892,80 +558,22 @@ def advance_capture(checkpoint: CaptureCheckpoint, end: int) -> dict[UUID, Admis
             if root is not None:
                 root_of[lineage] = root
                 trees.setdefault(root, []).append(lineage)
-        # Records, then the version's frozen row (actors before the fold), then the fold.
-        change = actor_fact_change(event, _condition_fact(event)) if completed else None
         if not event.canceled:
-            candidates = set(_actor_participants(event))
-            owner = actor_fact_owner(event)
-            if owner is not None:
-                candidates.add(owner)
-            identities = candidates | observed
-            row = AdmissionEvidence(observer, observed, frozenset(candidates),
-                {identity: actors[identity] for identity in identities if identity in actors},
-                {identity: {member: held[identity] for member, held in contacts.items() if identity in held}
-                 for identity in identities},
-                {identity: positions[identity] for identity in identities if identity in positions},
-                change)
-            evidence[event.uuid] = row
+            change = actor_fact_change(event, _condition_fact(event)) if completed else None
+            records[event.uuid] = change
             if root is not None:
-                pending.setdefault(root, {})[event.uuid] = row
+                pending.setdefault(root, {})[event.uuid] = change
         if completed:
             match event:
                 case EncounterStartEvent() | InitiativeOrderChangedEvent():
                     checkpoint.initiative = tuple(event.initiative_order)
-            fold_completed_actors(actors, event, change)
-            if (ended := ended_lifetime(event)) is not None:
-                positions.pop(ended, None)
-                for member in contacts.values():
-                    member.pop(ended, None)
-                if ended in contacts:
-                    contacts[ended].clear()
         if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL):
             # The root completes: its whole tree is captured now, never again.
             for member in trees.pop(lineage, ()):
                 root_of.pop(member, None)
-            evidence.update(pending.pop(lineage, {}))
+            records.update(pending.pop(lineage, {}))
         checkpoint.cursor = index + 1
-    return evidence
-
-
-def _derive_admissions(
-    indexed: tuple[tuple[int, Event], ...], audience: PlayerAudience, evidence: Mapping[UUID, AdmissionEvidence],
-) -> tuple[ActorAdmission, ...]:
-    """One audience's admissions over a recorded interval, read from its versions' evidence: the actors a
-    presentation target (`reduce_interval`) holds, each from its first observation. Publication does not read
-    them."""
-    admitted: set[UUID] = set()
-    result: list[ActorAdmission] = []
-    for index, event in indexed:
-        if event.canceled:
-            continue
-        row = evidence.get(event.uuid)
-        if row is None:
-            raise ValueError(f"Version {index} precedes the capture checkpoint and was not retained")
-        sensory = row.observer is not None and audience.observes(row.observer)
-        observed = row.observed if sensory else frozenset()
-        for identity in sorted({identity for identity in row.candidates | observed if identity not in admitted},
-                               key=str):
-            actor = row.actors.get(identity)
-            if actor is None:
-                continue
-            holders = row.holders[identity]
-            witnesses = [member for member in audience.observers
-                if member == identity or member in holders and (
-                    sensory and member == row.observer and identity in observed
-                    or str(member) in event.identified_entity_observer_uuids.get(str(identity), set())
-                    and str(member) in event.located_entity_observer_uuids.get(str(identity), set()))]
-            if not witnesses:
-                continue
-            witness = min(witnesses, key=lambda member: (
-                member != identity, not (member == identity or holders[member].visual), member.int))
-            contact = holders.get(witness) if witness != identity else None
-            position = (row.positions.get(identity) if witness == identity
-                        else contact.position if contact is not None and contact.visual else None)
-            result.append(ActorAdmission(event.uuid, replace(actor, last_visual_position=position), contact, witness))
-            admitted.add(identity)
-    return tuple(result)
+    return records
 
 
 def capture_lineage(root: Event, *, observer_uuid: UUID, audience: PlayerAudience | None = None) -> CompletedLineage:
@@ -984,8 +592,8 @@ class CaptureContext:
     """One operation's seat-independent capture over the EventQueue's existing indexes.
 
     `roots` are the roots it captures (by uuid, as given), `groups` their walk groups, each named by its root,
-    in the roots' order, and `graphs` each group's lineage graph by that root. `evidence` holds each
-    version's admission evidence from the shared fold and `bodies` each retained event's detached body:
+    in the roots' order, and `graphs` each group's lineage graph by that root. `records` holds each
+    version's actor change record from the shared fold and `bodies` each retained event's detached body:
     every seat shares them; a seat's capture adds only its redactions.
     """
 
@@ -994,7 +602,7 @@ class CaptureContext:
     roots: tuple[UUID, ...] = ()
     groups: tuple[Event, ...] = ()
     graphs: dict[UUID, "LineageGraph"] = field(default_factory=dict)
-    evidence: dict[UUID, AdmissionEvidence] = field(default_factory=dict)
+    records: dict[UUID, ActorFactChange | None] = field(default_factory=dict)
     bodies: dict[tuple[UUID, bool, bool | None], Event] = field(default_factory=dict)
 
 
@@ -1048,11 +656,11 @@ def capture_context(checkpoint: CaptureCheckpoint, roots: tuple[Event, ...] = ()
     context = replace(context, groups=tuple(named[identity] for identity in context.roots if identity in context.graphs))
     end = end_cursor if end_cursor is not None else max(
         (graph.indexed[-1][0] + 1 for graph in context.graphs.values()), default=checkpoint.cursor)
-    context.evidence.update(advance_capture(checkpoint, end))
+    context.records.update(advance_capture(checkpoint, end))
     for graph in context.graphs.values():
-        # Each version is captured from its own evidence: the shared fold never folds history again.
+        # Each version is captured from its own record: the shared fold never reads history again.
         for index, event in graph.indexed:
-            if not event.canceled and event.uuid not in context.evidence:
+            if not event.canceled and event.uuid not in context.records:
                 raise ValueError(f"Version {index} precedes the capture checkpoint and was not retained")
     return context
 
@@ -1068,11 +676,11 @@ def capture_lineages(
 ) -> tuple[CompletedLineage, ...]:
     """Project each audience from the same original operation evidence.
 
-    Without a shared `context` this audience folds the history from its start.
+    Without a shared `context` this capture reads the history from its start.
     """
     audience = resolve_audience(observer_uuid, audience)
     if context is None:
-        context = capture_context(CaptureCheckpoint(EventQueue.generation_id(), frozenset(audience.observers)), roots)
+        context = capture_context(CaptureCheckpoint(EventQueue.generation_id()), roots)
     elif tuple(dict.fromkeys(root.uuid for root in roots)) != context.roots:
         raise ValueError("A capture context captures the roots it was built from")
     return tuple(_capture_lineage(root, observer_uuid=observer_uuid, audience=audience, context=context,
@@ -1193,125 +801,18 @@ def _capture_lineage(
             for _, event in indexed
             if event.uuid in observed_source_ids and event.uuid not in retained_ids),
         native_logs=graph.native_logs,
-        actor_fact_changes=_actor_fact_changes(context.evidence, retained),
+        actor_fact_changes=_actor_fact_changes(context.records, retained),
     )
 
 
-def lineage_branch(lineage: CompletedLineage, root: Event) -> CompletedLineage:
-    """A retained subtree view, preserving actual event and parent identities."""
-    by_lineage = {event.lineage_uuid: event for event in lineage.events}
-    pending = [root.lineage_uuid]
-    selected: set[UUID] = set()
-    while pending:
-        identity = pending.pop()
-        if identity in selected:
-            continue
-        selected.add(identity)
-        pending.extend(by_lineage[identity].children_lineages)
-    events = tuple(event for event in lineage.events if event.lineage_uuid in selected)
-    identities = {event.uuid for event in events}
-    rows = tuple(row for row in lineage.objective_rows if row.lineage_uuid in selected)
-    return replace(lineage, root=root, events=events, objective_rows=rows,
-                   start_cursor=rows[0].source_index, end_cursor=rows[-1].source_index + 1,
-                   conditions=tuple(row for row in lineage.conditions if row.event_uuid in identities),
-                   dispositions=tuple(row for row in lineage.dispositions if row[0] in identities),
-                   native_logs={identity: entry for identity, entry in lineage.native_logs.items()
-                                if identity in identities},
-                   actor_fact_changes={identity: change for identity, change in lineage.actor_fact_changes.items()
-                                       if identity in identities})
-
-
-def _admit_actor(target: PresentationTarget, admission: ActorAdmission) -> None:
-    """Apply the actor's recorded state at this actual observation boundary."""
-    target.actors[admission.actor.uuid] = admission.actor
-    if admission.contact is not None and target.senses is not None:
-        target.senses.entities[admission.actor.uuid] = admission.contact
-
-
-def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> PresentationTarget:
-    """Apply retained results to an owned successor, at either history position."""
-    if target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid:
-        raise ValueError("lineage belongs to a different presentation baseline")
-    # Independent equipment roots can overlap in declaration/execution while
-    # completing in order. Their earliest phase is not a consumed fact cursor.
-    if lineage.end_cursor <= target.reducer_cursor:
-        raise ValueError("completed lineage precedes this reduction position")
-    result = copy_target(target)
-    condition_facts = {fact.event_uuid: fact for fact in lineage.conditions}
-    unsupported = {identity for identity, disposition in lineage.dispositions
-                   if disposition is Disposition.UNSUPPORTED}
-    not_disclosed = {identity for identity, disposition in lineage.dispositions
-                     if disposition is Disposition.NOT_DISCLOSED}
-    for event in lineage.events:
-        if event.canceled or event.uuid in unsupported:
-            continue
-        if event.phase is EventPhase.COMPLETION:
-            # A body born in the lineage (a summon) is held from its birth, as the session's fold holds it.
-            fold_birth(result.actors, event)
-        if (change := recorded_actor_change(lineage.actor_fact_changes, event)) is not None:
-            apply_presented_change(result.actors, change)
-        condition = condition_facts.get(event.uuid)
-        if condition is not None and (condition.resulting_tile is not None or condition.resulting_item is not None):
-            apply_world_fact(result, event, condition)
-            continue
-        owner = actor_fact_owner(event)
-        if owner is not None:
-            if owner not in result.actors and not isinstance(event, (AttackEvent, EquipmentEvent, SpatialChangeEvent)):
-                raise ValueError("actor fact requires its retained owner")
-            continue
-        match event:
-            case SensoryUpdateEvent():
-                _reduce_sensory_fact(result, event)
-            case Event(event_type=EventType.SENSORY_UPDATE) if event.uuid in not_disclosed:
-                # Audience capture retains only the causal header for an
-                # unrelated observer whose sensory payload has no consumer.
-                pass
-            case SpellMasteryStudiedEvent() | ConditionMembershipCommittedEvent() | RestResourcesRecoveredEvent() | PermanentFeatureUsedEvent() | ActionApplicationCommittedEvent() | MaximumHitPointReductionEvent() | EffectApplicationEvent() | ActionCostsCommittedEvent() | RestCompletedEvent() | HealingAppliedEvent():
-                # Admission/causal facts have no extra after-values or choreography.
-                pass
-            case ActorSheetEvent() | InitiativeOrderChangedEvent():
-                # Sheet and order facts are the HUD projection's, not a presented world value.
-                pass
-            case ActionEvent() | TakeDamageEvent() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent() | SpellDamageRollResultEvent() | SpellbookChangedEvent() | SpellPreparationChangedEvent() | D20Event():
-                # These facts explain causality. Only the committed applied
-                # packet changes HP, so aggregate totals cannot apply it twice.
-                pass
-            case SpatialChangeEvent() | ItemLocationStateEvent():
-                apply_world_fact(result, event)
-            case DeathEvent() | DeathSaveEvent() | ReviveEvent() | InstantDeathEvent() | ItemDestructionEvent():
-                # Keep the cause. The actual life and sensory children supply
-                # the successor facts; do not infer them from death/occupancy.
-                pass
-            case TurnEvent() | RoundEvent() | EncounterEvent():
-                _reduce_turn_fact(result, event)
-            case AreaReachEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent() | StandOfferEvent() | SpatialEffectChangeEvent() | SpatialEffectInteractionEvent():
-                # Senses supplies committed positions and observed fixture state.
-                # Spatial lifecycle events retain causality, not another state writer.
-                pass
-            case _:
-                raise NotImplementedError(f"lineage reduction does not consume {type(event).__name__}")
-    result.reducer_cursor = lineage.end_cursor
-    return result
-
-
 __all__ = [
-    "ActorAdmission",
-    "ActorState",
     "CompletedLineage",
     "ConditionFact",
     "Disposition",
     "IntervalEnvelope",
-    "IntervalTerminal",
     "ObjectiveRow",
-    "PresentationTarget",
-    "ReducedInterval",
     "capture_interval",
     "capture_lineage",
-    "copy_target",
-    "reduce_interval",
-    "reduce_lineage",
     "SharedLogEntries",
     "seat_log_entry",
-    "seed_actors",
-    "settle_dispositions",
 ]

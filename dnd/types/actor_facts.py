@@ -58,7 +58,6 @@ class ActorState:
     remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
     armor_class: int = 10
     conditions: tuple[ConditionFact, ...] = ()
-    last_visual_position: tuple[int, int] | None = None
     faction: str | None = None
     creature_type: str | None = None
     healing_blocked: bool = False

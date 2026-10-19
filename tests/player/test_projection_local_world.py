@@ -81,9 +81,9 @@ def initial(objects, visible, contacts):
         visual_access_changed=True, visual_access=1, object_contacts_changed=contacts)
     events = (world, sense)
     return IntervalEnvelope(name='recorded local changes', generation=generation, start_cursor=0,
-        end_cursor=2, observer_uuid=observer, battlefield_id=world.battlefield_id, door_uuid=None,
-        standing_torch_uuid=None, objective_rows=tuple(objective(i, event) for i, event in enumerate(events)),
-        admitted=tuple(enumerate(events)), dispositions=(), world_interval=WorldInterval(events=tuple(enumerate(events))))
+        end_cursor=2, observer_uuid=observer, battlefield_id=world.battlefield_id,
+        objective_rows=tuple(objective(i, event) for i, event in enumerate(events)),
+        admitted=tuple(enumerate(events)), world_interval=WorldInterval(events=tuple(enumerate(events))))
 
 
 def check(initialization, events):

@@ -26,9 +26,9 @@ def ended_lifetime(event: Event) -> UUID | None:
 
 def fold_completed_actors(actors: dict[UUID, ActorState], event: Event, change: ActorFactChange | None
                           ) -> tuple[UUID, ...]:
-    """A completed version's actor after-values, the shared fold's and the session projection's alike: its
-    recorded change (the presented fold) and, at a lifetime's end, the actor's removal; the identities it wrote.
-    A birth is folded before (`actor_from_birth`): the version's evidence reads the born actor."""
+    """A completed version's actor after-values in the session projection: its recorded change (the presented
+    fold) and, at a lifetime's end, the actor's removal; the identities it wrote. A birth is folded before
+    (`fold_birth`)."""
     written = apply_presented_change(actors, change) if change is not None else ()
     if (ended := ended_lifetime(event)) is not None:
         actors.pop(ended, None)

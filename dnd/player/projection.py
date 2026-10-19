@@ -44,11 +44,11 @@ from dnd.types.summoning import SummonDepartureCause
 from dnd.player.audience import (AudienceComposition, ComposedChange, PlayerAudience, apply_settlement, depart_contact,
     resolve_audience)
 
-from dnd.player.actor_facts import ActorState, ConditionFact
 from dnd.player.actor_projection import fold_birth, fold_completed_actors
 from dnd.player.bodies import (ActorChangeViews, View, body_digest, body_stampable, change_fact, change_rows,
     change_views, entering_body, shown_items)
-from dnd.types.actor_facts import ActorFactChange, ChangeRow, ConditionMember, ConditionRow, ItemEffectsRow, ItemStateRow
+from dnd.types.actor_facts import (ActorFactChange, ActorState, ChangeRow, ConditionFact, ConditionMember, ConditionRow,
+    ItemEffectsRow, ItemStateRow)
 from dnd.player.facts import (
     ActionCancellation, ActionFact, ActionReaction, ActorChangeFact, AreaReachFact, AttackFact, BodyRecord, ContentAttribution, DamageRequestFact, DamageResultFact,
     DeathSaveFact, ForcedMovementFact, PortalTransferFact, MechanismActivationFact, HealFact, ItemChargeFact, LifeFact,

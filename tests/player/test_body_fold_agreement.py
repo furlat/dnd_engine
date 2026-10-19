@@ -22,7 +22,7 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.condition_types import ConditionAgencyDenial, ConditionCategory
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.core.item_types import ItemEffectPresentationState, ItemPresentationState
-from dnd.player.capture import CompletedLineage, capture_interval, reduce_interval
+from dnd.player.capture import CompletedLineage, capture_interval
 from dnd.player.actor_projection import apply_presented_change
 from dnd.player.application import initialize_audiences
 from dnd.player.bodies import change_fact, change_rows, change_views, entering_body, shown_items, View
@@ -113,9 +113,12 @@ def check(session: Session, case: FoldCase) -> None:
     startup = capture_interval(name='startup', start_cursor=0, end_cursor=EventQueue.event_cursor(),
         observer_uuid=audience.observers[0], audience=audience,
         battlefield_id=session.battlefield.definition.battlefield_id)
-    engine, _ = reduce_interval(None, startup)
-    identity = next(identity for identity in engine.actors
-        if audience.controls(identity) is case.controlled and engine.actors[identity].equipment)
+    # The session's actor fold, on a body the seat holds.
+    engine = SessionProjection()
+    _, seen = begin_projection(engine, startup)
+    held = reduce_initialization(seen).actors
+    identity = next(identity for identity in engine.actors if identity in held
+        and audience.controls(identity) is case.controlled and engine.actors[identity].equipment)
     before = engine.actors[identity]
     event, fact = case.fact(before)
     if not case.controlled:

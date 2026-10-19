@@ -1,6 +1,6 @@
 """Fold recorded world after-values without consulting native world owners."""
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from uuid import UUID
 
 from dnd.blocks.base_item import ItemResourceChangeEvent, ItemLocationStateEvent, ItemHoldingsReleasedEvent
@@ -32,18 +32,6 @@ class WorldFacts:
     remnants_by_item: dict[UUID, set[UUID]] = field(default_factory=dict)
     constructions_by_provider: dict[UUID, set[UUID]] = field(default_factory=dict)
     constructions_by_position: dict[tuple[int, int], set[UUID]] = field(default_factory=dict)
-
-
-def copy_world_facts(world: WorldFacts) -> WorldFacts:
-    """Detach mutable recorded indexes while sharing their immutable after-values."""
-    return replace(world, tiles=dict(world.tiles), objects=dict(world.objects),
-        connectors=dict(world.connectors),
-        boundaries={key: set(value) for key, value in world.boundaries.items()},
-        objects_by_position={key: set(value) for key, value in world.objects_by_position.items()},
-        containers_by_item={key: set(value) for key, value in world.containers_by_item.items()},
-        remnants_by_item={key: set(value) for key, value in world.remnants_by_item.items()},
-        constructions_by_provider={key: set(value) for key, value in world.constructions_by_provider.items()},
-        constructions_by_position={key: set(value) for key, value in world.constructions_by_position.items()})
 
 
 def world_objects_at(world: WorldFacts, positions: set[tuple[int, int]]) -> set[UUID]:

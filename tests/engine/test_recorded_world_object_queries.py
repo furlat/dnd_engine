@@ -16,7 +16,7 @@ from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from dnd.types.world_placement import (
     BoundaryStructure, BoundaryStructureKind, WorldPlacementKind, WorldPlacementSpec,
 )
-from dnd.world_facts import WorldFacts, apply_world_fact, copy_world_facts, world_objects_at
+from dnd.world_facts import WorldFacts, apply_world_fact, world_objects_at
 
 
 @pytest.fixture(autouse=True)
@@ -69,7 +69,7 @@ def test_boundary_queries_include_unsupported_incident_neighbor(direction, oppos
     assert world_objects_at(world, {anchor, opposite}) == set()
 
 
-def test_native_relocation_face_change_and_removal_leave_detached_query_results():
+def test_native_relocation_face_change_and_removal_update_query_results():
     grid = get_map()
     grid.create_rectangle(-2, -2, 6, 5)
     wall = boundary()
@@ -80,7 +80,6 @@ def test_native_relocation_face_change_and_removal_leave_detached_query_results(
     center.place_on_grid((0, 0))
     world = WorldFacts()
     cursor = fold_recorded(world)
-    before = copy_world_facts(world)
     assert world_objects_at(world, {(0, 0), (1, 0)}) == {wall.uuid, center.uuid}
 
     grid.move_object(wall.uuid, (-1, 0), boundary_direction=CardinalDirection.NORTH)
@@ -99,8 +98,6 @@ def test_native_relocation_face_change_and_removal_leave_detached_query_results(
     assert grid.remove_object(center.uuid)
     fold_recorded(world, cursor)
     assert world_objects_at(world, set(grid.get_all_tiles())) == set()
-    assert world_objects_at(before, {(-1, 0), (0, 0), (1, 0)}) == {wall.uuid, center.uuid}
-    assert world_objects_at(before, {(-1, 1), (2, 1), (1, 1)}) == set()
 
 
 def test_new_recorded_world_replaces_old_incident_membership():
@@ -110,11 +107,9 @@ def test_new_recorded_world_replaces_old_incident_membership():
     wall.place_on_grid((-1, -1), boundary_direction=CardinalDirection.WEST)
     world = WorldFacts()
     fold_recorded(world)
-    before = copy_world_facts(world)
     assert world_objects_at(world, {(-2, -1)}) == {wall.uuid}
 
     reset_engine_runtime()
     build_battlefield("battlefield.open_floor_bright")
     fold_recorded(world)
     assert world_objects_at(world, {(-2, -1)}) == set()
-    assert world_objects_at(before, {(-2, -1)}) == {wall.uuid}

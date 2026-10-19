@@ -5,6 +5,7 @@ import pytest
 
 from dnd.actions import AttackEvent, MovementEvent, ShoveEvent, SpellEvent
 from dnd.core.base_actions import ActionEvent
+from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue
@@ -12,7 +13,7 @@ from dnd.player.capture import capture_interval, capture_lineages
 from dnd.player.audience import PlayerAudience
 from dnd.player.event_record import decode_event, encode_event
 from dnd.player.projection import SessionProjection, begin_projection, project_lineage
-from dnd.player.recorded import encode_sequence, decode_sequence
+from dnd.player.recorded import RecordedSequence
 from dnd.player.facts import ActorChangeFact, DamageResultFact
 from dnd.types.actor_facts import ConditionRow
 from dnd.player.reduction import reduce_initialization, reduce_lineage
@@ -52,7 +53,8 @@ def test_real_harm_cast_and_reduction_admission_capture_project_and_replay(world
     with fixed_dice_faces(*([2] * 40)):
         result = cast(Harm, caster, target)
     captured, = capture_lineages((result,),observer_uuid=caster.uuid,audience=audience)
-    _, (restored,) = decode_sequence(encode_sequence(native_initial,(captured,)))
+    restored, = RecordedSequence.model_validate_json(RecordedSequence(initialization=native_initial,
+        lineages=(captured,)).model_dump_json(), context=PASSIVE_EVENT_REPLAY).lineages
     public = project_lineage(session, projection, restored)
     assert public is not None
     replayed = reduce_lineage(state, public)

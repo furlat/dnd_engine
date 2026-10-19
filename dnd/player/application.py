@@ -39,8 +39,7 @@ def initialize_audiences(session: Session, catalog: UIContentManifest
     initializations = {}
     content_catalog = index_content_catalog(catalog)
     end_cursor = EventQueue.event_cursor()
-    checkpoint = CaptureCheckpoint(EventQueue.generation_id(),
-        frozenset(observer for audience in session.seats.values() for observer in audience.observers))
+    checkpoint = CaptureCheckpoint(EventQueue.generation_id())
     context = capture_context(checkpoint, end_cursor=end_cursor)
     shared = SessionProjection()
     startups = {seat: capture_interval(name="encounter startup", start_cursor=0,

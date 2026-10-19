@@ -1069,7 +1069,7 @@ def test_world_publication_reads_the_world_as_of_the_occurrence_and_never_compar
     path = REPOSITORY_ROOT / "dnd" / "player" / "world_publication.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     imported = {alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) for alias in node.names}
-    assert not imported & {"PlayerState", "copy_world_facts", "WorldMemory"}
+    assert not imported & {"PlayerState", "WorldMemory"}
     for function in (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)):
         worlds = [row.arg for row in function.args.args + function.args.kwonlyargs
                   if isinstance(row.annotation, ast.Name) and row.annotation.id == "WorldFacts"]

@@ -54,7 +54,7 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
         encounter.add_combatant(observer, HumanController(source_entity_uuid=observer.uuid))
     encounter.start_encounter()
     audience = PlayerAudience((first.uuid, second.uuid), (first.uuid, second.uuid))
-    checkpoint = CaptureCheckpoint(EventQueue.generation_id(), frozenset(audience.observers))
+    checkpoint = CaptureCheckpoint(EventQueue.generation_id())
     arguments = dict(name='checkpoint parity', start_cursor=0, end_cursor=EventQueue.event_cursor(),
         observer_uuid=first.uuid, audience=audience, battlefield_id='battlefield.open_floor_bright')
     original = capture_interval(**arguments)
@@ -135,8 +135,6 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
     world.commit_entity_retirement(prepared)
     consume()
     assert unseen.uuid in hot.actors, 'Retiring private reconstruction must preserve admitted public identity'
-    assert unseen.uuid not in checkpoint.actors
-    assert all(unseen.uuid not in contacts for contacts in checkpoint.contacts.values())
     assert discovered.body.normal_hp == 33
 
     # The shared fold never folds history again: a request for roots it has
@@ -150,7 +148,7 @@ def test_hot_and_cold_capture_preserve_discovery_reacquisition_and_terminal_fact
 def test_capture_checkpoint_belongs_to_one_event_queue_generation(world):
     first = member(world, 'Old generation', (2, 2))
     audience = PlayerAudience((first.uuid,), (first.uuid,))
-    checkpoint = CaptureCheckpoint(EventQueue.generation_id(), frozenset(audience.observers))
+    checkpoint = CaptureCheckpoint(EventQueue.generation_id())
     capture_interval(name='old', start_cursor=0, end_cursor=EventQueue.event_cursor(),
         observer_uuid=first.uuid, audience=audience, battlefield_id='battlefield.open_floor_bright',
         context=capture_context(checkpoint, end_cursor=EventQueue.event_cursor()))
@@ -166,7 +164,6 @@ def test_capture_checkpoint_belongs_to_one_event_queue_generation(world):
         observer_uuid=second.uuid, audience=audience, battlefield_id='battlefield.open_floor_bright')
     with pytest.raises(ValueError, match='another EventQueue generation'):
         capture_context(checkpoint, end_cursor=arguments['end_cursor'])
-    renewed = CaptureCheckpoint(EventQueue.generation_id(), frozenset(audience.observers))
+    renewed = CaptureCheckpoint(EventQueue.generation_id())
     assert capture_interval(**arguments, context=capture_context(renewed, end_cursor=arguments['end_cursor'])) == (
         capture_interval(**arguments))
-    assert first.uuid not in renewed.actors and second.uuid in renewed.actors

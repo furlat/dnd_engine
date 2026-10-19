@@ -14,7 +14,6 @@ from dnd.items.torches import build_torch
 from dnd.player.application import capture_application_operation, initialize_audiences, seat_capture_inputs
 from dnd.player.audience import PlayerAudience
 from dnd.player.capture import Disposition, capture_context, capture_interval, capture_lineages
-from dnd.player.capture import reduce_interval, reduce_lineage as reduce_native_lineage
 from dnd.player.event_record import decode_event, encode_event
 from dnd.player.content_composition import ui_content_manifest
 from dnd.player.facts import ActionFact, SensoryFact
@@ -47,8 +46,6 @@ def test_each_audience_gets_identical_light_facts_and_cold_replay(world, members
     admitted_projection, same_first = begin_projection(admitted_session, initial)
     assert first == same_first
     state = reduce_initialization(first)
-    full_native, _ = reduce_interval(None, initial)
-    admitted_native, _ = reduce_interval(None, initial)
     packets, captured, complete = [], [], []
     omitted = 0
     for light in (LightLevel.DIM_LIGHT, LightLevel.DARKNESS, LightLevel.BRIGHT_LIGHT):
@@ -60,9 +57,6 @@ def test_each_audience_gets_identical_light_facts_and_cold_replay(world, members
         admitted = capture_lineages(roots, observer_uuid=observer, audience=audience, omit_foreign_sensory_payloads=True)
         assert len(full) == len(admitted)
         for reference, candidate in zip(full, admitted):
-            full_native = reduce_native_lineage(full_native, reference)
-            admitted_native = reduce_native_lineage(admitted_native, candidate)
-            assert admitted_native == full_native
             assert candidate.objective_rows == reference.objective_rows
             assert candidate.observed_sources == reference.observed_sources
             originals = {event.uuid: event for event in reference.events}

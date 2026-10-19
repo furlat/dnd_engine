@@ -101,8 +101,6 @@ def check_replica(session: Session, steps: tuple[Step, ...]) -> dict[str, Player
         case = f'{name} / {seat}'
         # Each effect's content is sent once, and the client holds every one it was sent.
         assert client.spatial_content.keys() == runtime.projection.static_sent.spatial_content, case
-        # The capture fold and the session's actor fold agree.
-        assert runtime.capture.actors == runtime.session.actors, case
         assert client.content == seat_content(runtime), case
         assert (client.reducer_cursor, len(client.combat_log_appends)) == (
             runtime.projection.next_occurrence, runtime.projection.next_log_append), case
