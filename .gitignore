@@ -15,7 +15,6 @@ htmlcov/
 /.venv/
 /build/
 /dist/
-/sdk/typescript/dist/
 /sdk/player-typescript/dist/
 /sdk/python/dist/
 *.egg-info/
