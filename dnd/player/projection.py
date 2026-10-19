@@ -1129,6 +1129,9 @@ class SeatWalk:
     settled: frozenset[UUID] = frozenset()
     # The bodies that entered the seat's view during the walk.
     entered: set[UUID] = field(default_factory=set)
+    # Contacts the seat's view took before the session held their actor (seen before their birth completed):
+    # each enters at its birth, if the view still holds it.
+    unborn: set[UUID] = field(default_factory=set)
     # An interaction may itself hide the object. Retain its already granted
     # identity at entry; a remote control's undisclosed target gains no identity.
     observed_objects: set[UUID] = field(default_factory=set)
@@ -1372,7 +1375,9 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
                 sensory_fact = _settlement_fact(change, view, state, walk)
                 for identity in entering:
                     contact = view.entities.get(identity)
-                    if contact is not None:
+                    if contact is not None and identity not in actors:
+                        walk.unborn.add(identity)
+                    elif contact is not None:
                         _enter_body(walk, group, state, actors, loadout_ids, event, identity, contact.visual)
         _publish_world(walk, group, state, world, digests, event, applied, folded, before, settlement)
     for identity in observer.controlled:
@@ -1380,6 +1385,11 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
         if identity not in walk.known and identity in actors:
             _enter_body(walk, group, state, actors, loadout_ids, event, identity, True)
     view = state.audience_composition.view
+    for identity in tuple(walk.unborn):
+        if identity in actors:
+            walk.unborn.discard(identity)
+            if view is not None and (contact := view.entities.get(identity)) is not None:
+                _enter_body(walk, group, state, actors, loadout_ids, event, identity, contact.visual)
     observed_objects = walk.observed_objects
     if (isinstance(event, ActionEvent) and event.source_item_uuid is not None
             and event.source_item_uuid in world.objects
