@@ -3,17 +3,12 @@
 import ast
 import io
 from pathlib import Path
-import re
 import tokenize
 import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[2]
 PYPROJECT = ROOT / "pyproject.toml"
-SERVER_API_FILES = [
-    ROOT / "server" / "event_server.py",
-    ROOT / "server" / "session.py",
-]
 RUNTIME_SOURCE_ROOTS = [
     ROOT / "cli",
     ROOT / "dnd",
@@ -173,137 +168,6 @@ CLASS_FEATURE_GOOGLE_DOCSTRING_CLASSES = {
     },
     ROOT / "dnd" / "classes" / "feats.py": {"LuckyFeature"},
 }
-SERVER_API_DESCRIBED_MODEL_CLASSES = {
-    ROOT / "server" / "api_models.py": {
-        "ActionResult",
-        "AdvanceEncounterResult",
-        "AoEPreviewResult",
-        "CreateSessionRequest",
-        "CreateSessionResponse",
-        "ExecuteByIndexRequest",
-        "EquipRequest",
-        "EquipmentMutationResult",
-        "JoinGameRequest",
-        "JoinGameResponse",
-        "MapEditorCatalog",
-        "MapEditorCatalogEntry",
-        "MapEditorCreateMapRequest",
-        "MapEditorGridBounds",
-        "MapEditorLightCell",
-        "MapEditorLightResponse",
-        "MapEditorMapSnapshot",
-        "MapEditorObjectDeleteRequest",
-        "MapEditorObjectPlaceRequest",
-        "MapEditorSaveMapRequest",
-        "MapEditorSavedMapDocument",
-        "MapEditorSavedMapList",
-        "MapEditorSavedMapMetadata",
-        "MapEditorSavedObjectPlacement",
-        "MapEditorTilePatch",
-        "MapEditorTilePatchRequest",
-        "MapEditorVisibilityCell",
-        "MapEditorVisibilityResponse",
-        "MapEditorWalkabilityCell",
-        "MapEditorWalkabilityResponse",
-        "PositionPreviewRequest",
-        "SessionPingResponse",
-        "SimpleActionRequest",
-        "SpellCatalogEntry",
-        "SpellCatalogMultiTarget",
-        "SpellCatalogResponse",
-        "SpellCatalogSavingThrow",
-        "SpellCatalogVfx",
-        "ToggleHandlerRequest",
-        "UnequipRequest",
-    },
-    ROOT / "server" / "world_contracts.py": {
-        "APIAppearance",
-        "APICombatant",
-        "APIConditionSummary",
-        "APIDirectionalBlockMap",
-        "APIEncounter",
-        "APIEntitySummary",
-        "APIEntityVisibility",
-        "APIEquipmentOverview",
-        "APIEquipmentSlot",
-        "APIFloorObject",
-        "APIGameState",
-        "APIGrid",
-        "APIItemSummary",
-        "APITile",
-        "APIVisibilityResponse",
-    },
-    ROOT / "server" / "event_stream.py": {
-        "StreamSyncPayload",
-        "GameEventPayload",
-        "CombatLogPayload",
-        "HeartbeatPayload",
-        "EvictedPayload",
-    },
-}
-SERVER_API_GOOGLE_DOCSTRING_CLASSES = {
-    ROOT / "server" / "api_models.py": {
-        "ActionResult",
-        "AdvanceEncounterResult",
-        "AoEPreviewResult",
-        "CreateSessionRequest",
-        "CreateSessionResponse",
-        "ExecuteByIndexRequest",
-        "EquipRequest",
-        "EquipmentMutationResult",
-        "JoinGameRequest",
-        "JoinGameResponse",
-        "MapEditorCatalog",
-        "MapEditorCatalogEntry",
-        "MapEditorCreateMapRequest",
-        "MapEditorGridBounds",
-        "MapEditorLightCell",
-        "MapEditorLightResponse",
-        "MapEditorMapSnapshot",
-        "MapEditorObjectDeleteRequest",
-        "MapEditorObjectPlaceRequest",
-        "MapEditorSaveMapRequest",
-        "MapEditorSavedMapDocument",
-        "MapEditorSavedMapList",
-        "MapEditorSavedMapMetadata",
-        "MapEditorSavedObjectPlacement",
-        "MapEditorTilePatch",
-        "MapEditorTilePatchRequest",
-        "MapEditorVisibilityCell",
-        "MapEditorVisibilityResponse",
-        "MapEditorWalkabilityCell",
-        "MapEditorWalkabilityResponse",
-        "PositionPreviewRequest",
-        "SessionPingResponse",
-        "SimpleActionRequest",
-        "SpellCatalogEntry",
-        "SpellCatalogMultiTarget",
-        "SpellCatalogResponse",
-        "SpellCatalogSavingThrow",
-        "SpellCatalogVfx",
-        "ToggleHandlerRequest",
-        "UnequipRequest",
-    },
-    ROOT / "server" / "event_stream.py": {
-        "StreamSyncPayload",
-        "GameEventPayload",
-        "CombatLogPayload",
-        "HeartbeatPayload",
-        "EvictedPayload",
-    },
-}
-SERVER_SESSION_DESCRIBED_DATACLASS_CLASSES = {
-    ROOT / "server" / "session.py": {
-        "PlayerSession",
-        "GameSession",
-    },
-}
-SERVER_SESSION_GOOGLE_DOCSTRING_CLASSES = {
-    ROOT / "server" / "session.py": {
-        "PlayerSession",
-        "GameSession",
-    },
-}
 WORLD_REGISTRY_NAMES = frozenset({"get_all_entities", "_entity_registry"})
 KEYED_REGISTRY_OPS = frozenset({"get", "pop"})
 # The only functions in dnd/ that may read every registered Entity (plan §14.8).
@@ -378,6 +242,14 @@ def dataclass_field_has_metadata_description(value: ast.expr | None) -> bool:
     return False
 
 
+def is_discriminator_tag(statement: ast.AnnAssign) -> bool:
+    """A tagged-union tag (`kind: Literal["..."] = "..."`): a self-describing wire constant of the published
+    client schema, not a field to describe."""
+    return (isinstance(statement.target, ast.Name) and statement.target.id == "kind"
+            and isinstance(statement.annotation, ast.Subscript) and isinstance(statement.annotation.value, ast.Name)
+            and statement.annotation.value.id == "Literal" and isinstance(statement.value, ast.Constant))
+
+
 def test_combat_log_models_use_described_pydantic_fields() -> None:
     """Cleaned combat-log models should expose described Pydantic fields."""
     failures: list[str] = []
@@ -400,7 +272,7 @@ def test_combat_log_models_use_described_pydantic_fields() -> None:
                     continue
 
                 field_name = statement.target.id
-                if field_name.startswith("_"):
+                if field_name.startswith("_") or is_discriminator_tag(statement):
                     continue
 
                 if not is_field_call(statement.value):
@@ -428,6 +300,11 @@ def test_combat_log_models_use_google_style_docstrings() -> None:
             failures.append(f"{path.relative_to(ROOT)}::{class_name} missing")
 
         for class_name, class_node in sorted(classes.items()):
+            if not any(isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name)
+                       and not statement.target.id.startswith("_") and not is_discriminator_tag(statement)
+                       for statement in class_node.body):
+                # Only a tag over its parent's documented fields.
+                continue
             docstring = ast.get_docstring(class_node) or ""
             if "\n\nAttributes:\n" not in docstring:
                 failures.append(f"{path.relative_to(ROOT)}::{class_name} lacks Google-style Attributes block")
@@ -439,7 +316,7 @@ def test_combat_log_models_use_google_style_docstrings() -> None:
                     continue
 
                 field_name = statement.target.id
-                if field_name.startswith("_"):
+                if field_name.startswith("_") or is_discriminator_tag(statement):
                     continue
 
                 if not any(line.startswith(f"{field_name}:") for line in doc_lines):
@@ -614,144 +491,6 @@ def test_cleaned_class_feature_models_use_google_style_docstrings() -> None:
     assert not failures, "Class-feature docstring gaps:\n" + "\n".join(failures)
 
 
-def test_cleaned_server_api_models_use_described_pydantic_fields() -> None:
-    """Cleaned server API DTOs should expose described fields."""
-    failures: list[str] = []
-
-    for path, class_names in SERVER_API_DESCRIBED_MODEL_CLASSES.items():
-        tree = ast.parse(read_text(path))
-        classes = {
-            node.name: node
-            for node in tree.body
-            if isinstance(node, ast.ClassDef) and node.name in class_names
-        }
-
-        missing_classes = sorted(class_names - set(classes))
-        for class_name in missing_classes:
-            failures.append(f"{path.relative_to(ROOT)}::{class_name} missing")
-
-        for class_name, class_node in sorted(classes.items()):
-            for statement in class_node.body:
-                if not isinstance(statement, ast.AnnAssign) or not isinstance(statement.target, ast.Name):
-                    continue
-
-                field_name = statement.target.id
-                if field_name.startswith("_"):
-                    continue
-
-                if not is_field_call(statement.value):
-                    failures.append(f"{path.relative_to(ROOT)}::{class_name}.{field_name} is not Field(...)")
-                elif not field_has_description(statement.value):
-                    failures.append(f"{path.relative_to(ROOT)}::{class_name}.{field_name} lacks description")
-
-    assert not failures, "Server API metadata gaps:\n" + "\n".join(failures)
-
-
-def test_cleaned_server_api_models_use_google_style_docstrings() -> None:
-    """Guard cleaned server API DTO docstrings."""
-    failures: list[str] = []
-
-    for path, class_names in SERVER_API_GOOGLE_DOCSTRING_CLASSES.items():
-        tree = ast.parse(read_text(path))
-        classes = {
-            node.name: node
-            for node in tree.body
-            if isinstance(node, ast.ClassDef) and node.name in class_names
-        }
-
-        missing_classes = sorted(class_names - set(classes))
-        for class_name in missing_classes:
-            failures.append(f"{path.relative_to(ROOT)}::{class_name} missing")
-
-        for class_name, class_node in sorted(classes.items()):
-            docstring = ast.get_docstring(class_node) or ""
-            if "\n\nAttributes:\n" not in docstring:
-                failures.append(f"{path.relative_to(ROOT)}::{class_name} lacks Google-style Attributes block")
-                continue
-
-            doc_lines = [line.strip() for line in docstring.splitlines()]
-            for statement in class_node.body:
-                if not isinstance(statement, ast.AnnAssign) or not isinstance(statement.target, ast.Name):
-                    continue
-
-                field_name = statement.target.id
-                if field_name.startswith("_"):
-                    continue
-
-                if not any(line.startswith(f"{field_name}:") for line in doc_lines):
-                    failures.append(f"{path.relative_to(ROOT)}::{class_name}.{field_name} missing from docstring")
-
-    assert not failures, "Server API docstring gaps:\n" + "\n".join(failures)
-
-
-def test_server_session_dataclasses_use_described_fields() -> None:
-    """Cleaned session dataclasses should expose described metadata fields."""
-    failures: list[str] = []
-
-    for path, class_names in SERVER_SESSION_DESCRIBED_DATACLASS_CLASSES.items():
-        tree = ast.parse(read_text(path))
-        classes = {
-            node.name: node
-            for node in tree.body
-            if isinstance(node, ast.ClassDef) and node.name in class_names
-        }
-
-        missing_classes = sorted(class_names - set(classes))
-        for class_name in missing_classes:
-            failures.append(f"{path.relative_to(ROOT)}::{class_name} missing")
-
-        for class_name, class_node in sorted(classes.items()):
-            for statement in class_node.body:
-                if not isinstance(statement, ast.AnnAssign) or not isinstance(statement.target, ast.Name):
-                    continue
-
-                field_name = statement.target.id
-                if field_name.startswith("_"):
-                    continue
-
-                if not dataclass_field_has_metadata_description(statement.value):
-                    failures.append(f"{path.relative_to(ROOT)}::{class_name}.{field_name} lacks dataclass metadata description")
-
-    assert not failures, "Server session dataclass metadata gaps:\n" + "\n".join(failures)
-
-
-def test_server_session_dataclasses_use_google_style_docstrings() -> None:
-    """Guard cleaned session dataclass docstrings."""
-    failures: list[str] = []
-
-    for path, class_names in SERVER_SESSION_GOOGLE_DOCSTRING_CLASSES.items():
-        tree = ast.parse(read_text(path))
-        classes = {
-            node.name: node
-            for node in tree.body
-            if isinstance(node, ast.ClassDef) and node.name in class_names
-        }
-
-        missing_classes = sorted(class_names - set(classes))
-        for class_name in missing_classes:
-            failures.append(f"{path.relative_to(ROOT)}::{class_name} missing")
-
-        for class_name, class_node in sorted(classes.items()):
-            docstring = ast.get_docstring(class_node) or ""
-            if "\n\nAttributes:\n" not in docstring:
-                failures.append(f"{path.relative_to(ROOT)}::{class_name} lacks Google-style Attributes block")
-                continue
-
-            doc_lines = [line.strip() for line in docstring.splitlines()]
-            for statement in class_node.body:
-                if not isinstance(statement, ast.AnnAssign) or not isinstance(statement.target, ast.Name):
-                    continue
-
-                field_name = statement.target.id
-                if field_name.startswith("_"):
-                    continue
-
-                if not any(line.startswith(f"{field_name}:") for line in doc_lines):
-                    failures.append(f"{path.relative_to(ROOT)}::{class_name}.{field_name} missing from docstring")
-
-    assert not failures, "Server session dataclass docstring gaps:\n" + "\n".join(failures)
-
-
 def test_pyproject_defines_uv_pytest_contract() -> None:
     """The repository exposes its tests through uv-driven pytest."""
     config = tomllib.loads(read_text(PYPROJECT))
@@ -777,21 +516,6 @@ def test_active_runtime_sources_do_not_reference_claude() -> None:
                 offenders.append(str(path.relative_to(ROOT)))
 
     assert not offenders, "Runtime Claude references remain in:\n" + "\n".join(offenders)
-
-
-def test_server_http_errors_do_not_use_bare_string_details() -> None:
-    """Server action/API errors should expose structured correction payloads."""
-    bare_string_pattern = re.compile(
-        r"HTTPException\s*\([^)]*detail\s*=\s*f?[\"']",
-        re.DOTALL,
-    )
-    offenders = [
-        str(path.relative_to(ROOT))
-        for path in SERVER_API_FILES
-        if bare_string_pattern.search(read_text(path))
-    ]
-
-    assert not offenders, "Bare string HTTPException detail in:\n" + "\n".join(offenders)
 
 
 def world_registry_reads(path: Path) -> list[tuple[str, int]]:

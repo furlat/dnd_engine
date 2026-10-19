@@ -20,6 +20,7 @@ from dnd.content.items.authored_item_definitions import (
     STATIC_BLOCKER_DEFINITIONS,
     POWERED_WEARABLE_DEFINITIONS,
 )
+from dnd.content.items.roster_item_definitions import ROSTER_SILVER_LONGSWORD_DEFINITION
 from dnd.content.items.roster_item_definitions import (
     ROSTER_CARRIED_DEFINITIONS, ROSTER_EMBER_DEFINITIONS, ROSTER_GEAR_DEFINITIONS,
     ROSTER_INVENTORY_DEFINITIONS, ROSTER_WEAPON_DEFINITIONS, ROSTER_MAUL_DEFINITION,
@@ -27,7 +28,7 @@ from dnd.content.items.roster_item_definitions import (
 )
 from dnd.content.items.window_definitions import WINDOW_DEFINITIONS
 from dnd.content.items.door_profiles import DOOR_PROFILES
-from dnd.content.items.environment_item_builders import LIQUID_BARREL_PROFILES
+from dnd.content.items.environment_item_builders import LIQUID_BARREL_PROFILES, SOLID_WALL_MATERIALS
 from dnd.content.items.ground_hardware_builders import GROUND_HARDWARE_PROFILES
 from dnd.content.items.world_prop_builders import WORLD_PROP_PROFILES
 from dnd.content.items.trap_hardware_builders import TRAP_HARDWARE_PROFILES
@@ -237,7 +238,9 @@ def test_cri_public_item_inventory_is_complete_and_direct() -> None:
         | set(ROSTER_WEAPON_DEFINITIONS) | set(ROSTER_EMBER_DEFINITIONS)
         | set(ROSTER_WEAPON_APPEARANCE_DEFINITIONS) | set(ROSTER_WEARABLE_APPEARANCE_DEFINITIONS)
         | set(ROSTER_GEAR_DEFINITIONS) | set(ROSTER_CARRIED_DEFINITIONS) | set(ROSTER_INVENTORY_DEFINITIONS)
-        | {ROSTER_MAUL_DEFINITION.item_id}
+        | {ROSTER_MAUL_DEFINITION.item_id, ROSTER_SILVER_LONGSWORD_DEFINITION.item_id}
+        | set(SOLID_WALL_MATERIALS)
+        | {"weapon.devotees_mace", "consumable.weapon_coat.assassin_poison"}
         | {profile.wall.item_id for profile in WINDOW_DEFINITIONS.values()}
         | {profile.insert.item_id for profile in WINDOW_DEFINITIONS.values() if profile.insert is not None}
         | _BEHAVIOR_ITEM_IDS

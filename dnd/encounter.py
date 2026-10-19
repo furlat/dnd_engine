@@ -75,13 +75,13 @@ def _compute_revealed_entities(event: Event, child_logs: List[CombatLogEntry]) -
     return revealed
 
 
-# Owned by the Encounter system, whose event computers are this module's functions: one string per
-# entity id (observers and participants), so event-time grants and log perceivers share their
-# strings instead of stringifying an id per version. Cleared whenever the encounter installs or
-# removes its computers; bounded by the encounter's entities. A pure UUID-to-text table. The
-# SpatialSensesSystem keeps the same text for its registered observers (`_id_texts`), for the identity
-# grants it builds.
 _ID_STRINGS: Dict[UUID, str] = {}
+"""Owned by the Encounter system, whose event computers are this module's functions: one string per
+entity id (observers and participants), so event-time grants and log perceivers share their
+strings instead of stringifying an id per version. Cleared whenever the encounter installs or
+removes its computers; bounded by the encounter's entities. A pure UUID-to-text table. The
+SpatialSensesSystem keeps the same text for its registered observers (`_id_texts`), for the identity
+grants it builds."""
 
 
 def _id_string(identity: UUID) -> str:
@@ -102,10 +102,10 @@ class _IdentityCarry:
     held (it advances with every identity-grant clear; a reset, or the content loader's rollback of the
     senses system, can set it back) and when the encounter installs or removes its computers; bounded by
     the lineages stored between two epochs. An entry is only used for a version whose carried grants
-    are the entry's own mapping."""
+    are the entry's own mapping. `lineages` holds frozen rows: the located participants and the grants
+    mapping the version stored (never edited)."""
 
     epoch: int = -1
-    # Frozen rows: the located participants and the grants mapping the version stored (never edited).
     lineages: Dict[UUID, Tuple[Located, Dict[str, FrozenSet[str]]]] = field(default_factory=dict)
 
 
@@ -225,6 +225,7 @@ class AdvanceResult(BaseObject):
         round_number: Current encounter round number.
         turn_index: Current initiative-order index.
         log_start_index: Combat-log index before automated turns ran.
+        use_register: Transient advancement result; register only when explicitly requested.
     """
 
     use_register: bool = Field(default=False,
@@ -820,7 +821,10 @@ class Encounter(BaseObject):
         return event
 
     def _fire_round_end(self) -> RoundEndEvent:
-        """Resolve round-end rules, then publish one completed boundary."""
+        """Resolve round-end rules, then publish one completed boundary.
+
+        Every world-owned tick of the round is one instant: observers settle once.
+        """
         event = RoundEndEvent(
             source_entity_uuid=self.uuid,
             encounter_uuid=self.uuid,
@@ -829,7 +833,6 @@ class Encounter(BaseObject):
         )
         event = event.phase_to(EventPhase.EXECUTION)
         event = event.phase_to(EventPhase.EFFECT)
-        # Every world-owned tick of the round is one instant: observers settle once.
         with EventQueue.group(GroupEntryKind.ROUND_STEP, root=event, shares_damage_rolls=True):
             self._environment_step(parent_event=event)
         event = event.phase_to(EventPhase.COMPLETION)
@@ -1504,7 +1507,12 @@ class Encounter(BaseObject):
             return self._advance_one_controller_action_boundary()
 
     def _advance_one_controller_action_boundary(self) -> AdvanceResult:
-        """Implement one autonomous decision or expose a wait boundary."""
+        """Implement one autonomous decision or expose a wait boundary.
+
+        Turn-start effects (including death saves) have already run when a human turn is reached: a
+        recovered actor keeps the decision; an incapacitated one completes its lifecycle without waiting
+        for a meaningless click.
+        """
         log_start = len(self.combat_log)
         self.finish_combatant_leaves()
         if self.state is EncounterState.ACTIVE and self._departed_turn_successor:
@@ -1565,9 +1573,6 @@ class Encounter(BaseObject):
             ):
                 status = "advanced_autonomous"
             elif not current_entity.can_take_actions():
-                # Turn-start effects (including death saves) have already run.
-                # A recovered actor keeps the decision; an incapacitated one
-                # completes its lifecycle without waiting for a meaningless click.
                 self.complete_current_turn()
                 self.check_deaths()
                 status = ("encounter_ended" if self.state is EncounterState.ENDED

@@ -66,6 +66,8 @@ SAFE_LEAF_MODULES = frozenset({
     "dnd.core.life_types",
     "dnd.core.presentation_geometry",
     "dnd.types.senses",
+    "dnd.types.cells",
+    "dnd.types.spatial_effects",
     "dnd.types.traps",
     "dnd.types.world",
     "dnd.types.abilities",
@@ -77,13 +79,13 @@ SAFE_LEAF_MODULES = frozenset({
 # edges do not permit a leaf to import registries, entities or gameplay owners.
 NEUTRAL_VALUE_DEPENDENCIES = {
     "dnd.core.action_types": frozenset({"dnd.core.content.identities"}),
-    "dnd.core.presentation_geometry": frozenset({"dnd.core.effect_types"}),
+    "dnd.core.presentation_geometry": frozenset({"dnd.core.effect_types", "dnd.types.spatial_effects"}),
     "dnd.types.senses": frozenset({
         "dnd.types.world", "dnd.core.content.identities", "dnd.types.traps",
         "dnd.core.presentation_geometry", "dnd.types.material_deposits",
         "dnd.types.spell_suppression", "dnd.types.spatial_effects", "dnd.core.creature_types",
         "dnd.types.class_features",
-        "dnd.core.condition_types",
+        "dnd.core.condition_types", "dnd.types.cells",
     }),
     "dnd.types.traps": frozenset({"dnd.core.creature_types", "dnd.types.abilities"}),
 }
@@ -111,21 +113,6 @@ CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
     "ItemPresentationState": "dnd.core.item_types",
     "OriginRuntimeSupport": "dnd.core.content.origin_support",
     "OriginRuntimeSupportStatus": "dnd.core.content.origin_support",
-    "APIItemSummary": "server.world_contracts",
-    "APIEquipmentSlot": "server.world_contracts",
-    "APIEquipmentOverview": "server.world_contracts",
-    "APIAppearance": "server.world_contracts",
-    "APIConditionSummary": "server.world_contracts",
-    "APIEntitySummary": "server.world_contracts",
-    "APIDirectionalBlockMap": "server.world_contracts",
-    "APITile": "server.world_contracts",
-    "APIGrid": "server.world_contracts",
-    "APICombatant": "server.world_contracts",
-    "APIEncounter": "server.world_contracts",
-    "APIFloorObject": "server.world_contracts",
-    "APIGameState": "server.world_contracts",
-    "APIEntityVisibility": "server.world_contracts",
-    "APIVisibilityResponse": "server.world_contracts",
 }
 
 CONTENT_CONTRACT_MODULE_PREFIX = "dnd.core.content"
@@ -1089,50 +1076,6 @@ def test_world_publication_reads_the_world_as_of_the_occurrence_and_never_compar
         assert isinstance(node, ast.Call), f"a digest used outside the stamp rule (line {call.lineno})"
 
 
-def test_game_import_does_not_load_ai_or_server_packages() -> None:
-    """Importing the active client must not load AI or the retired server."""
-    marker = "__DND_ARCH_AI_MODULES__="
-    script = (
-        "import json, sys\n"
-        "import game.app\n"
-        "loaded = sorted(name for name in sys.modules "
-        "if name in ('ai', 'server') or name.startswith(('ai.', 'server.')))\n"
-        f"print({marker!r} + json.dumps(loaded))\n"
-    )
-    try:
-        completed = subprocess.run(
-            [sys.executable, "-c", script],
-            cwd=REPOSITORY_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise AssertionError(
-            "Fresh import of game.app exceeded the 30-second isolation timeout"
-        ) from error
-
-    assert completed.returncode == 0, (
-        "Fresh import of game.app failed before isolation could be checked:\n"
-        f"stdout:\n{completed.stdout}\n"
-        f"stderr:\n{completed.stderr}"
-    )
-    marker_lines = [
-        line for line in completed.stdout.splitlines() if line.startswith(marker)
-    ]
-    assert len(marker_lines) == 1, (
-        "Fresh import did not emit exactly one AI isolation result:\n"
-        f"stdout:\n{completed.stdout}\n"
-        f"stderr:\n{completed.stderr}"
-    )
-    loaded_ai_modules = json.loads(marker_lines[0][len(marker):])
-    assert loaded_ai_modules == [], (
-        "Importing game.app loaded AI/server modules:\n- "
-        + "\n- ".join(loaded_ai_modules)
-    )
-
-
 def test_neutral_symbols_have_one_canonical_leaf_owner() -> None:
     """Neutral enums and transport DTOs must be defined only in their leaf module."""
     definitions_by_symbol: dict[str, list[str]] = {
@@ -1174,28 +1117,6 @@ def test_creature_fact_enums_are_not_imported_from_stateful_modifiers() -> None:
         "Import dependency-neutral creature facts from dnd.core.creature_types, "
         "never dnd.core.modifiers:\n"
         + _format_import_references(stale_imports)
-    )
-
-
-def test_world_contract_dtos_are_not_reexported_through_api_models() -> None:
-    """World DTOs have one import surface instead of an api_models compatibility alias."""
-    api_models = _source_modules()["server.api_models"]
-    forbidden_symbols = {
-        symbol
-        for symbol, owner in CANONICAL_NEUTRAL_SYMBOL_OWNERS.items()
-        if owner == "server.world_contracts"
-    }
-    reexports = sorted({
-        alias.asname or alias.name
-        for node in api_models.tree.body
-        if isinstance(node, ast.ImportFrom)
-        and node.module == "server.world_contracts"
-        for alias in node.names
-        if alias.name in forbidden_symbols
-    })
-    assert reexports == [], (
-        "Import world DTOs from server.world_contracts, never server.api_models: "
-        + ", ".join(reexports)
     )
 
 

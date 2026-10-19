@@ -483,7 +483,7 @@ def test_deleted_server_owned_ai_contract_modules_are_not_imported() -> None:
 
 
 def test_engine_and_server_action_execution_share_the_core_dispatcher() -> None:
-    """Native AI/player applications and the old host share one dispatcher."""
+    """Native AI and player applications share one dispatcher."""
     consumers: list[Path] = []
     for path in _production_paths():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -500,7 +500,6 @@ def test_engine_and_server_action_execution_share_the_core_dispatcher() -> None:
     assert consumers == [
         Path("dnd/ai/runtime/execution.py"),
         Path("dnd/player/session.py"),
-        Path("server/event_server.py"),
     ]
 
 
