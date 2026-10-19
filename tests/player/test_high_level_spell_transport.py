@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from dnd.actions import SpellEvent
-from dnd.actions_functional import register_spell
+from dnd.actions_functional import performed_action, register_spell
 from dnd.conditions import Charmed, Prone
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.creature_types import CreatureType, DamageType
@@ -98,7 +98,7 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
         if row.behavior_id == behavior
         and row.can_afford
         and (spell is not CharmMonster or 5 in row.cast_levels)
-        and choices.target_sets[row.target_set]
+        and (choices.target_sets[row.target_set] or row.position_region is not None)
         and all(
             any(
                 facet.key == key and facet.value == value
@@ -130,17 +130,32 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
         actor.action_economy.spell_slot_value(level).normalized_score,
     )
     selected = None
-    for binding in bindings:
-        selection = ActionSelection(
-            action_index=row.discovery_index,
-            cast_at_level=level if level != row.cast_at_level else None,
-            target_indices=(
-                binding.index,
-                next(other.index for other in bindings if other.index != binding.index),
+    cast_at_level = level if level != row.cast_at_level else None
+    if bindings:
+        selections = [
+            ActionSelection(
+                action_index=row.discovery_index,
+                cast_at_level=cast_at_level,
+                target_indices=(
+                    binding.index,
+                    next(other.index for other in bindings if other.index != binding.index),
+                )
+                if spell is CharmMonster
+                else (binding.index,),
             )
-            if spell is CharmMonster
-            else (binding.index,),
-        )
+            for binding in bindings
+        ]
+    else:
+        # A free-aim row lists no cells (its `position_region`): the client aims a cell in the region,
+        # sent as the first extra position with no target index; preview validates it.
+        native_row = runtime.session.discovery.original.all_actions[row.discovery_index]
+        aims = performed_action(actor, native_row).get_valid_positions()
+        selections = [
+            ActionSelection(action_index=row.discovery_index, cast_at_level=cast_at_level, target_indices=(),
+                            extra_target_positions=(aim,))
+            for aim in aims[:12]
+        ]
+    for selection in selections:
         _, _, response = dispatch(
             runtime,
             Preview(
@@ -156,7 +171,7 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
         )
         if response.preview.next_positions:
             destination = response.preview.positions[response.preview.next_positions[0]]
-            selection = replace(selection, extra_target_positions=(destination,))
+            selection = replace(selection, extra_target_positions=(*selection.extra_target_positions, destination))
             _, _, response = dispatch(
                 runtime,
                 Preview(
