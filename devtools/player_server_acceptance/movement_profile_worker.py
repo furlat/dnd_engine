@@ -24,7 +24,7 @@ from dnd.blocks import sensory
 from dnd.core.events import BaseHandler, EventHandler, EventQueue, SpatialHandler, Trigger
 from dnd.core.gridmap import GridMap
 from dnd.entity import Entity
-from dnd.player import application, audience, capture, projection, reduction
+from dnd.player import application, audience, projection, reduction
 from server import worker
 
 
