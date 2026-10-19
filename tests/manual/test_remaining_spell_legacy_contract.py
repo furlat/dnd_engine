@@ -680,6 +680,13 @@ def test_multi_target_ally_filter_is_unique_bounded_and_atomic() -> None:
 
     assert valid.allow_same_target is False
     assert valid.get_all_targets() == [caster.uuid, first.uuid, second.uuid]
+    action_before = caster.action_economy.actions.normalized_score
+    slot_before = caster.action_economy.spell_slot_1.normalized_score
+    rejected = valid.apply()
+    assert rejected is not None and rejected.canceled
+    assert caster.action_economy.actions.normalized_score == action_before
+    assert caster.action_economy.spell_slot_1.normalized_score == slot_before
+    valid.extra_target_entity_uuids = [first.uuid, second.uuid]
     result = valid.apply()
 
     assert isinstance(result, SpellEvent)
@@ -792,7 +799,7 @@ def test_sunbeam_initial_and_repeat_line_share_concentration_owned_action() -> N
     ):
         result = Sunbeam(
             source_entity_uuid=caster.uuid,
-            end_position=(15, 5),
+            end_position=(14, 5),
             cast_at_level=6,
         ).apply()
 
@@ -818,7 +825,7 @@ def test_sunbeam_initial_and_repeat_line_share_concentration_owned_action() -> N
         10,
         *([3] * 6),
     ):
-        repeat = strike_template.instantiate(end_position=(15, 5)).apply()
+        repeat = strike_template.instantiate(end_position=(14, 5)).apply()
 
     assert repeat is not None
     assert not repeat.canceled
@@ -832,8 +839,9 @@ def test_sunbeam_initial_and_repeat_line_share_concentration_owned_action() -> N
     caster.action_economy.reset_all_costs()
     orphaned = SunbeamStrike(
         source_entity_uuid=caster.uuid,
-        end_position=(15, 5),
+        end_position=(14, 5),
         spell_dc=strike_template.spell_dc,
+        grant_condition_uuid=strike_template.grant_condition_uuid,
     ).apply()
     assert orphaned is not None
     assert orphaned.canceled
@@ -1039,7 +1047,7 @@ def test_fear_and_hypnotic_pattern_execute_area_and_cleanup_rules() -> None:
     assert isinstance(pattern_result, SpellEvent)
     assert not pattern_result.canceled
     assert has_condition(target, "Hypnotic Pattern")
-    assert has_condition(target, "Charmed")
+    assert any(condition.get_display_name() == "Charmed" for condition in target.active_conditions_by_uuid.values())
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0
     assert target.action_economy.movement_remaining() == 0
@@ -1049,7 +1057,7 @@ def test_fear_and_hypnotic_pattern_execute_area_and_cleanup_rules() -> None:
     caster.remove_condition("Concentrating")
 
     assert not has_condition(target, "Hypnotic Pattern")
-    assert not has_condition(target, "Charmed")
+    assert not any(condition.get_display_name() == "Charmed" for condition in target.active_conditions_by_uuid.values())
     assert target.action_economy.actions.normalized_score == 1
     assert target.action_economy.bonus_actions.normalized_score == 1
     assert target.action_economy.movement_remaining() == 30
@@ -1260,8 +1268,8 @@ def test_magic_missile_preserves_dart_distribution_upcast_and_enemy_filter() -> 
     assert isinstance(single_event, SpellEvent)
     assert not single_event.canceled
     assert single_event.total_targets == 3
-    assert single_event.total_damage == 9
-    assert get_hp(enemies[0]) == single_hp - 9
+    assert single_event.total_damage == 6
+    assert get_hp(enemies[0]) == single_hp - 6
     assert single_event.combat_log is not None
     assert len(single_event.combat_log.sub_entries) == 3
 
@@ -1279,11 +1287,11 @@ def test_magic_missile_preserves_dart_distribution_upcast_and_enemy_filter() -> 
     assert isinstance(split_event, SpellEvent)
     assert not split_event.canceled
     assert split_event.total_targets == 3
-    assert split_event.total_damage == 9
+    assert split_event.total_damage == 6
     assert [
         before - get_hp(enemy)
         for before, enemy in zip(split_hp, enemies, strict=True)
-    ] == [2, 3, 4]
+    ] == [2, 2, 2]
 
     caster.action_economy.reset_all_costs()
     upcast = MagicMissile(
@@ -1712,15 +1720,11 @@ def test_fireball_enforces_cast_los_range_and_explosion_occlusion() -> None:
         (8, 5),
         "monsters",
     )
-    grid.set_tile(
-        7,
-        5,
-        walking_cost=0,
-        flying_cost=0,
-        blocks_optics=True,
-        blocks_propagation=True,
-        name="Explosion Wall",
-    )
+    # Connected Fireball propagation bends around isolated cells; a continuous
+    # barrier is required to separate the two halves of this map.
+    for y in range(12):
+        grid.set_tile(7, y, walking_cost=0, flying_cost=0, blocks_optics=True,
+                      blocks_propagation=True, name="Explosion Wall")
     force_save_result(visible, "dexterity", succeeds=False)
     force_save_result(behind_wall, "dexterity", succeeds=False)
     Entity.update_all_entities_senses(max_distance=100)

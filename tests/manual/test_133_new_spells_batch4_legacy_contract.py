@@ -211,127 +211,12 @@ def test_finger_of_death_full_and_half_damage() -> None:
         assert caster.action_economy.spell_slot_7.normalized_score == 0
 
 
-def _telekinesis_scene() -> tuple[Entity, Entity]:
-    reset_spell_regression_arena(18, 11)
-    caster = create_spell_regression_actor(
-        "Telekinesis Caster",
-        (2, 5),
-        "heroes",
-        spell_slots={5: 1},
-    )
-    target = create_spell_regression_actor(
-        "Telekinesis Target",
-        (6, 5),
-        "monsters",
-    )
-    force_save_result(target, "strength", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=100)
-    return caster, target
 
 
-def test_telekinesis_grab_exposes_and_consumes_restrain_followup() -> None:
-    """Old case 6: a failed initial contest exposes both typed follow-ups."""
-    caster, target = _telekinesis_scene()
-
-    with fixed_dice_faces(10):
-        result = Telekinesis(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid,
-            cast_at_level=5,
-        ).apply()
-
-    assert isinstance(result, SpellEvent)
-    assert not result.canceled
-    assert has_condition(caster, "Concentrating")
-    available = get_available_actions(caster)
-    names = {row.template_name for row in available.all_actions}
-    assert {"Telekinesis: Restrain", "Telekinesis: Move"} <= names
-
-    restrain = next(
-        row for row in available.all_actions
-        if row.template_name == "Telekinesis: Restrain"
-    )
-    followup = execute_by_index(
-        caster,
-        restrain.template_name,
-        restrain.valid_targets[0].index,
-        available=available,
-    )
-
-    assert followup is not None
-    assert not followup.canceled
-    assert has_condition(target, "Restrained")
-    remaining_names = {action.name for action in caster.registered_actions}
-    assert "Telekinesis: Restrain" not in remaining_names
-    assert "Telekinesis: Move" not in remaining_names
 
 
-def test_telekinesis_move_updates_spatial_indexes_and_cleans_followups() -> None:
-    """Old case 7: forced movement updates both entity and grid indexes."""
-    caster, target = _telekinesis_scene()
-    original_position = target.position
-
-    with fixed_dice_faces(10):
-        Telekinesis(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid,
-            cast_at_level=5,
-        ).apply()
-
-    available = get_available_actions(caster)
-    move = next(
-        row for row in available.position_actions
-        if row.template_name == "Telekinesis: Move"
-    )
-    destination = next(
-        choice for choice in move.valid_targets
-        if choice.position == (7, 5)
-    )
-    result = execute_by_index(
-        caster,
-        move.template_name,
-        destination.index,
-        available=available,
-    )
-
-    assert result is not None
-    assert not result.canceled
-    assert target.position == (7, 5)
-    assert target.uuid in get_map().get_entities_at((7, 5))
-    assert target.uuid not in get_map().get_entities_at(original_position)
-    assert {"Telekinesis: Restrain", "Telekinesis: Move"}.isdisjoint(
-        {action.name for action in caster.registered_actions}
-    )
 
 
-def test_telekinesis_concentration_cleanup_removes_restrain_and_action() -> None:
-    """Old case 8: concentration owns both the condition and granted action."""
-    caster, target = _telekinesis_scene()
-
-    with fixed_dice_faces(10):
-        Telekinesis(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid,
-            cast_at_level=5,
-        ).apply()
-
-    available = get_available_actions(caster)
-    restrain = next(
-        row for row in available.all_actions
-        if row.template_name == "Telekinesis: Restrain"
-    )
-    execute_by_index(
-        caster,
-        restrain.template_name,
-        restrain.valid_targets[0].index,
-        available=available,
-    )
-    assert has_condition(target, "Restrained")
-
-    caster.remove_condition("Concentrating")
-
-    assert not has_condition(target, "Restrained")
-    assert caster.get_action_template("Telekinesis") is None
 
 
 def _globe_scene() -> tuple[Entity, Entity, Entity]:

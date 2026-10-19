@@ -345,6 +345,7 @@ def _representative_evidence() -> tuple[list[Event], list[CombatLogEntry]]:
     )
     assert bind_runtime_behavior(
         prone,
+        current_binding=prone.behavior_binding,
         runtime_owner_uuid=GOBLIN_UUID,
     ) is not None
     condition = ConditionApplicationEvent(
@@ -379,7 +380,7 @@ def _representative_evidence() -> tuple[list[Event], list[CombatLogEntry]]:
     item_charge = ItemResourceChangeEvent(
         target_entity_uuid=HERO_UUID,
         item_uuid=ITEM_UUID,
-        item_semantic_key="item.potion.healing",
+        item_id="consumable.healing_potion",
         item_name="Potion of Healing",
         amount=1,
         charges_before=1,
@@ -524,14 +525,14 @@ def test_representative_terminal_match_reduces_objective_typed_evidence() -> Non
     assert hero.statistics.action_usage["Magic Missile"].attempted == 1
     assert hero.statistics.resources_spent["spell_slot_1"] == 1
     assert hero.statistics.item_action_usage[str(ITEM_UUID)].completed == 1
-    assert hero.statistics.item_charges_spent["item.potion.healing"] == 1
+    assert hero.statistics.item_charges_spent["consumable.healing_potion"] == 1
     assert hero.statistics.kills == 1
 
     assert goblin.statistics.damage_taken.applied_by_type == {"Force": 8}
     assert goblin.statistics.movement.forced_events == 1
     assert goblin.statistics.movement.forced_feet == 10
     assert goblin.statistics.conditions_applied == {
-        PRONE_CONTENT_IDENTITY: 1,
+        "condition.prone": 1,
     }
     assert goblin.statistics.attacks.attempted == 1
     assert goblin.statistics.attacks.misses == 1

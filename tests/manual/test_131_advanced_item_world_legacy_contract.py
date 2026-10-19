@@ -8,7 +8,7 @@ world, visibility, targeting, and lifecycle combinations using current APIs.
 
 from uuid import UUID, uuid4
 
-from dnd.actions_functional import execute_drop, setup_standard_actions
+from dnd.actions_functional import execute_drop, execute_available_action, free_aim_target, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import BaseItem, EquippableItem
@@ -43,7 +43,7 @@ ISOLATION_SELECTOR = (
     f"{THIS_FILE}::test_inventory_removes_floor_item_from_grid_senses_and_object_targets"
 )
 DROP_SELECTOR = (
-    f"{THIS_FILE}::test_drop_is_explicit_lifecycle_operation_not_discovered_action"
+    f"{THIS_FILE}::test_discovered_drop_commits_lifecycle_hook_and_refuses_foreign_item"
 )
 COLOCATED_SELECTOR = (
     f"{THIS_FILE}::test_dropped_and_colocated_items_preserve_grid_and_visibility"
@@ -52,7 +52,7 @@ PICKUP_VISIBILITY_SELECTOR = (
     f"{THIS_FILE}::test_pickup_removes_floor_visibility_for_other_observers"
 )
 NON_TARGET_SELECTOR = (
-    f"{THIS_FILE}::test_nonbreakable_or_unseen_items_are_not_object_targets"
+    f"{THIS_FILE}::test_non_targetable_or_unseen_items_are_not_object_targets"
 )
 PICKUP_BOUNDARY_SELECTOR = (
     f"{THIS_FILE}::test_pickup_targets_respect_capacity_and_five_foot_range"
@@ -341,7 +341,7 @@ def test_inventory_removes_floor_item_from_grid_senses_and_object_targets() -> N
     assert crate.uuid not in object_target_uuids(actor, "Pick Up")
 
 
-def test_drop_is_explicit_lifecycle_operation_not_discovered_action() -> None:
+def test_discovered_drop_commits_lifecycle_hook_and_refuses_foreign_item() -> None:
     """Drop routes explicitly, fires its hook, and handles a foreign UUID."""
     reset_item_world()
     actor = create_actor((5, 5))
@@ -350,14 +350,15 @@ def test_drop_is_explicit_lifecycle_operation_not_discovered_action() -> None:
         item_id="test.drop_tracking_item",
         name="Trackable",
     )
-    assert actor.inventory.add_item(item)
+    assert actor.loot_item(item)
 
     available_names = {
         action.template_name for action in actor.get_available_actions().all_actions
     }
-    assert "Drop" not in available_names
-
-    event = execute_drop(actor, item.uuid)
+    assert "Drop" in available_names
+    drop = next(row for row in actor.get_available_actions().all_actions
+                if row.template_name == "Drop" and row.source_item_uuid == item.uuid)
+    event = execute_available_action(actor, drop, free_aim_target(drop, actor.position))
 
     assert event is not None and not event.canceled
     assert item.dropped is True
@@ -412,8 +413,8 @@ def test_pickup_removes_floor_visibility_for_other_observers() -> None:
     assert item.uuid not in watcher.senses.objects
 
 
-def test_nonbreakable_or_unseen_items_are_not_object_targets() -> None:
-    """Object actions require both current visibility and a breakable target."""
+def test_non_targetable_or_unseen_items_are_not_object_targets() -> None:
+    """Object attack selection requires current visibility and explicit targetability."""
     reset_item_world()
     grid = get_map()
     actor = create_actor((1, 5))
@@ -421,7 +422,7 @@ def test_nonbreakable_or_unseen_items_are_not_object_targets() -> None:
         source_entity_uuid=uuid4(),
         item_id="test.pillar",
         name="Indestructible Pillar",
-        is_targetable=True,
+        is_targetable=False,
         is_pickable=False,
         health=None,
     )

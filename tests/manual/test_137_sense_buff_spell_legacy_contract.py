@@ -68,7 +68,7 @@ def _has_sense(
     return any(
         mode.sense_type is sense_type
         and (range_feet is None or mode.range_feet == range_feet)
-        for mode in entity.senses.sense_modes
+        for mode in entity.senses.get_sense_modes()
     )
 
 

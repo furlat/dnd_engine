@@ -11,12 +11,13 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
+from dnd.types.traps import TrapState
 from dnd.encounter import EncounterState
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_interactables import StorageChest, TrapLever
-from dnd.actions_functional import execute_by_index
+from dnd.actions_functional import execute_by_index, execute_use_action
 from dnd.maps.arena_layout import (
     DIFFICULT_TERRAIN_POSITIONS,
     DOOR_POSITION,
@@ -164,9 +165,14 @@ def test_authored_encounter_catalog_has_complete_stable_inventory() -> None:
         "srd_goblinoid_warband",
         "srd_divine_cult_cell",
         "srd_elite_mercenary_contract",
+        "residue_workshop",
+        "storehouse_demo",
+        "lantern_crypt",
+        "lantern_gallery",
     ]
     assert len(ids) == len(set(ids))
-    assert all(recipe.tags == ("authored",) for recipe in AUTHORED_ENCOUNTER_RECIPES)
+    assert all(recipe.tags == ("authored",) for recipe in AUTHORED_ENCOUNTER_RECIPES[:38])
+    assert all(recipe.tags for recipe in AUTHORED_ENCOUNTER_RECIPES[38:])
 
 
 def test_each_authored_encounter_builds_started_with_unique_positions() -> None:
@@ -176,17 +182,17 @@ def test_each_authored_encounter_builds_started_with_unique_positions() -> None:
         arena = CanonicalScenario(
             assemble_encounter_recipe(recipe, game=Game())
         )
-        actors = (arena.hero, *arena.monsters)
+        actors = arena.assembled.entities
         positions = [actor.position for actor in actors]
 
         assert arena.encounter.state == EncounterState.ACTIVE
-        assert arena.hero.faction == "faction_1"
-        assert {monster.faction for monster in arena.monsters} == {"faction_2"}
+        for slot in recipe.roster_slots:
+            assert {actor.faction for actor in arena.assembled.entities_by_roster_slot[slot.roster_slot_id]} == {slot.faction_id}
         assert len(arena.controllers) == len(actors)
         assert len(arena.encounter.combatants) == len(actors)
         assert len(positions) == len(set(positions))
         assert all(arena.encounter.get_controller_for(actor.uuid) for actor in actors)
-        assert Entity.get(arena.hero.uuid) is arena.hero
+        assert all(Entity.get(actor.uuid) is actor for actor in actors)
 
 
 def test_srd_undead_crypt_gives_shield_fighter_ranged_counterplay() -> None:
@@ -594,8 +600,8 @@ def test_trap_lever_killzone_makes_hazard_object_use_available() -> None:
     assert arena.environment.spike_condition_uuid in spike_tile.get_conditions()
 
 
-def test_trap_lever_killzone_deactivates_handler_markers_and_hazard_routing() -> None:
-    """Pulling the linked lever removes every objective part of the spike trap."""
+def test_trap_lever_killzone_preserves_disabled_fixture_without_hazard_routing() -> None:
+    """A spent lever leaves the disabled trap visible without an active hazard."""
     arena = create_authored_encounter("trap_lever_killzone")
     lever_guard = next(monster for monster in arena.monsters if monster.name == "Validation Lever Guard")
     lever = next(
@@ -621,13 +627,12 @@ def test_trap_lever_killzone_deactivates_handler_markers_and_hazard_routing() ->
     assert event.phase is EventPhase.COMPLETION
     assert lever.charges == 0
     assert arena.environment is not None
-    assert not get_map().has_spatial_condition(
-        arena.environment.spike_condition_uuid,
-    )
+    trap = get_map().get_spatial_condition(arena.environment.spike_condition_uuid)
+    assert trap is not None and trap.trap_state is TrapState.DEACTIVATED
     for position in SPIKE_ZONE_POSITIONS:
         tile = get_map().get_tile(*position)
         assert tile is not None
-        assert arena.environment.spike_condition_uuid not in tile.get_conditions()
+        assert arena.environment.spike_condition_uuid in tile.get_conditions()
         assert tile.is_hazardous_for(lever_guard.uuid) is False
 
 
@@ -692,7 +697,7 @@ def test_damage_affinity_weapon_lab_surfaces_vulnerabilities_and_weapon_damage_t
     assert {target.target_uuid for target in club.valid_targets} == {arena.hero.uuid}
     assert {target.target_uuid for target in shortsword.valid_targets} == {arena.hero.uuid}
     assert {row.availability_status for row in extra_attacks} == {
-        ActionAvailabilityStatus.REQUIREMENTS_UNMET
+        ActionAvailabilityStatus.NO_VALID_TARGETS
     }
     assert all(not row.valid_targets for row in extra_attacks)
 
@@ -730,7 +735,7 @@ def test_resistance_weapon_counterplay_uses_non_skeleton_damage_affinities() -> 
     assert {target.target_uuid for target in club.valid_targets} == {arena.hero.uuid}
     assert {target.target_uuid for target in shortsword.valid_targets} == {arena.hero.uuid}
     assert {row.availability_status for row in extra_attacks} == {
-        ActionAvailabilityStatus.REQUIREMENTS_UNMET
+        ActionAvailabilityStatus.NO_VALID_TARGETS
     }
     assert all(not row.valid_targets for row in extra_attacks)
 
@@ -743,6 +748,9 @@ def test_field_cache_loot_race_exposes_adjacent_chest_resource_choice() -> None:
     chest_item_names = {item.name for item in chest.chest_inventory.items.values()}
 
     assert arena.hero.name == "Validation Cache Runner"
+    assert "Open Chest (Validation Field Cache)" in available_action_display_names(arena.hero)
+    opened = execute_use_action(arena.hero, chest.uuid, "Open Chest")
+    assert opened is not None and not opened.canceled and chest.is_open
     assert "Loot All (Validation Field Cache)" in available_action_display_names(arena.hero)
     assert {
         "Scroll of Fireball",
@@ -828,9 +836,9 @@ def test_multi_target_area_log_summarizes_child_targets() -> None:
     assert event is not None
     assert event.combat_log is not None
     combat_log = event.combat_log
-    assert set(combat_log.data["target_names"]) == expected_names
-    assert len(combat_log.data["per_target_damage"]) == 3
-    assert combat_log.data["saves_succeeded"] + combat_log.data["saves_failed"] == 3
+    assert set(combat_log.data.target_names) == expected_names
+    assert len(combat_log.data.per_target_damage) == 3
+    assert combat_log.data.saves_succeeded + combat_log.data.saves_failed == 3
 
 
 def test_multi_projectile_no_aoe_lab_keeps_projectile_rows_without_area_escape() -> None:
@@ -919,7 +927,11 @@ def test_multi_object_control_room_exposes_several_nearby_object_actions() -> No
     assert any(obj.name == "Fireball Cannon" for obj in cannon_objects)
     assert any(obj.name == "Wall Torch" for obj in torch_objects)
     assert any(name.startswith("Pull Lever") for name in display_names)
-    assert any(name.startswith("Loot All") for name in display_names)
+    assert any(name.startswith("Open Chest") for name in display_names)
+    chest = next(obj for obj in cache_objects if isinstance(obj, StorageChest))
+    opened = execute_use_action(arena.hero, chest.uuid, "Open Chest")
+    assert opened is not None and not opened.canceled and chest.is_open
+    assert any(name.startswith("Loot All") for name in available_action_display_names(arena.hero))
     assert any(name.startswith("Extinguish Wall Torch") for name in display_names)
     assert any("Fireball" in name for name in display_names)
 

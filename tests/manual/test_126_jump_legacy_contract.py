@@ -27,6 +27,7 @@ from tests.engine.support import (
     reset_combat_state,
 )
 from dnd.core.values import Channel, Kind, add_modifier
+from tests.manual.runtime_fixture_support import compose_and_deploy
 
 
 def _reset_state(
@@ -65,11 +66,11 @@ def _create_jumper(
         position=position,
         faction=faction,
     )
-    jumper = Entity.create(
+    jumper = compose_and_deploy(Entity.create(
         source_entity_uuid=uuid4(),
         name="Legacy Jump Tester",
         config=config,
-    )
+    ))
     setup_standard_actions(jumper)
     return jumper
 
@@ -104,17 +105,17 @@ def test_jump_reaches_visible_island_that_move_cannot_path_to() -> None:
     grid = get_map()
     for x in range(5):
         for y in range(5):
-            grid.set_tile(x, y, walkable=True, visible=True, name="Floor")
+            grid.set_tile(x, y, walking_cost=1, name="Floor")
     for x in range(5, 8):
         for y in range(5):
-            grid.set_tile(x, y, walkable=False, visible=True, name="Water")
+            grid.set_tile(x, y, walking_cost=0, name="Water")
     island_positions = {
         (x, y)
         for x in range(8, 11)
         for y in range(2, 5)
     }
     for x, y in island_positions:
-        grid.set_tile(x, y, walkable=True, visible=True, name="Island")
+        grid.set_tile(x, y, walking_cost=1, name="Island")
 
     jumper = _create_jumper(strength=18, position=(2, 2))
     Entity.update_all_entities_senses()
@@ -294,11 +295,11 @@ def test_jump_provokes_opportunity_attack_when_leaving_reach() -> None:
     """Legacy ``test_jump.py::test_jump_provokes_opportunity_attack``."""
     _reset_state()
     jumper = _create_jumper()
-    watcher = create_skeleton(
+    watcher = compose_and_deploy(create_skeleton(
         name="Jump Watcher",
         position=(6, 5),
         faction="monsters",
-    )
+    ))
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses()
     hit_modifier = force_attack_hit(watcher)
@@ -322,11 +323,11 @@ def test_disengage_prevents_opportunity_attack_during_jump() -> None:
     """Legacy ``test_jump.py::test_jump_disengage_prevents_oa``."""
     _reset_state()
     jumper = _create_jumper()
-    watcher = create_skeleton(
+    watcher = compose_and_deploy(create_skeleton(
         name="Disengaged Jump Watcher",
         position=(6, 5),
         faction="monsters",
-    )
+    ))
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses()
     disengage_event = Disengage(

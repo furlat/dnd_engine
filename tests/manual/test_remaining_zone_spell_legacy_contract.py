@@ -405,6 +405,7 @@ def test_spirit_guardians_preserves_faction_damage_slow_follow_and_cleanup() -> 
         result = SpiritGuardians(
             source_entity_uuid=caster.uuid,
             cast_at_level=3,
+            excluded_entity_uuids=frozenset({caster.uuid, initial_ally.uuid}),
         ).apply()
 
     assert isinstance(result, SpellEvent)
@@ -418,7 +419,7 @@ def test_spirit_guardians_preserves_faction_damage_slow_follow_and_cleanup() -> 
         if isinstance(condition, SpiritGuardiansZone)
     )
     assert zone.position == (10, 10)
-    assert not has_condition(initial_enemy, "Spirit Guardians Slowed")
+    assert has_condition(initial_enemy, "Spirit Guardians Slowed")
     assert not has_condition(initial_ally, "Spirit Guardians Slowed")
 
     initial_turn = EventQueue.begin_turn_execution()

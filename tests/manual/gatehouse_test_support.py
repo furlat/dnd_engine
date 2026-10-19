@@ -12,6 +12,7 @@ from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.core.values import Channel, Kind, add_modifier, remove_modifier
+from tests.manual.runtime_fixture_support import compose_and_deploy
 
 
 class ScenarioHumanController(HumanController):
@@ -117,8 +118,8 @@ def create_gatehouse_scenario() -> GatehouseScenario:
         Gatehouse scenario bundle containing encounter, actors, and controllers.
     """
     reset_playable_scenario_state()
-    hero = create_goblin(name="Gatehouse Hero", position=(1, 1), faction="heroes")
-    monster = create_skeleton(name="Gatehouse Skeleton", position=(2, 1), faction="monsters")
+    hero = compose_and_deploy(create_goblin(name="Gatehouse Hero", position=(1, 1), faction="heroes"))
+    monster = compose_and_deploy(create_skeleton(name="Gatehouse Skeleton", position=(2, 1), faction="monsters"))
     Entity.update_all_entities_senses(max_distance=20)
 
     hero_controller = ScenarioHumanController(source_entity_uuid=hero.uuid)

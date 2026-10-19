@@ -25,6 +25,21 @@ _MUTATED_OBJECT_UUID = UUID("10000000-0000-0000-0000-000000000001")
 _MUTATED_ENTITY_UUID = UUID("10000000-0000-0000-0000-000000000002")
 _MUTATED_HANDLER_UUID = UUID("10000000-0000-0000-0000-000000000003")
 
+from dnd.core.gridmap import GridMap
+from dnd.runtime_reset import reset_engine_runtime
+
+
+@pytest.fixture(autouse=True)
+def cold_content_runtime():
+    """External pack execution requires a cold process, including no grid."""
+    reset_engine_runtime()
+    GridMap.reset()
+    EventQueue.reset()
+    yield
+    reset_engine_runtime()
+    GridMap.reset()
+    EventQueue.reset()
+
 
 def _write_fixture_pack(
     root: Path,
@@ -94,9 +109,9 @@ def _write_fixture_pack(
                 "from pathlib import Path",
                 "from pydantic import BaseModel, ConfigDict",
                 "from dnd.core.content.descriptors import ContentDescriptorSpec, ContentVisibility",
-                "from dnd.core.content.item_definitions import ItemDefinition, ItemPersistencePolicy",
+                "from dnd.core.content.identities import ContentDefinitionKind",
                 "from dnd.core.content.provenance import ContentFidelity, ContentProvenance, ContentProvenanceRelation, ContentReviewStatus",
-                "from dnd.core.content.registration import item_factory",
+                "from dnd.core.content.registration import content_factory",
                 *extra_imports,
                 "",
                 f"Path({str(marker_path)!r}).write_text('imported', encoding='utf-8')",
@@ -106,7 +121,8 @@ def _write_fixture_pack(
                 "    model_config = ConfigDict(extra='forbid', frozen=True)",
                 "    charges: int",
                 "",
-                "@item_factory(",
+                "@content_factory(",
+                "    definition_kind=ContentDefinitionKind.ITEM,",
                 f"    pack_id={pack_id!r},",
                 f"    content_id={content_id!r},",
                 "    version=1,",
@@ -123,9 +139,6 @@ def _write_fixture_pack(
                 "        relation=ContentProvenanceRelation.ORIGINAL_CONTENT,",
                 "        fidelity=ContentFidelity.COMPLETE,",
                 "        review_status=ContentReviewStatus.REVIEWED,",
-                "    ),",
-                "    item_definition=ItemDefinition(",
-                "        persistence_policy=ItemPersistencePolicy.POSSESSION,",
                 "    ),",
                 ")",
                 "def create_fixture_item(context: object, parameters: Parameters):",
@@ -157,8 +170,8 @@ def _replace_fixture_extra_import(
     source = items_path.read_text(encoding="utf-8")
     items_path.write_text(
         source.replace(
-            "from dnd.core.content.registration import item_factory",
-            "from dnd.core.content.registration import item_factory\n"
+            "from dnd.core.content.registration import content_factory",
+            "from dnd.core.content.registration import content_factory\n"
             + replacement,
         ),
         encoding="utf-8",
@@ -180,15 +193,7 @@ def _runtime_registry_identity() -> tuple[object, ...]:
                 for key, value in Entity._entity_registry.items()
             ),
         ),
-        tuple(
-            sorted(
-                (
-                    position,
-                    tuple(id(entity) for entity in entities),
-                )
-                for position, entities in Entity._entity_by_position.items()
-            ),
-        ),
+        id(GridMap._instance),
         tuple(
             sorted(
                 (str(key), id(value))
@@ -268,120 +273,6 @@ def test_content_api_v1_pack_is_rejected_before_import(
     assert not marker.exists()
 
 
-def test_content_api_v2_pack_can_author_exact_origin_definitions(
-    tmp_path: Path,
-) -> None:
-    """The installed-pack API admits the same typed origin model as built-ins."""
-
-    root = tmp_path / "packs"
-    root.mkdir()
-    pack_directory, _ = _write_fixture_pack(
-        root,
-        directory_name="origin_capable",
-        pack_id="fixture.origin_capable",
-        python_package="fixture_origin_capable",
-        content_id="item.origin_token",
-    )
-    origins_path = (
-        pack_directory
-        / "src"
-        / "fixture_origin_capable"
-        / "origins.py"
-    )
-    origins_path.write_text(
-        "\n".join((
-            "from dnd.core.content.dependencies import ContentDependency, ContentDependencyPhase, ContentDependencyRelation",
-            "from dnd.core.content.descriptors import ContentDescriptorSpec, ContentVisibility",
-            "from dnd.core.content.durable_characters import OriginLevelGrant, SpeciesDefinition",
-            "from dnd.core.content.identities import ContentDefinitionKind",
-            "from dnd.core.content.origin_features import OriginCapability, OriginStructuralFeatureDefinition",
-            "from dnd.core.content.origin_support import OriginRuntimeSupport",
-            "from dnd.core.content.provenance import ContentFidelity, ContentProvenance, ContentProvenanceRelation, ContentReviewStatus",
-            "from dnd.core.content.registration import get_content_declaration, typed_definition",
-            "",
-            "PROVENANCE = ContentProvenance(",
-            "    primary_source_id='fixture.origin_capable.source',",
-            "    source_anchor='Fixture origin',",
-            "    relation=ContentProvenanceRelation.ORIGINAL_CONTENT,",
-            "    fidelity=ContentFidelity.COMPLETE,",
-            "    review_status=ContentReviewStatus.REVIEWED,",
-            ")",
-            "",
-            "@typed_definition(",
-            "    definition_kind=ContentDefinitionKind.TRAIT,",
-            "    pack_id='fixture.origin_capable',",
-            "    content_id='trait.origin.fixture_trance',",
-            "    version=1,",
-            "    descriptor=ContentDescriptorSpec(",
-            "        display_name='Fixture Trance',",
-            "        description='An exact external origin capability.',",
-            "        visibility=ContentVisibility.PUBLIC,",
-            "    ),",
-            "    provenance=PROVENANCE,",
-            "    definition=OriginStructuralFeatureDefinition(",
-            "        capabilities=(OriginCapability.TRANCE,),",
-            "    ),",
-            ")",
-            "class FixtureTrance:",
-            "    pass",
-            "",
-            "FIXTURE_TRANCE_REF = get_content_declaration(FixtureTrance).ref",
-            "",
-            "@typed_definition(",
-            "    definition_kind=ContentDefinitionKind.SPECIES,",
-            "    pack_id='fixture.origin_capable',",
-            "    content_id='species.fixture',",
-            "    version=1,",
-            "    descriptor=ContentDescriptorSpec(",
-            "        display_name='Fixture Species',",
-            "        description='An exact external playable origin.',",
-            "        visibility=ContentVisibility.PUBLIC,",
-            "    ),",
-            "    provenance=PROVENANCE,",
-            "    definition=SpeciesDefinition(",
-            "        runtime_support=OriginRuntimeSupport.available(),",
-            "        level_grants=(",
-            "            OriginLevelGrant(",
-            "                character_level=1,",
-            "                grant_refs=(FIXTURE_TRANCE_REF,),",
-            "            ),",
-            "        ),",
-            "    ),",
-            "    dependencies=(",
-            "        ContentDependency(",
-            "            relation=ContentDependencyRelation.GRANTS_FEATURE,",
-            "            target_ref=FIXTURE_TRANCE_REF,",
-            "            phase=ContentDependencyPhase.RUNTIME_REFERENCE,",
-            "            notes='Fixture species grants its exact trait.',",
-            "        ),",
-            "    ),",
-            ")",
-            "class FixtureSpecies:",
-            "    pass",
-            "",
-        )),
-        encoding="utf-8",
-    )
-
-    loaded = load_content_system(
-        pack_roots=(root,),
-    )
-    species = loaded.registry.declarations[
-        "fixture.origin_capable:species:species.fixture@1"
-    ]
-    trait = loaded.registry.declarations[
-        "fixture.origin_capable:trait:trait.origin.fixture_trance@1"
-    ]
-
-    assert isinstance(species.definition_payload, SpeciesDefinition)
-    assert (
-        species.definition_payload.level_grants[0].grant_refs
-        == (trait.ref,)
-    )
-    assert (
-        species.definition_payload.runtime_support.status.value
-        == "available"
-    )
 
 
 def test_pack_root_order_does_not_change_content_set_digest(tmp_path: Path) -> None:
@@ -1016,7 +907,8 @@ def test_top_level_runtime_mutations_abort_and_restore_every_registry(
                 f"    source_entity_uuid=UUID({str(_MUTATED_OBJECT_UUID)!r}),",
                 ")",
                 f"Entity._entity_registry[UUID({str(_MUTATED_ENTITY_UUID)!r})] = _RUNTIME_OBJECT",
-                "Entity._entity_by_position[(99, 99)].append(_RUNTIME_OBJECT)",
+                "from dnd.core.gridmap import get_map",
+                "get_map().create_rectangle(99, 99, 1, 1)",
                 f"EventQueue._event_handlers[UUID({str(_MUTATED_HANDLER_UUID)!r})] = _RUNTIME_OBJECT",
                 f"EventQueue._event_handlers_by_source_entity_uuid[UUID({str(_MUTATED_OBJECT_UUID)!r})].append(_RUNTIME_OBJECT)",
             ),
@@ -1032,7 +924,7 @@ def test_top_level_runtime_mutations_abort_and_restore_every_registry(
     assert _runtime_registry_identity() == before
     assert _MUTATED_OBJECT_UUID not in BaseObject._registry
     assert _MUTATED_ENTITY_UUID not in Entity._entity_registry
-    assert (99, 99) not in Entity._entity_by_position
+    assert GridMap._instance is None
     assert _MUTATED_HANDLER_UUID not in EventQueue._event_handlers
     assert (
         _MUTATED_OBJECT_UUID

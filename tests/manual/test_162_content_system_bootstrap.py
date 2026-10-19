@@ -48,11 +48,14 @@ def test_default_bootstrap_freezes_exact_builtin_identity() -> None:
     )
     assert tuple(loaded.registry.sources) == (
         "wotc.srd_5_1_cc",
+        "wotc.srd_5_2_cc",
         "neurodragon.original_b2b3930",
+        "wotc.ice_knife_legacy",
     )
     assert BUILT_IN_PACK_VERSIONS == {
         "content.neurodragon": "1.0.0",
         "content.srd_5_1_cc": "1.0.0",
+        "content.srd_5_2_cc": "1.0.0",
         "core.rules": "1.0.0",
     }
     assert BUILT_IN_PACK_DEPENDENCIES == {
@@ -61,13 +64,17 @@ def test_default_bootstrap_freezes_exact_builtin_identity() -> None:
             "core.rules",
         }),
         "content.srd_5_1_cc": frozenset({"core.rules"}),
+        "content.srd_5_2_cc": frozenset({"core.rules", "content.srd_5_1_cc"}),
         "core.rules": frozenset(),
     }
     assert tuple(source.source_id for source in BUILT_IN_SOURCES) == (
         "wotc.srd_5_1_cc",
+        "wotc.srd_5_2_cc",
         "neurodragon.original_b2b3930",
+        "wotc.ice_knife_legacy",
     )
-    neurodragon_source = BUILT_IN_SOURCES[1]
+    neurodragon_source = next(source for source in BUILT_IN_SOURCES
+                            if source.source_id == "neurodragon.original_b2b3930")
     assert neurodragon_source.source_family == (
         ContentSourceFamily.NEURODRAGON_ORIGINAL
     )

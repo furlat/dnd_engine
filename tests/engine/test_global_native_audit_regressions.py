@@ -225,18 +225,26 @@ def test_authored_item_benefit_requires_own_effect_admission(game, item_id, refu
     assert (after == before) is refused
 
 
-@pytest.mark.parametrize("refused", refusal_cases("GA-02: refused torch action changes light state"))
+@pytest.mark.parametrize("refused", [False, True], ids=["admitted", "refused"])
 @pytest.mark.parametrize("start_lit", [False, True], ids=["ignite", "extinguish"])
-def test_torch_use_requires_own_effect_admission(game, start_lit, refused):
+@pytest.mark.parametrize("item_id", ["equipment.portable_torch", "environment.wall_torch"])
+def test_torch_use_requires_own_effect_admission(game, start_lit, refused, item_id):
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 5, default_light=LightLevel.DARKNESS)
     actor = combatant(game)
-    torch = build_authored_item("equipment.portable_torch", actor.uuid)
-    actor.loot_item(torch)
+    torch = build_authored_item(item_id, actor.uuid)
+    if item_id == "equipment.portable_torch":
+        assert actor.loot_item(torch)
+    else:
+        torch.place_on_grid((3, 2))
+        actor.update_entity_senses(max_distance=10)
     if start_lit:
         use_name = torch.get_use_actions(actor.uuid)[0].get_discovery_template_name()
         initial = execute_use_action(actor, torch.uuid, use_name)
         assert initial is not None
         assert not initial.canceled
     assert torch.is_lit is start_lit
+    light_before = grid.get_tile(3, 2).resolved_light_level
     refusals = refuse_effect(actor, EventType.BASE_ACTION) if refused else []
     use_name = torch.get_use_actions(actor.uuid)[0].get_discovery_template_name()
     result = execute_use_action(actor, torch.uuid, use_name)
@@ -245,6 +253,7 @@ def test_torch_use_requires_own_effect_admission(game, start_lit, refused):
     assert result.canceled is refused
     assert bool(refusals) is refused
     assert lit_after is (start_lit if refused else not start_lit)
+    assert (grid.get_tile(3, 2).resolved_light_level == light_before) is refused
 
 
 @pytest.mark.parametrize("refused", refusal_cases("GA-03: refused feature condition leaves grants"))
@@ -284,9 +293,7 @@ def test_enhance_ability_temp_hp_requires_condition_admission(game, refused):
 
 @pytest.mark.parametrize("transfer", [
     pytest.param(False, id="original-carrier-control"),
-    pytest.param(True, id="transferred", marks=pytest.mark.xfail(
-        strict=True, raises=AssertionError, reason="GA-05: transferred torch still lights old carrier",
-    )),
+    pytest.param(True, id="transferred"),
 ])
 def test_torch_transfer_releases_old_carrier_light(game, transfer):
     grid = get_map()

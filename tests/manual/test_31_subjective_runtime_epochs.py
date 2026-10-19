@@ -14,7 +14,8 @@ from dnd.ai.runtime.decision_epoch import (
 )
 from dnd.ai.contracts.semantics import ActionTag, MovementKind, OutcomeKind, TopologyOperation, TruthValue, evaluate_fact_expression
 from dnd.ai.contracts.control import AffordanceSet
-from dnd.actions_functional import execute_by_index, register_spell
+from dnd.actions_functional import execute_by_index, register_spell, free_aim_target, preview_available_selection
+from dnd.types.cells import cell_in
 from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_object import BaseObject
 from dnd.core.base_actions import ActionAvailabilityStatus
@@ -385,17 +386,17 @@ def test_condition_lock_control_spells_expose_target_effects() -> None:
     hold_person = next(
         row
         for row in affordances.entity_actions
-        if row.semantic_key == "dnd.spells.enchantment.HoldPerson"
+        if row.semantic_key == "spell.hold_person"
     )
     fear = next(
         row
         for row in affordances.position_actions
-        if row.semantic_key == "dnd.spells.illusion.Fear"
+        if row.semantic_key == "spell.fear"
     )
     hypnotic_pattern = next(
         row
         for row in affordances.position_actions
-        if row.semantic_key == "dnd.spells.illusion.HypnoticPattern"
+        if row.semantic_key == "spell.hypnotic_pattern"
     )
 
     hold_semantics = affordances.semantics_for(hold_person)
@@ -534,7 +535,7 @@ def test_zone_and_removal_control_spells_expose_profiles() -> None:
     banishment = next(
         row
         for row in controller_affordances.entity_actions
-        if row.semantic_key == "dnd.spells.abjuration.Banishment"
+        if row.semantic_key == "spell.banishment"
     )
     slow = next(
         row
@@ -559,6 +560,7 @@ def test_zone_and_removal_control_spells_expose_profiles() -> None:
         "dnd.spells.transmutation.SlowedEffect",
     })
 
+    reset_authored_encounter_state()
     zone_arena = assemble_authored_encounter("zone_control_web_gauntlet")
     mage = next(monster for monster in zone_arena.monsters if "Web Mage" in monster.name)
     mage.update_entity_senses(max_distance=80)
@@ -567,31 +569,22 @@ def test_zone_and_removal_control_spells_expose_profiles() -> None:
         mage.get_available_actions(),
         42,
     )
-    grease = next(
-        row
-        for row in zone_affordances.position_actions
-        if row.semantic_key == "dnd.spells.conjuration.Grease"
-    )
-    web = next(
-        row
-        for row in zone_affordances.position_actions
-        if row.semantic_key == "dnd.spells.conjuration.Web"
-    )
-    spike_growth = next(
-        row
-        for row in zone_affordances.position_actions
-        if row.semantic_key == "dnd.spells.transmutation.SpikeGrowth"
-    )
-    invisibility = next(
-        row
-        for row in zone_affordances.entity_actions
-        if row.semantic_key == "dnd.spells.illusion.Invisibility"
-    )
-
-    grease_semantics = zone_affordances.semantics_for(grease)
-    web_semantics = zone_affordances.semantics_for(web)
-    spike_semantics = zone_affordances.semantics_for(spike_growth)
-    invisibility_semantics = zone_affordances.semantics_for(invisibility)
+    # Free-aim regions keep their capability metadata even before a selected
+    # aim becomes an executable affordance row.
+    semantics = {}
+    for name, key in (
+        ("Grease", "dnd.spells.conjuration.Grease"),
+        ("Web", "dnd.spells.conjuration.Web"),
+        ("Spike Growth", "dnd.spells.transmutation.SpikeGrowth"),
+        ("Invisibility", "dnd.spells.illusion.Invisibility"),
+    ):
+        capability = next(capability for capability in zone_affordances.capabilities
+                          if capability.semantic_key == key)
+        semantics[name] = zone_affordances.semantic_catalog[capability.semantics_ref]
+    grease_semantics = semantics["Grease"]
+    web_semantics = semantics["Web"]
+    spike_semantics = semantics["Spike Growth"]
+    invisibility_semantics = semantics["Invisibility"]
 
     assert grease_semantics.semantic_id == "control.grease"
     assert grease_semantics.target_effects[0].condition_semantic_keys == frozenset({"dnd.conditions.Prone"})
@@ -827,11 +820,11 @@ def test_sorcerer_epoch_carries_metamagic_transforms_and_base_spell_levels() -> 
 
     quickened = next(
         row for row in affordances.self_actions
-        if row.semantic_key == "dnd.classes.sorcerer.QuickenedSpell"
+        if row.semantic_key == "action.class.sorcerer.quickened_spell"
     )
     twinned = next(
         row for row in affordances.self_actions
-        if row.semantic_key == "dnd.classes.sorcerer.TwinnedSpell"
+        if row.semantic_key == "action.class.sorcerer.twinned_spell"
     )
     assert affordances.semantics_for(quickened).capability_transformations
     assert affordances.semantics_for(twinned).capability_transformations
@@ -840,8 +833,8 @@ def test_sorcerer_epoch_carries_metamagic_transforms_and_base_spell_levels() -> 
         for capability in affordances.capabilities
         if capability.action_category == "spell"
     }
-    assert spell_levels["dnd.spells.evocation.FireBolt"] == 0
-    assert spell_levels["dnd.spells.evocation.MagicMissile"] == 1
+    assert spell_levels["spell.fire_bolt"] == 0
+    assert spell_levels["spell.magic_missile"] == 1
     unknown_capabilities = {
         capability.semantic_key
         for capability in affordances.capabilities
@@ -981,82 +974,8 @@ def test_srd_active_monster_actions_reach_setup_semantics() -> None:
     assert leadership_semantics.self_setup.maximum_duration_rounds == 10
 
 
-def test_aoe_discovery_reuses_preview_rows_for_upcast_variants(monkeypatch) -> None:
-    """Upcast AoE variants do not recompute identical shape previews per slot."""
-    arena = assemble_authored_encounter("high_level_spell_resource_duel")
-    archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
-    archmage.update_entity_senses(max_distance=20)
-    compute_calls: Counter[str] = Counter()
-    original = Entity._compute_aoe_at_position
-
-    def wrapped_compute(
-        self,
-        shape,
-        shape_definition_key,
-        position,
-        template,
-        *args,
-        **kwargs,
-    ):
-        compute_calls[template.get_discovery_template_name()] += 1
-        return original(
-            self,
-            shape,
-            shape_definition_key,
-            position,
-            template,
-            *args,
-            **kwargs,
-        )
-
-    monkeypatch.setattr(Entity, "_compute_aoe_at_position", wrapped_compute)
-    actions = archmage.get_available_actions()
-    fireball_actions = [
-        action
-        for action in actions.position_actions
-        if action.template_name.startswith("Fireball__slot_")
-    ]
-
-    assert [action.template_name for action in fireball_actions] == [
-        "Fireball__slot_3",
-        "Fireball__slot_4",
-        "Fireball__slot_5",
-    ]
-    assert len({len(action.valid_targets) for action in fireball_actions}) == 1
-    assert fireball_actions[0].valid_targets
-    assert compute_calls["Fireball__slot_3"] > 0
-    assert compute_calls["Fireball__slot_4"] == 0
-    assert compute_calls["Fireball__slot_5"] == 0
 
 
-def test_epoch_reuses_immutable_targets_shared_by_spell_variants() -> None:
-    """Flattened upcast rows retain one typed target value per engine preview."""
-    arena = assemble_authored_encounter("high_level_spell_resource_duel")
-    archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
-    archmage.update_entity_senses(max_distance=20)
-    affordances = _build_affordance_set_from_actions(
-        archmage,
-        archmage.get_available_actions(),
-        42,
-    )
-    fireball_rows = [
-        row
-        for row in affordances.position_actions
-        if row.template_name.startswith("Fireball__slot_")
-    ]
-    rows_by_variant: dict[str, dict[tuple[int, int], object]] = {}
-    for row in fireball_rows:
-        target = row.targets[0]
-        assert target.position is not None
-        rows_by_variant.setdefault(row.template_name, {})[target.position] = target
-
-    shared_position = next(iter(rows_by_variant["Fireball__slot_3"]))
-    assert rows_by_variant["Fireball__slot_3"][shared_position] is (
-        rows_by_variant["Fireball__slot_4"][shared_position]
-    )
-    assert rows_by_variant["Fireball__slot_4"][shared_position] is (
-        rows_by_variant["Fireball__slot_5"][shared_position]
-    )
 
 
 def test_multi_target_wire_round_trip_reuses_canonical_target_pool() -> None:
@@ -1089,276 +1008,66 @@ def test_multi_target_wire_round_trip_reuses_canonical_target_pool() -> None:
 
 
 
-def test_aoe_discovery_caches_empty_previews_for_upcast_variants(monkeypatch) -> None:
-    """Empty AoE previews are shared across slots and unchanged epochs."""
-    arena = assemble_authored_encounter("skeleton_anti_aoe_split")
-    warlock = next(monster for monster in arena.monsters if "Warlock" in monster.name)
-    warlock.update_entity_senses(max_distance=20)
-    compute_calls: Counter[str] = Counter()
-    original = Entity._compute_aoe_at_position
-
-    def wrapped_compute(
-        self,
-        shape,
-        shape_definition_key,
-        position,
-        template,
-        *args,
-        **kwargs,
-    ):
-        compute_calls[template.get_discovery_template_name()] += 1
-        return original(
-            self,
-            shape,
-            shape_definition_key,
-            position,
-            template,
-            *args,
-            **kwargs,
-        )
-
-    monkeypatch.setattr(Entity, "_compute_aoe_at_position", wrapped_compute)
-    first_actions = warlock.get_available_actions()
-    first_counts = compute_calls.copy()
-    second_actions = warlock.get_available_actions()
-
-    first_empty_aoes = [
-        action
-        for action in first_actions.position_actions
-        if action.template_name.startswith(("Burning Hands__slot_", "Thunderwave__slot_"))
-    ]
-    second_empty_aoes = [
-        action
-        for action in second_actions.position_actions
-        if action.template_name.startswith(("Burning Hands__slot_", "Thunderwave__slot_"))
-    ]
-    assert first_empty_aoes
-    assert second_empty_aoes
-    assert all(
-        action.availability_status is ActionAvailabilityStatus.NO_VALID_TARGETS
-        and not action.valid_targets
-        for action in (*first_empty_aoes, *second_empty_aoes)
-    )
-    assert not [
-        action
-        for action in warlock.get_available_actions(legal_only=True).position_actions
-        if action.template_name.startswith(("Burning Hands__slot_", "Thunderwave__slot_"))
-    ]
-    assert first_counts["Burning Hands__slot_1"] > 0
-    assert first_counts["Burning Hands__slot_2"] == 0
-    assert first_counts["Thunderwave__slot_1"] > 0
-    assert first_counts["Thunderwave__slot_2"] == 0
-    assert compute_calls == first_counts
 
 
-def test_aoe_discovery_cache_key_covers_complete_shape_definition() -> None:
-    """AoE previews with different cone angles cannot share cached targets."""
-    arena = assemble_authored_encounter("condition_lock_sanctum")
-    support = next(monster for monster in arena.monsters if "Support" in monster.name)
-    burning_hands = next(
-        action
-        for action in support.position_actions
-        if action.name == "Burning Hands"
-    )
-    assert isinstance(burning_hands.aoe_shape, Cone)
-    narrow = burning_hands.model_copy(
-        update={"aoe_shape": burning_hands.aoe_shape.model_copy(update={"angle_degrees": 30})}
-    )
-    wide = burning_hands.model_copy(
-        update={"aoe_shape": burning_hands.aoe_shape.model_copy(update={"angle_degrees": 90})}
-    )
-    valid_positions = [(10, 5), (10, 6)]
-    narrow_key = support._aoe_discovery_cache_key(
-        narrow,
-        valid_positions,
-        include_dead=False,
-        shape_definition_key=support._aoe_shape_definition_key(narrow.aoe_shape),
-    )
-    wide_key = support._aoe_discovery_cache_key(
-        wide,
-        valid_positions,
-        include_dead=False,
-        shape_definition_key=support._aoe_shape_definition_key(wide.aoe_shape),
-    )
-
-    assert narrow_key != wide_key
+def test_aoe_discovery_covers_complete_shape_definition() -> None:
+    """Distinct cone angles retain distinct actual cells, without cache keys."""
+    source, aim = (5, 5), (10, 5)
+    narrow = Cone(length_feet=30, angle_degrees=30)
+    wide = Cone(length_feet=30, angle_degrees=90)
+    narrow_cells = narrow.geometric_positions(aim, source)
+    wide_cells = wide.geometric_positions(aim, source)
+    assert narrow_cells < wide_cells
+    assert (9, 8) in wide_cells and (9, 8) not in narrow_cells
 
 
-def test_directional_aoe_footprint_keys_match_geometry_equivalence() -> None:
-    """Directional footprints share rays while centered shapes keep centers."""
-    source_uuid = uuid4()
-    caster_position = (5, 5)
-    cone = Cone(source_entity_uuid=source_uuid, target=(6, 6), length_feet=30)
-    line = Line(source_entity_uuid=source_uuid, target=(6, 6), length_feet=30)
-    directional_cube = Cube(
-        source_entity_uuid=source_uuid,
-        target=(6, 6),
-        size_feet=15,
-        centered=False,
-    )
-    sphere = Sphere(source_entity_uuid=source_uuid, target=(6, 6), radius_feet=20)
-    centered_cube = Cube(
-        source_entity_uuid=source_uuid,
-        target=(6, 6),
-        size_feet=15,
-        centered=True,
-    )
-
-    assert cone.footprint_target_key(caster_position) == cone.model_copy(
-        update={"target": (9, 9)}
-    ).footprint_target_key(caster_position)
-    assert line.footprint_target_key(caster_position) == line.model_copy(
-        update={"target": (8, 8)}
-    ).footprint_target_key(caster_position)
-    assert directional_cube.footprint_target_key(caster_position) == (
-        directional_cube.model_copy(update={"target": (12, 6)}).footprint_target_key(
-            caster_position
-        )
-    )
-    assert sphere.footprint_target_key(caster_position) != sphere.model_copy(
-        update={"target": (9, 9)}
-    ).footprint_target_key(caster_position)
-    assert centered_cube.footprint_target_key(caster_position) != (
-        centered_cube.model_copy(update={"target": (9, 9)}).footprint_target_key(
-            caster_position
-        )
-    )
+def test_directional_aoe_footprints_match_geometry_equivalence() -> None:
+    """Directional shapes follow rays while centered shapes follow their aim."""
+    source = (5, 5)
+    for shape in (Cone(length_feet=30), Line(length_feet=30),
+                  Cube(size_feet=15, centered=False)):
+        assert shape.geometric_positions((6, 6), source) == shape.geometric_positions((9, 9), source)
+    for shape in (Sphere(radius_feet=20), Cube(size_feet=15, centered=True)):
+        assert shape.geometric_positions((6, 6), source) != shape.geometric_positions((9, 9), source)
 
 
-def test_aoe_occupancy_resolution_uses_only_subjective_entity_positions(
-    monkeypatch,
-) -> None:
-    """Preview occupancy never consults objective grid entity placement."""
+def test_aoe_occupancy_resolution_uses_only_subjective_entity_positions(monkeypatch) -> None:
+    """A selected preview reads perceived contacts rather than objective occupancy."""
     arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
-    visible_uuid, visible_position = next(iter(archmage.senses.entities.items()))
-    shape = Sphere(
-        source_entity_uuid=archmage.uuid,
-        target=visible_position,
-        radius_feet=20,
-    )
-    shape.computed_origin = visible_position
-    shape.affected_positions = {visible_position, archmage.position}
-
+    contact = next(iter(archmage.senses.entities.values()))
+    actions = archmage.get_available_actions(include_aoe_preview=False)
+    fireball = next(row for row in actions.position_actions if row.base_template_name == "Fireball")
+    aim = free_aim_target(fireball, contact.position)
     def reject_objective_lookup(_position):
         raise AssertionError("subjective preview consulted objective occupancy")
-
     monkeypatch.setattr(get_map(), "get_entities_at", reject_objective_lookup)
-    shape._resolve_subjective_entities(
-        archmage.position,
-        archmage.senses,
-        archmage.uuid,
-    )
-
-    assert shape.affected_entity_uuids == {visible_uuid, archmage.uuid}
+    preview = preview_available_selection(archmage, fireball, (aim,))
+    assert preview.can_confirm
+    assert set(preview.affected_entity_uuids) <= set(archmage.senses.entities) | {archmage.uuid}
+    assert preview.affected_entity_uuids
 
 
-def test_aoe_discovery_reuses_footprints_until_subjective_topology_changes(
-    monkeypatch,
-) -> None:
-    """Repeated discovery reuses pure footprints and invalidates on blockers."""
+
+
+
+
+def test_move_discovery_preserves_subjective_paths_and_budget() -> None:
+    """Repeated discovery preserves paths; spending movement bounds its choices."""
     arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
-    compute_calls = 0
-    original_compute = Entity._compute_aoe_propagation_footprint
-
-    def track_compute(self, *args, **kwargs):
-        nonlocal compute_calls
-        compute_calls += 1
-        return original_compute(self, *args, **kwargs)
-
-    monkeypatch.setattr(Entity, "_compute_aoe_propagation_footprint", track_compute)
-    archmage.get_available_actions()
-    first_compute_calls = compute_calls
-    archmage.get_available_actions()
-
-    assert first_compute_calls > 0
-    assert compute_calls == first_compute_calls
-
-    wall = BaseItem(
-        source_entity_uuid=archmage.uuid,
-        name="AoE Preview Cache Wall",
-        is_pickable=False,
-        blocks_vision_field=True,
-    )
-    get_map().place_object(wall.uuid, (7, 7))
-    archmage.get_available_actions()
-
-    assert compute_calls > first_compute_calls
-
-
-def test_aoe_discovery_reuses_previews_until_subjective_contacts_change(
-    monkeypatch,
-) -> None:
-    """Repeated discovery caches previews against subjective contact facts."""
-    arena = assemble_authored_encounter("high_level_spell_resource_duel")
-    archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
-    archmage.update_entity_senses(max_distance=20)
-    compute_calls = 0
-    original_compute = Entity._compute_aoe_at_position
-
-    def track_compute(self, *args, **kwargs):
-        nonlocal compute_calls
-        compute_calls += 1
-        return original_compute(self, *args, **kwargs)
-
-    monkeypatch.setattr(Entity, "_compute_aoe_at_position", track_compute)
-    archmage.get_available_actions()
-    first_compute_calls = compute_calls
-    archmage.get_available_actions()
-
-    assert first_compute_calls > 0
-    assert compute_calls == first_compute_calls
-
-    contact_uuid, old_position = next(iter(archmage.senses.entities.items()))
-    visible_positions = [
-        position
-        for position, is_visible in ((position, True) for position in mask_positions(capture_senses_snapshot(archmage.senses).visible))
-        if is_visible and position != old_position
-    ]
-    archmage.senses.entities[contact_uuid] = visible_positions[0]
-    archmage.get_available_actions()
-
-    assert compute_calls > first_compute_calls
-
-
-def test_move_discovery_reuses_subjective_path_projection(monkeypatch) -> None:
-    """Movement rows reuse projected paths and costs without rescanning paths."""
-    arena = assemble_authored_encounter("high_level_spell_resource_duel")
-    archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
-    archmage.update_entity_senses(max_distance=20)
-    path_cost_calls = 0
-    original_cost = Entity.movement_path_cost_feet
-
-    def track_cost(self, *args, **kwargs):
-        nonlocal path_cost_calls
-        path_cost_calls += 1
-        return original_cost(self, *args, **kwargs)
-
-    monkeypatch.setattr(Entity, "movement_path_cost_feet", track_cost)
-    first_actions = archmage.get_available_actions()
-    first_path_cost_calls = path_cost_calls
-    second_actions = archmage.get_available_actions()
-
-    assert first_path_cost_calls == 0
-    assert path_cost_calls == 0
-    first_move = next(
-        action for action in first_actions.position_actions
-        if action.template_name == "Move"
-    )
-    second_move = next(
-        action for action in second_actions.position_actions
-        if action.template_name == "Move"
-    )
-    assert first_move.valid_targets == second_move.valid_targets
+    first = next(row for row in archmage.get_available_actions().position_actions if row.template_name == "Move")
+    second = next(row for row in archmage.get_available_actions().position_actions if row.template_name == "Move")
+    assert first.valid_targets == second.valid_targets
     assert route_count(archmage.senses.paths)
-
-    remaining_movement = archmage.action_economy.movement_remaining()
-    archmage._collect_path_actions(remaining_movement - 5)
-
-    assert path_cost_calls == 0
+    archmage.action_economy.consume("movement", 5)
+    remaining = archmage.action_economy.movement_remaining()
+    reduced = next(row for row in archmage.get_available_actions().position_actions if row.template_name == "Move")
+    assert reduced.valid_targets
+    assert all(target.path_cost is not None and target.path_cost <= remaining for target in reduced.valid_targets)
+    assert {target.position for target in reduced.valid_targets} <= {target.position for target in first.valid_targets}
 
 
 def test_position_spell_rows_preserve_variants_costs_and_semantics() -> None:
@@ -1375,15 +1084,13 @@ def test_position_spell_rows_preserve_variants_costs_and_semantics() -> None:
     ]
     dimension_door_rows = [
         row
-        for row in actions.position_actions
+        for row in actions.entity_actions
         if row.template_name.startswith("Dimension Door")
     ]
 
     assert [row.template_name for row in cloudkill_rows] == ["Cloudkill__slot_5"]
-    assert [row.template_name for row in dimension_door_rows] == [
-        "Dimension Door__slot_4",
-        "Dimension Door__slot_5",
-    ]
+    assert [row.template_name for row in dimension_door_rows] == ["Dimension Door__slot_4"]
+    assert dimension_door_rows[0].cast_levels == (4, 5)
     assert all(row.action_category.value == "spell" for row in cloudkill_rows)
     assert all(row.action_category.value == "spell" for row in dimension_door_rows)
     assert any(cost.cost_type == "spell_slot_5" for cost in cloudkill_rows[0].costs)
@@ -1392,7 +1099,7 @@ def test_position_spell_rows_preserve_variants_costs_and_semantics() -> None:
     affordances = _build_affordance_set_from_actions(archmage, actions, 42)
     dimension_door = next(
         row
-        for row in affordances.position_actions
+        for row in affordances.entity_actions
         if row.template_name == "Dimension Door__slot_4"
     )
     dimension_semantics = affordances.semantics_for(dimension_door)
@@ -1414,13 +1121,9 @@ def test_teleport_escape_rows_expose_mobility_semantics() -> None:
         mage.get_available_actions(),
         42,
     )
-    misty_step = next(
-        row
-        for row in affordances.position_actions
-        if row.semantic_key == "dnd.spells.conjuration.MistyStep"
-    )
-    semantics = affordances.semantics_for(misty_step)
-
+    misty_step = next(capability for capability in affordances.capabilities
+                      if capability.semantic_key == "dnd.spells.conjuration.MistyStep")
+    semantics = affordances.semantic_catalog[misty_step.semantics_ref]
     assert semantics.semantic_id == "movement.teleport.misty_step"
     assert ActionTag.MOVEMENT_TELEPORT in semantics.tags
     assert semantics.spatial is not None
@@ -1429,23 +1132,19 @@ def test_teleport_escape_rows_expose_mobility_semantics() -> None:
 
 
 def test_position_spell_discovery_does_not_leak_unseen_occupancy() -> None:
-    """A hidden occupant cannot remove a subjectively valid destination row."""
+    """Dimension Door keeps unseen occupied destinations in its selection region."""
     arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
+    hidden = arena.hero
+    hidden.set_stealth_dc(100)
     archmage.update_entity_senses(max_distance=20)
-    hidden_entity = arena.hero
-    hidden_position = hidden_entity.position
-
-    assert hidden_entity.uuid in archmage.senses.entities
-    archmage.senses.entities.pop(hidden_entity.uuid)
+    assert hidden.uuid not in archmage.senses.entities
     actions = archmage.get_available_actions()
-    dimension_door = next(
-        row
-        for row in actions.position_actions
-        if row.template_name == "Dimension Door__slot_4"
-    )
-
-    assert any(target.position == hidden_position for target in dimension_door.valid_targets)
+    door = next(row for row in actions.entity_actions if row.base_template_name == "Dimension Door")
+    alone = next(target for target in door.valid_targets if target.target_uuid == archmage.uuid)
+    preview = preview_available_selection(archmage, door, (alone,))
+    assert preview.next_positions is not None
+    assert hidden.position in preview.next_positions
 
 
 def test_visible_position_spell_targets_are_not_limited_to_walkable_paths() -> None:
@@ -1464,11 +1163,12 @@ def test_visible_position_spell_targets_are_not_limited_to_walkable_paths() -> N
         if row.template_name == "Web__slot_2"
     )
 
-    assert occupied_positions <= {
-        target.position
-        for target in web.valid_targets
-        if target.position is not None
-    }
+    assert web.position_region is not None
+    for position in occupied_positions:
+        aim = free_aim_target(web, position)
+        preview = preview_available_selection(mage, web, (aim,))
+        assert preview.can_confirm
+        assert aim.position == position
 
 
 def test_position_spell_variants_reuse_subjective_target_projection(

@@ -112,6 +112,9 @@ def test_custom_condition_applies_and_cleans_up_owned_modifiers(capsys) -> None:
     assert "Field Focus" in hero.active_conditions
     assert hero.action_economy.movement_remaining() == base_movement + 10
     assert hero.ac_bonus().normalized_score == base_ac + 1
+    assert set(condition.modifers_uuids) == {
+        *(speed.uuid for speed in hero.action_economy.speed_values), hero.equipment.ac_bonus.uuid,
+    }
     assert condition.modifers_uuids
 
     active_before_cleanup = "Field Focus" in hero.active_conditions
@@ -140,7 +143,7 @@ def test_custom_condition_applies_and_cleans_up_owned_modifiers(capsys) -> None:
         ),
     ]
     expected_lines = [
-        "apply event: phase=completion, active=True, modifiers=2",
+        "apply event: phase=completion, active=True, modifiers=3",
         "bonuses active: movement=30->40, ac=15->16",
         "after cleanup: active=False, movement=30, ac=15",
     ]

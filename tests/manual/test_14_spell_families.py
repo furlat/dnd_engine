@@ -13,6 +13,7 @@ from dnd.core.base_actions import TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
+from dnd.core.combat_log import ConditionRemovedLogData, ModifierBreakdown
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import (
     DamageAppliedEvent,
@@ -158,9 +159,9 @@ def test_ranged_spell_attacks_are_disadvantaged_while_threatened() -> None:
     assert event.dice_roll.advantage_status is AdvantageStatus.DISADVANTAGE
 
     combat_log = event.generate_combat_log()
-    assert combat_log.data["is_threatened"] is True
-    assert combat_log.data["advantage_breakdown"] == [
-        {"name": "Threatened (Ranged)", "value": -1, "source": "self"}
+    assert combat_log.data.is_threatened is True
+    assert combat_log.data.advantage_breakdown == [
+        ModifierBreakdown(name="Threatened (Ranged)", value=-1, source="self")
     ]
 
 
@@ -270,7 +271,7 @@ def test_first_spell_family_example_prints_catalog_and_outcomes(capsys) -> None:
             "sacred flame: save=dexterity, success=False, "
             "damage=[4, 5]->9, hp=29->20"
         ),
-        "magic missile: targets=3, total_damage=12, hp=20->8, slot=1->0",
+        "magic missile: targets=3, total_damage=9, hp=20->11, slot=1->0",
     ]
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
@@ -434,8 +435,8 @@ def test_offensive_spell_families_cover_attack_save_and_auto_hit_damage(capsys) 
 
     missile_event = assert_completed_spell(missile_event)
     assert missile_event.total_targets == 3
-    assert missile_event.total_damage == 12
-    assert target.get_hp() == hp_before - 12
+    assert missile_event.total_damage == 9
+    assert target.get_hp() == hp_before - 9
     assert caster.action_economy.spell_slot_1.normalized_score == 0
     readout_lines.append(
         (
@@ -455,7 +456,7 @@ def test_offensive_spell_families_cover_attack_save_and_auto_hit_damage(capsys) 
             "sacred flame: save=dexterity, success=False, "
             "damage=[4, 5]->9, hp=29->20"
         ),
-        "magic missile: targets=3, total_damage=12, hp=20->8, slot=1->0",
+        "magic missile: targets=3, total_damage=9, hp=20->11, slot=1->0",
     ]
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
@@ -946,7 +947,8 @@ def test_damage_applied_event_is_post_mitigation_and_drives_damage_consequences(
             yield from iter_log_tree(child)
 
     assert any(
-        entry.data.get("condition_name") == "Hypnotic Pattern"
+        isinstance(entry.data, ConditionRemovedLogData)
+        and entry.data.condition_name == "Hypnotic Pattern"
         for entry in iter_log_tree(damage_completion.combat_log)
     )
 

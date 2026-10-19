@@ -197,6 +197,9 @@ def test_dashing_and_dodging_apply_and_clean_their_exact_modifiers() -> None:
     apply_to_target(Dashing, source, target)
     assert target.action_economy.movement_remaining() == base_speed * 2
     target.remove_condition("Dashing")
+    # Dash credit belongs to the turn even after its marker is removed.
+    assert target.action_economy.movement_remaining() == base_speed * 2
+    target.action_economy.reset_all_costs()
     assert target.action_economy.movement_remaining() == base_speed
 
     apply_to_target(Dodging, source, target)

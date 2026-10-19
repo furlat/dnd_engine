@@ -570,6 +570,7 @@ class WetSurface(WetAreaCondition):
     """Persistent water surface with exact source-owned Wet membership."""
 
     name: str = Field(default="Wet Surface")
+    description: str = Field(default="Water makes creatures standing in it Wet.")
     has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=WET_SURFACE_CONTENT_REF)
     layer: SpatialEffectLayer = Field(
@@ -602,6 +603,7 @@ class IceSurface(AreaCondition):
     creates = (Prone,)
 
     name: str = Field(default="Ice Surface")
+    description: str = Field(default="Difficult terrain; creatures must make a Dexterity save or fall Prone.")
     has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=ICE_SURFACE_CONTENT_REF)
     layer: SpatialEffectLayer = Field(
@@ -724,6 +726,7 @@ class ElectrifiedWater(WetAreaCondition):
     """Wet ground carrying first-per-turn lightning damage."""
 
     name: str = Field(default="Electrified Water")
+    description: str = Field(default="Electrified water makes creatures Wet and deals lightning damage.")
     has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=ELECTRIFIED_WATER_CONTENT_REF)
     layer: SpatialEffectLayer = Field(
@@ -849,6 +852,7 @@ class SteamCloud(WetAreaCondition):
     """Short-lived wet, heavily obscuring cloud."""
 
     name: str = Field(default="Steam Cloud")
+    description: str = Field(default="Steam makes creatures Wet and heavily obscures the area.")
     has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=STEAM_CLOUD_CONTENT_REF)
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.CLOUD)

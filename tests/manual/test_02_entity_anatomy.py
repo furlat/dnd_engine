@@ -15,6 +15,7 @@ from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
+from tests.manual.runtime_fixture_support import compose_and_deploy
 
 
 def reset_entity_anatomy_state() -> None:
@@ -91,8 +92,10 @@ def test_first_actor_example_prints_runtime_shape(capsys) -> None:
     """The first actor example prints the runtime shape it creates."""
     reset_entity_anatomy_state()
 
+    get_map().create_rectangle(0, 0, 3, 4)
+
     hero_id = uuid4()
-    hero = Entity.create(
+    hero = compose_and_deploy(Entity.create(
         source_entity_uuid=hero_id,
         name="Aria",
         config=EntityConfig(
@@ -114,7 +117,7 @@ def test_first_actor_example_prints_runtime_shape(capsys) -> None:
             faction="heroes",
             weight=180,
         ),
-    )
+    ))
 
     readout_lines = [
         f"created actor: {hero.name}",

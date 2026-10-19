@@ -8,6 +8,7 @@ from devtools.generate_event_contract import import_dnd_modules
 
 
 from dnd.actions import SpellAction
+from dnd.content_system.builtin_inventory import BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS
 from dnd.core.base_actions import BaseAction
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.runtime import RuntimeBehaviorKind
@@ -44,14 +45,18 @@ def _concrete_action_types(
 
 
 def test_active_action_inventory_is_exact_and_fully_declared() -> None:
-    """Only three composition bases remain non-authored runtime mechanisms."""
+    """The live generic catalog declares actions; direct class grants stay outside it."""
     import_dnd_modules()
     descendants = _active_descendants(BaseAction)
     assert EXPECTED_ABSTRACT_ACTION_MECHANISMS <= descendants
 
-    concrete = _concrete_action_types(descendants)
+    concrete = _concrete_action_types(
+        action_type for action_type in BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS
+        if issubclass(action_type, BaseAction)
+    )
+    assert set(concrete) <= descendants
     declarations = tuple(
-        get_content_declaration(action_type)
+        BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS[action_type]
         for action_type in concrete
     )
 

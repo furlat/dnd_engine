@@ -1,20 +1,16 @@
 # Paused server tests
 
-This lane holds only the catalog cold-start probe, split from the active
-architecture test. It is not a native engine test. The persistent-character
+This lane has no executable tests. Its final catalog cold-start probe was
+removed on 2026-10-19 because `server.spell_catalog` and its obsolete server
+package have been retired. The active native-and-extension cold-start contract is
+covered by `tests/architecture/test_spell_catalog_composition.py`, which
+checks native Fire Bolt and extension Aegis Spark through the current content
+bootstrap in a fresh process.
+
+The persistent-character
 equipment-mutation and scenario-deployment files were deleted on 2026-10-17:
 their server character directory, game directory and character-build modules
 no longer exist (see `agent_docs/STALE_TEST_REPAIR_2026-10-17.md`).
-
-Run explicitly with the project environment:
-
-```sh
-python -m pytest tests/paused_server
-```
-
-Known blocker: the probe's subprocess imports `server.spell_catalog`, which now
-exists only under `server_obsolete/`. No skip, xfail or automatic collection
-filter hides this failure. `pytest tests` still includes this lane.
 
 Active acceptance commands:
 

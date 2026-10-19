@@ -959,6 +959,9 @@ class AffordanceSet(ControlModel):
             strict=True,
         ):
             source_payload.pop("target_options", None)
+            if source.position_selection is not None:
+                # A union discriminator is required on the wire even when it is a default.
+                source_payload["position_selection"]["kind"] = source.position_selection.kind
             source_target_indices = [
                 register_target(target)
                 for target in source.target_options

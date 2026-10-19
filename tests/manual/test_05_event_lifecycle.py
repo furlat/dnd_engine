@@ -3,7 +3,7 @@
 from uuid import uuid4
 
 from dnd.core.base_object import BaseObject
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 
 
@@ -30,6 +30,14 @@ class TutorialLogEvent(Event):
             compact=f"{self.source_entity_name or 'Unknown'} resolves {self.name}",
             verbose=f"{self.source_entity_name or 'Unknown'} resolves {self.name}",
             detailed=f"{self.source_entity_name or 'Unknown'} resolves {self.name}",
+            data=ActionLogData(
+                entity_name=self.source_entity_name or "Unknown",
+                entity_uuid=str(self.source_entity_uuid),
+                action_name=self.name,
+                effect_description=f"Resolve {self.name}",
+                target_name=self.target_entity_name,
+                target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else None,
+            ),
             success=not self.canceled,
         )
 

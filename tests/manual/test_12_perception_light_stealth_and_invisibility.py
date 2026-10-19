@@ -13,6 +13,7 @@ from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.events import (
+    Event,
     EventPhase,
     EventQueue,
     EventType,
@@ -26,8 +27,12 @@ from tests.manual.authored_encounter_support import (
     assemble_authored_encounter,
 )
 from dnd.types.cells import cell_in, no_cells
-from dnd.core.cells import mask_positions
+from dnd.core.cells import mask_positions, values_items
 from dnd.core.navigation import has_route
+from tests.manual.runtime_fixture_support import compose_and_deploy
+from dnd.runtime_reset import reset_engine_runtime
+from dnd.core.aoe import Sphere
+from dnd.spells.conjuration import DarknessZone
 
 
 def reset_perception_tutorial_state(
@@ -36,18 +41,8 @@ def reset_perception_tutorial_state(
     default_light: LightLevel = LightLevel.BRIGHT_LIGHT,
 ) -> None:
     """Clear global state and create a tutorial grid with one light level."""
-    EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    ModifiableValue._registry.clear()
-    Entity._entity_registry.clear()
-    GridMap.reset()
-    grid = get_map()
-    grid.create_rectangle(0, 0, width, height)
-    for tile in grid.get_all_tiles().values():
-        tile.default_light = default_light
+    reset_engine_runtime()
+    get_map().create_rectangle(0, 0, width, height, default_light=default_light)
 
 
 def create_perception_actor(
@@ -79,7 +74,7 @@ def create_perception_actor(
         position=position,
         faction=faction,
     )
-    return Entity.create(source_entity_uuid=actor_id, name=name, config=config)
+    return compose_and_deploy(Entity.create(source_entity_uuid=actor_id, name=name, config=config))
 
 
 def completed_sensory_updates(observer) -> list[SensoryUpdateEvent]:
@@ -116,9 +111,10 @@ def test_sensory_delta_is_one_completed_observational_event() -> None:
         event for event in sensory_events if event.observer_uuid == observer.uuid
     )
     assert observer_update.observer_position == observer.position
-    assert observer_update.effective_light_levels == (
-        observer.senses.get_effective_light_levels(observer.uuid)
-    )
+    changed_light = dict(values_items(observer_update.effective_light_levels_changed))
+    assert changed_light
+    levels = observer.senses.get_effective_light_levels(observer.uuid)
+    assert all(levels[f"{x},{y}"] == level for (x, y), level in changed_light.items())
 
 
 def test_light_change_emits_subjective_levels_without_visibility_membership_delta() -> None:
@@ -141,13 +137,16 @@ def test_light_change_emits_subjective_levels_without_visibility_membership_delt
     assert updates
     assert no_cells(updates[-1].visible_cells_added)
     assert no_cells(updates[-1].visible_cells_removed)
-    assert updates[-1].effective_light_levels == (
-        observer.senses.get_effective_light_levels(observer.uuid)
-    )
+    changed_light = dict(values_items(updates[-1].effective_light_levels_changed))
+    assert changed_light
+    levels = observer.senses.get_effective_light_levels(observer.uuid)
+    assert all(levels[f"{x},{y}"] == level for (x, y), level in changed_light.items())
+    assert changed_light[(2, 0)] == LightLevel.BRIGHT_LIGHT.value
 
 
 def test_movement_end_preserves_contacts_revealed_by_carried_light() -> None:
     """A movement-end refresh does not reuse visibility from before light moved."""
+    reset_engine_runtime()
     arena = assemble_authored_encounter("standard_skeleton_doors")
     observer = arena.hero
     updates_before = len(completed_sensory_updates(observer))
@@ -173,12 +172,12 @@ def test_movement_end_preserves_contacts_revealed_by_carried_light() -> None:
     added_contacts = {
         entity_uuid
         for update in movement_updates
-        for entity_uuid in update.visible_entities_added
+        for entity_uuid in update.entity_contacts_changed
     }
     removed_contacts = {
         entity_uuid
         for update in movement_updates
-        for entity_uuid in update.visible_entities_removed
+        for entity_uuid in update.entity_contacts_removed
     }
     expected_visible = {entity.uuid for entity in arena.monsters[1:]}
     warm_entities = dict(observer.senses.entities)
@@ -225,7 +224,7 @@ def test_first_perception_example_prints_visible_observer_knowledge(capsys) -> N
             cell_in(event.visible_cells_added, (3, 0)) for event in light_updates
         ),
         "update_target": any(
-            target.uuid in event.visible_entities_added for event in light_updates
+            target.uuid in event.entity_contacts_changed for event in light_updates
         ),
     }
     readout_lines = [
@@ -247,7 +246,7 @@ def test_first_perception_example_prints_visible_observer_knowledge(capsys) -> N
     expected_lines = [
         "observer: Observer",
         "target cell subscribed: True",
-        "adjacent visible in darkness: True",
+        "adjacent visible in darkness: False",
         "target cell visible before light: False",
         "target visible before light: False",
         "target cell seen before light: False",
@@ -271,12 +270,12 @@ def test_senses_subscribe_to_geometric_fov_before_light_filtering(capsys) -> Non
 
     assert observer.uuid in spatial_senses_system.observers_granted({(3, 0)})
     assert not cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))
-    assert cell_in(capture_senses_snapshot(observer.senses).visible, (1, 0))
+    assert not cell_in(capture_senses_snapshot(observer.senses).visible, (1, 0))
     assert target.uuid not in observer.senses.entities
     assert not cell_in(capture_senses_snapshot(observer.senses).seen, (3, 0))
 
     geometry_lines = [
-        f"subscribed target cell: {(3, 0) in subscriptions}",
+        f"subscribed target cell: {observer.uuid in spatial_senses_system.observers_granted({(3, 0)})}",
         f"visible adjacent cell: {cell_in(capture_senses_snapshot(observer.senses).visible, (1, 0))}",
         f"visible target cell: {cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0))}",
         f"target in visible entities: {target.uuid in observer.senses.entities}",
@@ -287,7 +286,7 @@ def test_senses_subscribe_to_geometric_fov_before_light_filtering(capsys) -> Non
 
     expected_geometry_lines = [
         "subscribed target cell: True",
-        "visible adjacent cell: True",
+        "visible adjacent cell: False",
         "visible target cell: False",
         "target in visible entities: False",
         "target cell remembered: False",
@@ -296,81 +295,52 @@ def test_senses_subscribe_to_geometric_fov_before_light_filtering(capsys) -> Non
     assert capsys.readouterr().out.splitlines() == expected_geometry_lines
 
 
-def test_shadowcast_memoizes_blocking_checks_within_one_fov_query(monkeypatch) -> None:
-    """One FOV query resolves each observer-specific blocking cell once."""
-    reset_perception_tutorial_state(width=20, height=20)
-    grid = get_map()
-    original_is_blocking = grid.is_blocking
-    checked_positions: list[tuple[int, int]] = []
-
-    def record_is_blocking(x: int, y: int, requesting_entity_uuid=None) -> bool:
-        checked_positions.append((x, y))
-        return original_is_blocking(x, y, requesting_entity_uuid)
-
-    monkeypatch.setattr(grid, "is_blocking", record_is_blocking)
-
-    visible = grid.compute_fov((10, 10), max_distance=8)
-
-    assert visible
-    assert len(checked_positions) == len(set(checked_positions))
-    assert all(
-        max(abs(x - 10), abs(y - 10)) <= 8
-        for x, y in checked_positions
-    )
-
-
 def test_special_senses_change_subjective_light(capsys) -> None:
     """Darkvision, Devil's Sight, and truesight alter effective light differently."""
     reset_perception_tutorial_state(width=16, height=1)
     observer = create_perception_actor("Observer", position=(0, 0))
     grid = get_map()
-    far_dark = grid.get_tile(15, 0)
-    near_dark = grid.get_tile(10, 0)
-    dim = grid.get_tile(5, 0)
-    magical = grid.get_tile(2, 0)
-    assert far_dark is not None
-    assert near_dark is not None
-    assert dim is not None
-    assert magical is not None
-    far_dark.default_light = LightLevel.DARKNESS
-    near_dark.default_light = LightLevel.DARKNESS
-    dim.default_light = LightLevel.DIM_LIGHT
-    magical.add_obscurement(uuid4(), LightLevel.MAGICAL_DARKNESS, fire_event=False)
-
+    grid.set_tile_base_light((15, 0), LightLevel.DARKNESS)
+    grid.set_tile_base_light((10, 0), LightLevel.DARKNESS)
+    grid.set_tile_base_light((5, 0), LightLevel.DIM_LIGHT)
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
     ]
+    observer.update_entity_senses(max_distance=20)
+    levels = observer.senses.get_effective_light_levels(observer.uuid)
+    assert "15,0" not in levels  # Darkness beyond the sense's sixty-foot range.
+    assert levels["10,0"] == LightLevel.DIM_LIGHT.value
+    assert levels["5,0"] == LightLevel.BRIGHT_LIGHT.value
 
-    assert far_dark.get_effective_light_for(observer.uuid, (0, 0)) == LightLevel.DARKNESS
-    assert near_dark.get_effective_light_for(observer.uuid, (0, 0)) == LightLevel.DIM_LIGHT
-    assert dim.get_effective_light_for(observer.uuid, (0, 0)) == LightLevel.BRIGHT_LIGHT
-    assert magical.get_effective_light_for(observer.uuid, (0, 0)) == LightLevel.MAGICAL_DARKNESS
-    darkvision_state = (
-        far_dark.get_effective_light_for(observer.uuid, (0, 0)),
-        near_dark.get_effective_light_for(observer.uuid, (0, 0)),
-        dim.get_effective_light_for(observer.uuid, (0, 0)),
-        magical.get_effective_light_for(observer.uuid, (0, 0)),
-    )
+    # Add the optical zone after checking ordinary light: it blocks the route
+    # down this single-row arena for senses that cannot pierce magical darkness.
+    zone = DarknessZone(source_entity_uuid=observer.uuid, position=(2, 0),
+                        area=Sphere(radius_feet=0))
+    zone.activate(parent_event=Event(name="Tutorial darkness", event_type=EventType.BASE_ACTION, source_entity_uuid=observer.uuid))
+    observer.update_entity_senses(max_distance=20)
+    assert "2,0" not in observer.senses.get_effective_light_levels(observer.uuid)
+    darkvision_state = ("15,0" in levels, LightLevel(levels["10,0"]),
+                        LightLevel(levels["5,0"]),
+                        "2,0" in observer.senses.get_effective_light_levels(observer.uuid))
 
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.DEVILS_SIGHT, range_feet=120)
     ]
-
-    assert magical.get_effective_light_for(observer.uuid, (0, 0)) == LightLevel.BRIGHT_LIGHT
-    devils_sight_state = magical.get_effective_light_for(observer.uuid, (0, 0))
-
+    observer.update_entity_senses(max_distance=20)
+    devils_sight_state = LightLevel(observer.senses.get_effective_light_levels(observer.uuid)["2,0"])
+    assert devils_sight_state is LightLevel.BRIGHT_LIGHT
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=60)
     ]
-
-    assert magical.get_effective_light_for(observer.uuid, (0, 0)) == LightLevel.BRIGHT_LIGHT
-    truesight_state = magical.get_effective_light_for(observer.uuid, (0, 0))
+    observer.update_entity_senses(max_distance=20)
+    truesight_state = LightLevel(observer.senses.get_effective_light_levels(observer.uuid)["2,0"])
+    assert truesight_state is LightLevel.BRIGHT_LIGHT
 
     special_lines = [
-        f"darkvision far darkness: {darkvision_state[0].name}",
+        f"darkvision far darkness visible: {darkvision_state[0]}",
         f"darkvision near darkness: {darkvision_state[1].name}",
         f"darkvision dim light: {darkvision_state[2].name}",
-        f"darkvision magical darkness: {darkvision_state[3].name}",
+        f"darkvision magical darkness visible: {darkvision_state[3]}",
         f"devil's sight magical darkness: {devils_sight_state.name}",
         f"truesight magical darkness: {truesight_state.name}",
     ]
@@ -378,10 +348,10 @@ def test_special_senses_change_subjective_light(capsys) -> None:
     print("\n".join(special_lines))
 
     expected_special_lines = [
-        "darkvision far darkness: DARKNESS",
+        "darkvision far darkness visible: False",
         "darkvision near darkness: DIM_LIGHT",
         "darkvision dim light: BRIGHT_LIGHT",
-        "darkvision magical darkness: MAGICAL_DARKNESS",
+        "darkvision magical darkness visible: False",
         "devil's sight magical darkness: BRIGHT_LIGHT",
         "truesight magical darkness: BRIGHT_LIGHT",
     ]
@@ -416,7 +386,7 @@ def test_light_changes_reveal_subscribed_cells_reactively(capsys) -> None:
     ]
     assert light_updates
     assert any(cell_in(event.visible_cells_added, (3, 0)) for event in light_updates)
-    assert any(target.uuid in event.visible_entities_added for event in light_updates)
+    assert any(target.uuid in event.entity_contacts_changed for event in light_updates)
     after = {
         "target_visible": target.uuid in observer.senses.entities,
         "cell_visible": cell_in(capture_senses_snapshot(observer.senses).visible, (3, 0)),
@@ -425,7 +395,7 @@ def test_light_changes_reveal_subscribed_cells_reactively(capsys) -> None:
             cell_in(event.visible_cells_added, (3, 0)) for event in light_updates
         ),
         "added_target": any(
-            target.uuid in event.visible_entities_added for event in light_updates
+            target.uuid in event.entity_contacts_changed for event in light_updates
         ),
         "update_count": len(light_updates),
     }
@@ -481,41 +451,41 @@ def test_stealth_and_invisibility_filter_perceivable_entities(capsys) -> None:
 
     target.set_stealth_dc(observer.get_passive_perception() + 1)
 
-    assert not target.is_perceivable_by(observer.uuid)
+    assert not (target.uuid in observer.senses.entities)
     assert target.uuid not in observer.senses.entities
     assert any(
-        target.uuid in event.visible_entities_removed
+        target.uuid in event.entity_contacts_removed
         for event in completed_sensory_updates(observer)
     )
     hidden_state = (
         target.stealth_dc,
-        target.is_perceivable_by(observer.uuid),
+        (target.uuid in observer.senses.entities),
         target.uuid in observer.senses.entities,
         any(
-            target.uuid in event.visible_entities_removed
+            target.uuid in event.entity_contacts_removed
             for event in completed_sensory_updates(observer)
         ),
     )
 
     target.set_stealth_dc(1)
 
-    assert target.is_perceivable_by(observer.uuid)
+    assert (target.uuid in observer.senses.entities)
     assert target.uuid in observer.senses.entities
     revealed_state = (
         target.stealth_dc,
-        target.is_perceivable_by(observer.uuid),
+        (target.uuid in observer.senses.entities),
         target.uuid in observer.senses.entities,
     )
 
     target.set_invisible(True)
 
-    assert not target.is_perceivable_by(observer.uuid)
-    assert target.is_perceivable_by(truesight.uuid)
+    assert not (target.uuid in observer.senses.entities)
+    assert (target.uuid in truesight.senses.entities)
     assert target.uuid not in observer.senses.entities
     assert target.uuid in truesight.senses.entities
     invisible_state = (
-        target.is_perceivable_by(observer.uuid),
-        target.is_perceivable_by(truesight.uuid),
+        (target.uuid in observer.senses.entities),
+        (target.uuid in truesight.senses.entities),
         target.uuid in observer.senses.entities,
         target.uuid in truesight.senses.entities,
     )

@@ -126,8 +126,10 @@ def test_ice_storm_executes_upcast_save_cylinder_and_terrain_lifecycle() -> None
     assert center_tile is not None
     assert center_tile.get_movement_cost(MovementMode.WALKING) == 2
 
-    encounter = setup_combat_arena(caster, failed)
-    encounter._environment_step()
+    # The terrain expires at its caster's next turn end, not a world tick.
+    caster.on_turn_start()
+    assert terrain in grid.get_spatial_conditions()
+    caster.on_turn_end()
 
     assert terrain not in grid.get_spatial_conditions()
     assert center_tile.get_movement_cost(MovementMode.WALKING) == 1

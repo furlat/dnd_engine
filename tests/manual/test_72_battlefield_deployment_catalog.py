@@ -22,10 +22,10 @@ from dnd.scenarios.encounter_compatibility import (
 )
 
 
-def test_battlefield_catalog_has_nine_exact_mechanical_states() -> None:
-    assert len(BATTLEFIELDS) == 9
-    assert len({row.battlefield_id for row in BATTLEFIELDS}) == 9
-    assert len({row.content_digest for row in BATTLEFIELDS}) == 9
+def test_battlefield_catalog_has_twenty_exact_mechanical_states() -> None:
+    assert len(BATTLEFIELDS) == 20
+    assert len({row.battlefield_id for row in BATTLEFIELDS}) == 20
+    assert len({row.content_digest for row in BATTLEFIELDS}) == 20
     assert all(row.preview is not None for row in BATTLEFIELDS)
 
     bright = get_battlefield("battlefield.open_floor_bright")
@@ -90,16 +90,14 @@ def test_battlefield_previews_retain_terrain_barriers_and_objects() -> None:
 
 def test_every_battlefield_has_one_builder_and_preview_matches_runtime() -> None:
     for definition in BATTLEFIELDS:
-        reset_engine_runtime(
-            grid_size=(definition.width, definition.height),
-        )
+        reset_engine_runtime()
         built = build_battlefield(definition.battlefield_id)
         assert built.definition is definition
         grid = get_map()
         for cell in definition.preview.cells:
             tile = grid.get_tile(*cell.position)
             assert tile is not None, (definition.battlefield_id, cell.position)
-            assert tile.walkable is cell.walkable
+            assert (tile.get_movement_cost(MovementMode.WALKING) > 0) is cell.walkable
             if cell.walkable:
                 assert (
                     tile.get_movement_cost(MovementMode.WALKING)
@@ -128,9 +126,7 @@ def test_canonical_static_and_built_compatibility_agree() -> None:
         definition = get_battlefield(recipe.battlefield_id)
         static = check_encounter_compatibility(recipe, definition)
         assert static.admitted, (recipe.encounter_id, static.issues)
-        reset_engine_runtime(
-            grid_size=(definition.width, definition.height),
-        )
+        reset_engine_runtime()
         build_battlefield(definition.battlefield_id)
         built = check_built_encounter_compatibility(
             static,

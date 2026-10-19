@@ -10,6 +10,7 @@ from dnd.content_system.condition_definitions import (
     CONDITION_BEHAVIOR_IDENTITY_SPECS,
 )
 from dnd.core.base_conditions import BaseCondition
+from dnd.content_system.builtin_inventory import BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.registration import get_content_declaration
@@ -56,17 +57,20 @@ def _condition_category(
 
 
 def test_active_condition_inventory_is_exact_and_fully_declared() -> None:
-    """Every visible leaf owns one exact non-Python-path declaration."""
+    """Live catalog condition leaves own exact identities; direct class grants are separate."""
     import_dnd_modules()
     descendants = _active_descendants(BaseCondition)
-    leaves = _leaf_types(descendants)
+    declared = {condition_type for condition_type in BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS
+                if issubclass(condition_type, BaseCondition)}
+    assert declared <= descendants
+    leaves = _leaf_types(declared)
     public = tuple(
         condition_type
         for condition_type in leaves
         if _condition_category(condition_type) is not ConditionCategory.INTERNAL
     )
     declarations = tuple(
-        get_content_declaration(condition_type)
+        BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS[condition_type]
         for condition_type in public
     )
     assert len({

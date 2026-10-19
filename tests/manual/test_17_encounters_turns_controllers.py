@@ -25,6 +25,8 @@ from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.core.cells import mask_positions
+from tests.manual.runtime_fixture_support import compose_and_deploy
+from dnd.runtime_reset import reset_engine_runtime
 
 
 class RecordingController(Controller):
@@ -68,27 +70,13 @@ class RecordingController(Controller):
 
 def reset_encounter_tutorial_state(width: int = 16, height: int = 10) -> None:
     """Clear global runtime state and create a rectangular encounter arena."""
-    EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
-    EventQueue.set_perceiver_computer(None)
-    EventQueue.set_revealed_computer(None)
-    SpellProtectionRegistry.reset()
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    ModifiableValue._registry.clear()
-    Entity._entity_registry.clear()
-    Controller.clear_registry()
-    Encounter.clear_registry()
-    Encounter._combat_log_listeners.clear()
-    GridMap.reset()
-    get_map().create_rectangle(0, 0, width, height)
+    reset_engine_runtime(grid_size=(width, height))
 
 
 def create_encounter_pair() -> tuple[Entity, Entity]:
     """Create a nearby hero and monster with opposing factions."""
-    hero = create_goblin(name="Manual Hero", position=(1, 1), faction="heroes")
-    monster = create_skeleton(name="Manual Skeleton", position=(2, 1), faction="monsters")
+    hero = compose_and_deploy(create_goblin(name="Manual Hero", position=(1, 1), faction="heroes"))
+    monster = compose_and_deploy(create_skeleton(name="Manual Skeleton", position=(2, 1), faction="monsters"))
     Entity.update_all_entities_senses(max_distance=20)
     return hero, monster
 
@@ -132,8 +120,8 @@ def clear_melee_attack_modifier(entity: Entity, modifier_uuid: UUID) -> None:
 def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
     """A turn-start recompute reaches event-first subjective replication."""
     reset_encounter_tutorial_state(width=8, height=3)
-    hero = create_goblin(name="Turn Observer", position=(1, 1), faction="heroes")
-    monster = create_skeleton(name="Turn Target", position=(5, 1), faction="monsters")
+    hero = compose_and_deploy(create_goblin(name="Turn Observer", position=(1, 1), faction="heroes"))
+    monster = compose_and_deploy(create_skeleton(name="Turn Target", position=(5, 1), faction="monsters"))
     # A fresh observer: nothing published yet.
     hero.senses.cells = NO_CELLS
     hero.senses.seen = CellLayer(0, 0, np.zeros((0, 0), dtype=bool))

@@ -912,7 +912,7 @@ def test_closed_door_invalidates_prepared_intercept_path_at_trigger_time() -> No
     """A newly closed door prevents a previously legal intercept charge."""
     reset_arena()
     interceptor = create_melee_fighter("Interceptor", (2, 2), "heroes")
-    door_closer = create_melee_fighter("Door Closer", (4, 3), "neutral")
+    door_closer = create_melee_fighter("Door Closer", (3, 2), "heroes")
     enemy = create_melee_fighter("Enemy", (9, 2), "monsters")
     door = build_directional_door(is_open=True)
     door.place_on_grid(
@@ -926,6 +926,7 @@ def test_closed_door_invalidates_prepared_intercept_path_at_trigger_time() -> No
 
     assert result is not None and not result.canceled
     assert door.is_open is False
+    Entity.update_entity_position(door_closer, (3, 3))
     assert not get_map().can_transition((3, 2), (4, 2))
     assert interceptor.senses._paths_dirty
 
@@ -1032,7 +1033,7 @@ def test_open_door_is_authoritative_when_dodge_roll_triggers() -> None:
     reset_arena(width=10, height=5)
     attacker = create_melee_fighter("Attacker", (3, 2), "monsters")
     defender = create_melee_fighter("Defender", (4, 2), "heroes")
-    opener = create_melee_fighter("Door Opener", (5, 3), "heroes")
+    opener = create_melee_fighter("Door Opener", (5, 2), "heroes")
     door = build_directional_door()
     door.place_on_grid(
         (5, 2),

@@ -20,6 +20,10 @@ class TutorialActor(BaseBlock):
     guard_bonus: ModifiableValue = Field(description="Tutorial defensive value.")
     focus_bonus: ModifiableValue = Field(description="Tutorial focus value.")
 
+    def value_fields(self) -> tuple[ModifiableValue, ...]:
+        """Name the tutorial block's owned values explicitly."""
+        return self.guard_bonus, self.focus_bonus
+
 
 def create_tutorial_actor(name: str) -> TutorialActor:
     """Create a block with condition support and two tutorial values."""

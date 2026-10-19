@@ -377,20 +377,20 @@ def test_legacy_core_item_manifests_account_for_all_49_cases() -> None:
 def test_base_item_value_damage_affinity_and_destroy_contract() -> None:
     """Item values, capabilities, damage affinities, and cleanup remain coherent."""
     reset_item_world()
-    inert = BaseItem(
+    inert = BaseItem(item_id="fixture.baseitem",
         source_entity_uuid=uuid4(),
         name="Unplaced Relic",
         weight=5,
         value=100,
         rarity=ItemRarity.RARE,
     )
-    equippable = EquippableItem(source_entity_uuid=uuid4(), name="Ring")
-    usable = UsableItem(source_entity_uuid=uuid4(), name="Scroll")
-    blocker = BaseItem(
+    equippable = EquippableItem(item_id="fixture.equippableitem", source_entity_uuid=uuid4(), name="Ring")
+    usable = UsableItem(item_id="fixture.usableitem", source_entity_uuid=uuid4(), name="Scroll")
+    blocker = BaseItem(item_id="fixture.baseitem",
         source_entity_uuid=uuid4(),
         name="Barricade",
         blocks_movement=True,
-        blocks_vision_field=True,
+        blocks_optics_field=True,
     )
 
     assert (
@@ -402,9 +402,9 @@ def test_base_item_value_damage_affinity_and_destroy_contract() -> None:
         inert.is_equippable,
         inert.is_usable,
         inert.blocks_movement,
-        inert.blocks_vision_field,
+        inert.blocks_optics_field,
         inert.blocks_walking(),
-        inert.blocks_vision(),
+        inert.blocks_optics_at_center(),
         inert.get_position(),
     ) == (
         "Unplaced Relic",
@@ -422,10 +422,10 @@ def test_base_item_value_damage_affinity_and_destroy_contract() -> None:
     )
     assert equippable.is_equippable and equippable.is_pickable
     assert usable.is_usable
-    assert blocker.blocks_walking() and blocker.blocks_vision()
+    assert blocker.blocks_walking() and blocker.blocks_optics_at_center()
 
     source_uuid = uuid4()
-    breakable = BaseItem(
+    breakable = BaseItem(item_id="fixture.baseitem",
         source_entity_uuid=source_uuid,
         name="Wooden Crate",
         is_targetable=True,
@@ -460,8 +460,8 @@ def test_grid_clear_synchronizes_each_floor_item_exactly_once() -> None:
     """Destructive map clear cannot leave live items claiming stale floor slots."""
     reset_item_world()
     grid = get_map()
-    first = GridRemovalProbeItem(source_entity_uuid=uuid4(), name="First")
-    second = GridRemovalProbeItem(source_entity_uuid=uuid4(), name="Second")
+    first = GridRemovalProbeItem(item_id="fixture.gridremovalprobeitem", source_entity_uuid=uuid4(), name="First")
+    second = GridRemovalProbeItem(item_id="fixture.gridremovalprobeitem", source_entity_uuid=uuid4(), name="Second")
     first.place_on_grid((2, 2))
     second.place_on_grid((3, 2))
 
@@ -479,7 +479,7 @@ def test_lifecycle_hooks_receive_authoritative_context_in_order() -> None:
     """Loot, drop, and destroy hooks observe the committed location for that phase."""
     reset_item_world()
     actor = create_actor((4, 4))
-    item = LifecycleProbeItem(source_entity_uuid=uuid4(), name="Tracked")
+    item = LifecycleProbeItem(item_id="fixture.lifecycleprobeitem", source_entity_uuid=uuid4(), name="Tracked")
     item.place_on_grid((5, 4))
     original_tile_uuid = item.tile_uuid
 
@@ -521,7 +521,7 @@ def test_destroy_hook_can_use_floor_context_before_cleanup() -> None:
     """A destroy extension can safely derive tile effects before location teardown."""
     reset_item_world()
     source_uuid = uuid4()
-    item = TileSpillProbeItem(
+    item = TileSpillProbeItem(item_id="fixture.tilespillprobeitem",
         source_entity_uuid=source_uuid,
         name="Spill Vessel",
         is_targetable=True,
@@ -548,7 +548,7 @@ def test_loot_hook_can_apply_condition_and_bounded_healing() -> None:
         actor = create_actor((3, 3))
         set_hp(actor, get_max_hp(actor) - missing_hp)
         before = get_hp(actor)
-        item = LootEffectProbeItem(source_entity_uuid=uuid4(), name="Cursed Herb")
+        item = LootEffectProbeItem(item_id="fixture.looteffectprobeitem", source_entity_uuid=uuid4(), name="Cursed Herb")
         item.place_on_grid((4, 3))
 
         assert actor.loot_item(item)
@@ -564,7 +564,7 @@ def test_loot_drop_hooks_move_an_owned_modifier_between_actors() -> None:
     reset_item_world()
     first = create_actor((3, 3), name="First")
     second = create_actor((4, 3), name="Second", faction="others")
-    item = AuraProbeItem(source_entity_uuid=uuid4(), name="Aura")
+    item = AuraProbeItem(item_id="fixture.auraprobeitem", source_entity_uuid=uuid4(), name="Aura")
     item.place_on_grid((3, 4))
     first_base = first.ac_bonus().normalized_score
     second_base = second.ac_bonus().normalized_score

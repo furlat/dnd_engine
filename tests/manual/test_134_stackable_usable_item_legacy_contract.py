@@ -236,7 +236,7 @@ def item_rows(entity: Entity, item_uuid: UUID) -> list[AvailableActionInfo]:
     return [
         row
         for row in get_available_actions(entity).all_actions
-        if row.source_item_uuid == item_uuid
+        if row.source_item_uuid == item_uuid and row.is_item_use
     ]
 
 
@@ -334,7 +334,7 @@ def test_stacked_scroll_has_one_discovered_row_and_consumes_one_copy() -> None:
     rows = [
         row
         for row in available.all_actions
-        if row.source_item_uuid == stacked.uuid
+        if row.source_item_uuid == stacked.uuid and row.is_item_use
     ]
 
     assert len(rows) == 1
@@ -410,7 +410,7 @@ def test_elemental_coat_stacks_stay_distinct_and_lightning_applies() -> None:
     )
 
     assert result is not None and not result.canceled
-    assert "Lightning Coat" in actor.active_conditions
+    assert "Lightning Coat" in sword.active_conditions
     assert sword.extra_damage_dices == [6]
     assert sword.extra_damage_type == [DamageType.LIGHTNING]
     assert BaseBlock.get(lightning_stack.uuid) is None

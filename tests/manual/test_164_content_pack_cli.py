@@ -7,11 +7,29 @@ import os
 from io import StringIO
 from pathlib import Path
 
+import pytest
+
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.builtin import BUILT_IN_PACK_VERSIONS
 from dnd.content_system.cli import main
 from dnd.content_system.configuration import DEFAULT_CONTENT_PACK_ROOT
 from dnd.content_system.pack_loader import discover_content_packs
+
+from dnd.core.events import EventQueue
+from dnd.core.gridmap import GridMap
+from dnd.runtime_reset import reset_engine_runtime
+
+
+@pytest.fixture(autouse=True)
+def cold_content_runtime():
+    """External pack execution requires a cold process, including no grid."""
+    reset_engine_runtime()
+    GridMap.reset()
+    EventQueue.reset()
+    yield
+    reset_engine_runtime()
+    GridMap.reset()
+    EventQueue.reset()
 
 
 def _write_pack(

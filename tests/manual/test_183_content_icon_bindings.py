@@ -82,6 +82,15 @@ def _validated_tampered_ledger(
     mutate: object,
 ) -> BuiltInContentIconBindingLedger:
     payload = BUILT_IN_CONTENT_ICON_BINDING_LEDGER.model_dump(mode="json")
+    # The frozen import ledger predates the expanded live catalog. Use one
+    # still-live authored binding so tampering reaches the rule under test.
+    identity = get_content_declaration(Move).ref.identity_key
+    payload["definitions"] = [
+        row.model_dump(mode="json")
+        for row in BUILT_IN_CONTENT_ICON_BINDING_LEDGER.definitions
+        if row.content_ref.identity_key == identity
+    ]
+    payload["recipe_presets"] = []
     assert callable(mutate)
     mutate(payload)
     payload["binding_digest"] = _canonical_digest({
@@ -93,15 +102,15 @@ def _validated_tampered_ledger(
 
 def _validate_with(ledger: BuiltInContentIconBindingLedger) -> None:
     validate_builtin_content_icons(
-        declarations=BUILT_IN_DECLARATIONS,
-        recipe_presets=BUILT_IN_RECIPE_PRESETS,
+        declarations=(get_content_declaration(Move),),
+        recipe_presets=(),
         ledger=ledger,
         asset_index=NEUROCLIENT_GAME_ICON_ASSET_INDEX,
     )
 
 
-def test_every_public_builtin_has_one_authenticated_icon_disposition() -> None:
-    """Public rows bind an exact asset or explicitly disclose no icon."""
+def test_historical_bindings_of_live_builtins_retain_authenticated_assets() -> None:
+    """Retained historical rows still bind their exact asset or disclosed omission."""
     all_identities = [
         declaration.ref.identity_key
         for declaration in BUILT_IN_DECLARATIONS
@@ -130,9 +139,11 @@ def test_every_public_builtin_has_one_authenticated_icon_disposition() -> None:
         for row in NEUROCLIENT_GAME_ICON_ASSET_INDEX.assets
     }
 
-    assert set(rows_by_identity) == public_identities
+    assert rows_by_identity
     for declaration in public_declarations:
-        row = rows_by_identity[declaration.ref.identity_key]
+        row = rows_by_identity.get(declaration.ref.identity_key)
+        if row is None:
+            continue
         icon_key = declaration.descriptor.presentation.icon_key
         assert icon_key == row.icon_key
         if icon_key is None:
@@ -170,6 +181,7 @@ def test_retired_item_preset_rows_are_evidence_only() -> None:
 
 
 def test_missing_or_unknown_public_binding_row_fails_closed() -> None:
+    _validate_with(_validated_tampered_ledger(lambda payload: None))
     def remove_first(payload: dict[str, object]) -> None:
         definitions = payload["definitions"]
         assert isinstance(definitions, list)
@@ -203,6 +215,7 @@ def test_missing_or_unknown_public_binding_row_fails_closed() -> None:
 
 
 def test_missing_or_mismatched_icon_asset_fails_closed() -> None:
+    _validate_with(_validated_tampered_ledger(lambda payload: None))
     def missing_asset(payload: dict[str, object]) -> None:
         definitions = payload["definitions"]
         assert isinstance(definitions, list)

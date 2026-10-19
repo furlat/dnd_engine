@@ -11,6 +11,7 @@ from dnd.spatial.environmental_conditions import (
     materialize_spike_trap_condition,
 )
 from tests.engine.support import get_hp, reset_combat_state, set_hp
+from tests.manual.runtime_fixture_support import compose_and_deploy
 
 def test_spike_zone_activation_and_deactivation_are_one_shared_hazard() -> None:
     """One shared handler and tile markers activate and retire atomically."""
@@ -22,10 +23,10 @@ def test_spike_zone_activation_and_deactivation_are_one_shared_hazard() -> None:
     tiles = [grid.get_tile(*position) for position in sorted(positions)]
     assert all(tile is not None for tile in tiles)
     handler_uuid = condition.spatial_handler_uuids[0]
-    observer = create_skeleton(
+    observer = compose_and_deploy(create_skeleton(
         name="Spike Hazard Observer",
         position=(0, 4),
-    )
+    ))
 
     assert {tile.position for tile in tiles} == positions
     assert all(tile.name == "Floor" for tile in tiles)
@@ -75,10 +76,10 @@ def test_spike_zone_applies_damage_for_each_committed_entry() -> None:
     grid = get_map()
     grid.create_rectangle(0, 0, 10, 8)
     materialize_spike_trap_condition({(2, 4), (3, 4), (4, 4)})
-    walker = create_skeleton(
+    walker = compose_and_deploy(create_skeleton(
         name="Spike Step Walker",
         position=(0, 4),
-    )
+    ))
     hp_before = get_hp(walker)
 
     with patch("dnd.core.dice.random.randint", return_value=2):
@@ -104,10 +105,10 @@ def test_lethal_spike_entry_commits_canonical_life_state() -> None:
     grid = get_map()
     grid.create_rectangle(0, 0, 10, 8)
     materialize_spike_trap_condition({(2, 4), (3, 4), (4, 4)})
-    walker = create_skeleton(
+    walker = compose_and_deploy(create_skeleton(
         name="Lethal Spike Walker",
         position=(0, 4),
-    )
+    ))
     set_hp(walker, 2)
 
     with patch("dnd.core.dice.random.randint", return_value=4):

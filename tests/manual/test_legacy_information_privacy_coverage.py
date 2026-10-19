@@ -13,7 +13,8 @@ from uuid import uuid4
 from dnd.conditions import Hidden
 from dnd.core.base_actions import ActionEvent
 from dnd.core.base_conditions import ConditionRemovalEvent
-from dnd.core.combat_log import CombatLogEntryType
+from dnd.core.combat_log import CombatLogEntryType, ConditionRemovedLogData
+from tests.manual.runtime_fixture_support import compose_and_deploy
 from dnd.core.events import EventPhase
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
@@ -113,17 +114,17 @@ def test_position_aoe_can_resolve_with_zero_affected_entities() -> None:
     """Fireball can spend its action and slot on a legal empty grid position."""
     reset_combat_state()
     get_map().create_rectangle(0, 0, 15, 15)
-    caster = create_caster(
+    caster = compose_and_deploy(create_caster(
         name="Wizard",
         position=(2, 2),
         faction="heroes",
         level=5,
-    )
-    distant_target = create_skeleton(
+    ))
+    distant_target = compose_and_deploy(create_skeleton(
         name="Distant Target",
         position=(14, 14),
         faction="monsters",
-    )
+    ))
     Entity.update_all_entities_senses(max_distance=15)
     hp_before = get_hp(distant_target)
     action_before = caster.action_economy.actions.normalized_score
@@ -170,7 +171,6 @@ def test_condition_removal_log_carries_typed_identity_and_reveal_fact() -> None:
     assert log.entry_type == CombatLogEntryType.CONDITION_REMOVED
     assert log.source_uuid == str(source_uuid)
     assert log.target_uuid == str(target_uuid)
-    assert log.data == {
-        "condition_name": "Hidden",
-        "reveals_target": True,
-    }
+    assert isinstance(log.data, ConditionRemovedLogData)
+    assert log.data.condition_name == "Hidden"
+    assert log.data.reveals_target is True

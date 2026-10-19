@@ -20,12 +20,13 @@ from tests.progression.test_direct_character_builds import _custom_build
 
 @pytest.mark.parametrize("item_id", [
     pytest.param("unknown.audit_item", id="unknown-item-control"),
-    pytest.param("environment.directional_wall", marks=pytest.mark.xfail(
-        strict=True, raises=AssertionError, reason="GA-06: rejected build leaves registered wall",
-    )),
-    pytest.param("environment.wall_torch", marks=pytest.mark.xfail(
-        strict=True, raises=AssertionError, reason="GA-06: rejected build leaves registered wall torch",
-    )),
+    "environment.directional_wall",
+    "environment.cliff_face",
+    "environment.directional_door",
+    "environment.wall_torch",
+    "environment.trap_lever",
+    "environment.storage_chest",
+    "environment.fireball_cannon",
 ])
 def test_rejected_character_loadout_leaves_no_world_items(game, item_id):
     before = frozenset(item.uuid for item in BaseItem.get_all_items())

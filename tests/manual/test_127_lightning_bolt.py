@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 
 from dnd.actions import SpellEvent
+from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
@@ -158,7 +159,7 @@ def test_lightning_bolt_misses_off_line() -> None:
 def test_lightning_bolt_wall_stops_line() -> None:
     """Archived group 6: a wall clips the line before creatures behind it."""
     reset_spell_regression_arena(28, 9)
-    get_map().set_tile(10, 4, walkable=False, visible=False, name="Wall")
+    get_map().set_tile(10, 4, walking_cost=0, blocks_optics=True, blocks_propagation=True, name="Wall")
     caster = create_spell_regression_actor(
         "Lightning Caster",
         (2, 4),
@@ -288,7 +289,8 @@ def test_lightning_bolt_both_save_outcomes_are_reported() -> None:
     assert isinstance(result, SpellEvent)
     assert result.combat_log is not None
     save_results = {
-        entry.data["save_success"]
+        entry.data.save_success
         for entry in result.combat_log.sub_entries
+        if entry.entry_type is CombatLogEntryType.SPELL_SAVE
     }
     assert save_results == {False, True}

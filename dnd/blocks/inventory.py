@@ -351,6 +351,8 @@ class Inventory(BaseBlock):
         result = target.add_item_with_result(item)
         if not result.succeeded:
             return False
+        if result.inserted_item is not None and target is not self:
+            result.inserted_item.loot(entity_uuid=target.source_entity_uuid, inventory_uuid=target.uuid)
         if result.merged_into_item is not None:
             result.merged_into_item.publish_location_state(
                 ItemLocation.INVENTORY, owner_uuid=target.source_entity_uuid,

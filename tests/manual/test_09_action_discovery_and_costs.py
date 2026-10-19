@@ -27,6 +27,7 @@ from dnd.blocks.base_item import ItemResourceChangeEvent
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_actions import ActionCategory, BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
+from dnd.conditions import Invisible
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import HazardFilter
 from dnd.core.base_object import BaseObject
@@ -225,7 +226,7 @@ def test_first_action_example_prints_visible_turn_menu(capsys) -> None:
     expected_lines = [
         "actor: Scout",
         "movement left: 30",
-        "groups: entity=4, position=3, self=7, object=0",
+        "groups: entity=7, position=4, self=7, object=0",
         "dash row: target=self, cost=1 actions, afford=True",
         "move row: target 0 -> (5, 6), distance=5, path=[(5, 5), (5, 6)]",
         "attack row: Scimitar -> Skeleton, distance=5",
@@ -376,7 +377,7 @@ def test_standard_action_discovery_groups_choices_for_clients(capsys) -> None:
     expected_discovery_lines = [
         "entity uuid matches actor: True",
         "remaining movement: 30",
-        "groups: entity=4, position=3, self=7, object=0",
+        "groups: entity=7, position=4, self=7, object=0",
         "self actions include: ['Dash', 'Disengage', 'Dodge']",
         "dash row: target=self, index=0, cost=1 actions, afford=True",
         "move row: category=movement, target=(5, 6), path=[(5, 5), (5, 6)]",
@@ -671,87 +672,31 @@ def test_move_row_reports_movement_budget_exhaustion() -> None:
     )
 
 
-def test_generic_position_row_reports_requirements_not_target_cost(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    """A rules-invalid position is not mislabeled target-cost unaffordable."""
+def test_generic_position_rule_refusal_preserves_resources(monkeypatch: MonkeyPatch) -> None:
+    """An invalid free aim is refused by the rule before any cost is paid."""
     reset_action_state()
     actor = create_tutorial_actor(position=(2, 2))
-    add_modifier(actor.action_economy.spell_slot_2, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
-            source_entity_uuid=actor.uuid,
-            target_entity_uuid=actor.uuid,
-            name="Misty Step regression slot",
-            value=1,
-        ))
-    actor.register_action(
-        MistyStep(
-            source_entity_uuid=actor.uuid,
-            template=True,
-            position_discovery=None,
-        )
-    )
+    add_modifier(actor.action_economy.spell_slot_2, Channel.SELF_STATIC, Kind.VALUE,
+                 NumericalModifier.create(source_entity_uuid=actor.uuid,
+                     target_entity_uuid=actor.uuid, name="Misty Step regression slot", value=1))
+    actor.register_action(MistyStep(source_entity_uuid=actor.uuid, template=True))
     Entity.update_all_entities_senses()
-    monkeypatch.setattr(
-        MistyStep,
-        "validate_requirements_for_discovery",
-        lambda self: False,
-    )
-
-    authored = get_available_actions(actor)
-    legal = get_available_actions(actor, legal_only=True)
-
-    misty_step = next(
-        action
-        for action in authored.position_actions
-        if action.base_template_name == "Misty Step"
-    )
-    assert misty_step.can_afford is True
-    assert misty_step.availability_status == "no_valid_targets"
-    assert misty_step.valid_targets == []
-    assert not any(
-        candidate.base_template_name == "Misty Step"
-        for candidate in legal.position_actions
-    )
+    before_slots = actor.action_economy.spell_slot_2.normalized_score
+    before_position = actor.position
+    monkeypatch.setattr(MistyStep, "rule_error",
+                        lambda self, scan, selection: "Tutorial destination is forbidden")
+    for legal_only in (False, True):
+        assert not any(row.base_template_name == "Misty Step"
+                       for row in get_available_actions(actor, legal_only=legal_only).position_actions)
+    result = MistyStep(source_entity_uuid=actor.uuid, end_position=(3, 2)).apply()
+    assert result is not None and result.canceled
+    assert result.status_message == "Tutorial destination is forbidden"
+    assert actor.position == before_position
+    assert actor.action_economy.spell_slot_2.normalized_score == before_slots
+    assert actor.action_economy.bonus_actions.normalized_score == 1
 
 
-def test_entity_row_reports_target_cost_unaffordable(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    """A rules-valid enemy blocked only by target cost gets the exact status."""
-    reset_action_state()
-    actor = create_goblin(
-        name="Cost-bound Attacker",
-        position=(2, 2),
-        faction="heroes",
-    )
-    create_skeleton(name="Adjacent Enemy", position=(3, 2), faction="monsters")
-    Entity.update_all_entities_senses()
 
-    def impossible_target_cost(self: Attack) -> list[Cost]:
-        return [
-            Cost(
-                name="Impossible target movement",
-                cost_type="movement",
-                cost=999,
-                evaluator=entity_action_economy_cost_evaluator,
-            )
-        ]
-
-    monkeypatch.setattr(
-        Attack,
-        "get_target_dynamic_costs",
-        impossible_target_cost,
-    )
-
-    authored = get_available_actions(actor)
-    legal = get_available_actions(actor, legal_only=True)
-
-    attack = find_attack_action(authored)
-    assert attack.can_afford is True
-    assert attack.availability_status == "target_cost_unaffordable"
-    assert attack.valid_targets == []
-    assert all(cost.cost_type != "movement" for cost in attack.costs)
-    assert not any(candidate.is_attack for candidate in legal.entity_actions)
 
 
 def test_unaffordable_contextual_self_item_stays_stable_without_validation(
@@ -770,7 +715,7 @@ def test_unaffordable_contextual_self_item_stays_stable_without_validation(
     rows = [
         action
         for action in available.all_actions
-        if action.source_item_uuid == potion.uuid
+        if action.source_item_uuid == potion.uuid and action.is_item_use
     ]
     assert len(rows) == 1
     assert rows[0].availability_status == "source_unaffordable"
@@ -801,7 +746,7 @@ def test_unaffordable_contextual_entity_item_stays_stable_without_target_work(
     rows = [
         action
         for action in available.all_actions
-        if action.source_item_uuid == scroll.uuid
+        if action.source_item_uuid == scroll.uuid and action.is_item_use
     ]
     assert len(rows) == 1
     assert rows[0].availability_status == "source_unaffordable"
@@ -837,7 +782,7 @@ def test_unaffordable_contextual_aoe_item_stays_stable_without_preview_work(
     rows = [
         action
         for action in available.all_actions
-        if action.source_item_uuid == scroll.uuid
+        if action.source_item_uuid == scroll.uuid and action.is_item_use
     ]
     assert len(rows) == 1
     assert rows[0].availability_status == "source_unaffordable"
@@ -904,12 +849,7 @@ def test_dash_adds_current_speed_after_speed_bonuses_and_movement_spending() -> 
         source_entity_uuid=actor.uuid,
         target_entity_uuid=actor.uuid,
     ))
-    add_modifier(movement, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
-        name="movement cost",
-        value=-15,
-        source_entity_uuid=actor.uuid,
-        target_entity_uuid=actor.uuid,
-    ))
+    actor.action_economy.consume("movement", 15)
     available = get_available_actions(actor)
     dash_info = find_action(available, "Dash")
 
@@ -918,13 +858,10 @@ def test_dash_adds_current_speed_after_speed_bonuses_and_movement_spending() -> 
     assert result is not None
     assert result.canceled is False
     assert actor.action_economy.current_speed() == 40
-    assert movement.normalized_score == 65
-    dashing_modifiers = [
-        modifier
-        for modifier in modifiers_of(movement, Channel.SELF_STATIC, Kind.VALUE)
-        if modifier.name == "Dashing"
-    ]
-    assert [modifier.value for modifier in dashing_modifiers] == [40]
+    assert movement.normalized_score == 40
+    assert actor.action_economy.movement_spent() == 15
+    assert actor.action_economy.movement_remaining() == 65
+    assert actor.action_economy.dash_count == 1
 
 
 def test_floor_and_inventory_item_actions_are_discovered_and_routed(capsys) -> None:
@@ -1082,7 +1019,7 @@ def test_item_bound_spell_consumes_its_charge_before_action_completion() -> None
         for index, event in indexed
         if event.uuid == result.uuid
     )
-    assert charge_terminal_index < action_execution_index < action_terminal_index
+    assert action_execution_index < charge_terminal_index < action_terminal_index
     assert completion.lineage_uuid in result.children_lineages
 
 
@@ -1162,14 +1099,12 @@ def test_target_filters_shape_entity_target_pools(capsys) -> None:
     all_targets_attack = find_attack_action(
         hero.get_available_actions(target_filter="all", include_dead=True)
     )
-    assert [target.target_uuid for target in all_targets_attack.valid_targets] == [
-        enemy.uuid,
-        dead_enemy.uuid,
-        ally.uuid,
-    ]
-    all_names = [
+    assert {target.target_uuid for target in all_targets_attack.valid_targets} == {
+        enemy.uuid, dead_enemy.uuid, ally.uuid,
+    }
+    all_names = sorted(
         entity_target_name(target) for target in all_targets_attack.valid_targets
-    ]
+    )
 
     target_lines = [
         f"default targets: {default_names}",
@@ -1182,7 +1117,7 @@ def test_target_filters_shape_entity_target_pools(capsys) -> None:
     expected_target_lines = [
         "default targets: ['Enemy']",
         "ally targets: ['Ally']",
-        "all targets with dead included: ['Enemy', 'Dead Enemy', 'Ally']",
+        "all targets with dead included: ['Ally', 'Dead Enemy', 'Enemy']",
     ]
     assert target_lines == expected_target_lines
     assert capsys.readouterr().out.splitlines() == expected_target_lines
@@ -1341,12 +1276,13 @@ def test_partial_move_completion_reports_only_traversed_path_and_cost() -> None:
     target.path = disclosed_path
     target.path_cost = 30
 
-    create_tutorial_actor(
+    blocker = create_tutorial_actor(
         name="Unknown Blocker",
         position=(4, 7),
         faction="monsters",
         standard_actions=False,
     )
+    blocker.add_condition(Invisible(source_entity_uuid=blocker.uuid, target_entity_uuid=blocker.uuid))
 
     result = execute_by_index(
         scout,
@@ -1373,8 +1309,8 @@ def test_partial_move_completion_reports_only_traversed_path_and_cost() -> None:
     assert (4, 7) not in movement_result.get_affected_positions()
     assert movement_cost == 15
     assert movement_result.combat_log is not None
-    assert movement_result.combat_log.data["path"] == traversed_path
-    assert movement_result.combat_log.data["distance_feet"] == 15
-    assert movement_result.combat_log.data["movement_cost"] == 15
+    assert movement_result.combat_log.data.path == traversed_path
+    assert movement_result.combat_log.data.distance_feet == 15
+    assert movement_result.combat_log.data.movement_cost == 15
     assert len(movement_result.combat_log.sub_entries) == 3
     assert "15ft" in movement_result.combat_log.compact

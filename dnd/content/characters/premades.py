@@ -10,7 +10,7 @@ from dnd.content.characters.builds import (
     CharacterBuild,
     create_character,
 )
-from dnd.content.items.item_loadouts import ItemLoadoutEntry
+from dnd.content.items.item_loadouts import CLASS_STARTING_LOADOUTS, ItemLoadoutEntry
 from dnd.content.characters.class_definitions import class_level_choices, next_class_level
 from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.entity import Entity
@@ -46,6 +46,8 @@ def _fighter_levels(
     count: int,
     *,
     style: str,
+    equipment: str = "sword_shield",
+    asi: str = "strength",
 ) -> tuple[AppliedClassLevel, ...]:
     rows: list[AppliedClassLevel] = []
     for level in range(1, count + 1):
@@ -54,7 +56,7 @@ def _fighter_levels(
             choices.extend((
                 ClassChoiceSelection(
                     "class.fighter.first_class.starting_equipment",
-                    ("starting_equipment.fighter.sword_shield",),
+                    (f"starting_equipment.fighter.{equipment}",),
                 ),
                 ClassChoiceSelection(
                     "class.fighter.proficiencies.skills",
@@ -73,7 +75,7 @@ def _fighter_levels(
         elif level == 4:
             choices.append(ClassChoiceSelection(
                 "class.fighter.level_4.asi_or_feat",
-                ("ability_score.strength.2",),
+                (f"ability_score.{asi}.2",),
             ))
         rows.append(AppliedClassLevel(
             step_id=f"class.fighter.level_{level}",
@@ -86,7 +88,7 @@ def _fighter_levels(
     return tuple(rows)
 
 
-def _barbarian_levels() -> tuple[AppliedClassLevel, ...]:
+def _barbarian_levels(*, equipment: str = "greataxe") -> tuple[AppliedClassLevel, ...]:
     rows: list[AppliedClassLevel] = []
     for level in range(1, 6):
         choices: list[ClassChoiceSelection] = []
@@ -94,7 +96,7 @@ def _barbarian_levels() -> tuple[AppliedClassLevel, ...]:
             choices.extend((
                 ClassChoiceSelection(
                     "class.barbarian.first_class.starting_equipment",
-                    ("starting_equipment.barbarian.greataxe",),
+                    (f"starting_equipment.barbarian.{equipment}",),
                 ),
                 ClassChoiceSelection(
                     "class.barbarian.proficiencies.skills",
@@ -170,6 +172,11 @@ def _sorcerer_level(
             "class.sorcerer.level_4.asi_or_feat",
             ("ability_score.charisma.2",),
         ))
+    if class_level == 8:
+        choices.append(ClassChoiceSelection(
+            "class.sorcerer.level_8.asi_or_feat",
+            ("ability_score.dexterity.2",),
+        ))
     if class_level == 1:
         choices.append(ClassChoiceSelection(
             "subclass.sorcerer.draconic_bloodline.level_1.ancestry",
@@ -189,6 +196,7 @@ def _sorcerer_levels(
     *,
     character_level_offset: int = 0,
     spellblade: bool = False,
+    scenario_spells: tuple[tuple[str, ...], ...] | None = None,
 ) -> tuple[AppliedClassLevel, ...]:
     if spellblade:
         cantrips = (
@@ -218,6 +226,9 @@ def _sorcerer_levels(
             ("spell.fireball",),
         )
         count = 5
+    if scenario_spells is not None:
+        spells = scenario_spells
+        count = len(spells)
     return tuple(
         _sorcerer_level(
             class_level=level,
@@ -332,7 +343,7 @@ def _prepared_levels(class_id: CharacterClass) -> tuple[AppliedClassLevel, ...]:
         levels=(*levels,row)
     return levels
 
-PREMADE_CHARACTER_BUILDS: Mapping[str, CharacterBuild] = MappingProxyType({
+_STANDARD_CHARACTER_BUILDS: Mapping[str, CharacterBuild] = MappingProxyType({
     CLERIC_PREMADE_ID: CharacterBuild(
         name="Life Cleric",species=Species.HUMAN,background=Background.ADVENTURER,
         base_ability_scores=(("strength",14),("dexterity",10),("constitution",14),
@@ -466,6 +477,107 @@ PREMADE_CHARACTER_BUILDS: Mapping[str, CharacterBuild] = MappingProxyType({
         ),
         appearance=replace(_FIGHTER_APPEARANCE,portrait_key="hero.fighter_2_sorcerer_3_spellblade.hero"),
     ),
+})
+
+
+# These are the retired authored scenarios' choices expressed as ordinary builds.
+# Scenario setup owns extra spells, equipment and torches; the base build owns
+# the selected class package and its curated inventory, without premade extras.
+PREMADE_CHARACTER_BUILDS: Mapping[str, CharacterBuild] = MappingProxyType({
+    **_STANDARD_CHARACTER_BUILDS,
+    **{
+        f"scenario.fighter_l5_{variant}": replace(
+            _STANDARD_CHARACTER_BUILDS[FIGHTER_PREMADE_ID],
+            class_levels=_fighter_levels(
+                5,
+                style=f"class_feature.fighter.fighting_style.{style}",
+                equipment=equipment,
+                asi=asi,
+            ),
+            item_loadout=(
+                *CLASS_STARTING_LOADOUTS[f"starting_equipment.fighter.{equipment}"],
+                *_FIGHTER_SUPPLEMENT,
+            ),
+        )
+        for variant, equipment, style, asi in (
+            ("archer", "archery", "archery", "dexterity"),
+            ("shield", "sword_shield", "dueling", "strength"),
+            ("great_weapon", "greatsword", "great_weapon_fighting", "strength"),
+            ("defense", "greatsword", "defense", "strength"),
+            ("two_weapon", "dual_wield", "two_weapon_fighting", "strength"),
+        )
+    },
+    **{
+        f"scenario.barbarian_l5_{equipment}": replace(
+            _STANDARD_CHARACTER_BUILDS[BARBARIAN_PREMADE_ID],
+            class_levels=_barbarian_levels(equipment=equipment),
+            item_loadout=(
+                *CLASS_STARTING_LOADOUTS[f"starting_equipment.barbarian.{equipment}"],
+                *_BARBARIAN_SUPPLEMENT,
+            ),
+        )
+        for equipment in ("greataxe", "dual_axes", "sword_shield")
+    },
+    **{
+        f"scenario.sorcerer_{variant}": replace(
+            _STANDARD_CHARACTER_BUILDS[SORCERER_PREMADE_ID],
+            class_levels=_sorcerer_levels(scenario_spells=spells),
+            item_loadout=(
+                *CLASS_STARTING_LOADOUTS["starting_equipment.sorcerer.dagger"],
+                *_SORCERER_SUPPLEMENT,
+            ),
+        )
+        for variant, spells in (
+            ("l5_standard", (
+                ("spell.burning_hands", "spell.magic_missile"),
+                ("spell.thunderwave",),
+                ("spell.scorching_ray",),
+                ("spell.hold_person",),
+                ("spell.fireball",),
+            )),
+            ("l9_standard", (
+                ("spell.magic_missile", "spell.thunderwave"),
+                ("spell.burning_hands",),
+                ("spell.scorching_ray",),
+                ("spell.hold_person",),
+                ("spell.fireball",),
+                ("spell.lightning_bolt",),
+                ("spell.banishment",),
+                ("spell.greater_invisibility",),
+                ("spell.cone_of_cold",),
+            )),
+            ("l5_projectile", (
+                ("spell.burning_hands", "spell.magic_missile"),
+                ("spell.charm_person",),
+                ("spell.scorching_ray",),
+                ("spell.blindness_deafness",),
+                ("spell.blur",),
+            )),
+            ("l5_mirror", (
+                ("spell.burning_hands", "spell.magic_missile"),
+                ("spell.charm_person",),
+                ("spell.scorching_ray",),
+                ("spell.hold_person",),
+                ("spell.haste",),
+            )),
+            ("l5_control", (
+                ("spell.burning_hands", "spell.magic_missile"),
+                ("spell.charm_person",),
+                ("spell.hold_person",),
+                ("spell.web",),
+                ("spell.hypnotic_pattern",),
+            )),
+            ("l7_lock", (
+                ("spell.burning_hands", "spell.charm_person"),
+                ("spell.color_spray",),
+                ("spell.hold_person",),
+                ("spell.blindness_deafness",),
+                ("spell.fear",),
+                ("spell.hypnotic_pattern",),
+                ("spell.banishment",),
+            )),
+        )
+    },
 })
 
 

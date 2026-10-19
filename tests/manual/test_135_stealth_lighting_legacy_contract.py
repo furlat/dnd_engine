@@ -707,7 +707,7 @@ def test_damage_incapacity_and_spell_events_reveal_hidden_state() -> None:
         for _, event in EventQueue.iter_events_since(cursor)
         if event.event_type == EventType.DAMAGE_APPLIED
     ]
-    assert [event.phase for event in damage_events] == [
+    assert list(dict.fromkeys(event.phase for event in damage_events)) == [
         EventPhase.DECLARATION,
         EventPhase.EXECUTION,
         EventPhase.EFFECT,

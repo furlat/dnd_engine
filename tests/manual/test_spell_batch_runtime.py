@@ -38,7 +38,7 @@ def test_selected_spells_are_discoverable_through_the_initialized_catalog(spell_
     register_spell(caster, spell_type)
     Entity.update_all_entities_senses()
     rows = [row for row in get_available_actions(caster).all_actions if row.behavior_id == identity]
-    assert rows and any(row.valid_targets for row in rows)
+    assert rows and any(row.valid_targets or row.position_region is not None for row in rows)
 
 
 @pytest.mark.parametrize("spell_type, ability, steps", (

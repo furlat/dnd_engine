@@ -272,7 +272,7 @@ def test_poison_spray_works_at_10ft() -> None:
     caster, target, spell = _poison_spray_scene(distance_tiles=2)
     force_save_result(target, "constitution", succeeds=True)
 
-    with fixed_dice_faces(10):
+    with fixed_dice_faces(10, 6, 7):
         result = spell.apply()
 
     assert caster.senses.get_feet_distance(target.position) == 10
@@ -299,7 +299,7 @@ def test_poison_spray_no_damage_on_save() -> None:
     force_save_result(target, "constitution", succeeds=True)
     hp_before = target.get_hp()
 
-    with fixed_dice_faces(10):
+    with fixed_dice_faces(10, 6, 7):
         result = spell.apply()
 
     assert isinstance(result, SpellEvent)

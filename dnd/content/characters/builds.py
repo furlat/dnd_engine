@@ -217,6 +217,18 @@ def resolve_character_build(build: CharacterBuild) -> ResolvedCharacterBuild:
     for row in build.item_loadout:
         if row.item_id not in DIRECT_ITEM_BUILDERS:
             raise ValueError(f"unknown direct character item {row.item_id!r}")
+        # These builders create independent world owners. Reject them before
+        # allocating objects that cannot belong to this character's loadout.
+        if row.item_id in {
+            "environment.directional_wall",
+            "environment.cliff_face",
+            "environment.directional_door",
+            "environment.wall_torch",
+            "environment.trap_lever",
+            "environment.storage_chest",
+            "environment.fireball_cannon",
+        }:
+            raise ValueError(f"world-owned item cannot be a character item: {row.item_id!r}")
 
     build.appearance.config()
     return ResolvedCharacterBuild(

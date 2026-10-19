@@ -252,7 +252,8 @@ def test_magic_missile_validates_every_selected_recipient_without_rewriting_homi
                                extra_target_uuids=[north.uuid, east.uuid])
     hp_before = (get_hp(east), get_hp(north))
     with fixed_dice_faces(2, 2, 2):
-        result = execute_use_action(caster, device.uuid, info.template_name, selected)
+        result = execute_use_action(caster, device.uuid, info.template_name, selected,
+                                    extra_target_uuids=(north.uuid, east.uuid))
     assert result is not None
     if sector is not None:
         assert result.canceled

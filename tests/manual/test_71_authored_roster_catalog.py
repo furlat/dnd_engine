@@ -13,19 +13,20 @@ from dnd.monsters.configured_srd_creatures import (
 )
 from dnd.scenarios.encounter_catalog import (
     AUTHORED_ROSTER_RECIPES,
+    AUTHORED_ENCOUNTER_RECIPES,
     roster_recipe,
 )
 
 
 def test_roster_catalog_has_exact_audited_counts_and_unique_identity() -> None:
-    assert len(AUTHORED_ROSTER_RECIPES) == 58
-    assert sum(len(row.members) for row in AUTHORED_ROSTER_RECIPES) == 141
+    assert len(AUTHORED_ROSTER_RECIPES) == 60
+    assert sum(len(row.members) for row in AUTHORED_ROSTER_RECIPES) == 146
     assert len({
         row.roster_id for row in AUTHORED_ROSTER_RECIPES
-    }) == 58
+    }) == 60
     assert len({
         row.recipe_digest for row in AUTHORED_ROSTER_RECIPES
-    }) == 58
+    }) == 60
     assert all(
         roster_recipe(row.roster_id) is row
         for row in AUTHORED_ROSTER_RECIPES
@@ -52,7 +53,8 @@ def test_every_authored_member_has_a_creature_recipe_or_direct_build() -> None:
 def test_every_srd_creature_factory_is_represented_in_a_roster() -> None:
     represented_refs = {
         member.source.recipe.ref.identity_key
-        for roster in AUTHORED_ROSTER_RECIPES
+        for roster in (*AUTHORED_ROSTER_RECIPES, *(slot.roster
+            for recipe in AUTHORED_ENCOUNTER_RECIPES for slot in recipe.roster_slots))
         for member in roster.members
         if isinstance(member.source, AuthoredCreatureRosterSource)
     }

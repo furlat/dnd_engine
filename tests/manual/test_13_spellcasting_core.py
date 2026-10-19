@@ -6,6 +6,7 @@ from dnd.actions import SpellAction, SpellEvent
 from dnd.actions_functional import (
     execute_by_index,
     get_available_actions,
+    row_form_at_level,
     register_spell,
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
@@ -116,7 +117,7 @@ def test_immediate_damage_spells_disclose_execution_honest_outcomes() -> None:
 
     assert finger is not None
     assert finger.resolution is OutcomeResolution.SAVING_THROW
-    assert finger.damage_rolls[0].dice_count == 8
+    assert finger.damage_rolls[0].dice_count == 7
     assert finger.damage_rolls[0].die_size == 8
     assert finger.damage_rolls[0].flat_bonus == 33
     assert finger.damage_rolls[0].damage_type == "Necrotic"
@@ -285,7 +286,7 @@ def test_necrotic_bless_combat_log_preserves_each_target_identity() -> None:
 
     assert isinstance(event, SpellEvent)
     assert event.combat_log is not None
-    assert event.combat_log.data["target_names"] == [
+    assert event.combat_log.data.target_names == [
         "Living Target",
         "Undead Ally",
     ]
@@ -294,8 +295,8 @@ def test_necrotic_bless_combat_log_preserves_each_target_identity() -> None:
         str(undead_ally.uuid),
     ]
     assert [
-        target_log["target_uuid"]
-        for target_log in event.combat_log.data["per_target_logs"]
+        event.combat_log.sub_entries[index].target_uuid
+        for index in event.combat_log.data.target_entry_indices
     ] == [
         str(living_target.uuid),
         str(undead_ally.uuid),
@@ -695,8 +696,9 @@ def test_registered_spells_surface_cantrips_and_slot_variants(capsys) -> None:
     available = get_available_actions(caster)
     fire_bolt = find_action(available, "Fire Bolt")
     missile_1 = find_action(available, "Magic Missile__slot_1")
-    missile_2 = find_action(available, "Magic Missile__slot_2")
-    missile_3 = find_action(available, "Magic Missile__slot_3")
+    assert missile_1.cast_levels == (1, 2, 3)
+    missile_2 = row_form_at_level(caster, missile_1, 2)
+    missile_3 = row_form_at_level(caster, missile_1, 3)
     haste = find_action(available, "Haste__slot_3")
 
     assert fire_bolt.action_category == ActionCategory.SPELL
@@ -713,13 +715,14 @@ def test_registered_spells_surface_cantrips_and_slot_variants(capsys) -> None:
     assert missile_1.num_projectiles == 3
     assert missile_1.allow_same_target is True
     assert missile_2.cast_at_level == 2
-    assert missile_2.num_projectiles == 4
+    assert missile_2.get_num_projectiles() == 4
     assert missile_3.cast_at_level == 3
-    assert missile_3.num_projectiles == 5
+    assert missile_3.get_num_projectiles() == 5
 
     assert haste.base_template_name == "Haste"
     assert haste.cast_at_level == 3
     assert {target.target_uuid for target in haste.valid_targets} == {
+        caster.uuid,
         enemy.uuid,
         ally.uuid,
     }
@@ -755,8 +758,8 @@ def test_registered_spells_surface_cantrips_and_slot_variants(capsys) -> None:
         ),
         (
             "magic missile scaling: "
-            f"level2={missile_2.num_projectiles}, "
-            f"level3={missile_3.num_projectiles}"
+            f"level2={missile_2.get_num_projectiles()}, "
+            f"level3={missile_3.get_num_projectiles()}"
         ),
         (
             "haste row: "
@@ -772,7 +775,7 @@ def test_registered_spells_surface_cantrips_and_slot_variants(capsys) -> None:
         "fire bolt row: category=spell, level=0, cast_at=0, variant=False, targets=['Training Target']",
         "magic missile level 1: base=Magic Missile, display=Magic Missile (Level 1), cast_at=1, projectiles=3, same_target=True",
         "magic missile scaling: level2=4, level3=5",
-        "haste row: base=Haste, cast_at=3, targets=['Haste Ally', 'Training Target']",
+        "haste row: base=Haste, cast_at=3, targets=['Haste Ally', 'Menu Mage', 'Training Target']",
     ]
     assert discovery_lines == expected_discovery_lines
     assert capsys.readouterr().out.splitlines() == expected_discovery_lines
@@ -806,7 +809,7 @@ def test_fire_bolt_uses_spell_attack_bonus_scaling_and_damage(capsys) -> None:
     assert caster.action_economy.actions.normalized_score == 0
     assert event.combat_log is not None
     assert event.combat_log.entry_type == CombatLogEntryType.ATTACK
-    assert event.combat_log.data["outcome"] == "hit"
+    assert event.combat_log.data.outcome == "hit"
     fire_lines = [
         (
             "event phase: "
@@ -820,7 +823,7 @@ def test_fire_bolt_uses_spell_attack_bonus_scaling_and_damage(capsys) -> None:
         (
             "combat log: "
             f"{event.combat_log.entry_type.value}, "
-            f"outcome={event.combat_log.data['outcome']}"
+            f"outcome={event.combat_log.data.outcome}"
         ),
     ]
 
@@ -860,16 +863,16 @@ def test_magic_missile_auto_hits_multiple_darts_and_spends_slot(capsys) -> None:
     assert isinstance(event, SpellEvent)
     assert not event.canceled
     assert event.total_targets == 3
-    assert event.total_damage == 12
-    assert enemy.get_hp() == hp_before - 12
+    assert event.total_damage == 9
+    assert enemy.get_hp() == hp_before - 9
     assert caster.action_economy.actions.normalized_score == 0
     assert caster.action_economy.spell_slot_1.normalized_score == 0
     assert event.combat_log is not None
     assert event.combat_log.entry_type == CombatLogEntryType.MULTI_ENTITY_ACTION
     assert len(event.combat_log.sub_entries) == 3
-    assert event.combat_log.data["target_names"] == ["Training Target"]
-    assert event.combat_log.data["per_target_damage"] == [3, 4, 5]
-    assert event.combat_log.data["total_damage"] == 12
+    assert event.combat_log.data.target_names == ["Training Target"] * 3
+    assert event.combat_log.data.per_target_damage == [3, 3, 3]
+    assert event.combat_log.data.total_damage == 9
     missile_lines = [
         f"event phase: {event.phase.value}, canceled={event.canceled}",
         f"targets/projectiles: {event.total_targets}, damage={event.total_damage}",
@@ -890,8 +893,8 @@ def test_magic_missile_auto_hits_multiple_darts_and_spends_slot(capsys) -> None:
 
     expected_missile_lines = [
         "event phase: completion, canceled=False",
-        "targets/projectiles: 3, damage=12",
-        "target hp: 27->15",
+        "targets/projectiles: 3, damage=9",
+        "target hp: 27->18",
         "actions after cast: 0",
         "level 1 slots after cast: 0",
         "combat log: multi_entity_action, sub_entries=3",

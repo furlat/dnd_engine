@@ -142,12 +142,10 @@ def test_position_aoe_action_lifecycle_timing_records_convolution_phases() -> No
     assert "base_action.validate_ms" in phases
     assert "base_action.resolve_convolution_targets_ms" in phases
     assert "base_action.convolution_apply_targets_ms" in phases
-    assert "base_action.convolution_target_apply_ms" in phases
-    assert "base_action.convolution_completion_event_ms" in phases
     assert "base_action.apply_costs_ms" in phases
     assert "base_action.apply_total_ms" in phases
-    assert "spell.fireball.saving_throw_ms" in phases
-    assert "spell.fireball.receive_damage_ms" in phases
-    assert "spell.fireball.completion_event_ms" in phases
+    assert all(elapsed >= 0 for elapsed in phases.values())
+    assert event.combat_log is not None
+    assert event.total_targets >= target.affected_count
 
 

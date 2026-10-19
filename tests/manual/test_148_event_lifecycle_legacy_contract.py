@@ -14,6 +14,7 @@ from dnd.core.events import (
     EventPhase,
     EventQueue,
     EventType,
+    SpatialChangeEvent,
     SavingThrowEvent,
     Trigger,
 )
@@ -275,19 +276,22 @@ def test_fireball_emits_one_parent_log_with_isolated_target_children() -> None:
     residue_logs = [entry for entry in parent_log.sub_entries if entry.target_uuid not in target_ids]
     assert len(target_logs) == len(targets)
     assert {entry.target_uuid for entry in target_logs} == target_ids
-    assert parent_log.data["total_targets"] == len(targets)
-    assert parent_log.data["total_damage"] == 48
-    assert parent_log.data["per_target_damage"] == [16, 16, 16]
-    assert parent_log.data["saves_failed"] == 3
-    assert parent_log.data["saves_succeeded"] == 0
-    per_target_logs = parent_log.data["per_target_logs"]
+    assert parent_log.data.total_targets == len(targets)
+    assert parent_log.data.total_damage == 48
+    assert parent_log.data.per_target_damage == [16, 16, 16]
+    assert parent_log.data.saves_failed == 3
+    assert parent_log.data.saves_succeeded == 0
+    per_target_logs = [
+        parent_log.sub_entries[index]
+        for index in parent_log.data.target_entry_indices
+    ]
     assert len(per_target_logs) == len(targets)
-    assert {entry["target_uuid"] for entry in per_target_logs} == target_ids
+    assert {entry.target_uuid for entry in per_target_logs} == target_ids
     assert all(target.get_hp() == hp_before[target.uuid] - 16 for target in targets)
     for entry in target_logs:
         assert entry.entry_type is CombatLogEntryType.SPELL_SAVE
-        assert entry.data["save_success"] is False
-        assert entry.data["final_damage"] == 16
+        assert entry.data.save_success is False
+        assert entry.data.final_damage == 16
         assert Counter(child.entry_type for child in entry.sub_entries) == Counter({
             CombatLogEntryType.SAVING_THROW: 1,
             CombatLogEntryType.DAMAGE_TAKEN: 1,
@@ -298,14 +302,22 @@ def test_fireball_emits_one_parent_log_with_isolated_target_children() -> None:
             assert child.target_uuid in {None, entry.target_uuid}
             descendants.extend(child.sub_entries)
 
-    # Inert residue remains causal log evidence, without becoming a spell target.
-    residue_tile_ids = set()
+    # Tile materials now travel as one keyed world fact, not fake per-tile
+    # condition applications. They remain causal evidence without target slots.
     assert result.resolved_area_positions
-    for position in result.resolved_area_positions:
+    resolved = set(result.resolved_area_positions)
+    for position in resolved:
         tile = get_map().get_tile(*position)
-        assert tile is not None and ASHEN_RESIDUE.name in tile.active_conditions
-        residue_tile_ids.add(str(tile.uuid))
-    assert len(residue_logs) == len(residue_tile_ids)
-    assert {entry.target_uuid for entry in residue_logs} == residue_tile_ids
-    assert all(entry.entry_type is CombatLogEntryType.CONDITION_APPLIED for entry in residue_logs)
-    assert len(parent_log.sub_entries) == len(targets) + len(residue_tile_ids)
+        assert tile is not None
+        assert tile.residue_state(ASHEN_RESIDUE.residue_id) is not None
+        assert ASHEN_RESIDUE.name in tile.condition_names()
+    residue_facts = [event for event in EventQueue.get_events_by_type(EventType.SPATIAL_TILE_CHANGED)
+        if isinstance(event, SpatialChangeEvent) and event.phase is EventPhase.COMPLETION
+        and any(row.residue_id == ASHEN_RESIDUE.residue_id
+                for change in event.keyed_tile_changes for row in change.residues)]
+    assert len(residue_facts) == 1
+    assert residue_facts[0].parent_lineage == result.lineage_uuid
+    assert {change.position for change in residue_facts[0].keyed_tile_changes} == resolved
+    assert len(residue_logs) == 1
+    assert residue_logs[0].entry_type is CombatLogEntryType.SPATIAL_EFFECT
+    assert len(parent_log.sub_entries) == len(targets) + len(residue_logs)

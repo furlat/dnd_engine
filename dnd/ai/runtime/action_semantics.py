@@ -1098,6 +1098,8 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
     "dnd.classes.barbarian.RecklessAttack": _reckless_attack_semantics,
     "dnd.classes.sorcerer.QuickenedSpell": _quickened_spell_semantics,
     "dnd.classes.sorcerer.TwinnedSpell": _twinned_spell_semantics,
+    "action.class.sorcerer.quickened_spell": _quickened_spell_semantics,
+    "action.class.sorcerer.twinned_spell": _twinned_spell_semantics,
     "dnd.classes.rage.Frenzy": _frenzy_semantics,
     "dnd.classes.rage.EndRage": _end_rage_semantics,
     "dnd.classes.rage.Rage": _rage_semantics,
@@ -1122,13 +1124,15 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
     "dnd.items.environment.OpenDirectionalDoorAction": _open_door_semantics,
     "dnd.items.environment_interactables.CloseDoorAction": _close_door_semantics,
     "dnd.items.environment_interactables.OpenDoorAction": _open_door_semantics,
-    "dnd.items.environment_interactables.PullLeverAction": _deactivate_hazard_semantics,
+    "action.environment.trap_lever.set_deactivated": _deactivate_hazard_semantics,
 }
 
 
 _STRUCTURED_ACTION_BUILDERS: dict[str, StructuredSemanticBuilder] = {
     "dnd.classes.sorcerer.ConvertSlotToSP": _convert_slot_to_sorcery_semantics,
     "dnd.classes.sorcerer.ConvertSPToSlot": _convert_sorcery_to_slot_semantics,
+    "action.class.sorcerer.convert_slot_to_sorcery_points": _convert_slot_to_sorcery_semantics,
+    "action.class.sorcerer.convert_sorcery_points_to_slot": _convert_sorcery_to_slot_semantics,
 }
 
 

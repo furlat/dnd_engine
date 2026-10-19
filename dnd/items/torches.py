@@ -132,13 +132,15 @@ class IgniteTorchAction(BaseAction):
         torch = BaseBlock.get(self.source_item_uuid)
         if not isinstance(torch, Torch):
             return execution_event.cancel(status_message="Torch not found")
-        torch.ignite(
-            self.source_entity_uuid,
-            parent_event=execution_event.uuid,
-        )
         effect = execution_event.phase_to(
             EventPhase.EFFECT,
-            status_message="Torch ignited",
+            status_message="Ignite torch admitted",
+        )
+        if effect.canceled:
+            return effect
+        torch.ignite(
+            self.source_entity_uuid,
+            parent_event=effect.uuid,
         )
         return effect.with_updates(
             status_message="Torch ignited",
@@ -197,11 +199,13 @@ class ExtinguishTorchAction(BaseAction):
         torch = BaseBlock.get(self.source_item_uuid)
         if not isinstance(torch, Torch):
             return execution_event.cancel(status_message="Torch not found")
-        torch.extinguish(parent_event=execution_event.uuid)
         effect = execution_event.phase_to(
             EventPhase.EFFECT,
-            status_message="Torch extinguished",
+            status_message="Extinguish torch admitted",
         )
+        if effect.canceled:
+            return effect
+        torch.extinguish(parent_event=effect.uuid)
         return effect.with_updates(
             status_message="Torch extinguished",
         )
@@ -372,6 +376,29 @@ class Torch(UsableItem):
             parent_event=parent_event.uuid if parent_event is not None else None,
         )
 
+    def _on_loot(self, entity_uuid: UUID, inventory_uuid: UUID) -> None:
+        """Move a burning torch's exact light contribution to its accepted carrier."""
+        if not self.is_lit:
+            return
+        carrier = Entity.get(entity_uuid)
+        if carrier is None:
+            self.extinguish()
+            return
+        if self._light_source_uuid in carrier.get_attached_light_sources():
+            return
+        grid = get_map()
+        if self._light_source_uuid is not None:
+            grid.remove_light_source(self._light_source_uuid)
+        self._light_source_uuid = grid.add_light_source(
+            position=carrier.position,
+            very_bright_radius_feet=self.very_bright_radius_feet,
+            bright_radius_feet=self.bright_radius_feet,
+            dim_radius_feet=self.dim_radius_feet,
+            appearance="torch",
+            anchor_uuid=entity_uuid,
+            publish_event=carrier.creation_committed,
+        )
+
     def _on_drop(
         self,
         entity_uuid: UUID,
@@ -431,11 +458,13 @@ class IgniteWallTorchAction(BaseAction):
             return execution_event.cancel(
                 status_message="Wall torch not found",
             )
-        torch.light(parent_event=execution_event.uuid)
         effect = execution_event.phase_to(
             EventPhase.EFFECT,
-            status_message="Wall torch lit",
+            status_message="Light wall torch admitted",
         )
+        if effect.canceled:
+            return effect
+        torch.light(parent_event=effect.uuid)
         return effect.with_updates(
             status_message="Wall torch lit",
         )
@@ -484,11 +513,13 @@ class ExtinguishWallTorchAction(BaseAction):
             return execution_event.cancel(
                 status_message="Wall torch not found",
             )
-        torch.put_out(parent_event=execution_event.uuid)
         effect = execution_event.phase_to(
             EventPhase.EFFECT,
-            status_message="Wall torch extinguished",
+            status_message="Extinguish wall torch admitted",
         )
+        if effect.canceled:
+            return effect
+        torch.put_out(parent_event=effect.uuid)
         return effect.with_updates(
             status_message="Wall torch extinguished",
         )

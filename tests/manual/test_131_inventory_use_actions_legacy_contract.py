@@ -14,6 +14,8 @@ from dnd.types.world import MovementMode
 from dnd.actions import SpellAction
 from dnd.actions_functional import (
     execute_available_action,
+    free_aim_target,
+    preview_available_selection,
     execute_by_index,
     execute_use_action,
     get_available_actions,
@@ -41,6 +43,8 @@ from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
+from dnd.blocks.sensory import capture_senses_snapshot
+from dnd.core.cells import mask_positions
 from dnd.items.consumables import (
     build_concentration_fire_weapon_coat,
     build_fire_weapon_coat,
@@ -323,6 +327,25 @@ def target_hitting(
             excluding is None or excluding not in affected
         ):
             return target
+    # Region rows carry one selected preview, not every possible aim. Search
+    # the actor's visible region through the same public preview operation.
+    template = info.execution_template
+    if info.position_region is not None and template is not None:
+        actor = Entity.get(template.source_entity_uuid)
+        assert actor is not None
+        for position in mask_positions(capture_senses_snapshot(actor.senses).visible):
+            choice = free_aim_target(info, position)
+            preview = preview_available_selection(actor, info, (choice,))
+            affected = set(preview.affected_entity_uuids)
+            if preview.can_confirm and set(entity_uuids) <= affected and (
+                excluding is None or excluding not in affected
+            ):
+                return choice.model_copy(update={
+                    "affected_positions": list(preview.affected_positions),
+                    "affected_entity_uuids": list(preview.affected_entity_uuids),
+                    "affected_entity_names": list(preview.affected_entity_names),
+                    "affected_count": len(preview.affected_entity_uuids),
+                })
     raise AssertionError(
         f"No {info.template_name!r} preview affected {entity_uuids}"
     )
@@ -503,7 +526,7 @@ def test_permanent_weapon_coat_discovery_damage_and_cleanup() -> None:
     assert result is not None and not result.canceled
     assert coat.uuid not in caster.inventory.items
     assert BaseBlock.get(coat.uuid) is None
-    assert "Flaming Coat" in caster.active_conditions
+    assert "Flaming Coat" in main.active_conditions
     assert main.extra_damage_dices == [6]
     assert main.extra_damage_type == [DamageType.FIRE]
     assert off.extra_damage_dices == []
@@ -527,7 +550,7 @@ def test_permanent_weapon_coat_discovery_damage_and_cleanup() -> None:
     assert attack_result is not None and not attack_result.canceled
     assert get_hp(target) < hp_before
 
-    caster.remove_condition("Flaming Coat")
+    main.remove_condition("Flaming Coat")
 
     assert main.extra_damage_dices == []
     assert main.extra_damage_type == []
@@ -560,10 +583,11 @@ def test_magic_missile_wand_depletes_without_destroying_item() -> None:
     assert wand.charges == 0
     assert caster.inventory.has_item(wand.uuid)
     assert BaseBlock.get(wand.uuid) is wand
-    assert all(
-        info.source_item_uuid != wand.uuid
-        for info in get_available_actions(caster).all_actions
-    )
+    depleted = [info for info in get_available_actions(caster).all_actions
+                if info.source_item_uuid == wand.uuid and info.is_item_use]
+    assert depleted == []
+    assert any(info.template_name == "Drop" and info.source_item_uuid == wand.uuid
+               for info in get_available_actions(caster).all_actions)
 
 
 def test_wand_of_fire_enforces_per_spell_charge_costs() -> None:
@@ -578,7 +602,7 @@ def test_wand_of_fire_enforces_per_spell_charge_costs() -> None:
     rows = [
         info
         for info in get_available_actions(caster).position_actions
-        if info.source_item_uuid == wand.uuid
+        if info.source_item_uuid == wand.uuid and info.is_item_use
     ]
 
     assert {
@@ -609,7 +633,7 @@ def test_wand_of_fire_enforces_per_spell_charge_costs() -> None:
     fireball = next(
         info
         for info in get_available_actions(caster).position_actions
-        if info.source_item_uuid == wand.uuid and info.item_charge_cost == 3
+        if info.source_item_uuid == wand.uuid and info.is_item_use and info.item_charge_cost == 3
     )
     hp_before = get_hp(target)
     with fixed_dice_faces(10, *([4] * 8)):
@@ -632,7 +656,7 @@ def test_wand_of_fire_enforces_per_spell_charge_costs() -> None:
     remaining = [
         info
         for info in get_available_actions(caster).all_actions
-        if info.source_item_uuid == wand.uuid
+        if info.source_item_uuid == wand.uuid and info.is_item_use
     ]
     assert {info.item_charge_cost for info in remaining} == {1}
 
@@ -681,12 +705,7 @@ def test_wand_fireballs_preserve_explicit_level_and_variant_isolation() -> None:
         hp_before = get_hp(target)
 
         with fixed_dice_faces(10, *([4] * dice_count)):
-            result = execute_by_index(
-                caster,
-                selected.template_name,
-                preview.index,
-                available=available,
-            )
+            result = execute_available_action(caster, selected, preview)
 
         assert result is not None and not result.canceled
         assert hp_before - get_hp(target) == dice_count * 4
@@ -1060,12 +1079,12 @@ def test_weapon_coat_concentration_and_timed_lifetimes() -> None:
 
     assert result is not None and not result.canceled
     assert "Concentrating" in caster.active_conditions
-    assert "Flaming Coat" in caster.active_conditions
+    assert "Flaming Coat" in sword.active_conditions
     assert sword.extra_damage_dices == [6]
 
     caster.remove_condition("Concentrating")
 
-    assert "Flaming Coat" not in caster.active_conditions
+    assert "Flaming Coat" not in sword.active_conditions
     assert sword.extra_damage_dices == []
 
     caster.action_economy.reset_all_costs()
@@ -1079,13 +1098,13 @@ def test_weapon_coat_concentration_and_timed_lifetimes() -> None:
     )
     assert result is not None and not result.canceled
 
-    caster.advance_duration_condition("Flaming Coat")
-    assert "Flaming Coat" in caster.active_conditions
+    sword.advance_duration("Flaming Coat")
+    assert "Flaming Coat" in sword.active_conditions
     assert sword.extra_damage_dices == [6]
 
-    caster.advance_duration_condition("Flaming Coat")
-    assert "Flaming Coat" in caster.active_conditions
-    caster.advance_duration_condition("Flaming Coat")
+    sword.advance_duration("Flaming Coat")
+    assert "Flaming Coat" in sword.active_conditions
+    sword.advance_duration("Flaming Coat")
 
-    assert "Flaming Coat" not in caster.active_conditions
+    assert "Flaming Coat" not in sword.active_conditions
     assert sword.extra_damage_dices == []

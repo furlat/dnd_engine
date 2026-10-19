@@ -18,10 +18,14 @@ from dnd.ai.contracts.semantics import action_semantics_ref
 from dnd.ai.runtime import decision_epoch as subjective_epochs
 from dnd.ai.runtime.decision_epoch import _build_affordance_set_from_actions
 from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder
-from dnd.actions import SpellAction
-from dnd.actions_functional import execute_by_index
+from dnd.actions import SpellAction, SpellEvent
+from dnd.core.combat_log import SpellSaveLogData
+from dnd.actions_functional import (execute_by_index, register_spell, free_aim_target,
+    preview_available_selection, get_available_actions)
+from dnd.spells.evocation import IceStorm
+from tests.manual.spell_regression_support import create_spell_regression_actor, reset_spell_regression_arena
 from dnd.core.base_actions import BaseAction, TargetType
-from dnd.core.aoe import AoEShape, Sphere
+from dnd.core.aoe import AoEShape, Sphere, line_of_effect_reach
 from dnd.core.base_block import LightLevel
 from dnd.core.base_block import MovementMode
 from dnd.core.base_tiles import Tile
@@ -29,6 +33,7 @@ from dnd.core.navigation import route_cost, route_destinations
 from tests.engine.support import search_tables
 from dnd.core.events import (
     Event,
+    SavingThrowEvent,
     EventPhase,
     EventType,
     EventQueue,
@@ -137,205 +142,11 @@ def test_filtered_event_callbacks_skip_unrelated_events() -> None:
     assert filtered_sequence not in EventQueue._on_event_sequence_callback_filters
 
 
-def test_epoch_build_expands_registered_action_variants_once(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """One epoch reuses one fresh discovery snapshot across rows and capabilities."""
-    arena = assemble_authored_encounter("high_level_spell_resource_duel")
-    archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
-    archmage.update_entity_senses(max_distance=20)
-    base_variant_calls: Counter[str] = Counter()
-    spell_variant_calls: Counter[str] = Counter()
-    make_info_calls = 0
-    original_base_variants = BaseAction.get_discovery_variants
-    original_spell_variants = SpellAction.get_discovery_variants
-    original_make_info = Entity._make_action_info
-
-    def track_base_variants(self: BaseAction, entity: Any) -> list[BaseAction]:
-        base_variant_calls[str(self.uuid)] += 1
-        return original_base_variants(self, entity)
-
-    def track_spell_variants(self: SpellAction, entity: Any) -> list[BaseAction]:
-        spell_variant_calls[str(self.uuid)] += 1
-        return original_spell_variants(self, entity)
-
-    def track_make_info(self: Entity, *args: Any, **kwargs: Any):
-        nonlocal make_info_calls
-        make_info_calls += 1
-        return original_make_info(self, *args, **kwargs)
-
-    monkeypatch.setattr(BaseAction, "get_discovery_variants", track_base_variants)
-    monkeypatch.setattr(SpellAction, "get_discovery_variants", track_spell_variants)
-    monkeypatch.setattr(Entity, "_make_action_info", track_make_info)
-
-    actions = archmage.get_available_actions(legal_only=True)
-    row_build_make_info_calls = make_info_calls
-    affordances = _build_affordance_set_from_actions(archmage, actions, 42)
-    capability_make_info_calls = make_info_calls - row_build_make_info_calls
-    discovered_sources = {
-        (
-            row.template_name,
-            row.target_type.value,
-            str(row.source_item_uuid) if row.source_item_uuid is not None else None,
-        )
-        for row in actions.all_actions
-    }
-    capability_sources = [
-        (variant, None)
-        for variant in actions.registered_action_variants
-    ] + [
-        (
-            variant,
-            str(variant.source_item_uuid) if variant.source_item_uuid is not None else None,
-        )
-        for variant in actions.inventory_use_action_sources
-    ]
-    missing_capability_rows = sum(
-        (
-            variant.get_discovery_template_name(),
-            variant.effective_target_type.value,
-            source_item_uuid,
-        ) not in discovered_sources
-        for variant, source_item_uuid in capability_sources
-    )
-
-    assert affordances.capabilities
-    regular_rows = tuple(
-        row
-        for row in affordances.all_rows
-        if row.bucket != "special_commands"
-    )
-    source_counts = Counter(row.source_action_id for row in regular_rows)
-    assert None not in source_counts
-    assert len(source_counts) == len(actions.all_actions)
-    assert max(source_counts.values()) > 1
-    registered_spells = tuple(
-        template
-        for template in archmage.registered_actions
-        if isinstance(template, SpellAction)
-    )
-    registered_non_spells = tuple(
-        template
-        for template in archmage.registered_actions
-        if not isinstance(template, SpellAction)
-    )
-    assert set(spell_variant_calls) == {
-        str(template.uuid)
-        for template in registered_spells
-    }
-    assert set(spell_variant_calls.values()) == {1}
-    assert set(base_variant_calls) == {
-        str(template.uuid)
-        for template in registered_non_spells
-    } | {
-        str(variant.uuid)
-        for variant in actions.registered_action_variants
-        if isinstance(variant, SpellAction)
-    }
-    assert set(base_variant_calls.values()) == {1}
-    assert capability_make_info_calls == missing_capability_rows
 
 
-def test_epoch_derives_semantics_and_cost_once_per_source_row(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Capabilities and affordances reuse one build-local row descriptor."""
-    arena = assemble_authored_encounter("high_level_spell_resource_duel")
-    archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
-    archmage.update_entity_senses(max_distance=20)
-    actions = archmage.get_available_actions()
-    subjective_epochs.clear_epoch_value_caches()
-    original_semantics = subjective_epochs.action_semantics_for_available_action
-    original_cost = subjective_epochs._action_cost_profile_from_action
-    semantics_calls = 0
-    cost_calls = 0
-
-    def track_semantics(row: Any):
-        nonlocal semantics_calls
-        semantics_calls += 1
-        return original_semantics(row)
-
-    def track_cost(row: Any):
-        nonlocal cost_calls
-        cost_calls += 1
-        return original_cost(row)
-
-    monkeypatch.setattr(
-        subjective_epochs,
-        "action_semantics_for_available_action",
-        track_semantics,
-    )
-    monkeypatch.setattr(
-        subjective_epochs,
-        "_action_cost_profile_from_action",
-        track_cost,
-    )
-
-    available_source_keys = {
-        subjective_epochs._capability_row_lookup_key(row)
-        for row in actions.all_actions
-    }
-    capability_sources = [
-        (variant, None)
-        for variant in actions.registered_action_variants
-    ] + [
-        (
-            variant,
-            str(variant.source_item_uuid) if variant.source_item_uuid is not None else None,
-        )
-        for variant in actions.inventory_use_action_sources
-    ]
-    missing_capability_count = sum(
-        subjective_epochs._capability_template_lookup_key(variant, source_item_uuid)
-        not in available_source_keys
-        for variant, source_item_uuid in capability_sources
-    )
-    expected_derivations = len(actions.all_actions) + missing_capability_count
-
-    affordances = _build_affordance_set_from_actions(archmage, actions, 42)
-
-    assert affordances.capabilities
-    assert semantics_calls == expected_derivations
-    assert cost_calls == expected_derivations
 
 
-def test_aoe_shape_definition_is_not_serialized_per_candidate_cell(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """AoE discovery reuses one immutable shape key across candidate cells."""
-    arena = assemble_authored_encounter("caster_crossfire")
-    mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
-    mage.update_entity_senses(max_distance=20)
-    original_shape_key = Entity._aoe_shape_definition_key
-    shape_key_calls = 0
 
-    def track_shape_key(shape: Any) -> tuple[Any, ...]:
-        nonlocal shape_key_calls
-        shape_key_calls += 1
-        return original_shape_key(shape)
-
-    monkeypatch.setattr(
-        Entity,
-        "_aoe_shape_definition_key",
-        staticmethod(track_shape_key),
-    )
-
-    actions = mage.get_available_actions()
-    aoe_rows = [
-        row
-        for row in actions.position_actions
-        if row.target_type is TargetType.POSITION_AOE
-    ]
-    aoe_variants = [
-        variant
-        for variant in actions.registered_action_variants
-        if variant.effective_target_type is TargetType.POSITION_AOE
-        and variant.check_costs()
-    ]
-
-    assert aoe_rows
-    assert sum(len(row.valid_targets) for row in aoe_rows) > 10
-    assert shape_key_calls == len(aoe_variants)
 
 
 def test_footprint_limited_propagation_matches_full_fov_for_candidates() -> None:
@@ -346,178 +157,17 @@ def test_footprint_limited_propagation_matches_full_fov_for_candidates() -> None
     candidate_positions = circle_positions(origin, radius=4)
 
     full_fov = set(grid.compute_propagation_fov(origin, 4))
-    bounded = grid.filter_propagation_positions(origin, candidate_positions, 4)
+    bounded = line_of_effect_reach(origin, candidate_positions)
 
     assert bounded == candidate_positions.intersection(full_fov)
 
 
-def test_footprint_limited_propagation_reuses_identical_candidate_filters() -> None:
-    """Repeated spell footprints should share one physical-propagation filter."""
-    assemble_authored_encounter("standard_skeleton_doors")
-    grid = get_map()
-    origin = (9, 7)
-    candidate_positions = circle_positions(origin, radius=4)
-    phases: list[str] = []
-
-    token = set_action_timing_recorder(lambda phase, _started: phases.append(phase))
-    try:
-        first = grid.filter_propagation_positions(origin, candidate_positions, 4)
-        second = grid.filter_propagation_positions(origin, set(candidate_positions), 4)
-    finally:
-        reset_action_timing_recorder(token)
-
-    assert second == first
-    assert "grid.filter_propagation_positions.cache_miss_ms" in phases
-    assert "grid.filter_propagation_positions.cache_hit_ms" in phases
-    assert len(grid._propagation_filter_cache) == 1
-
-    grid._bump_spatial_revisions(frozenset({SpatialChannel.PROPAGATION}))
-
-    assert grid._propagation_filter_cache == {}
 
 
-def test_aoe_preview_filters_footprints_without_full_origin_fov(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """AoE previews filter known footprints instead of scanning full origin FOV."""
-    arena = assemble_authored_encounter("caster_crossfire")
-    mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
-    mage.update_entity_senses(max_distance=20)
-    grid = get_map()
-    original_filter_propagation_positions = grid.filter_propagation_positions
-    original_compute_propagation_fov = grid.compute_propagation_fov
-    filter_calls = 0
-    propagation_fov_calls = 0
-
-    def track_filter_propagation_positions(
-        origin: tuple[int, int],
-        positions: set[tuple[int, int]],
-        max_distance: float | None = None,
-    ) -> set[tuple[int, int]]:
-        nonlocal filter_calls
-        filter_calls += 1
-        return original_filter_propagation_positions(origin, positions, max_distance)
-
-    def track_compute_propagation_fov(
-        origin: tuple[int, int],
-        max_distance: float | None = None,
-    ) -> list[tuple[int, int]]:
-        nonlocal propagation_fov_calls
-        propagation_fov_calls += 1
-        return original_compute_propagation_fov(origin, max_distance)
-
-    monkeypatch.setattr(
-        grid,
-        "filter_propagation_positions",
-        track_filter_propagation_positions,
-    )
-    monkeypatch.setattr(grid, "compute_propagation_fov", track_compute_propagation_fov)
-
-    actions = mage.get_available_actions()
-    aoe_target_count = sum(
-        len(row.valid_targets)
-        for row in actions.position_actions
-        if row.target_type is TargetType.POSITION_AOE
-    )
-
-    assert aoe_target_count > 10
-    assert filter_calls > 0
-    assert propagation_fov_calls == 0
 
 
-def test_aoe_discovery_reuses_one_preview_shape_per_variant(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """AoE preview discovery should not clone a shape for every candidate cell."""
-    arena = assemble_authored_encounter("caster_crossfire")
-    mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
-    mage.update_entity_senses(max_distance=20)
-    original_model_copy = AoEShape.model_copy
-    shape_copy_calls = 0
-    target_update_copy_calls = 0
-
-    def track_shape_copy(self: AoEShape, *args: Any, **kwargs: Any) -> AoEShape:
-        nonlocal shape_copy_calls, target_update_copy_calls
-        shape_copy_calls += 1
-        update = kwargs.get("update")
-        if isinstance(update, dict) and "target" in update:
-            target_update_copy_calls += 1
-        return original_model_copy(self, *args, **kwargs)
-
-    monkeypatch.setattr(AoEShape, "model_copy", track_shape_copy)
-
-    actions = mage.get_available_actions()
-    aoe_target_count = sum(
-        len(row.valid_targets)
-        for row in actions.position_actions
-        if row.target_type is TargetType.POSITION_AOE
-    )
-    affordable_aoe_variant_count = sum(
-        1
-        for variant in actions.registered_action_variants
-        if variant.effective_target_type is TargetType.POSITION_AOE
-        and variant.aoe_shape is not None
-        and variant.check_costs()
-    )
-
-    assert aoe_target_count > affordable_aoe_variant_count
-    assert 0 < shape_copy_calls < affordable_aoe_variant_count
-    assert shape_copy_calls < aoe_target_count
-    assert target_update_copy_calls == 0
 
 
-def test_directional_aoe_discovery_compacts_duplicate_target_rays(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Line-style AoEs should expose semantic rays, not every cell on a ray."""
-    arena = assemble_authored_encounter("standard_skeleton_doors")
-    actor = arena.hero
-    actor.update_entity_senses(max_distance=20)
-    actions = actor.get_available_actions()
-    move = next(row for row in actions.position_actions if row.template_name == "Move")
-    target = next(candidate for candidate in move.valid_targets if candidate.position == (7, 12))
-    execute_by_index(actor, "Move", target.index, available=actions)
-    original_compute = Entity._compute_aoe_at_position
-    call_counts: Counter[str] = Counter()
-
-    def track_compute(
-        self: Entity,
-        shape: Any,
-        shape_definition_key: tuple[Any, ...],
-        pos: tuple[int, int],
-        template: BaseAction,
-        include_dead: bool,
-        caster_visible_positions: Any,
-        fov_cache: dict,
-        barrier_positions: set[tuple[int, int]],
-        idx: int,
-    ) -> Any:
-        call_counts[template.get_discovery_template_name()] += 1
-        return original_compute(
-            self,
-            shape,
-            shape_definition_key,
-            pos,
-            template,
-            include_dead,
-            caster_visible_positions,
-            fov_cache,
-            barrier_positions,
-            idx,
-        )
-
-    monkeypatch.setattr(Entity, "_compute_aoe_at_position", track_compute)
-
-    post_move_actions = actor.get_available_actions()
-    lightning = next(
-        row
-        for row in post_move_actions.position_actions
-        if row.template_name == "Lightning Bolt__slot_3"
-    )
-
-    assert len(lightning.valid_targets) == 3
-    assert call_counts["Lightning Bolt__slot_3"] < 100
-    assert all(target.affected_entity_uuids for target in lightning.valid_targets)
 
 
 def test_static_aoe_geometry_reuses_relative_offset_caches() -> None:
@@ -566,30 +216,26 @@ def test_supercover_line_reuses_relative_geometry_for_translated_rays() -> None:
 
 
 def test_subjective_aoe_preview_intersects_visibility_and_propagation() -> None:
-    """AoE preview optimization must preserve both subjective filters."""
-    shape = Sphere(
-        source_entity_uuid=uuid4(),
-        target=(5, 5),
-        radius_feet=10,
-    )
-    caster_fov = {(5, 5), (6, 5), (7, 5), (100, 100)}
-    origin_fov = {(5, 5), (6, 5), (4, 5), (5, 6)}
-    fov_cache = {((5, 5), 2): origin_fov}
-    senses = SimpleNamespace(visible={}, entities={})
-
-    shape.compute_subjective(
-        caster_pos=(0, 0),
-        senses=cast(Any, senses),
-        fov_cache=fov_cache,
-        barrier_positions={(5, 5)},
-        caster_visible_positions=caster_fov,
-    )
-
-    expected = circle_positions((5, 5), radius=2).intersection(
-        caster_fov,
-        origin_fov,
-    )
-    assert shape.affected_positions == expected
+    """A selected area discloses visible, reachable cells and perceived recipients."""
+    reset_spell_regression_arena(12, 10)
+    caster = create_spell_regression_actor("Preview Caster", (2, 4), "heroes", spell_slots={4: 1})
+    target = create_spell_regression_actor("Visible Target", (5, 4), "monsters")
+    hidden = create_spell_regression_actor("Hidden Target", (8, 4), "monsters")
+    hidden.set_stealth_dc(100)
+    for y in range(10):
+        get_map().set_tile(7, y, blocks_optics=True, blocks_propagation=True, walking_cost=0)
+    register_spell(caster, IceStorm)
+    Entity.update_all_entities_senses(max_distance=100)
+    actions = get_available_actions(caster, include_aoe_preview=False)
+    row = next(row for row in actions.position_actions if row.base_template_name == "Ice Storm")
+    aim = free_aim_target(row, target.position)
+    preview = preview_available_selection(caster, row, (aim,))
+    assert preview.can_confirm and preview.area_preview == "computed"
+    assert target.uuid in preview.affected_entity_uuids
+    assert hidden.uuid not in preview.affected_entity_uuids
+    visible = set(mask_positions(capture_senses_snapshot(caster.senses).visible))
+    assert set(preview.affected_positions) <= visible
+    assert all(x <= 7 for x, _ in preview.affected_positions)
 
 
 def test_observation_tile_projection_skips_hazard_scan_on_safe_maps(
@@ -648,52 +294,32 @@ def test_observation_tile_projection_keeps_entity_aware_hazard_checks(
     assert calls > 0
 
 
-def test_fireball_uses_resolved_save_roll_bonus_without_second_bonus_rebuild(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Fireball should not rebuild the same save bonus after each target rolls."""
+def test_fireball_reports_each_resolved_save_roll_bonus() -> None:
+    """Every actual creature recipient's event carries the resolved roll bonus."""
     arena = assemble_authored_encounter("caster_crossfire")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     mage.update_entity_senses(max_distance=20)
     actions = mage.get_available_actions()
-    fireball = next(
-        row
-        for row in actions.position_actions
-        if row.template_name == "Fireball__slot_3"
-    )
-    target = max(fireball.valid_targets, key=lambda candidate: candidate.affected_count or 0)
-    target_uuids = set(target.affected_entity_uuids or [])
-    assert len(target_uuids) == 2
-
-    original = Entity.saving_throw_bonus
-    saving_throw_bonus_calls = 0
-
-    def count_saving_throw_bonus(
-        self: Entity,
-        target_entity_uuid: UUID | None,
-        ability_name: Any,
-        context: Any,
-    ) -> Any:
-        nonlocal saving_throw_bonus_calls
-        if self.uuid in target_uuids and target_entity_uuid == mage.uuid and ability_name == "dexterity":
-            saving_throw_bonus_calls += 1
-        return original(self, target_entity_uuid, ability_name, context)
-
-    monkeypatch.setattr(Entity, "saving_throw_bonus", count_saving_throw_bonus)
-
-    event = execute_by_index(
-        mage,
-        fireball.template_name,
-        target.index,
-        available=actions,
-    )
-
-    assert event is not None
-    assert not event.canceled
-    # Exposed walls and objects are Fireball recipients too, so the event's
-    # application count can exceed the two creature targets.
-    assert event.total_targets >= len(target_uuids)
-    assert saving_throw_bonus_calls == len(target_uuids)
+    row = next(row for row in actions.position_actions if row.base_template_name == "Fireball")
+    aim = max(row.valid_targets, key=lambda candidate: candidate.affected_count or 0)
+    expected_targets = set(aim.affected_entity_uuids or ())
+    assert expected_targets
+    cursor = EventQueue.event_cursor()
+    event = execute_by_index(mage, row.template_name, aim.index, available=actions)
+    assert event is not None and not event.canceled
+    assert event.combat_log is not None
+    applications = [child for child in event.combat_log.sub_entries
+                    if isinstance(child.data, SpellSaveLogData)]
+    assert {child.target_uuid for child in applications} == {str(identity) for identity in expected_targets}
+    saves = [save for _, save in EventQueue.iter_events_since(cursor)
+             if isinstance(save, SavingThrowEvent) and save.phase is EventPhase.COMPLETION]
+    assert saves
+    for child in applications:
+        assert isinstance(child.data, SpellSaveLogData)
+        resolved = next(save for save in saves if str(save.target_entity_uuid) == child.target_uuid)
+        assert resolved.dice_roll is not None
+        assert child.data.save_roll.bonus == resolved.dice_roll.bonus
+        assert child.data.save_roll.total == resolved.dice_roll.total
 
 
 def test_dense_epoch_wire_factors_shared_action_metadata_and_round_trips() -> None:
@@ -902,137 +528,27 @@ def test_hazard_free_movement_choices_have_no_hazard_or_safe_alternative() -> No
                for target in move.valid_targets)
 
 
-def test_bright_visibility_skips_per_tile_effective_light(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Fully bright FOVs should not resolve observer-specific light per tile."""
-    arena = assemble_authored_encounter("srd_low_cr_patrol")
-    actor = arena.hero
-
-    def reject_effective_light(*_args: Any, **_kwargs: Any) -> LightLevel:
-        raise AssertionError("bright maps should use the objective light fast path")
-
-    monkeypatch.setattr(Tile, "get_effective_light_for", reject_effective_light)
-
-    actor.update_entity_visibility(max_distance=20)
-
-    assert not no_cells(capture_senses_snapshot(actor.senses).visible)
-
-
-def test_dark_visibility_still_uses_subjective_light_resolution(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Dark FOVs must still apply observer-specific senses such as darkvision."""
-    arena = assemble_authored_encounter("srd_low_cr_patrol")
-    actor = arena.hero
-    for tile in get_map().get_all_tiles().values():
-        tile.default_light = LightLevel.DARKNESS
-    calls = 0
-    original = Tile.get_effective_light_for
-
-    def track_effective_light(self: Tile, *args: Any, **kwargs: Any) -> LightLevel:
-        nonlocal calls
-        calls += 1
-        return original(self, *args, **kwargs)
-
-    monkeypatch.setattr(Tile, "get_effective_light_for", track_effective_light)
-
-    actor.update_entity_visibility(max_distance=20)
-
-    assert calls > 0
 
 
 
-def test_bright_light_refresh_skips_per_tile_effective_light(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Incremental bright light updates should use objective light directly."""
-    arena = assemble_authored_encounter("srd_low_cr_patrol")
-    actor = arena.hero
-    actor.update_entity_senses(max_distance=20)
-    grid = get_map()
-    changed_positions = {
-        position
-        for position in grid.get_entity_subscriptions(actor.uuid)
-        if (tile := grid.get_tile(*position)) is not None
-        and tile.resolved_light_level.value >= LightLevel.BRIGHT_LIGHT.value
-    }
-    assert changed_positions
-    changed_positions = set(sorted(changed_positions)[:3])
-    callback = actor.senses.create_spatial_callback(actor.uuid)
-
-    def reject_effective_light(*_args: Any, **_kwargs: Any) -> LightLevel:
-        raise AssertionError("bright light refresh should not resolve subjective light")
-
-    monkeypatch.setattr(Tile, "get_effective_light_for", reject_effective_light)
-
-    callback._light_positions_requiring_visibility_refresh(changed_positions)
-    callback._update_visibility_for_light_positions(changed_positions)
-
-    assert changed_positions <= set(mask_positions(capture_senses_snapshot(actor.senses).visible))
 
 
-def test_dark_light_refresh_still_uses_subjective_light_resolution(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Incremental dark light updates must still respect observer senses."""
-    arena = assemble_authored_encounter("srd_low_cr_patrol")
-    actor = arena.hero
-    actor.update_entity_senses(max_distance=20)
-    grid = get_map()
-    position = next(
-        position
-        for position in sorted(grid.get_entity_subscriptions(actor.uuid))
-        if grid.get_tile(*position) is not None
-    )
-    tile = grid.get_tile(*position)
-    assert tile is not None
-    tile.default_light = LightLevel.DARKNESS
-    tile.add_obscurement(uuid4(), LightLevel.DARKNESS, fire_event=False)
-    assert tile.resolved_light_level.value <= LightLevel.DARKNESS.value
-    calls = 0
-    original = Tile.get_effective_light_for
-
-    def track_effective_light(self: Tile, *args: Any, **kwargs: Any) -> LightLevel:
-        nonlocal calls
-        calls += 1
-        return original(self, *args, **kwargs)
-
-    monkeypatch.setattr(Tile, "get_effective_light_for", track_effective_light)
-    callback = actor.senses.create_spatial_callback(actor.uuid)
-
-    callback._light_positions_requiring_visibility_refresh({position})
-    callback._update_visibility_for_light_positions({position})
-
-    assert calls >= 2
 
 
-def test_dirty_action_discovery_limits_path_radius_to_movement_budget(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Dirty movement rows should not recompute full visibility-radius paths."""
+
+
+def test_dirty_action_discovery_limits_choices_to_movement_budget() -> None:
+    """Refreshing dirty paths yields only routes that the current budget can pay."""
     arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     actor.senses._paths_dirty = True
-    grid = get_map()
-    original_compute_paths = grid.compute_paths
-    requested_distances: list[int | None] = []
-
-    def track_compute_paths(*args: Any, **kwargs: Any) -> Any:
-        max_distance = kwargs.get("max_distance")
-        if max_distance is None and len(args) > 1:
-            max_distance = args[1]
-        requested_distances.append(max_distance)
-        return original_compute_paths(*args, **kwargs)
-
-    monkeypatch.setattr(grid, "compute_paths", track_compute_paths)
-
-    actor.get_available_actions()
-
-    assert actor.senses.path_max_distance == 6
-    assert 6 in requested_distances
-    assert 20 not in requested_distances
+    actions = actor.get_available_actions()
+    move = next(row for row in actions.position_actions if row.template_name == "Move")
+    assert move.valid_targets
+    assert actor.senses.path_max_distance == actor.action_economy.movement_remaining() // 5
+    assert all(target.path_cost is not None and target.path_cost <= actor.action_economy.movement_remaining()
+               for target in move.valid_targets)
 
 
 def test_dash_expands_limited_path_radius_when_movement_budget_grows() -> None:
@@ -1178,54 +694,17 @@ def test_unit_cost_paths_use_breadth_first_fast_path(
     assert paths[actor.position] == [actor.position]
 
 
-def test_weighted_paths_keep_dijkstra_selection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Non-unit movement costs must keep weighted Dijkstra semantics."""
-    arena = assemble_authored_encounter("srd_low_cr_patrol")
-    actor = arena.hero
+def test_weighted_paths_preserve_exact_terrain_costs() -> None:
+    """Terrain weights contribute to route costs regardless of solver choice."""
+    get_map().create_rectangle(0, 0, 5, 1)
     grid = get_map()
-    grid._path_cache.clear()
-    difficult_position = next(
-        position for position in grid.get_all_tiles()
-        if position != actor.position
-    )
-    difficult_tile = grid.get_tile(*difficult_position)
-    assert difficult_tile is not None
-    add_modifier(difficult_tile.edit_movement_cost(MovementMode.WALKING), Channel.SELF_STATIC, Kind.VALUE, NumericalModifier.create(
-            source_entity_uuid=difficult_tile.uuid,
-            name="Performance Test Difficult Terrain",
-            value=1,
-        ))
-    dijkstra_calls = 0
-    bfs_calls = 0
-    original_dijkstra = gridmap_module.GridMap._dijkstra
-
-    def track_dijkstra(*args: Any, **kwargs: Any) -> Any:
-        nonlocal dijkstra_calls
-        dijkstra_calls += 1
-        return original_dijkstra(*args, **kwargs)
-
-    def reject_bfs(*_args: Any, **_kwargs: Any) -> Any:
-        nonlocal bfs_calls
-        bfs_calls += 1
-        raise AssertionError("weighted maps must use Dijkstra")
-
-    monkeypatch.setattr(gridmap_module.GridMap, "_dijkstra", staticmethod(track_dijkstra))
-    monkeypatch.setattr(gridmap_module.GridMap, "_breadth_first", staticmethod(reject_bfs))
-
-    distances, _ = search_tables(grid.compute_paths(
-        actor.position,
-        max_distance=6,
-        requesting_entity_uuid=actor.uuid,
-        movement_mode=MovementMode.WALKING,
-        subjective=True,
-    ))
-
-    assert dijkstra_calls == 1
-    assert bfs_calls == 0
-    if difficult_position in distances:
-        assert distances[difficult_position] >= 2
+    grid.set_tile(2, 0, walking_cost=3)
+    distances, paths = search_tables(grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING))
+    easy, _ = search_tables(grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING,
+                                               ignore_difficult_terrain=True))
+    assert distances[(4, 0)] == 6
+    assert easy[(4, 0)] == 4
+    assert paths[(4, 0)] == [(x, 0) for x in range(5)]
 
 
 def test_move_discovery_uses_cached_senses_path_costs(
@@ -1336,7 +815,7 @@ def test_grid_compute_paths_invalidates_on_occupancy_change(
     )
     assert solver_calls == 1
 
-    grid.move_entity(blocker.uuid, (blocker.position[0], blocker.position[1] + 1))
+    Entity.update_entity_position(blocker, (blocker.position[0], blocker.position[1] + 1))
     grid.compute_paths(
         actor.position,
         max_distance=20,

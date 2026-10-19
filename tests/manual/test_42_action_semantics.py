@@ -423,7 +423,7 @@ def test_pull_lever_exposes_typed_hazard_deactivation() -> None:
     """Trap controls predict hazard removal without pretending to open a blocker."""
     row = _action(
         "Pull Lever__item_test",
-        semantic_key="dnd.items.environment_interactables.PullLeverAction",
+        semantic_key="action.environment.trap_lever.set_deactivated",
         is_item_use=True,
     )
 

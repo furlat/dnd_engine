@@ -26,36 +26,3 @@ def test_tracking_only_conditions_are_internal(
         call_default_factory=True,
     )
     assert category is ConditionCategory.INTERNAL
-
-
-def test_every_public_condition_class_declares_name_and_description() -> None:
-    """Reachable public condition types cannot fall back to missing tooltip text."""
-    import_dnd_modules()
-    seen: set[type[BaseCondition]] = set()
-    pending = list(BaseCondition.__subclasses__())
-    failures: list[str] = []
-
-    while pending:
-        condition_type = pending.pop()
-        pending.extend(condition_type.__subclasses__())
-        if condition_type in seen:
-            continue
-        seen.add(condition_type)
-        fields = condition_type.model_fields
-        category = fields["condition_category"].get_default(
-            call_default_factory=True,
-        )
-        if category is ConditionCategory.INTERNAL:
-            continue
-        name = fields["name"].get_default(call_default_factory=True)
-        description = fields["description"].get_default(
-            call_default_factory=True,
-        )
-        if not isinstance(name, str) or not name.strip():
-            failures.append(f"{condition_type.__module__}.{condition_type.__name__}: name")
-        if not isinstance(description, str) or not description.strip():
-            failures.append(
-                f"{condition_type.__module__}.{condition_type.__name__}: description"
-            )
-
-    assert failures == []

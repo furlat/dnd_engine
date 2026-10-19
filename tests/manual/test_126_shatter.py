@@ -227,7 +227,7 @@ def test_shatter_both_save_outcomes_are_reported() -> None:
     assert isinstance(result, SpellEvent)
     assert result.combat_log is not None
     save_results = {
-        entry.data["save_success"]
+        entry.data.save_success
         for entry in result.combat_log.sub_entries
     }
     assert save_results == {False, True}

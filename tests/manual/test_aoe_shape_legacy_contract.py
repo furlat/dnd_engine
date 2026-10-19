@@ -78,12 +78,13 @@ def test_aoe_shapes_preserve_extent_width_entities_and_wall_occlusion() -> None:
     }
     assert {(7, 1), (7, 2), (7, 3), (8, 2), (9, 2)} <= directional_cube
 
-    grid.set_tile(5, 11, walkable=False, visible=False, name="Line Wall")
+    grid.set_tile(5, 11, walking_cost=0, blocks_optics=True, blocks_propagation=True, name="Line Wall")
     blocked_line = objective_footprint(Line(length_feet=50, width_feet=5), (15, 11), (0, 11))
     assert (4, 11) in blocked_line
     assert (6, 11) not in blocked_line
 
-    grid.set_tile(7, 5, walkable=False, visible=False, name="Sphere Wall")
+    Entity.update_entity_position(edge_target, (7, 4))
+    grid.set_tile(7, 5, walking_cost=0, blocks_optics=True, blocks_propagation=True, name="Sphere Wall")
     blocked_sphere = objective_footprint(Sphere(radius_feet=20), (5, 5), (0, 0))
     assert (6, 5) in blocked_sphere
     assert (8, 5) not in blocked_sphere

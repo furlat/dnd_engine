@@ -8,6 +8,7 @@ from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.runtime_reset import reset_engine_runtime
+from tests.manual.runtime_fixture_support import compose_and_deploy
 
 
 def reset_controller_catalogue_state(width: int = 10, height: int = 8) -> None:
@@ -33,12 +34,14 @@ def create_controller_pair(
     Returns:
         Hero and monster entities with current senses.
     """
-    hero = create_goblin(name="Controller Hero", position=hero_position, faction="heroes")
-    monster = create_skeleton(
+    hero = compose_and_deploy(create_goblin(
+        name="Controller Hero", position=hero_position, faction="heroes",
+    ))
+    monster = compose_and_deploy(create_skeleton(
         name="Controller Skeleton",
         position=monster_position,
         faction="monsters",
-    )
+    ))
     Entity.update_all_entities_senses(max_distance=20)
     return hero, monster
 
@@ -58,7 +61,9 @@ def create_melee_only_skeleton(
     Returns:
         Skeleton entity with its ranged weapon unequipped.
     """
-    skeleton = create_skeleton(name=name, position=position, faction=faction)
+    skeleton = compose_and_deploy(create_skeleton(
+        name=name, position=position, faction=faction,
+    ))
     removed = skeleton.equipment.unequip(WeaponSlot.RANGED_MAIN)
     if removed is None:
         raise RuntimeError("Expected skeleton to start with a ranged weapon")

@@ -218,6 +218,10 @@ class PullLeverAction(BaseAction):
     )
     desired_state: TrapState = TrapState.DEACTIVATED
 
+    def get_semantic_key(self) -> str:
+        """Describe the selected trap operation independently of item identity."""
+        return f"action.environment.trap_lever.set_{self.desired_state.value}"
+
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
         lever = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
         if self.source_item_uuid is not None and (not isinstance(lever, TrapLever) or not lever.is_active):

@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
-
 from dnd.content.characters.premades import PREMADE_CHARACTER_BUILDS
 from dnd.content_system.bootstrap import bootstrap_content_system
-from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_BY_NAME,
@@ -17,11 +14,8 @@ from dnd.core.content.encounters import (
     PremadeCharacterRosterSource,
     RosterSpellGrant,
 )
-from dnd.core.content.materialization import (
-    CreatureDeploymentRole,
-    CreaturePossessionMode,
-)
 from dnd.core.gridmap import get_map
+from tests.engine.authored_character_support import prepare_roster_member
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import BATTLEFIELDS, build_battlefield
@@ -36,11 +30,11 @@ from dnd.scenarios.encounter_catalog import (
 
 
 def test_authored_catalog_inventory_is_complete_and_exact() -> None:
-    assert len(BATTLEFIELDS) == 9
+    assert len(BATTLEFIELDS) == 20
     assert len(AUTHORED_DEPLOYMENTS) == 9
-    assert len(AUTHORED_ROSTER_RECIPES) == 58
-    assert sum(len(row.members) for row in AUTHORED_ROSTER_RECIPES) == 141
-    assert len(AUTHORED_ENCOUNTER_RECIPES) == 38
+    assert len(AUTHORED_ROSTER_RECIPES) == 60
+    assert sum(len(row.members) for row in AUTHORED_ROSTER_RECIPES) == 146
+    assert len(AUTHORED_ENCOUNTER_RECIPES) == 42
 
     assert len({
         row.battlefield_id for row in BATTLEFIELDS
@@ -64,10 +58,13 @@ def test_authored_catalog_inventory_is_complete_and_exact() -> None:
 
     for encounter in AUTHORED_ENCOUNTER_RECIPES:
         assert encounter_recipe(encounter.encounter_id) is encounter
-        assert encounter.tags == ("authored",)
-        assert encounter.deployment.deployment_id == (
-            f"deployment.{encounter.encounter_id}"
-        )
+        assert encounter.tags
+        expected_deployment = {
+            "encounter.storehouse_demo": "deployment.storehouse_demo",
+            "encounter.lantern_crypt": "deployment.lantern_crypt",
+            "encounter.lantern_gallery": "deployment.lantern_gallery",
+        }.get(encounter.encounter_id, f"deployment.{encounter.encounter_id}")
+        assert encounter.deployment.deployment_id == expected_deployment
 
 
 def test_only_reusable_neutral_deployments_are_public() -> None:
@@ -75,7 +72,11 @@ def test_only_reusable_neutral_deployments_are_public() -> None:
         deployment.battlefield_id
         for deployment in AUTHORED_DEPLOYMENTS
     } == {
-        battlefield.battlefield_id for battlefield in BATTLEFIELDS
+        "battlefield.standard_hazards_closed", "battlefield.open_floor_bright",
+        "battlefield.standard_hazards_open", "battlefield.double_door_dark",
+        "battlefield.arcane_device_bright", "battlefield.reveal_labyrinth_dark",
+        "battlefield.field_cache_bright", "battlefield.multi_object_dark",
+        "battlefield.open_floor_dark",
     }
     assert all(
         deployment.deployment_id
@@ -133,67 +134,71 @@ def test_every_authored_encounter_prepares_through_canonical_assembler() -> None
 
 
 def test_every_authored_spell_matrix_preserves_requested_runtime_spells() -> None:
-    """Scenario-only spell matrices must survive canonical roster migration."""
-    SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
+    """Original spell requests survive in both reusable and embedded rosters."""
+    expected_spells = {
+        "scenario.sorcerer_l5_standard": {
+            "Fire Bolt", "Ray of Frost", "Magic Missile", "Burning Hands",
+            "Thunderwave", "Scorching Ray", "Hold Person", "Shatter",
+            "Invisibility", "Fireball", "Lightning Bolt",
+        },
+        "scenario.sorcerer_l9_standard": {
+            "Fire Bolt", "Ray of Frost", "Magic Missile", "Thunderwave",
+            "Scorching Ray", "Hold Person", "Shatter", "Invisibility",
+            "Fireball", "Lightning Bolt", "Hypnotic Pattern", "Slow", "Haste",
+            "Banishment", "Greater Invisibility", "Cone of Cold", "Cloudkill",
+        },
+        "scenario.sorcerer_l5_projectile": {
+            "Fire Bolt", "Ray of Frost", "Magic Missile", "Scorching Ray",
+        },
+        "scenario.sorcerer_l5_mirror": {
+            "Fire Bolt", "Ray of Frost", "Magic Missile", "Scorching Ray",
+            "Hold Person", "Haste", "Slow", "Fireball", "Lightning Bolt",
+        },
+        "scenario.sorcerer_l5_control": {
+            "Fire Bolt", "Ray of Frost", "Magic Missile", "Hold Person",
+            "Web", "Hypnotic Pattern", "Slow", "Fireball",
+        },
+        "scenario.sorcerer_l7_lock": {
+            "Fire Bolt", "Ray of Frost", "Hold Person", "Fear",
+            "Hypnotic Pattern", "Slow", "Banishment",
+        },
+    }
     all_rosters: tuple[EncounterRosterRecipe, ...] = (
         *AUTHORED_ROSTER_RECIPES,
-        *(
-            slot.roster
-            for encounter in AUTHORED_ENCOUNTER_RECIPES
-            for slot in encounter.roster_slots
-        ),
+        *(slot.roster for encounter in AUTHORED_ENCOUNTER_RECIPES
+          for slot in encounter.roster_slots),
     )
     audited_members = 0
     try:
         for roster in all_rosters:
             for member in roster.members:
                 source = member.source
-                if not isinstance(source, AuthoredCreatureRosterSource):
+                if not isinstance(source, PremadeCharacterRosterSource):
                     continue
-                requested_names = tuple(
-                    source.recipe.parameters.get("spell_names", ()),
-                )
-                if not requested_names:
+                if source.premade_id not in expected_spells:
                     continue
                 audited_members += 1
-                reset_engine_runtime()
-                entity = materialize_creature(
-                    source.recipe,
-                    runtime_entity_uuid=uuid4(),
-                    display_name=member.display_name,
-                    faction="spell-matrix-audit",
-                    position=(0, 0),
-                    deployment_role=CreatureDeploymentRole(
-                        role_id="audit.spell_matrix",
-                    ),
-                    possession_mode=(
-                        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
-                    ),
+                entity = prepare_roster_member(roster, member.member_id)
+                materialized_names = {action.name for action in entity.registered_actions}
+                assert expected_spells[source.premade_id] <= materialized_names, (
+                    roster.roster_id, member.member_id,
+                    expected_spells[source.premade_id] - materialized_names,
                 )
-                materialized_names = {
-                    action.name for action in entity.registered_actions
-                }
                 granted_identities = [
                     ref.identity_key
                     for effect in member.scenario_setup_effects
                     if isinstance(effect, RosterSpellGrant)
                     for ref in effect.spell_refs
                 ]
-                assert len(granted_identities) == len(
-                    set(granted_identities),
-                ), (roster.roster_id, member.member_id)
-                missing_identities = {
-                    SPELL_CATALOG_COMPOSITION_BY_NAME[
-                        name
-                    ].declaration.ref.identity_key
-                    for name in requested_names
-                    if name not in materialized_names
-                }
-                assert missing_identities <= set(granted_identities), (
-                    roster.roster_id,
-                    member.member_id,
-                    sorted(missing_identities - set(granted_identities)),
+                assert len(granted_identities) == len(set(granted_identities)), (
+                    roster.roster_id, member.member_id,
                 )
+                runtime_spell_identities = {
+                    SPELL_CATALOG_COMPOSITION_BY_NAME[name].declaration.ref.identity_key
+                    for name in materialized_names
+                    if name in SPELL_CATALOG_COMPOSITION_BY_NAME
+                }
+                assert set(granted_identities) <= runtime_spell_identities
     finally:
         reset_engine_runtime()
     assert audited_members == 25

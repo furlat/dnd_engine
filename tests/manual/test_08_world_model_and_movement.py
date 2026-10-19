@@ -15,17 +15,16 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import ModifiableValue
-from tests.engine.support import search_tables
+from tests.engine.support import search_tables, create_test_entity
+from dnd.entity import Entity, EntityConfig
+from dnd.runtime_reset import reset_engine_runtime
+from dnd.items.environment import DirectionalWall
+from dnd.types.world import CardinalDirection, WorldEdgeChannel
 
 
 def reset_world_state() -> None:
     """Clear global state touched by these world-model examples."""
-    EventQueue.reset()
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    ModifiableValue._registry.clear()
-    GridMap.reset()
-    EventQueue.set_combat_log_callback(None)
+    reset_engine_runtime()
 
 
 def test_first_world_example_prints_visible_corridor_costs(capsys) -> None:
@@ -134,68 +133,28 @@ def test_grid_tiles_have_bounds_lookup_and_movement_costs(capsys) -> None:
     assert capsys.readouterr().out.splitlines() == expected_terrain_lines
 
 
-def test_directional_border_blocks_transition_and_emits_tile_change(capsys) -> None:
-    """Directional tile borders can block movement between adjacent cells."""
+def test_directional_boundary_blocks_transition_and_publishes_placement(capsys) -> None:
+    """A placed structure owns directional movement and its spatial fact."""
     reset_world_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 2, 1)
+    assert grid.can_transition((0, 0), (1, 0), movement_mode=MovementMode.WALKING)
+    cursor = EventQueue.event_cursor()
+    wall = DirectionalWall(source_entity_uuid=uuid4(), item_id="fixture.world_wall",
+                           blocked_channels=(WorldEdgeChannel.MOVEMENT,))
+    wall.place_on_grid((0, 0), boundary_direction=CardinalDirection.EAST)
+    assert not grid.can_transition((0, 0), (1, 0), movement_mode=MovementMode.WALKING)
+    facts = [event for _, event in EventQueue.iter_events_since(cursor)
+             if isinstance(event, SpatialChangeEvent) and event.phase is EventPhase.COMPLETION
+             and event.object_uuid == wall.uuid]
+    assert len(facts) == 1
+    fact = facts[0]
+    assert fact.position == (0, 0)
+    assert fact.placement is not None
+    assert fact.placement.boundary_direction is CardinalDirection.EAST
+    print("directional boundary: east; transition blocked; placement published")
+    assert capsys.readouterr().out == "directional boundary: east; transition blocked; placement published\n"
 
-    before_passable = grid.can_transition(
-        (0, 0),
-        (1, 0),
-        movement_mode=MovementMode.WALKING,
-    )
-    assert before_passable
-
-    changed = grid.set_tile_directional_border(
-        position=(0, 0),
-        channel="movement",
-        direction="east",
-        passable=False,
-    )
-    after_passable = grid.can_transition(
-        (0, 0),
-        (1, 0),
-        movement_mode=MovementMode.WALKING,
-    )
-
-    assert changed is True
-    assert not after_passable
-
-    tile_change_completions = [
-        event
-        for event in EventQueue.get_events_by_type(EventType.SPATIAL_TILE_CHANGED)
-        if event.phase == EventPhase.COMPLETION
-    ]
-    assert len(tile_change_completions) == 1
-    assert tile_change_completions[0].position == (0, 0)
-    assert tile_change_completions[0].directional_directions == ["east"]
-    assert tile_change_completions[0].directional_channels == ["movement"]
-    border_event = tile_change_completions[0]
-
-    border_lines = [
-        f"transition before border: {before_passable}",
-        f"border changed: {changed}",
-        f"transition after border: {after_passable}",
-        f"tile-change completions: {len(tile_change_completions)}",
-        f"changed position: {border_event.position}",
-        f"directions: {border_event.directional_directions}",
-        f"channels: {border_event.directional_channels}",
-    ]
-
-    print("\n".join(border_lines))
-
-    expected_border_lines = [
-        "transition before border: True",
-        "border changed: True",
-        "transition after border: False",
-        "tile-change completions: 1",
-        "changed position: (0, 0)",
-        "directions: ['east']",
-        "channels: ['movement']",
-    ]
-    assert border_lines == expected_border_lines
-    assert capsys.readouterr().out.splitlines() == expected_border_lines
 
 
 def test_entity_position_index_and_spatial_events_follow_grid_moves(capsys) -> None:
@@ -205,7 +164,7 @@ def test_entity_position_index_and_spatial_events_follow_grid_moves(capsys) -> N
     grid.create_rectangle(0, 0, 3, 1)
     actor_id = uuid4()
 
-    grid.register_entity(actor_id, (0, 0))
+    actor = create_test_entity(source_id=actor_id, name="Mover", config=EntityConfig(position=(0, 0)))
 
     assert grid.get_entity_position(actor_id) == (0, 0)
     assert grid.get_entities_at((0, 0)) == {actor_id}
@@ -220,7 +179,7 @@ def test_entity_position_index_and_spatial_events_follow_grid_moves(capsys) -> N
         total_path_length=2,
         phase=EventPhase.EFFECT,
     )
-    grid.move_entity(actor_id, (1, 0), parent_event=step_event.uuid)
+    Entity.update_entity_position(actor, (1, 0), parent_event=step_event.uuid)
 
     assert grid.get_entity_position(actor_id) == (1, 0)
     assert grid.get_entities_at((0, 0)) == set()
@@ -289,7 +248,7 @@ def test_forced_movement_is_a_distinct_event_that_can_parent_spatial_updates(cap
     shover_id = uuid4()
     target_id = uuid4()
 
-    grid.register_entity(target_id, (1, 0))
+    target = create_test_entity(source_id=target_id, name="Pushed", config=EntityConfig(position=(1, 0)))
 
     forced_event = ForcedMovementEvent(
         source_entity_uuid=shover_id,
@@ -302,7 +261,7 @@ def test_forced_movement_is_a_distinct_event_that_can_parent_spatial_updates(cap
         cause="tutorial shove",
         phase=EventPhase.EFFECT,
     )
-    grid.move_entity(target_id, (3, 0), parent_event=forced_event.uuid)
+    Entity.update_entity_position(target, (3, 0), parent_event=forced_event.uuid)
 
     assert forced_event.event_type == EventType.FORCED_MOVEMENT
     assert grid.get_entity_position(target_id) == (3, 0)
@@ -344,46 +303,23 @@ def test_forced_movement_is_a_distinct_event_that_can_parent_spatial_updates(cap
     assert capsys.readouterr().out.splitlines() == expected_forced_lines
 
 
-def test_batch_tile_creation_does_not_emit_tile_change_events(capsys) -> None:
-    """Rectangular map creation populates tiles without noisy per-tile events."""
+def test_batch_tile_creation_publishes_each_committed_tile_once(capsys) -> None:
+    """Batch construction publishes its committed tile facts without mutable phases."""
     reset_world_state()
     grid = get_map()
-
     grid.create_rectangle(0, 0, 3, 2)
-
+    setup = EventQueue.get_events_by_type(EventType.SPATIAL_TILE_CHANGED)
     assert grid.tile_count() == 6
-    assert EventQueue.get_events_by_type(EventType.SPATIAL_TILE_CHANGED) == []
-    setup_tile_changes = EventQueue.get_events_by_type(EventType.SPATIAL_TILE_CHANGED)
-
-    grid.set_tile(1, 1, walkable=False, visible=False, name="Wall")
-
-    tile_change_completions = [
-        event
-        for event in EventQueue.get_events_by_type(EventType.SPATIAL_TILE_CHANGED)
-        if event.phase == EventPhase.COMPLETION
-    ]
-    assert len(tile_change_completions) == 1
-    assert tile_change_completions[0].position == (1, 1)
-    changed_tile = grid.get_tile(1, 1)
-
-    batch_lines = [
-        f"tile count after rectangle: {grid.tile_count()}",
-        f"tile-change events during rectangle: {len(setup_tile_changes)}",
-        f"tile-change completions after edit: {len(tile_change_completions)}",
-        f"changed tile position: {tile_change_completions[0].position}",
-        f"changed tile name: {changed_tile.name}",
-        f"changed tile walkable: {changed_tile.walkable}",
-    ]
-
-    print("\n".join(batch_lines))
-
-    expected_batch_lines = [
-        "tile count after rectangle: 6",
-        "tile-change events during rectangle: 0",
-        "tile-change completions after edit: 1",
-        "changed tile position: (1, 1)",
-        "changed tile name: Wall",
-        "changed tile walkable: False",
-    ]
-    assert batch_lines == expected_batch_lines
-    assert capsys.readouterr().out.splitlines() == expected_batch_lines
+    assert len(setup) == 6
+    assert {event.position for event in setup} == {(x, y) for x in range(3) for y in range(2)}
+    assert all(event.phase is EventPhase.COMPLETION and event.tile_present for event in setup)
+    cursor = EventQueue.event_cursor()
+    grid.set_tile(1, 1, walking_cost=0, blocks_optics=True, blocks_propagation=True, name="Wall")
+    edited = [event for _, event in EventQueue.iter_events_since(cursor)
+              if event.event_type is EventType.SPATIAL_TILE_CHANGED and event.phase is EventPhase.COMPLETION]
+    assert len(edited) == 1 and edited[0].position == (1, 1)
+    tile = grid.get_tile(1, 1)
+    assert tile is not None and tile.name == "Wall"
+    assert tile.get_movement_cost(MovementMode.WALKING) == 0
+    print("rectangle: six committed tile facts; wall edit: one committed fact")
+    assert capsys.readouterr().out == "rectangle: six committed tile facts; wall edit: one committed fact\n"
