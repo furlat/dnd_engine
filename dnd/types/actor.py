@@ -66,6 +66,13 @@ class ConditionState(BaseModel):
     duplicate_count: int | None = Field(default=None, ge=0)
     size_change: Literal["enlarge", "reduce"] | None = None
     energy_type: DamageType | None = None
+    damage_type: DamageType | None = Field(default=None, exclude_if=lambda value: value is None)
+    aura_kind: Literal["protection", "devotion", "courage"] | None = Field(default=None, exclude_if=lambda value: value is None)
+    breath_type: DamageType | None = Field(default=None, exclude_if=lambda value: value is None)
+    prerequisite: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    action_id: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    ready: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    parent_condition_uuid: UUID | None = Field(default=None, exclude_if=lambda value: value is None)
     metamagic_mode: MetamagicMode | None = None
     affected_item_uuid: UUID | None = None
     enhanced_ability: AbilityName | None = None

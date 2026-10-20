@@ -5,6 +5,7 @@ They are creature actions, distinct from their creation spell's provenance.
 """
 
 from typing import Any, Literal, cast
+from dnd.types.actor import ConditionState
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
@@ -1999,6 +2000,9 @@ class ElementalMultiattackBonus(BaseCondition):
     prerequisite: str
     packet_count: int = 1
 
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={"prerequisite": self.prerequisite})
+
     def _apply(self, event):
         actor = (
             Entity.get(self.target_entity_uuid)
@@ -2158,7 +2162,7 @@ class DragonBreath(NativeSaveBurst):
         ):
             owner = BaseCondition.get(self.allowance_uuid)
             if isinstance(owner, DraconicBreathCadence):
-                owner.consume()
+                owner.consume(result)
         return result
 
 
@@ -2174,15 +2178,24 @@ class DraconicBreathCadence(BaseCondition):
     free_action_uuid: UUID | None = None
     granted_lineage: UUID | None = None
 
-    def consume(self):
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={
+            "breath_type": self.breath_type,
+            "ready": self.free_action_uuid is not None and self.contributions_active(),
+        })
+
+    def consume(self, parent_event: Event | None = None, *, publish: bool = True) -> None:
         actor = (
             Entity.get(self.target_entity_uuid)
             if self.target_entity_uuid is not None
             else None
         )
+        changed = self.free_action_uuid is not None
         if actor is not None and self.free_action_uuid is not None:
             actor.unregister_action_by_uuid(self.free_action_uuid)
         self.free_action_uuid = None
+        if changed and publish and actor is not None and self.applied and self.uuid in actor.active_conditions_by_uuid:
+            actor.publish_condition_state(self, parent_event=parent_event)
 
     def _apply(self, event):
         actor = (
@@ -2195,12 +2208,12 @@ class DraconicBreathCadence(BaseCondition):
 
         def cadence(boundary, _):
             if boundary.event_type is EventType.TURN_END:
-                self.consume()
+                self.consume(boundary)
                 self.issued = False
                 self.granted_lineage = None
             elif boundary.phase is EventPhase.CANCEL:
                 if boundary.lineage_uuid == self.granted_lineage:
-                    self.consume()
+                    self.consume(boundary)
                     self.issued = False
                     self.granted_lineage = None
             elif (
@@ -2227,6 +2240,7 @@ class DraconicBreathCadence(BaseCondition):
                 self.free_action_uuid = action.uuid
                 self.issued = True
                 self.granted_lineage = boundary.lineage_uuid
+                actor.publish_condition_state(self, parent_event=boundary)
             return None
 
         handler = EventHandler(
@@ -2256,7 +2270,7 @@ class DraconicBreathCadence(BaseCondition):
         return [], [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT)
 
     def _release_owned_runtime_state(self, *, parent_event=None):
-        self.consume()
+        self.consume(parent_event, publish=False)
 
 
 class DragonSharedResistance(BaseCondition):
@@ -2267,6 +2281,9 @@ class DragonSharedResistance(BaseCondition):
     name: str = "Dragon Shared Resistance"
     damage_type: DamageType
     body_uuid: UUID
+
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={"damage_type": self.damage_type})
 
     def _apply(self, event):
         caster = (
@@ -2443,6 +2460,10 @@ class MyrmidonStrikeDice(BaseCondition):
     )
     damage_type: DamageType
     action_id: str
+
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={
+            "action_id": self.action_id, "damage_type": self.damage_type})
 
     def get_action_damage_roll_profiles(self, action):
         if (

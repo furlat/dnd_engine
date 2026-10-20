@@ -9,7 +9,7 @@ from dnd.classes import divine_intervention
 from dnd.classes.divine import ClassFeatureLifetime
 from dnd.blocks.action_economy import RechargeType, ResourceCapacityPolicy
 from dnd.core.events import EventHandler, EventType, EventPhase, Trigger
-from dnd.core.content.runtime import BehaviorBinding
+from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
 from dnd.content.characters.spellcasting_grants import class_casting_source
 from dnd.content.characters.caster_chassis import (
     validate_class_feature_handles,
@@ -172,6 +172,7 @@ def apply_cleric_level(
                 source_entity_uuid=entity.uuid,
                 name=feature_id,
                 semantic_key=feature_id,
+                content_kind=RuntimeBehaviorKind.CLASS_FEATURE,
                 player_toggleable=n == 8,
                 event_processor=processor,
                 trigger_conditions=[
@@ -201,6 +202,13 @@ def apply_cleric_level(
                 source_entity_uuid=entity.uuid,
                 name="Destroy Undead",
                 semantic_key="class_feature.cleric.destroy_undead",
+                content_kind=RuntimeBehaviorKind.CLASS_FEATURE,
+                behavior_binding=BehaviorBinding(
+                    behavior_id="class_feature.cleric.destroy_undead",
+                    provided_by_id="class_feature.cleric.destroy_undead",
+                    origin_root_id=CharacterClass.CLERIC.value,
+                    runtime_owner_uuid=entity.uuid,
+                ),
                 event_processor=cleric.destroy_undead,
                 trigger_conditions=[
                     Trigger(

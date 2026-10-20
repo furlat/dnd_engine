@@ -673,6 +673,8 @@ class Cost(BaseCost):
 
 
 class ActionEvent(Event):
+    target_position: tuple[int, int] | None = None
+
     def harmful_direct_recipients(self) -> tuple[UUID, ...]:
         """Direct hostile recipients, excluding incidental area contact."""
         origin = self.get_effect_origin()

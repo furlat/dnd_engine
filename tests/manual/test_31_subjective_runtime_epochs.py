@@ -679,12 +679,16 @@ def test_bestow_curse_and_eyebite_strike_expose_selected_condition_branches() ->
     ))
     Entity.update_all_entities_senses(max_distance=30)
 
+    actions = caster.get_available_actions()
+    selected_curse = next(row for row in actions.entity_actions
+        if any(facet.key == "form" and facet.value == "inaction" for facet in row.variant_facets))
     affordances = _build_affordance_set_from_actions(
         caster,
-        caster.get_available_actions(),
+        actions,
         42,
     )
-    bestow = next(row for row in affordances.entity_actions if row.semantic_key == "dnd.spells.necromancy.BestowCurse")
+    bestow = next(row for row in affordances.entity_actions
+        if row.template_name == selected_curse.template_name)
     bestow_semantics = affordances.semantics_for(bestow)
     eyebite_profile = EyebiteStrike(
         source_entity_uuid=caster.uuid,

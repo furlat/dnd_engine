@@ -2,8 +2,8 @@
 
 `player-api-v1.schema.json` is exported directly from existing native/player type
 owners and the finite `server/protocol.py` envelopes. It has 19 public roots,
-378 shared definitions and 1,907 field-ledger rows. `protocol-identity.json` binds
-protocol 1 and player schema 16 to the exact canonical schema digest (`49d14bc20920…`).
+379 shared definitions and 1,925 field-ledger rows. `protocol-identity.json` binds
+protocol 1 and player schema 16 to the exact canonical schema digest (`2c11d7a9919c8…`).
 
 - `openapi.json`: actual HTTP paths, request/response types, identity headers,
   finite errors and SSE record types. Also served at the running host's `/openapi.json`.
@@ -20,6 +20,35 @@ visual loadouts) are sent once per seat; the combat log is rendered once per dis
 Position rows may carry a free-aim `position_region` and no listed cells: the client aims a cell and
 preview validates it. The complete client specification is
 [the schema-16 handout](../../agent_docs/GODOT_CLIENT_SCHEMA_16_HANDOUT_2026-10-19.md).
+
+The 20 October backend handoff adds optional facts to schema 16; both SDKs carry
+the updated digest, so adoption must update the existing identity handshake.
+Earlier recordings retain their empty/default values.
+
+- `SpellFact.damage_types` carries the selected cast element even on a miss.
+  A Prismatic recipient application carries its actual `prismatic_roll` and
+  `prismatic_colors`; each colour's saving throw has the corresponding
+  `effect_id`, and its actual damage/condition outcomes descend from that save.
+- `ActionFact.target_position` carries an accepted payload throw destination
+  when disclosed. The explosion retains its real area centre/geometry, and
+  Vitriolic Sphere publishes its resolved initial footprint.
+- Existing condition and item membership rows now carry the actual retained
+  grant/enchantment owners and selected condition operands. `ready` records
+  the dragon's free-breath allowance; `parent_condition_uuid` identifies the
+  real Frenzied parent. No consumer should reconstruct an owner from a name,
+  cast level, nearby actor or elapsed turns.
+- `DamageResultFact.components` contains attributed native components joined
+  by `source_damage_uuid`, with their actual source identity, damage type,
+  incoming amount and amount after affinity. These amounts precede packet-wide
+  reductions and HP allocation: they are **not independent applied HP losses**.
+  The packet's `applied_damage` remains authoritative. A source that the seat
+  cannot identify has null source identity fields; an entirely blocked packet
+  does not emit a positive applied-damage result.
+
+The existing effective-handler route also retains emitted-only class features,
+including Blessed Healer and Destroy Undead, with their real trigger and emitted
+lineages. Capture includes children produced after a parent save completes,
+bounded to the captured operation; cold replay retains the same causal links.
 
 ## Shared cells, rows and references (schema 15)
 

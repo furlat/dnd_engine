@@ -104,7 +104,7 @@ ADDITIVE_FIELDS = {
                   "target_position", "target_base_height_steps", "attack_source_kind", "natural_weapon", "additional_damages", "attack_is_magical", "projectile_deflection_position"},
     SpellEvent: {"summon_application", "resolved_area_positions", "effect_id", "cast_origin", "effect_source_position", "suppressions", "area_propagation", "target_kind", "target_position", "target_base_height_steps"},
     ShoveEvent: {"resolved_area_positions"},
-    DamageAppliedEvent: {"body_release", "critical_hit", "impact_direction", "spatial_source"},
+    DamageAppliedEvent: {"body_release", "critical_hit", "impact_direction", "spatial_source", "components"},
     TakeDamageEvent: {"intercepted_by_condition_uuid", "spatial_source", "effect_origin"},
     HealEvent: {"source_condition_uuid"},
     EntityCreatedEvent: {"healing_blocked", "occupancy_layer", "temporary_hit_points_grant", "summon_origin", "initial_condition_states", "scribed_spell_ids", "permanent_feature_uses"},
@@ -125,7 +125,10 @@ for _model in EVENT_MODELS.values():
 for _model in EVENT_MODELS.values():
     if "application_intercepted_by" in _model.model_fields:
         ADDITIVE_FIELDS.setdefault(_model, set()).add("application_intercepted_by")
+    if issubclass(_model, ActionEvent):
+        ADDITIVE_FIELDS.setdefault(_model, set()).add("target_position")
 ADDITIVE_FIELDS[SpellEvent].update({"magical_transfer", "authored_spell_id", "can_deal_damage"})
+ADDITIVE_FIELDS[SpellEvent].update({"prismatic_roll", "prismatic_colors"})
 
 # Retained pre-interruption completion archives did not record these declarations.
 # They suffice for completion replay, but cannot establish a cancellation receipt.

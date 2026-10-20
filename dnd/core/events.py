@@ -67,7 +67,7 @@ from dnd.core.content.runtime import (
     runtime_behavior_provider,
 )
 from dnd.core.content.identities import ContentRef
-from dnd.core.damage import DamageResolution
+from dnd.core.damage import AttributedDamageComponent, DamageResolution
 from dnd.core.modifiers import AdvantageStatus
 from dnd.core.effect_types import ObservedChangeRef, EffectOrigin, EventResolutionRef, ResolutionRef
 from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
@@ -112,7 +112,7 @@ from dnd.core.action_execution import MovementProvocationPolicy
 from uuid import UUID, uuid4
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
 from datetime import UTC, datetime
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from typing import Callable, Tuple
 import logging
@@ -1653,17 +1653,17 @@ class EventQueue:
             emitted_event_count=emitted_event_count,
         )
         if (
-            result is not None
-            and evidence.effected
+            evidence.effected
             and handler.content_kind in (RuntimeBehaviorKind.REACTION, RuntimeBehaviorKind.CLASS_FEATURE)
-            and isinstance(binding, BehaviorBinding)
+            and binding is not None
         ):
+            presented = result if result is not None else event
             emitted_lineages = tuple(dict.fromkeys(
                 emitted.lineage_uuid
                 for emitted in cls._all_events[before_event_index:]
             ))
             presentations = (
-                *result.effective_handler_presentations,
+                *cls._dispatched_presentations.get(presented.uuid, presented.effective_handler_presentations),
                 EffectiveHandlerPresentation(
                     dispatch_index=evidence.dispatch_index,
                     handler_name=handler.name,
@@ -1677,11 +1677,12 @@ class EventQueue:
                     outcome=evidence.outcome,
                 ),
             )
-            if cls._events_by_uuid.get(result.uuid) is result:
+            stored = cls._events_by_uuid.get(presented.uuid)
+            if stored is presented or (not result_changed and stored is not None):
                 # The dispatched version is stored and frozen: the queue holds its evidence.
-                cls._dispatched_presentations[result.uuid] = presentations
+                cls._dispatched_presentations[presented.uuid] = presentations
             else:
-                result._effective_handler_presentations = presentations
+                presented._effective_handler_presentations = presentations
         cls._handler_dispatch_cursor += 1
         for callback in tuple(cls._on_handler_dispatch_callbacks):
             try:
@@ -2381,21 +2382,24 @@ class EventQueue:
         return event._effective_handler_presentations
 
     @classmethod
-    def child_links(cls, event: Event) -> Tuple[List[UUID], List[UUID]]:
+    def child_links(cls, event: Event, *, end_cursor: int | None = None) -> Tuple[List[UUID], List[UUID]]:
         """One version's (children_events, lineage_children_events) as of now.
 
         A stored version keeps the lists it was stored with; every child of its lineage stored after
         it follows, read from the queue's lineage index. A version this queue never stored has only
-        its own lists. The returned lists are shared values: callers do not edit them.
+        its own lists. An optional exclusive cursor bounds later links for capture.
+        The returned lists are shared values: callers do not edit them.
         """
         position = cls._event_indexes_by_uuid.get(event.uuid)
         later = cls._lineage_children.get(event.lineage_uuid)
         if position is None or not later:
             return event.children_events, event.lineage_children_events
         start = bisect_right(later, position, key=cls._event_indexes_by_uuid.__getitem__)
-        if start == len(later):
+        end = (len(later) if end_cursor is None else
+               bisect_left(later, end_cursor, lo=start, key=cls._event_indexes_by_uuid.__getitem__))
+        if start == end:
             return event.children_events, event.lineage_children_events
-        tail = later[start:]
+        tail = later[start:end]
         return event.children_events + tail, event.lineage_children_events + tail
 
     @classmethod
@@ -5580,6 +5584,7 @@ class DamageAppliedEvent(Event):
     )
     spatial_source: SpatialDamageSource | None = None
     source_condition_uuid: UUID | None = None
+    components: tuple[AttributedDamageComponent, ...] = ()
     resolution: Optional[DamageResolution] = Field(
         default=None,
         description="Complete resolution of the parent incoming damage packet.",

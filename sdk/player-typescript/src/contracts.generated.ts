@@ -285,6 +285,9 @@ export type CastOrigin = ("actor" | "source_item") | null;
 export type SourceItemUuid1 = string | null;
 export type EffectId = string | null;
 export type AoePosition = [number, number] | null;
+export type PrismaticRoll = number | null;
+export type PrismaticColors = number[];
+export type DamageTypes1 = DamageType[];
 export type AreaGeometry =
   | (
       | SpherePresentationGeometry
@@ -550,8 +553,14 @@ export type TargetPosition2 = [number, number];
 export type BaseHeightSteps4 = number;
 export type Exposure = "contact" | "radiated_heat";
 export type SourceConditionUuid1 = string | null;
-export type Kind16 = "heal";
+export type SourceDamageUuid = string | null;
 export type SourceEntityUuid8 = string | null;
+export type SourceId = string | null;
+export type IncomingDamage = number;
+export type AfterAffinityDamage = number;
+export type Components = AttributedDamageComponent[];
+export type Kind16 = "heal";
+export type SourceEntityUuid9 = string | null;
 export type TargetEntityUuid7 = string;
 export type ActualHealing = number;
 export type WasBlocked = boolean;
@@ -562,7 +571,7 @@ export type Kind17 = "temporary_hit_points";
 export type EntityUuid = string;
 export type ResultingTemporaryHp2 = number;
 export type InstanceUuid = string;
-export type SourceId = string | null;
+export type SourceId1 = string | null;
 export type Kind18 = "life";
 export type EntityUuid1 = string;
 /**
@@ -651,6 +660,11 @@ export type OutcomeProtections = OutcomeProtection[];
 export type AppliedSourceEventCursor1 = number | null;
 export type DuplicateCount = number | null;
 export type SizeChange = ("enlarge" | "reduce") | null;
+export type AuraKind = ("protection" | "devotion" | "courage") | null;
+export type Prerequisite = string | null;
+export type ActionId = string | null;
+export type Ready = boolean | null;
+export type ParentConditionUuid = string | null;
 export type MetamagicMode = ("quickened" | "twinned" | "distant") | null;
 export type AffectedItemUuid = string | null;
 export type EnhancedAbility =
@@ -966,10 +980,11 @@ export type EventType =
 export type EntityUuid5 = string | null;
 export type RoundNumber = number | null;
 export type Kind24 = "action";
-export type SourceEntityUuid9 = string;
+export type SourceEntityUuid10 = string;
 export type TargetEntityUuid8 = string | null;
 export type BehaviorId6 = string | null;
 export type Name5 = string | null;
+export type TargetPosition3 = [number, number] | null;
 export type SourceItemUuid2 = string | null;
 export type TriggeredLineage = number | null;
 export type Succeeded2 = boolean;
@@ -1012,7 +1027,7 @@ export type LightSourcesAdded = number[];
 export type LightSourcesPatched = number[];
 export type LightSourcesRemoved = number[];
 export type Kind26 = "item_charge";
-export type SourceEntityUuid10 = string;
+export type SourceEntityUuid11 = string;
 export type ItemUuid6 = string;
 export type ChargesAfter = number;
 export type StackCountAfter = number;
@@ -1717,7 +1732,7 @@ export type TargetUuid3 = string;
 /**
  * Admitted grid position, or unknown.
  */
-export type TargetPosition3 = [number, number] | null;
+export type TargetPosition4 = [number, number] | null;
 /**
  * Passive Perception score that detected the entity.
  */
@@ -2038,7 +2053,7 @@ export type Role = "behavior" | "source_item" | "effective_handler";
 export type BehaviorId7 = string;
 export type ProvidedById = string | null;
 export type OriginRootId = string | null;
-export type SourceEntityUuid11 = string | null;
+export type SourceEntityUuid12 = string | null;
 export type TriggeringOccurrence = number | null;
 export type TriggeringLineage = number | null;
 export type EmittedLineages = number[];
@@ -2413,7 +2428,7 @@ export type TriggerEvent = string;
 export type HandlerDetails = AvailableHandlerInfo[];
 export type ScribedSpellIds = string[];
 export type PermanentFeatureUses = string[];
-export type SourceId1 = string;
+export type SourceId2 = string;
 export type SpellIds = string[];
 export type PreparedSpellSelections = PreparedSpellSelection[];
 export type Key2 = string;
@@ -2742,7 +2757,7 @@ export type WeaponName1 = string | null;
 /**
  * Damage type labels this action can deal when known.
  */
-export type DamageTypes1 = string[];
+export type DamageTypes2 = string[];
 /**
  * Stable identity of the modeled effect for typed interactions.
  */
@@ -3748,8 +3763,8 @@ export interface ConditionDurationSummary {
  * A spell's cast, or one target's application of it.
  *
  * The cast carries the declaration (source, behavior, name, declared targets, area, origin). An application
- * (its node's resolution names an application of the cast's lineage) carries only its target, propagation and
- * attack outcome: its declaration is the cast's, whose nodes its group carries (plan §3.6).
+ * (its node's resolution names an application of the cast's lineage) carries its target, propagation,
+ * outcome and selected subeffect: its declaration is the cast's, whose nodes its group carries (plan §3.6).
  */
 export interface SpellFact {
   kind?: Kind6;
@@ -3765,6 +3780,9 @@ export interface SpellFact {
   source_item_uuid?: SourceItemUuid1;
   effect_id?: EffectId;
   aoe_position?: AoePosition;
+  prismatic_roll?: PrismaticRoll;
+  prismatic_colors?: PrismaticColors;
+  damage_types?: DamageTypes1;
   area_geometry?: AreaGeometry;
   resolved_area_positions?: ResolvedAreaPositions;
   suppressions?: Suppressions;
@@ -4002,6 +4020,7 @@ export interface DamageResultFact {
   effect_id?: EffectId1;
   spatial_source?: SpatialDamageSource | null;
   source_condition_uuid?: SourceConditionUuid1;
+  components?: Components;
 }
 /**
  * One injury's release, with an optional actual residue destination.
@@ -4044,9 +4063,20 @@ export interface SpatialDamageSource {
   base_height_steps: BaseHeightSteps4;
   exposure: Exposure;
 }
+/**
+ * An actual component's source and affinity outcome, before packet-level reductions.
+ */
+export interface AttributedDamageComponent {
+  source_damage_uuid: SourceDamageUuid;
+  source_entity_uuid: SourceEntityUuid8;
+  source_id: SourceId;
+  damage_type: DamageType;
+  incoming_damage: IncomingDamage;
+  after_affinity_damage: AfterAffinityDamage;
+}
 export interface HealFact {
   kind?: Kind16;
-  source_entity_uuid: SourceEntityUuid8;
+  source_entity_uuid: SourceEntityUuid9;
   target_entity_uuid: TargetEntityUuid7;
   actual_healing: ActualHealing;
   was_blocked: WasBlocked;
@@ -4065,7 +4095,7 @@ export interface TemporaryHitPointsFact {
  */
 export interface TemporaryHitPointsGrant {
   instance_uuid: InstanceUuid;
-  source_id?: SourceId;
+  source_id?: SourceId1;
 }
 export interface LifeFact {
   kind?: Kind18;
@@ -4155,6 +4185,13 @@ export interface ConditionState {
   duplicate_count?: DuplicateCount;
   size_change?: SizeChange;
   energy_type?: DamageType | null;
+  damage_type?: DamageType | null;
+  aura_kind?: AuraKind;
+  breath_type?: DamageType | null;
+  prerequisite?: Prerequisite;
+  action_id?: ActionId;
+  ready?: Ready;
+  parent_condition_uuid?: ParentConditionUuid;
   metamagic_mode?: MetamagicMode;
   affected_item_uuid?: AffectedItemUuid;
   enhanced_ability?: EnhancedAbility;
@@ -4394,10 +4431,11 @@ export interface TurnFact {
 }
 export interface ActionFact {
   kind?: Kind24;
-  source_entity_uuid: SourceEntityUuid9;
+  source_entity_uuid: SourceEntityUuid10;
   target_entity_uuid: TargetEntityUuid8;
   behavior_id: BehaviorId6;
   name: Name5;
+  target_position?: TargetPosition3;
   source_item_uuid?: SourceItemUuid2;
   reaction?: ActionReaction | null;
   font_conversion?: FontConversion | null;
@@ -4519,7 +4557,7 @@ export interface SpatialEffectContent1 {
 }
 export interface ItemChargeFact {
   kind?: Kind26;
-  source_entity_uuid: SourceEntityUuid10;
+  source_entity_uuid: SourceEntityUuid11;
   item_uuid: ItemUuid6;
   charges_after: ChargesAfter;
   stack_count_after: StackCountAfter;
@@ -4993,7 +5031,7 @@ export interface EntitySpottedLogData {
   observer_uuid: ObserverUuid1;
   target_name: TargetName3;
   target_uuid: TargetUuid3;
-  target_position: TargetPosition3;
+  target_position: TargetPosition4;
   passive_perception: PassivePerception1;
   stealth_dc: StealthDc;
 }
@@ -5262,7 +5300,7 @@ export interface ContentAttribution {
   behavior_id: BehaviorId7;
   provided_by_id?: ProvidedById;
   origin_root_id?: OriginRootId;
-  source_entity_uuid?: SourceEntityUuid11;
+  source_entity_uuid?: SourceEntityUuid12;
   triggering_occurrence?: TriggeringOccurrence;
   triggering_lineage?: TriggeringLineage;
   emitted_lineages?: EmittedLineages;
@@ -5916,7 +5954,7 @@ export interface AvailableHandlerInfo {
  * Ordered prepared spells owned by one semantic casting source.
  */
 export interface PreparedSpellSelection {
-  source_id: SourceId1;
+  source_id: SourceId2;
   spell_ids: SpellIds;
 }
 /**
@@ -6282,10 +6320,6 @@ export interface PlayerAction {
   behavior_id: BehaviorId9;
   provided_by_id: ProvidedById2;
   origin_root_id?: OriginRootId2;
-  /**
-   * Exact authored configuration for a parameterized action. Clients resolve this catalog row instead of inferring a variant from execution tokens, display names, or outcome identifiers.
-   */
-  configured_action_ref?: ContentRef | null;
   target_type: TargetType;
   position_selection?: PositionSelection;
   /**
@@ -6302,7 +6336,7 @@ export interface PlayerAction {
   costs?: Costs;
   weapon_slot?: WeaponSlot2;
   weapon_name?: WeaponName1;
-  damage_types?: DamageTypes1;
+  damage_types?: DamageTypes2;
   /**
    * Actor-baseline stochastic outcome model when declared by the action rule.
    */
@@ -6602,7 +6636,6 @@ export interface AvailableWorldInteraction {
   contact_positions?: ContactPositions1;
   connector_uuid?: ConnectorUuid3;
   template_name?: TemplateName1;
-  configured_action_ref?: ContentRef | null;
   variant_facets?: VariantFacets1;
   reason?: Reason2;
 }

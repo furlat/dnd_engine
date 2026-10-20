@@ -3595,9 +3595,13 @@ class PrismaticSpray(SpellAction):
 
     def _apply_color_effect(
         self, color: int, target: Entity, caster: Entity,
-        dc: int, parent_event: Event
+        dc: int, parent_event: SpellEvent
     ) -> None:
         """Apply a single color effect to a target."""
+        origin = parent_event.get_effect_origin()
+        effect_id = f"spell.prismatic_spray.color_{color}"
+        save_context = SavingThrowContext(
+            cause_id="spell.prismatic_spray", effect_id=effect_id, is_magical=True)
 
         color_damage: dict[int, DamageType] = {
             1: DamageType.FIRE,
@@ -3612,7 +3616,7 @@ class PrismaticSpray(SpellAction):
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name=save_ability, dc=dc,
-                parent_event=parent_event.uuid
+                parent_event=parent_event.uuid, saving_throw_context=save_context
             )
             _, _, success = target.saving_throw(save_request)
             damage_bonus = caster.get_spell_damage_bonus()
@@ -3621,9 +3625,9 @@ class PrismaticSpray(SpellAction):
                 damage_dice=6, dice_numbers=10, damage_bonus=damage_bonus,
                 damage_type=color_damage[color]
             )
-            damage_roll = roll_spell_damage(prismatic_damage, parent_event=parent_event, effect_origin=self.effect_origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
+            damage_roll = roll_spell_damage(prismatic_damage, parent_event=save_request, effect_origin=origin, attack_outcome=AttackOutcome.HIT, crit_extra_dice=0)
             final_damage = damage_roll.total // 2 if success else damage_roll.total
-            target.receive_damage(final_damage, color_damage[color], caster.uuid, parent_event=parent_event.uuid,
+            target.receive_damage(final_damage, color_damage[color], caster.uuid, parent_event=save_request.uuid,
                 damages=[prismatic_damage], damage_rolls=[damage_roll],
                 damage_save=DamageSaveContext(ability=save_ability, success=success, success_fraction=0.5))
 
@@ -3632,36 +3636,38 @@ class PrismaticSpray(SpellAction):
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="constitution", dc=dc,
-                parent_event=parent_event.uuid
+                parent_event=parent_event.uuid, saving_throw_context=save_context
             )
             _, _, success = target.saving_throw(save_request)
             if not success:
                 prismatic_restrained = PrismaticRestrained(
                     source_entity_uuid=caster.uuid,
                     target_entity_uuid=target.uuid,
+                    effect_origin=origin,
                     caster_uuid=caster.uuid,
                     spell_dc=dc,
                     tags={ConditionTag.MAGICAL}
                 )
-                target.add_condition(prismatic_restrained, parent_event=parent_event)
+                target.add_condition(prismatic_restrained, parent_event=save_request)
 
         elif color == 7:
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="wisdom", dc=dc,
-                parent_event=parent_event.uuid
+                parent_event=parent_event.uuid, saving_throw_context=save_context
             )
             _, _, success = target.saving_throw(save_request)
             if not success:
                 blinded = Blinded(
                     source_entity_uuid=caster.uuid,
                     target_entity_uuid=target.uuid,
+                    effect_origin=origin,
                     tags={ConditionTag.MAGICAL}
                 )
                 blinded.duration.duration_type = DurationType.ROUNDS
                 blinded.duration.duration = 10
-                target.add_condition(blinded, parent_event=parent_event)
+                target.add_condition(blinded, parent_event=save_request)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3686,10 +3692,14 @@ class PrismaticSpray(SpellAction):
             color2 = roll_die_face(7)
             while color2 == color1:
                 color2 = roll_die_face(7)
+            effect_event = effect_event.with_updates(
+                prismatic_roll=color_roll, prismatic_colors=(color1, color2))
             self._apply_color_effect(color1, target, caster, dc, effect_event)
             self._apply_color_effect(color2, target, caster, dc, effect_event)
             color_text = f"colors {color1} + {color2}"
         else:
+            effect_event = effect_event.with_updates(
+                prismatic_roll=color_roll, prismatic_colors=(color_roll,))
             self._apply_color_effect(color_roll, target, caster, dc, effect_event)
             color_text = f"color {color_roll}"
 
@@ -5829,6 +5839,9 @@ class VitriolicSphere(SpellAction):
     include_self: bool = True
     valid_target_filter: str = "all"
     spell_damage_type: DamageType = DamageType.ACID
+
+    def _resolve_execution_targets(self):
+        return self._resolve_area_targets()
 
     def model_post_init(self, context: object) -> None:
         super().model_post_init(context)

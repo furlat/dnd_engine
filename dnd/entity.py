@@ -1,5 +1,5 @@
 from dnd.core.effect_types import EventResolutionRef, EffectOrigin
-from dnd.core.damage import DamageResolution
+from dnd.core.damage import AttributedDamageComponent, DamageResolution
 from dnd.core.attack_types import NaturalWeaponSpec, ShieldAttackSpec
 from typing import cast, Callable, AbstractSet, Dict, FrozenSet, Hashable, Iterable, Mapping, Optional, Any, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
@@ -3619,6 +3619,22 @@ class Entity(BaseBlock):
             Completed positive post-mitigation damage event.
         """
         applied_damage = normal_hit_point_damage + temporary_hit_point_damage
+        damage_sources = {damage.uuid: damage for damage in damages}
+        attributed_components = tuple(
+            AttributedDamageComponent(
+                source_damage_uuid=component.source_damage_uuid,
+                source_entity_uuid=damage.source_entity_uuid,
+                source_id=damage.effect_origin.source_id,
+                damage_type=component.damage_type,
+                incoming_damage=component.incoming_damage,
+                after_affinity_damage=component.after_affinity_damage,
+            )
+            for component in resolution.components
+            if component.source_damage_uuid is not None
+            and (damage := damage_sources.get(component.source_damage_uuid)) is not None
+            and damage.effect_origin is not None
+            and damage.effect_origin.source_id is not None
+        )
         event = DamageAppliedEvent(
             source_entity_uuid=source_entity_uuid,
             target_entity_uuid=self.uuid,
@@ -3637,6 +3653,7 @@ class Entity(BaseBlock):
             damages=damages,
             effect_id=effect_id,
             resolution=resolution,
+            components=attributed_components,
             spatial_source=parent_event.spatial_source,
             source_condition_uuid=parent_event.source_condition_uuid,
             critical_hit=critical_hit,
@@ -6031,7 +6048,7 @@ class Entity(BaseBlock):
                 target_pool: Dict[UUID, Tuple[int, int]] = {}
                 if source_requirements_met:
                     target_pool = self._compute_target_pool(
-                        template.valid_target_filter, include_dead,
+                        template.valid_target_filter, include_dead or template.include_dead,
                         template.include_self, potential_targets, target_pool_cache
                     )
                     target_pool = self._with_object_targets(template, target_pool)
@@ -7090,6 +7107,11 @@ class Entity(BaseBlock):
         ] = []
 
         inventory_use_actions = self.inventory.get_all_use_actions(self.uuid)
+        carried_item_ids = {action.source_item_uuid for action in inventory_use_actions}
+        for item in self.equipment.get_all_equipped_items():
+            if isinstance(item, UsableItem) and item.uuid not in carried_item_ids:
+                inventory_use_actions.extend(item.get_use_actions(self.uuid))
+                carried_item_ids.add(item.uuid)
         result.set_inventory_use_action_sources(inventory_use_actions)
         for use_template in inventory_use_actions:
             item_uuid = use_template.source_item_uuid
@@ -7210,7 +7232,7 @@ class Entity(BaseBlock):
 
             elif use_template.target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY, TargetType.CREATURE_OR_OBJECT):
                 target_pool = self._compute_target_pool(
-                    use_template.valid_target_filter, include_dead,
+                    use_template.valid_target_filter, include_dead or use_template.include_dead,
                     use_template.include_self, potential_targets, target_pool_cache
                 )
                 target_pool = self._with_object_targets(use_template, target_pool)

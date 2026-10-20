@@ -16,6 +16,17 @@ class DamageResolutionModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+class AttributedDamageComponent(DamageResolutionModel):
+    """An actual component's source and affinity outcome, before packet-level reductions."""
+
+    source_damage_uuid: UUID | None
+    source_entity_uuid: UUID | None
+    source_id: str | None
+    damage_type: DamageType
+    incoming_damage: int = Field(ge=0)
+    after_affinity_damage: int = Field(ge=0)
+
+
 class DamageComponentResolution(DamageResolutionModel):
     """Affinity resolution for one typed component of a damage packet."""
 

@@ -106,6 +106,9 @@ def payload_blast(
             cast_at_level=level,
             event_type=EventType.BASE_ACTION,
             target_type=TargetType.POSITION_AOE,
+            aoe_position=center,
+            area_geometry=shape.presentation_geometry(center, center),
+            area_propagation=shape.propagation,
             resolved_area_positions=tuple(sorted(stage.reached)),
             parent_event=parent.uuid,
             phase=EventPhase.EFFECT,
@@ -386,7 +389,7 @@ class ThrowSpellPayload(BaseAction):
 
     def _apply(self, event):
         item = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
-        effect = event.phase_to(EventPhase.EFFECT)
+        effect = event.phase_to(EventPhase.EFFECT, target_position=self.end_position)
         if effect.canceled:
             return effect
         if not isinstance(item, SpellPayloadItem) or self.end_position is None:

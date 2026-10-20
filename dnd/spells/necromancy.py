@@ -583,6 +583,16 @@ class BlindnessDeafness(SpellAction):
     valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
     effect_type: str = Field(default="blinded", description="Effect choice: blinded or deafened.")
 
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="form", value=effect, label=effect.title()),)
+                     for effect in ("blinded", "deafened"))
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        facets = {facet.key: facet.value for facet in selection.facets}
+        return {**super()._selection_overrides(selection),
+                "effect_type": facets.get("form", self.effect_type)}
+
     def _create_declaration_event(
         self, parent_event: Optional[Event] = None, use_register: bool = True,
     ) -> Optional[Event]:
@@ -2253,6 +2263,23 @@ class BestowCurse(SpellAction):
     projectile_type: Optional[str] = Field(default="touch", description="VFX projectile metadata.")
     curse_option: int = Field(default=1, description="Selected curse option from 1 through 4.")
     cursed_ability: AbilityName = Field(default="strength", description="Ability affected when option 1 is used.")
+
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        abilities = tuple((ActionVariantFacet(key="form", value="ability", label="Ability disadvantage"),
+                           ActionVariantFacet(key="ability", value=ability, label=ability.title()))
+                          for ability in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"))
+        return abilities + tuple((ActionVariantFacet(key="form", value=form, label=label),)
+                                 for form, label in (("attack", "Attack disadvantage"),
+                                                     ("inaction", "Lose actions"),
+                                                     ("damage", "Extra necrotic damage")))
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        facets = {facet.key: facet.value for facet in selection.facets}
+        form = facets.get("form", "")
+        return {**super()._selection_overrides(selection),
+                "curse_option": {"ability": 1, "attack": 2, "inaction": 3, "damage": 4}.get(form, self.curse_option),
+                "cursed_ability": facets.get("ability", self.cursed_ability)}
 
     def get_target_effect_profile(self) -> Optional[ActionTargetEffectProfile]:
         """Declare the selected Bestow Curse branch."""

@@ -180,6 +180,32 @@
           ],
           "title": "Name"
         },
+        "target_position": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Position"
+        },
         "source_item_uuid": {
           "anyOf": [
             {
@@ -1995,6 +2021,72 @@
       ],
       "title": "AttackOutcome",
       "type": "string"
+    },
+    "AttributedDamageComponent": {
+      "additionalProperties": false,
+      "description": "An actual component's source and affinity outcome, before packet-level reductions.",
+      "properties": {
+        "source_damage_uuid": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Damage Uuid"
+        },
+        "source_entity_uuid": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Entity Uuid"
+        },
+        "source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Id"
+        },
+        "damage_type": {
+          "$ref": "#/$defs/DamageType"
+        },
+        "incoming_damage": {
+          "minimum": 0,
+          "title": "Incoming Damage",
+          "type": "integer",
+          "maximum": 9007199254740991
+        },
+        "after_affinity_damage": {
+          "minimum": 0,
+          "title": "After Affinity Damage",
+          "type": "integer",
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "source_damage_uuid",
+        "source_entity_uuid",
+        "source_id",
+        "damage_type",
+        "incoming_damage",
+        "after_affinity_damage"
+      ],
+      "title": "AttributedDamageComponent",
+      "type": "object"
     },
     "AvailableHandlerInfo": {
       "description": "Player-toggleable event handler exposed with available actions.",
@@ -4035,6 +4127,94 @@
           ],
           "default": null
         },
+        "damage_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DamageType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "aura_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "protection",
+                "devotion",
+                "courage"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Aura Kind"
+        },
+        "breath_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DamageType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "prerequisite": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prerequisite"
+        },
+        "action_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Id"
+        },
+        "ready": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ready"
+        },
+        "parent_condition_uuid": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Condition Uuid"
+        },
         "metamagic_mode": {
           "anyOf": [
             {
@@ -5492,6 +5672,14 @@
           ],
           "default": null,
           "title": "Source Condition Uuid"
+        },
+        "components": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AttributedDamageComponent"
+          },
+          "title": "Components",
+          "type": "array"
         }
       },
       "required": [
@@ -18689,7 +18877,7 @@
       "type": "object"
     },
     "SpellFact": {
-      "description": "A spell's cast, or one target's application of it.\n\nThe cast carries the declaration (source, behavior, name, declared targets, area, origin). An application\n(its node's resolution names an application of the cast's lineage) carries only its target, propagation and\nattack outcome: its declaration is the cast's, whose nodes its group carries (plan §3.6).",
+      "description": "A spell's cast, or one target's application of it.\n\nThe cast carries the declaration (source, behavior, name, declared targets, area, origin). An application\n(its node's resolution names an application of the cast's lineage) carries its target, propagation,\noutcome and selected subeffect: its declaration is the cast's, whose nodes its group carries (plan §3.6).",
       "properties": {
         "kind": {
           "const": "spell",
@@ -18869,6 +19057,38 @@
           ],
           "default": null,
           "title": "Aoe Position"
+        },
+        "prismatic_roll": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prismatic Roll"
+        },
+        "prismatic_colors": {
+          "default": [],
+          "items": {
+            "maximum": 7,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "title": "Prismatic Colors",
+          "type": "array"
+        },
+        "damage_types": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DamageType"
+          },
+          "title": "Damage Types",
+          "type": "array"
         },
         "area_geometry": {
           "anyOf": [

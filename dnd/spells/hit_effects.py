@@ -11,7 +11,7 @@ from dnd.core.base_block import BaseBlock, PreparedConditionApplication, Prepare
 from dnd.core.action_types import RestrictedActionKind
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType, spell_slot_cost_type
 from dnd.core.base_conditions import BaseCondition, Duration, SpellProtectionRegistry
-from dnd.core.condition_types import ConditionTag, DurationType
+from dnd.core.condition_types import ConditionCategory, ConditionTag, DurationType
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import Damage, DamageRollResultEvent, Event, EventQueue, EventHandler, EventPhase, EventType, Range, RangeType, Trigger
@@ -77,6 +77,7 @@ def install_hit_rider(owner: BaseCondition,*,dice_count: int,die_size: Literal[4
 class QuarrySustain(ConcentrationActionMarker):
     """The surviving caster-owned root shared by the two authored mark spells."""
     quarry_uuid: UUID
+    condition_category: ConditionCategory = ConditionCategory.STATUS
     duration: Duration = Field(default_factory=lambda: Duration(duration=None,duration_type=DurationType.UNTIL_LONG_REST))
     tags: set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
@@ -285,6 +286,7 @@ class AttackBackedSpell(SpellAction):
         result=Attack.attack_consequences(attack,caster.uuid,on_hit=on_hit)
         if result is None or result.canceled:
             return effect.cancel(status_message="Weapon attack interrupted")
+        result=result.phase_to(EventPhase.COMPLETION)
         return effect.with_updates(attack_outcome=result.attack_outcome,dice_roll=result.dice_roll,
             attack_bonus=result.attack_bonus,ac=result.ac,damages=result.damages,
             damage_rolls=result.damage_rolls,total_damage=result.total_damage)

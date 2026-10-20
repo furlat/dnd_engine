@@ -11,6 +11,8 @@ Contains all rage/frenzy related code:
 
 from dnd.core.action_types import ActionSelection, RestrictedActionKind
 from dnd.types.discovery import ActorScan
+from dnd.types.actor import ConditionState
+from dnd.core.condition_types import ConditionCategory
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject, empty_list
@@ -828,6 +830,13 @@ class Frenzied(BaseCondition):
         exclude=True,
         description="Exact Frenzied Strike action owned by this condition.",
     )
+
+    def snapshot_state(self) -> ConditionState:
+        parent = BaseCondition.get(self.parent_condition) if self.parent_condition is not None else None
+        parent_uuid = (parent.uuid if isinstance(parent, Raging) and parent.applied
+            and parent.target_entity_uuid == self.target_entity_uuid
+            and parent.condition_category is not ConditionCategory.INTERNAL else None)
+        return super().snapshot_state().model_copy(update={"parent_condition_uuid": parent_uuid})
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],

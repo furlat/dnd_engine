@@ -645,7 +645,9 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: Mapping[UUID, 
                 # nodes the same group carries (plan §3.6).
                 return SpellFact(target_entity_uuid=target, target_kind=event.target_kind,
                     target_position=target_position, target_base_height_steps=target_height,
-                    propagation=event.propagation, attack_outcome=event.attack_outcome)
+                    propagation=event.propagation, attack_outcome=event.attack_outcome,
+                    effect_id=event.effect_id, prismatic_roll=event.prismatic_roll,
+                    prismatic_colors=event.prismatic_colors)
             return SpellFact(source_entity_uuid=source, target_entity_uuid=target,
                 target_kind=event.target_kind, target_position=target_position, target_base_height_steps=target_height,
                 behavior_id=event.behavior_id, name=event.name, source_position=source_position,
@@ -657,6 +659,9 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: Mapping[UUID, 
                 propagation=event.propagation,
                 attack_outcome=event.attack_outcome,
                 effect_id=event.effect_id,
+                prismatic_roll=event.prismatic_roll,
+                prismatic_colors=event.prismatic_colors,
+                damage_types=tuple(event.damage_types),
                 aoe_position=area_position,
                 area_geometry=event.area_geometry if area_position is not None else None,
                 area_propagation=event.area_propagation,
@@ -726,10 +731,11 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: Mapping[UUID, 
                 relentless_rage=event.relentless_rage,
                 source_condition_uuid=event.source_condition_uuid if (
                     senses is not None and event.source_condition_uuid in senses.spatial_effects
-                    or source is not None and source in actors and any(
+                    or any(
                         member.condition_uuid == event.source_condition_uuid
                         and member.category is not ConditionCategory.INTERNAL
-                        for member in actors[source].conditions)) else None))
+                        for owner in (source, target) if owner is not None and owner in actors
+                        for member in actors[owner].conditions)) else None))
         case DamageAppliedEvent():
             if target is None:
                 return None
@@ -789,13 +795,17 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: Mapping[UUID, 
             return DamageResultFact( source_entity_uuid=source, target_entity_uuid=target,
                 applied_damage=event.applied_damage, resulting_normal_hp=event.resulting_normal_hp,
                 resulting_temporary_hp=event.resulting_temporary_hp, damage_type=event.damage_type,
+                components=tuple(component if _identified(event, component.source_entity_uuid, observer)
+                    else component.model_copy(update={"source_id": None, "source_entity_uuid": None})
+                    for component in event.components),
                 spatial_source=spatial_source,
                 source_condition_uuid=event.source_condition_uuid if (
                     senses is not None and event.source_condition_uuid in senses.spatial_effects
-                    or source is not None and source in actors and any(
+                    or any(
                         member.condition_uuid == event.source_condition_uuid
                         and member.category is not ConditionCategory.INTERNAL
-                        for member in actors[source].conditions)) else None,
+                        for owner in (source, target) if owner is not None and owner in actors
+                        for member in actors[owner].conditions)) else None,
                 body_release=release, effect_id=event.effect_id if event.effect_id is not None and senses is not None
                     and any(effect.content_ref.identity_key == event.effect_id
                             for effect in senses.spatial_effects.values()) else None)
@@ -929,6 +939,10 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: Mapping[UUID, 
             object_target = event.target_entity_uuid if event.target_entity_uuid in observed_objects else target
             return (None if source is None else ActionFact(source_entity_uuid=source, target_entity_uuid=object_target,
                 behavior_id=event.behavior_id, name=_action_name(event, observer),
+                target_position=event.target_position if event.target_position is not None and (
+                    observer.controls(source) or _position_allowed(event, event.target_position, observer)
+                    or senses is not None and cell_in(senses.visible, event.target_position)
+                    or declaration_senses is not None and cell_in(declaration_senses.visible, event.target_position)) else None,
                 font_conversion=(event.font_conversion if observer.controls(source) else
                     FontConversion(direction=event.font_conversion.direction)
                     if event.font_conversion is not None else None),

@@ -696,6 +696,16 @@ class ProtectionFromEnergy(SpellAction):
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
     chosen_energy_type: DamageType = Field(default=DamageType.FIRE, description="Energy damage type selected for resistance.")
 
+    def facet_domain(self, scan: ActorScan, level: Optional[int],
+                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
+        return tuple((ActionVariantFacet(key="damage_type", value=energy, label=energy.title()),)
+                     for energy in ("acid", "cold", "fire", "lightning", "thunder"))
+
+    def _selection_overrides(self, selection: ActionSelection) -> dict:
+        energy = next((facet.value for facet in selection.facets if facet.key == "damage_type"), None)
+        return {**super()._selection_overrides(selection),
+                "chosen_energy_type": DamageType(energy.title()) if energy else self.chosen_energy_type}
+
     def _create_declaration_event(
         self, parent_event: Optional[Event] = None, use_register: bool = True,
     ) -> Optional[Event]:

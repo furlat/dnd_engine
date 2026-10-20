@@ -68,6 +68,8 @@ from dnd.core.events import (
 )
 from dnd.types.abilities import AbilityName
 from dnd.types.actor import ConditionState
+from dnd.core.item_types import ItemEffectPresentationState
+from dnd.core.condition_types import ConditionCategory
 from dnd.core.dice import AttackOutcome
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.elevation import support_distance_feet
@@ -2138,6 +2140,12 @@ class MagicWeaponEffect(BaseCondition):
     def get_display_name(self) -> str:
         return "Magic Weapon"
 
+    def snapshot_item_effect(self) -> ItemEffectPresentationState:
+        return ItemEffectPresentationState(duration=self.duration.snapshot_summary(),
+            effect_uuid=self.uuid, behavior_id=self.get_semantic_key(),
+            display_name=self.get_display_name(), description=self.description,
+            applied_source_event_cursor=self.applied_source_event_cursor)
+
     def _apply(self,event: Event):
         weapon=BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not isinstance(weapon,Weapon):
@@ -2359,6 +2367,11 @@ class DragonsBreathEffect(ConcentrationActionMarker):
     description: str = "The caster maintains an ally's elemental breath action."
     tags: set[ConditionTag] = Field(default_factory=lambda:{ConditionTag.MAGICAL})
     duration: Duration = Field(default_factory=lambda:Duration(duration=10,duration_type=DurationType.ROUNDS))
+    condition_category: ConditionCategory = ConditionCategory.STATUS
+    energy_type: DamageType
+
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={"energy_type": self.energy_type})
 
 
 @srd_action_identity(content_id="action.spell.dragons_breath.exhale",display_name="Exhale Dragon's Breath",
@@ -2479,7 +2492,7 @@ class DragonsBreath(SpellAction):
         if caster is None or recipient is None:
             return event.cancel(status_message="Breath recipient is absent")
         marker=DragonsBreathEffect(source_entity_uuid=caster.uuid,target_entity_uuid=recipient.uuid,
-            action_name="Exhale Dragon's Breath")
+            action_name="Exhale Dragon's Breath", energy_type=DamageType(self.element.title()))
         admitted=self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),marker)
         if admitted.canceled or not marker.applied:
             return admitted

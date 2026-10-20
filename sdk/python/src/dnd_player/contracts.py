@@ -24,6 +24,9 @@ type ActionAvailabilityStatus = Literal[
 type ActionCategory = Literal['ability', 'attack', 'spell', 'movement']
 
 
+type TargetPositionItem = int
+
+
 type ActionInformationOperation = Literal[
     'reveal_region', 'change_light', 'grant_sense', 'conceal_region'
 ]
@@ -142,9 +145,6 @@ class AreaReachFact(TypedDict):
 class AttachmentRequest(TypedDict):
     acquisition_id: str
     expected_attachment_epoch: str | None
-
-
-type TargetPositionItem = int
 
 
 type AttackOutcome = Literal['Hit', 'Miss', 'Crit', 'Crit Miss']
@@ -2154,6 +2154,7 @@ class ActionFact(TypedDict):
     target_entity_uuid: str | None
     behavior_id: str | None
     name: str | None
+    target_position: NotRequired[list[TargetPositionItem] | None]
     source_item_uuid: NotRequired[str | None]
     reaction: NotRequired[ActionReaction | None]
     font_conversion: NotRequired[FontConversion | None]
@@ -2265,6 +2266,15 @@ class AttachmentResponse(TypedDict):
     acquisition_id: str
     attachment_epoch: str
     status: StatusSnapshot
+
+
+class AttributedDamageComponent(TypedDict):
+    source_damage_uuid: str | None
+    source_entity_uuid: str | None
+    source_id: str | None
+    damage_type: DamageType
+    incoming_damage: int
+    after_affinity_damage: int
 
 
 class BodyReleaseRegion(TypedDict):
@@ -2395,6 +2405,13 @@ class ConditionState(TypedDict):
     duplicate_count: NotRequired[int | None]
     size_change: NotRequired[Literal['enlarge', 'reduce'] | None]
     energy_type: NotRequired[DamageType | None]
+    damage_type: NotRequired[DamageType | None]
+    aura_kind: NotRequired[Literal['protection', 'devotion', 'courage'] | None]
+    breath_type: NotRequired[DamageType | None]
+    prerequisite: NotRequired[str | None]
+    action_id: NotRequired[str | None]
+    ready: NotRequired[bool | None]
+    parent_condition_uuid: NotRequired[str | None]
     metamagic_mode: NotRequired[Literal['quickened', 'twinned', 'distant'] | None]
     affected_item_uuid: NotRequired[str | None]
     enhanced_ability: NotRequired[
@@ -2493,6 +2510,7 @@ class DamageResultFact(TypedDict):
     effect_id: NotRequired[str | None]
     spatial_source: NotRequired[SpatialDamageSource | None]
     source_condition_uuid: NotRequired[str | None]
+    components: NotRequired[list[AttributedDamageComponent]]
 
 
 class DamageRollDisplay(TypedDict):
@@ -3617,6 +3635,9 @@ class SpellFact(TypedDict):
     source_item_uuid: NotRequired[str | None]
     effect_id: NotRequired[str | None]
     aoe_position: NotRequired[list[AoePositionItem] | None]
+    prismatic_roll: NotRequired[int | None]
+    prismatic_colors: NotRequired[list[int]]
+    damage_types: NotRequired[list[DamageType]]
     area_geometry: NotRequired[
         SpherePresentationGeometry
         | ConePresentationGeometry

@@ -118,7 +118,7 @@ from dnd.core.combat_log import (
 )
 from dnd.types.physical_access import ObjectContact, PhysicalAccess
 from pydantic import BaseModel, Field, StrictBool, StrictInt, model_validator
-from typing import AbstractSet, Any, Callable, ClassVar, Dict, Iterable, Literal, Optional, List, Set, TypeVar, Tuple, Self, cast, final
+from typing import AbstractSet, Annotated, Any, Callable, ClassVar, Dict, Iterable, Literal, Optional, List, Set, TypeVar, Tuple, Self, cast, final
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.action_economy import (
@@ -401,7 +401,7 @@ def commit_forced_movement(target: Entity, event: ForcedMovementEvent, *,
         for _ in range(event.actual_distance // 5):
             next_pos = (endpoint[0] + event.direction[0], endpoint[1] + event.direction[1])
             admitted_kind = grid.admit_forced_step(endpoint, next_pos, target.uuid)
-            if admitted_kind is None:
+            if admitted_kind is None or not target.can_end_movement_at(next_pos):
                 blocked, blocked_by = True, grid.identify_blocker_at(next_pos, target.uuid)
                 break
             entry_cursor = EventQueue.event_cursor()
@@ -4047,6 +4047,7 @@ class Shove(BaseAction):
             Final position, actual distance, blocked flag, and blocker label.
         """
         grid = get_map()
+        target = Entity.get(target_uuid)
         current = start
         cells_to_move = distance_feet // 5
         actual_cells = 0
@@ -4057,7 +4058,7 @@ class Shove(BaseAction):
             next_pos = (current[0] + direction[0], current[1] + direction[1])
 
             landing = grid.admit_forced_step(current, next_pos, target_uuid)
-            if landing is None:
+            if landing is None or (target is not None and not target.can_end_movement_at(next_pos)):
                 blocked = True
                 blocked_by = grid.identify_blocker_at(next_pos, target_uuid)
                 break
@@ -4253,6 +4254,8 @@ class SpellEvent(ActionEvent):
     harmful: bool = Field(default=False, description="Whether this cast includes an authored harmful effect.")
     harmful_target_entity_uuids: List[UUID] = Field(default_factory=list, description="Declared recipients to whom this cast's native effects are harmful.")
     effect_id: Optional[str] = Field(default=None, description="Authored subeffect within the owning spell, when distinct from the cast.")
+    prismatic_roll: Annotated[int, Field(ge=1, le=8)] | None = None
+    prismatic_colors: tuple[Annotated[int, Field(ge=1, le=7)], ...] = ()
     spell_level: int = Field(default=0, description="Base spell level (0 = cantrip)")
     cast_at_level: int = Field(default=0, description="Actual slot level used (0 = cantrip)")
     spell_school: str = Field(default="evocation", description="School of magic")

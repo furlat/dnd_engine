@@ -132,7 +132,8 @@ def retained_selection(runtime: Runtime, seat: str, actor: UUID, generation: int
         if not selection.extra_target_positions:
             raise CommandRejected('invalid_selection')
         return row, (free_aim_target(row, selection.extra_target_positions[0]),), selection.extra_target_positions[1:]
-    pool = {target.index: target for target in selection_target_pool(row, selection.target_indices)}
+    pool = {target.index: target for target in selection_target_pool(
+        runtime.session.game.entities[actor], row, selection.target_indices)}
     if any(index < 0 or index not in pool for index in selection.target_indices):
         raise CommandRejected('invalid_selection')
     return row, tuple(pool[index] for index in selection.target_indices), selection.extra_target_positions

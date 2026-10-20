@@ -50,6 +50,7 @@ from dnd.types.actor import TemporaryHitPointsGrant, SpatialDisposition
 from dnd.types.actor_sheet import PlayerResource, PlayerResourceValue
 from dnd.types.class_features import FontConversion, IndomitableReroll, RelentlessRageIntervention
 from dnd.types.actor_facts import ChangeRow, ConditionMember
+from dnd.core.damage import AttributedDamageComponent
 from dnd.types.item_parts import (ItemLook as ItemLook, ItemProfile as ItemProfile, ItemState as ItemState,
     VisualItem as VisualItem)
 from dnd.types.summoning import SummonManifestation, SummonDepartureCause
@@ -364,8 +365,8 @@ class SpellFact:
     """A spell's cast, or one target's application of it.
 
     The cast carries the declaration (source, behavior, name, declared targets, area, origin). An application
-    (its node's resolution names an application of the cast's lineage) carries only its target, propagation and
-    attack outcome: its declaration is the cast's, whose nodes its group carries (plan §3.6).
+    (its node's resolution names an application of the cast's lineage) carries its target, propagation,
+    outcome and selected subeffect: its declaration is the cast's, whose nodes its group carries (plan §3.6).
     """
 
     kind: Literal["spell"] = "spell"
@@ -381,6 +382,10 @@ class SpellFact:
     source_item_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
     effect_id: Annotated[str | None, Field(exclude_if=_unset)] = None
     aoe_position: Annotated[tuple[int, int] | None, Field(exclude_if=_unset)] = None
+    prismatic_roll: Annotated[int | None, Field(ge=1, le=8, exclude_if=_unset)] = None
+    prismatic_colors: Annotated[tuple[Annotated[int, Field(ge=1, le=7)], ...], Field(exclude_if=_no_rows)] = ()
+    # Native spell damage types, including the selected type on a miss.
+    damage_types: Annotated[tuple[DamageType, ...], Field(exclude_if=_no_rows)] = ()
     area_geometry: Annotated[AoEPresentationGeometry | None, Field(exclude_if=_unset)] = None
     # A disclosed subset of the native result, never a physical blast mask.
     # None means no recorded result; () is a resolved result with no granted cells.
@@ -506,6 +511,7 @@ class DamageResultFact:
     effect_id: Annotated[str | None, Field(exclude_if=_unset)] = None
     spatial_source: Annotated[SpatialDamageSource | None, Field(exclude_if=_unset)] = None
     source_condition_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
+    components: Annotated[tuple[AttributedDamageComponent, ...], Field(exclude_if=_no_rows)] = ()
 
 
 DamageFact = DamageRequestFact | DamageResultFact
@@ -629,6 +635,7 @@ class ActionFact:
     target_entity_uuid: UUID | None
     behavior_id: str | None
     name: str | None
+    target_position: Annotated[tuple[int, int] | None, Field(exclude_if=_unset)] = None
     source_item_uuid: Annotated[UUID | None, Field(exclude_if=_unset)] = None
     reaction: Annotated[ActionReaction | None, Field(exclude_if=_unset)] = None
     font_conversion: Annotated[FontConversion | None, Field(exclude_if=_unset)] = None

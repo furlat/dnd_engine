@@ -1,0 +1,1027 @@
+{
+  "schema": "dnd-engine/backend-handoff-test-gaps",
+  "schema_version": 1,
+  "date": "2026-10-20",
+  "baseline": {
+    "checkout": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine",
+    "head": "cdfafea0c9645819470dc8f5337a3de2abd401e0",
+    "sync": "Root verified local/HEAD/origin event-native-deltas equal before repro; client originals target older frozen211b71134.",
+    "scope": "Production handoff investigation and bounded backend repairs, on the requested feature/rules-checking worktree; earlier character, fixture and occupancy work preserved."
+  },
+  "why_green_tests_missed_reported_problems": [
+    "Native mechanic outcome tests can pass while discovery never offers the action or public capture omits its identity. Direct .apply is valid low-level coverage but bypasses Entity.perform/worker/capture acceptance.",
+    "The existing generic worker spell transport test covers16spell shapes but asserts records/noncanceled native events, not exact consumer-required lifecycle/selector/attribution fields, all facets or independent perspectives.",
+    "Several publication tests inject already-populated recorded attribution values; these protect projection/replay handling but do not prove real producers create those values.",
+    "Deterministic HP/dice/resource/condition checks are meaningful, but cannot substitute for exact per-owner/app/result identity or selected options on misses.",
+    "Some reported absences are contract differences or unconfirmed paths, not automatically production bugs: voluntary prone is explicitly excluded; bead power needs a public presentation decision; Help stale_state was not reproduced though a separate real worker-selection failure was."
+  ],
+  "methods": {
+    "read": [
+      "HOW_TO_TEST.MD",
+      "RECOVERY_PLAN.md",
+      "agent_docs/plans/EVENT_NATIVE_PUBLICATION_PLAN_2026-10-18.md",
+      "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md"
+    ],
+    "test_search_scope": [
+      "tests/engine",
+      "tests/progression",
+      "tests/manual",
+      "tests/player"
+    ],
+    "test_references_ast_validated": true,
+    "no_full_suite": "Initial audit ran no full suite. Subsequent full-sweep evidence is recorded in final_verification when complete.",
+    "no_live_server_or_client_changes": true,
+    "execution": "UV_PROJECT_ENVIRONMENT=/home/tommaso/.cache/dnd-engine/venv uv run --no-sync python -B; PYTHONDONTWRITEBYTECODE=1; focused pytest disables cacheprovider"
+  },
+  "focused_validation": {
+    "existing_tests": [
+      {
+        "node": "tests/engine/test_help_assassinate.py::test_help_discovery_and_only_selected_ally_enemy_first_rolled_attack",
+        "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_help_assassinate.py",
+        "line": 93
+      },
+      {
+        "node": "tests/progression/test_divine_intervention.py::test_arm_reward_is_real_transferable_mace_with_item_owned_healing_charge",
+        "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/progression/test_divine_intervention.py",
+        "line": 129
+      },
+      {
+        "node": "tests/engine/test_standard_conditions.py::test_eb_08_010_prone_auto_stand_handler_is_standard_action_state",
+        "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_standard_conditions.py",
+        "line": 414
+      }
+    ],
+    "result": "3passed in0.75s",
+    "reprobes": "Read-only in-memory worker/native probes; outputs retained as structured reproduction rows below. First Help probe selected wrong fixture-name assumption and stopped at StopIteration; corrected probe selected actual returned ally and established invalid_selection."
+  },
+  "issues": [
+    {
+      "issue": "dragons_breath_grant_lifecycle",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_bg3_spell_items_and_repeats.py::test_dragons_breath_recipient_pays_repeat_with_original_dc",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_bg3_spell_items_and_repeats.py",
+          "line": 57
+        },
+        {
+          "node": "tests/player/test_bg3_spell_transport.py::test_worker_discovers_previews_executes_and_records_new_spell_shapes",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/player/test_bg3_spell_transport.py",
+          "line": 42
+        }
+      ],
+      "exact_test_blind_spot": "Engine test directly casts and invokes retained Exhale, asserting damage/DC/cost/action cleanup. Generic worker test selects first legal row/target and asserts records exist plus an uncanceled native SpellEvent; it never requires exact Dragon grant owner UUID, state or application/end in either public stream.",
+      "missing_acceptance_boundary": "Actual cast on another recipient -> disclose exact retained grant owner/caster/recipient/element -> Exhale -> exact retirement in independently folded seats.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "Existing public condition membership exposes the actual retained grant and selected energy; cast, Exhale and concentration retirement are checked in both serialized streams. A separate actual wizard-to-fighter grant validates independent allied human seats, original caster damage attribution, recipient Exhale and caster-driven retirement.",
+        "regression_files": [
+          "tests/player/test_backend_handoff_publication.py",
+          "tests/player/test_handoff_dragons_breath_ally.py"
+        ]
+      }
+    },
+    {
+      "issue": "vitriolic_delayed_packet_identity",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_high_level_spell_controls.py::test_vitriolic_upcast_initial_only_and_failed_save_delayed_packet",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_high_level_spell_controls.py",
+          "line": 236
+        }
+      ],
+      "exact_test_blind_spot": "Asserts HP immediately, one later tick and no second tick after direct cast/turn calls; no capture or assertion of source_condition_uuid on every emitted packet. Correct damage totals can coexist with unattributable delayed results.",
+      "missing_acceptance_boundary": "Two or more residue recipients; native end-turn -> capture/project each actual delayed damage packet with its own real condition owner, filtering by disclosure.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "Source-condition disclosure checks the actual recipient-owned residue as well as caster-owned conditions; all six recipients retain their own source UUID on later packets.",
+        "regression_files": [
+          "tests/player/test_handoff_vitriolic.py"
+        ]
+      }
+    },
+    {
+      "issue": "sorcerous_burst_and_chromatic_orb_selected_element",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_bg3_rank_one_two_spells.py::test_burst_elements_and_bounded_explosion",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_bg3_rank_one_two_spells.py",
+          "line": 192
+        },
+        {
+          "node": "tests/engine/test_bg3_spell_fields.py::test_orb_ground_cast_creates_patch_without_initial_hit_damage",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_bg3_spell_fields.py",
+          "line": 93
+        },
+        {
+          "node": "tests/player/test_bg3_spell_transport.py::test_worker_discovers_previews_executes_and_records_new_spell_shapes",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/player/test_bg3_spell_transport.py",
+          "line": 42
+        }
+      ],
+      "exact_test_blind_spot": "Native tests pass element constructor operands directly and check HP/surface class. Generic worker test chooses only first row (Orb ground side), not every selected element and misses; records/noncanceled native spell do not assert selected public declaration operands.",
+      "missing_acceptance_boundary": "Worker chooses all7Burst/all6Orb facets including misses; exact chosen element/effect operand survives each disclosed root/application, not inferred from damage.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "SpellFact.damage_types carries the selected declaration operand on all seven Burst and six Orb misses.",
+        "regression_files": [
+          "tests/player/test_backend_handoff_publication.py"
+        ]
+      }
+    },
+    {
+      "issue": "delayed_bead_retained_power_display",
+      "status": "reported_public_operand_request_requires_contract_decision",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_high_level_spell_payloads.py::test_delayed_bead_growth_concentration_release_and_floor_throw_cannot_bypass_touch",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_high_level_spell_payloads.py",
+          "line": 103
+        }
+      ],
+      "exact_test_blind_spot": "Directly reads private/native SpellPayloadItem.dice_count to verify12->13 growth. It does not assert a public display operand for retained power/DC. Client request is partly a public-contract decision, not automatically a proven existing-schema defect.",
+      "missing_acceptance_boundary": "First decide which existing public presentation operand is required; then compare retained native power with that explicit public value through placement/growth/release.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage"
+    },
+    {
+      "issue": "portable_freezing_throw_destination",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_high_level_spell_payloads.py::test_portable_freezing_transfer_then_throw_retains_power_and_retires_once",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_high_level_spell_payloads.py",
+          "line": 54
+        }
+      ],
+      "exact_test_blind_spot": "Gets use action from exact item then directly instantiate(end_position).apply; checks HP, item retirement and lifetime cleanup. No worker selection/capture and no per-seat selected destination assertion.",
+      "missing_acceptance_boundary": "Actual accepted throw -> actor hand release and explosion origin/destination preserved under each seat disclosure independently.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "Accepted ActionEvent target_position survives disclosure; native explosion publishes its actual centre, geometry and footprint.",
+        "regression_files": [
+          "tests/player/test_handoff_selected_effects.py"
+        ]
+      }
+    },
+    {
+      "issue": "vitriolic_initial_resolved_footprint",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_high_level_spell_controls.py::test_vitriolic_upcast_initial_only_and_failed_save_delayed_packet",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_high_level_spell_controls.py",
+          "line": 236
+        }
+      ],
+      "exact_test_blind_spot": "Victim HP/turn tick assertions do not compare actual resolved reachable cells against public resolved_area_positions; a root sphere and correct recipients are insufficient.",
+      "missing_acceptance_boundary": "Real cast with occlusion -> native resolved footprint equals disclosed public field; include reachable empty cells, not just damaged recipients.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "Vitriolic uses the existing area-resolution path and publishes its resolved footprint, including empty reachable cells.",
+        "regression_files": [
+          "tests/player/test_handoff_vitriolic.py"
+        ]
+      }
+    },
+    {
+      "issue": "attack_backed_smite_terminal_lineage",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_bg3_spell_hit_riders.py::test_attack_backed_spell_pays_slot_and_bonus_only_on_hit",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_bg3_spell_hit_riders.py",
+          "line": 106
+        },
+        {
+          "node": "tests/engine/test_bg3_spell_hit_riders.py::test_ensnaring_ticks_and_ally_help_restores_movement",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_bg3_spell_hit_riders.py",
+          "line": 126
+        }
+      ],
+      "exact_test_blind_spot": "Tests real equipped mechanics via direct spell .apply and native outcomes; never close a PlayerSession command operation through capture_lineages/_lineage_graph. Nonterminal event history can therefore escape these mechanics assertions.",
+      "missing_acceptance_boundary": "Each actual offered equipped Branding/Searing/Ensnaring cast via worker command -> capture/project terminal native roots/children and replay. Preserve hit/miss/resource assertions.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "The actual child attack reaches completion before the outer spell returns; all three equipped spells capture on hit and miss.",
+        "regression_files": [
+          "tests/player/test_backend_handoff_publication.py"
+        ]
+      }
+    },
+    {
+      "issue": "magic_weapon_and_sacred_weapon_item_membership",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_bg3_spell_hit_riders.py::test_magic_weapon_bonus_and_exact_concentration_cleanup",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_bg3_spell_hit_riders.py",
+          "line": 142
+        },
+        {
+          "node": "tests/engine/test_bg3_spell_hit_riders.py::test_magic_weapon_composes_with_shillelagh_and_follows_real_transfer",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_bg3_spell_hit_riders.py",
+          "line": 243
+        },
+        {
+          "node": "tests/progression/test_paladin_interactions.py::test_sacred_weapon_follows_exact_item_and_current_wielder_then_level_cleanup",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/progression/test_paladin_interactions.py",
+          "line": 43
+        }
+      ],
+      "exact_test_blind_spot": "Tests have meaningful exact-item ownership/transfer/cleanup and bonus checks, but inspect weapon.active_conditions/native magical flags rather than requiring snapshot_item_effect and item public apply/remove/retire membership.",
+      "missing_acceptance_boundary": "Two holders and independent witness; cast/use/equip/transfer/removal -> exact enchantment condition UUID/state on actual item publication, then removal/replay.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "Both real effects implement the existing snapshot_item_effect route; exact equipped item membership, subsequent weapon use and actual expiry/concentration removal are public.",
+        "regression_files": [
+          "tests/player/test_backend_handoff_publication.py"
+        ]
+      }
+    },
+    {
+      "issue": "blessed_healer_and_destroy_undead_effective_handlers",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/progression/test_cleric_features.py::test_life_healing_source_bonus_and_committed_blessed_healer",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/progression/test_cleric_features.py",
+          "line": 30
+        },
+        {
+          "node": "tests/progression/test_cleric_features.py::test_turning_is_separate_from_fear_and_destroy_damage_does_not_end_new_turning",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/progression/test_cleric_features.py",
+          "line": 127
+        },
+        {
+          "node": "tests/player/test_light_source_projection.py::test_recorded_content_attribution_uses_foreign_equipment_grants",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/player/test_light_source_projection.py",
+          "line": 163
+        },
+        {
+          "node": "tests/player/test_foreign_sensory_capture.py::test_foreign_sensory_with_additional_evidence_keeps_its_full_capture",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/player/test_foreign_sensory_capture.py",
+          "line": 96
+        }
+      ],
+      "exact_test_blind_spot": "Mechanics tests assert actual healing/damage and Turned, not exact effective handler identity. Nearby publication tests manually inject already-populated effective_handler_presentations with outcome=modified_event; they cannot catch producer dropping emitted-only handlers returning None.",
+      "missing_acceptance_boundary": "Real cleric trigger -> actual emitted-only handler behavior/provider, triggering event and disclosed emitted lineages retained and projected; do not synthesize presentation input.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/SERVER_PASSIVE_ATTRIBUTION_GAPS_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "Actual emitted-only handlers retain effective-handler evidence; cleric features have their precise existing behavior bindings and class-feature kind. Positive and non-trigger controls use real handlers.",
+        "regression_files": [
+          "tests/player/test_handoff_passive_attribution.py"
+        ]
+      }
+    },
+    {
+      "issue": "attributed_weapon_rider_components",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_bg3_spell_hit_riders.py::test_weapon_hit_appends_one_critical_aware_spell_component",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_bg3_spell_hit_riders.py",
+          "line": 43
+        },
+        {
+          "node": "tests/progression/test_paladin_interactions.py::test_improved_smite_applies_on_every_melee_hit_and_doubles_critical_dice",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/progression/test_paladin_interactions.py",
+          "line": 234
+        }
+      ],
+      "exact_test_blind_spot": "Native component damage types/dice/critical totals are checked. Those assertions do not require actual public effective rider owner/handler linkage per independently applied component; aggregate attack totals or typed roll logs can pass.",
+      "missing_acceptance_boundary": "Perform real weapon attack -> exact actual rider grant/condition/handler source joins to the disclosed rider result independently of aggregate damage type.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "DamageAppliedEvent retains attributed native component UUID, source and affinity outcome before executable damage data is detached. Public rows redact unidentified source identities. Components are not separate final HP allocations.",
+        "regression_files": [
+          "tests/player/test_handoff_passive_attribution.py"
+        ]
+      }
+    },
+    {
+      "issue": "condition_selector_operands_28_selections_5_owner_families",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_high_level_spell_summons.py::test_dragon_five_authored_resistances_and_selected_caster_lease",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_high_level_spell_summons.py",
+          "line": 735
+        },
+        {
+          "node": "tests/engine/test_high_level_spell_summons.py::test_dragon_native_rends_then_one_free_breath_and_exact_cleanup",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_high_level_spell_summons.py",
+          "line": 127
+        },
+        {
+          "node": "tests/engine/test_high_level_spell_summons.py::test_elemental_multiattack_exhaustion_is_visible_before_second_action",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_high_level_spell_summons.py",
+          "line": 647
+        },
+        {
+          "node": "tests/progression/test_paladin_interactions.py::test_aura_recovers_after_unconsciousness_and_expands_on_live_level_eighteen",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/progression/test_paladin_interactions.py",
+          "line": 143
+        }
+      ],
+      "exact_test_blind_spot": "Tests read native resistance/damage/condition existence/cost state; they never require typed condition state operands aura_kind, damage_type, breath_type, prerequisite, action_id. Matching condition membership or null energy_type does not establish a variant.",
+      "missing_acceptance_boundary": "Capture exact concrete owner per family and require its actual selector operand through apply/update/expiry. Different energy meanings must remain distinct; no global alias.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/CONDITION_SELECTOR_PRODUCER_GAPS_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "Concrete condition snapshots expose aura_kind, breath_type, damage_type, prerequisite and action_id. Dragon cadence publishes actual readiness grant/consume/expiry and cancellation without resurrecting removed membership.",
+        "regression_files": [
+          "tests/player/test_handoff_condition_owners.py"
+        ]
+      }
+    },
+    {
+      "issue": "frenzied_parent_and_hex_hunters_mark_sustain_owners",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/progression/test_direct_barbarian_progression.py::test_frenzy_replaces_exact_rage_and_removes_only_its_owned_root",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/progression/test_direct_barbarian_progression.py",
+          "line": 282
+        },
+        {
+          "node": "tests/engine/test_bg3_spell_hit_riders.py::test_defeated_quarry_reapply_preserves_concentration_and_spends_no_slot",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_bg3_spell_hit_riders.py",
+          "line": 83
+        }
+      ],
+      "exact_test_blind_spot": "Native tests strongly verify exact owner replacement and retained concentration/reapply action, but do not require publicly disclosed child-parent/sustain UUID linkage for windup/retirement. Private owner correctness is separate from disclosure completeness.",
+      "missing_acceptance_boundary": "Retained parent/sustain identity through actual public application/replacement/end with hidden-state filtering and replay; preserve native ownership assertions.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "Frenzied snapshots its actual live same-owner Raging parent; Hex/Hunter caster sustain conditions use existing STATUS membership with exact apply/remove UUIDs.",
+        "regression_files": [
+          "tests/player/test_handoff_condition_owners.py",
+          "tests/player/test_backend_handoff_publication.py"
+        ]
+      }
+    },
+    {
+      "issue": "prismatic_selected_colour_result_identity",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_rule_dice_override_coverage.py::test_prismatic_fixed_colors_produce_their_native_damage_or_conditions",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_rule_dice_override_coverage.py",
+          "line": 196
+        },
+        {
+          "node": "tests/engine/test_rule_dice_override_coverage.py::test_prismatic_two_colors_preserves_distinct_d7_choices",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_rule_dice_override_coverage.py",
+          "line": 212
+        }
+      ],
+      "exact_test_blind_spot": "Excellent deterministic d8/d7 consumption and distinct actual damage/condition behavior checks, but no capture or typed public selected colour indexes joined to recipient/result. Non-damaging6/7 and double-colour8 cannot be reconstructed by the consumer.",
+      "missing_acceptance_boundary": "Worker cast with fixed native colours -> exact colour indices and recipient/application/result identity survive public capture, including non-damage and double-colour branches.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "Recipient application retains actual d8 and selected colours; each actual save identifies its colour and parents its outcomes. Capture includes late children within the operation cutoff. Explicit spell origin preserves existing damage interception and condition provenance.",
+        "regression_files": [
+          "tests/player/test_handoff_selected_effects.py",
+          "tests/player/test_completed_parent_capture.py"
+        ]
+      }
+    },
+    {
+      "issue": "implemented_spell_forms_absent_from_offered_domain",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/manual/test_31_subjective_runtime_epochs.py::test_bestow_curse_and_eyebite_strike_expose_selected_condition_branches",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/manual/test_31_subjective_runtime_epochs.py",
+          "line": 664
+        },
+        {
+          "node": "tests/manual/test_135_cleric_batches_2_4_5_legacy_contract.py::test_bestow_curse_ability_and_contextual_attack_options",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/manual/test_135_cleric_batches_2_4_5_legacy_contract.py",
+          "line": 620
+        },
+        {
+          "node": "tests/manual/test_130_tier2_spells.py::test_protection_from_energy_cold_resistance",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/manual/test_130_tier2_spells.py",
+          "line": 376
+        }
+      ],
+      "exact_test_blind_spot": "Tests preconstruct/register BestowCurse(curse_option=3) or directly instantiate resistance/curse options. They test supplied variants, not that ordinary default spell registration offers every implemented legal form. Deafened default-vs-alternate domain is similarly not covered by these nodes.",
+      "missing_acceptance_boundary": "Ordinary registered spell -> Choices includes implemented curse2/3/4, deafened and all fiveenergy variants -> select exact facets through worker and verify native actual operand/result.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "Existing facet domains expose all implemented Bestow Curse, Blindness/Deafness and Protection from Energy forms through ordinary worker discovery and execution.",
+        "regression_files": [
+          "tests/player/test_handoff_discovery_regressions.py"
+        ]
+      }
+    },
+    {
+      "issue": "spare_the_dying_and_stabilize_zero_hp_target_discovery",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_bg3_rank_one_two_spells.py::test_spare_dying_stabilizes_without_healing_and_damage_resumes_dying",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_bg3_rank_one_two_spells.py",
+          "line": 73
+        },
+        {
+          "node": "tests/engine/test_bg3_rank_one_two_spells.py::test_spare_dying_rejects_ineligible_before_action_payment",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_bg3_rank_one_two_spells.py",
+          "line": 88
+        }
+      ],
+      "exact_test_blind_spot": "paid helper directly instantiates SpareTheDying(target_uuid).apply after making a real0HP/DYING patient; bypasses global discovery include_dead filtering and perceived target contact admission. This is good life-rule coverage, not public eligibility coverage.",
+      "missing_acceptance_boundary": "Lawful adjacent visible living DYING actor -> offered actual selection -> command -> exact DYING→STABLE without healing; test both discovery and perception.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_SPELL_SETUP_GAPS_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "initial_audit_status": "client_report_source_mapped_not_reproduced_here",
+      "repair": {
+        "behavior": "Outer target discovery honors template.include_dead; actual visible adjacent DYING recipients can be selected and become STABLE without healing.",
+        "regression_files": [
+          "tests/player/test_handoff_discovery_regressions.py"
+        ]
+      }
+    },
+    {
+      "issue": "developer_fixture_test_bless_roster_grant",
+      "status": "preserved_named_developer_fixture_setup_failure",
+      "existing_tests": [],
+      "exact_test_blind_spot": "Developer declaration exists in action_definitions but _apply_spell_grant resolves a separate direct registered spell-action table. Existing manual TestBless alias exercises its class directly; no matching authored roster-grant test was found. Ordinary Bless tests are not coverage of this fixture ID.",
+      "missing_acceptance_boundary": "Build ordinary encounter with exact developer RosterSpellGrant -> actual directly registered action, or explicit supported setup exclusion; do not silently replace with Bless.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "current_boundary": "Declaration is DEVELOPER visibility and excluded from ordinary spell grant catalog. No replacement with ordinary Bless or removal from inventory."
+    },
+    {
+      "issue": "help_attack_returned_secondary_worker_selection",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_help_assassinate.py::test_help_discovery_and_only_selected_ally_enemy_first_rolled_attack",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_help_assassinate.py",
+          "line": 93
+        },
+        {
+          "node": "tests/player/test_compact_compound_choices.py::test_chain_primary_scoped_branch_keeps_distant_recipient_and_object_identity",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/player/test_compact_compound_choices.py",
+          "line": 45
+        }
+      ],
+      "exact_test_blind_spot": "Help test previews natively then Entity.perform uses UUIDs; compound projection test also directly calls native preview and serializes its output, never re-enters worker retained_selection with returned secondary index. Worker selection_target_pool only sees original valid_targets/eager secondary_targets, so it rejects the newly offered on-demand ally.",
+      "missing_acceptance_boundary": "Real worker Choices -> first Preview -> use exact returned ally index in second Preview and execute; cursor/revision unchanged on reads.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "reproduction": {
+        "baseline": "cdfafea0c9645819470dc8f5337a3de2abd401e0",
+        "setup": "Existing melee combat_configuration recipe with Amber supports(4,6),(4,7),Blue(5,6),(11,7),all human; bootstrap/start/advance normally.",
+        "observed": {
+          "helper": "Amber combatant2",
+          "primary_index": 0,
+          "offered_ally": "Amber combatant1",
+          "secondary_index": 2,
+          "first_preview_can_confirm": false,
+          "second_preview_exception": "CommandRejected invalid_selection",
+          "publication_revision_unchanged": true,
+          "event_cursor_unchanged": true
+        },
+        "source_chain": [
+          "server/worker.py::retained_selection",
+          "dnd/player/selection.py::selection_target_pool",
+          "dnd/actions_functional.py::secondary_candidates"
+        ],
+        "original_failure_qualification": "Client document says stale_state; this controlled worker repro establishes invalid_selection. stale_state is revision mismatch in authorize and was not reproduced here."
+      },
+      "initial_audit_status": "reproduced_current_worker_invalid_selection_original_stale_state_unexplained",
+      "repair": {
+        "behavior": "Worker selection resolves the existing on-demand secondary domain, accepting the ally index actually returned by Preview. Original stale_state was not reproduced; the reproduced invalid_selection is repaired.",
+        "regression_files": [
+          "tests/player/test_handoff_discovery_regressions.py"
+        ]
+      }
+    },
+    {
+      "issue": "drop_prone_not_offered",
+      "status": "reproduced_omission_matches_explicit_current_contract",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_standard_conditions.py::test_eb_08_010_prone_auto_stand_handler_is_standard_action_state",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_standard_conditions.py",
+          "line": 414
+        },
+        {
+          "node": "tests/manual/test_126_slow_legacy_contract.py::test_slow_does_not_lock_for_non_action_or_bonus_costs",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/manual/test_126_slow_legacy_contract.py",
+          "line": 285
+        }
+      ],
+      "exact_test_blind_spot": "setup_standard_actions explicitly excludes voluntary StandUp/DropProne and registers auto-stand. Standard-condition test requires that policy; Slow test directly creates DropProne only as a free-cost probe. A declaration/class existing does not imply normal registration.",
+      "missing_acceptance_boundary": "Clarify requested product policy before changing standard actions. This audit does not request adding DropProne.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage"
+    },
+    {
+      "issue": "devotees_mace_healing_incense_discovery",
+      "status": "backend_repaired_regression_verified_client_originals_not_rerecorded",
+      "existing_tests": [
+        {
+          "node": "tests/progression/test_divine_intervention.py::test_arm_reward_is_real_transferable_mace_with_item_owned_healing_charge",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/progression/test_divine_intervention.py",
+          "line": 129
+        }
+      ],
+      "exact_test_blind_spot": "Test calls mace.get_use_actions(actor.uuid) then action.instantiate().apply, and checks charge/healing/transfer. Ordinary discovery aggregates inventory use actions and observed world items, omitting equipped item sources; correct binding/charge/rule can exist yet never be considered.",
+      "missing_acceptance_boundary": "Real ArmThyServant -> discover equipped mace action -> command uses actual charge/bonus action -> real healing; repeat after unequip/re-equip and transfer.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_REVIEW_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage",
+      "reproduction": {
+        "setup": "Existing real level10 prepared Cleric via tests/progression/test_divine_intervention.cleric; ArmThyServant; reset ordinary turn budget; native discovery before and after unequip/re-equip.",
+        "observed": {
+          "arm_canceled": false,
+          "item": "weapon.devotees_mace",
+          "equipped": true,
+          "direct_use_action_behavior": "action.item.devotees_mace.healing_incense",
+          "discovered_item_rows": [
+            "action.attack:no_valid_targets"
+          ],
+          "incense_row_count": 0
+        },
+        "source_chain": [
+          "dnd/entity.py::_collect_use_actions",
+          "dnd/blocks/inventory.py::get_all_use_actions",
+          "dnd/blocks/base_item.py::UsableItem.get_use_actions"
+        ],
+        "qualification": "Native discovery omission reproduced; exact original party recorder sequence not rerun. No missing behavior identity: the direct action is correctly bound."
+      },
+      "initial_audit_status": "reproduced_current_native_discovery_omission",
+      "repair": {
+        "behavior": "Existing use-action discovery includes equipped UsableItem sources with UUID deduplication; the actual mace charge and healing action are reachable.",
+        "regression_files": [
+          "tests/player/test_handoff_discovery_regressions.py"
+        ]
+      }
+    },
+    {
+      "issue": "hellish_rebuke_area_group_trigger",
+      "status": "client_area_failure_unisolated_here_single_target_control_already_recorded",
+      "existing_tests": [
+        {
+          "node": "tests/engine/test_high_level_spell_summons.py::test_fire_myrmidon_rebuke_uses_own_resource_and_shared_reaction_with_oa",
+          "path": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/tests/engine/test_high_level_spell_summons.py",
+          "line": 706
+        }
+      ],
+      "exact_test_blind_spot": "Existing test calls actor.receive_damage(1,Force,enemy_uuid) directly and verifies returned Fire damage/resource sharing. It neither invokes area AFTER_GROUP trigger nor captures the public result. Actual successful single-target recording does not close failed area/group path.",
+      "missing_acceptance_boundary": "Real area cast -> actual grouped incoming applied damage -> learned reaction with positive Fire result and disclosed reaction/result lineage; consumed resources alone do not pass.",
+      "original_evidence_document": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_SPELL_SETUP_GAPS_2026-10-20.md",
+      "coverage_confidence": "high: cited tests/source inspected; absence claim bounded to searched tests, not proof of no conceivable coverage"
+    }
+  ],
+  "limits": "Sixteen grouped producer/discovery defects have bounded backend repairs and regressions. The frozen client originals have not been re-recorded, no engine export has been promoted, and no client visual/Play/Studio qualification is claimed. Remaining named product/setup/area-reaction boundaries are preserved below.",
+  "subsequent_authorized_discovery_repairs": {
+    "scope": "Assigned worktree backend only; no client edits, no DropProne registration, no restored obsolete APIs or generic character substitution. Root owns publication fixes.",
+    "changed_source_files": [
+      "dnd/entity.py",
+      "dnd/player/selection.py",
+      "server/worker.py",
+      "dnd/spells/necromancy.py",
+      "dnd/spells/abjuration.py"
+    ],
+    "regression_file": "tests/player/test_handoff_discovery_regressions.py",
+    "repairs": [
+      {
+        "issue": "HelpAttack ordered worker selection",
+        "first_failure": "Exact ally index returned by first Preview was rejected invalid_selection by second Preview; no revision/event cursor change. stale_state not reproduced.",
+        "cause": "Retained selection validated only primary rows after deferred secondary candidates moved out of eager discovery.",
+        "change": "Resolve multiple selection indices against the same subjective secondary_candidates domain used by native preview, preserving already eager secondary targets.",
+        "acceptance": "First Preview, exact returned ally index in second Preview, no preview writes, actual worker command, correct assisted_ally_uuid and paid action."
+      },
+      {
+        "issue": "Equipped Devotee mace Healing Incense absent",
+        "first_failure": "Actual Arm Thy Servant reward was equipped and get_use_actions returned the ability, but worker Choices omitted it.",
+        "cause": "Use-action discovery gathered inventory/world items but omitted equipped UsableItem instances.",
+        "change": "Include equipped use actions once per source item using existing equipment slots and UsableItem capability.",
+        "acceptance": "Real prepared Cleric10 invokes Arm Thy Servant via worker, then discovers/uses item-owned incense; exact source UUID, consumed charge/bonus action and actual spatial aura."
+      },
+      {
+        "issue": "Spare the Dying target admission",
+        "first_failure": "A seen initialized dying recipient at0HP was absent from Choices despite the spell declaring include_dead=True.",
+        "cause": "Ordinary/item use target-pool callsites passed only outer include_dead=False, discarding template policy.",
+        "change": "Pass outer include_dead or template.include_dead at both discovery callsites. No sensory/global target enumeration change.",
+        "acceptance": "Seen initialized death-save recipient remains perceived, is offered to Spare while absent from ordinary attacks, stabilizes without healing via worker, and both serialized operations contain exact LifeFact.",
+        "fixture_note": "A first publication probe created an uncaptured patient after Start, producing no public facts. The final test uses an initialized encounter creature with explicit death-save capability; both streams then contain LifeFact and SpellFact. No publication defect inferred from the invalid initial capture fixture."
+      },
+      {
+        "issue": "Already implemented spell choices omitted from discovery",
+        "first_failure": "16worker choice cases could not find required facet rows before fixes.",
+        "change": "Use existing facet_domain/_selection_overrides for9Bestow Curse choices (6abilities +attack/inaction/damage),2Blindness/Deafness forms and5Protection from Energy types. Native explicitly configured calls without facets retain their configured values.",
+        "acceptance": "Every choice is selected from actual Choices, admitted by Preview, executed by Command, creates the correct native condition/parameter and emits exact effect_id in BOTH serialized seat streams.",
+        "existing_test_migration": "test31 selected-curse semantics test now selects the actual inaction native row and matches its template_name to AI affordances, preserving its original option3 condition profile assertions."
+      }
+    ],
+    "validation": [
+      {
+        "stage": "Failing-first Help+Mace",
+        "result": "2failed in1.24s",
+        "meaning": "Returned ally selection rejected; equipped incense omitted."
+      },
+      {
+        "stage": "Failing-first Spare+forms",
+        "result": "17failed,2passed in3.99s",
+        "log": "/tmp/dnd-discovery-forms-red.log",
+        "meaning": "Missing zero-HP recipient and16missing choice facet selections; existing Help/Mace repairs already passed."
+      },
+      {
+        "stage": "Final focused discovery batch",
+        "result": "211passed in18.26s",
+        "log": "/tmp/dnd-discovery-final-focused.log",
+        "coverage": [
+          "new19worker cases",
+          "compact Choices transport",
+          "generic spell transport",
+          "Help engine mechanics",
+          "divine intervention progression",
+          "rank1/2 spell mechanics",
+          "shared sensory conditions",
+          "selected curse AI semantics",
+          "remaining spell legacy contract",
+          "tier2spells",
+          "Cleric legacy batches"
+        ]
+      },
+      {
+        "stage": "Focused current pyright",
+        "result": "14diagnostics, all reported source locations outside changed discovery/facet hunks; no clean typecheck claimed",
+        "log": "/tmp/dnd-discovery-pyright.log"
+      }
+    ],
+    "preserved_remaining_boundaries": [
+      "DropProne is intentionally absent from standard actions; no template added.",
+      "Broader test31 unknown semantic capabilities still fails for Drop/AllyHelp/HelpAttack/DismissSummon; not weakened or hidden.",
+      "Help stale_state from the client report remains unconfirmed; separate invalid_selection regression was fixed.",
+      "No full suite run for this repair until root signals all concurrent changes settled."
+    ]
+  },
+  "subsequent_root_fix_regression": {
+    "node": "tests/player/test_handoff_vitriolic.py::test_vitriolic_cast_footprint_and_each_residue_deadline_survive_both_seat_streams",
+    "root_owned_source": "Root implemented Vitriolic _resolve_execution_targets and per-recipient source_condition_uuid projection before this requested regression; this agent did not edit evocation/projection.",
+    "input": "Six initialized HUMAN-controlled encounter goblins with explicit +200HP durability and failed DEX saves. Real Choices cast then actual worker EndTurn/Advance commands.",
+    "assertions": [
+      "Exact49-cell20ft sphere footprint in native cast and both serialized seat operations",
+      "Six distinct native VitriolicResidue UUIDs captured before deadlines",
+      "Exactly12public delayed DamageResultFacts:2observers by6recipients, each exact target residue UUID",
+      "Each recipient loses10acid from fixed5d4 and its residue is removed at next actual turn END"
+    ],
+    "result": "1passed in1.26s",
+    "log": "/tmp/dnd-handoff-vitriolic.log"
+  },
+  "subsequent_condition_owner_repairs": {
+    "scope": "Root explicitly assigned DraconicBreathCadence readiness and concrete Frenzied parent publication; root supplied the five existing selector snapshot fields. No generic INTERNAL-parent publication and no new gameplay system.",
+    "changed_source_files": [
+      "dnd/types/actor.py",
+      "dnd/classes/rage.py",
+      "dnd/monsters/spell_summon_actions.py"
+    ],
+    "changes": [
+      "Optional typed ready and parent_condition_uuid values omit None from serialized condition state.",
+      "Only Frenzied exposes the exact live public Raging parent on the same native owner; other condition snapshots do not expose generic runtime parent links.",
+      "Draconic cadence snapshots reflect actual free-action readiness and publish standard ConditionStateChangedEvent on grant, consumption, unused turn end and canceled grant. Free Breath consumption uses the actual accepted cost result as causal parent.",
+      "Condition removal clears owned allowance without publishing a membership-set event during retirement."
+    ],
+    "regression_file": "tests/player/test_handoff_condition_owners.py",
+    "regression_cases": 17,
+    "boundaries": [
+      "Actual worker Frenzy from the authored Berserker premade, both serialized seat streams, exact native Frenzied and Raging UUIDs and no generic parent disclosures.",
+      "Actual worker SummonDragon, five independent breath/shared-resistance pairs covering every supported type, real autonomous Multiattack and Free Breath steps, native state-change events with causal parents and exact ready transitions in both streams.",
+      "Actual canceled Multiattack grants then cancels allowance, serialized True/False transitions; unused actual encounter TURN_END publishes False; condition retirement publishes removal without a new membership set.",
+      "Real prepared Paladin10 initialization, controller and independent Goblin perspective, serialized initialization folded by actual client reducer; protection/devotion/courage values equal native membership UUIDs.",
+      "Actual native ConjureElemental applications captured into both existing worker audience projections: all four elemental prerequisites and the three native Myrmidon action_id/damage_type pairs. This boundary deliberately does not claim Myrmidon worker discovery works."
+    ],
+    "failing_first": {
+      "result": "2failed in1.30s",
+      "log": "/tmp/dnd-condition-owners-red.log",
+      "cause": "ConditionState lacked parent_condition_uuid and ready at the actual worker publication boundary."
+    },
+    "final_focused_validation": {
+      "result": "137passed,1expected xfail in18.20s",
+      "log": "/tmp/dnd-condition-owners-final.log",
+      "coverage": [
+        "new17owner/selector cases",
+        "native high-level summons",
+        "direct Barbarian progression",
+        "Paladin aura locality",
+        "high-level spell worker transport"
+      ]
+    },
+    "preserved_gap": "Existing strict xfail: ConjureElemental slot-six Myrmidon choices omitted by base-level facet discovery. No adjacent discovery expansion, skip or assertion weakening."
+  },
+  "final_verification": {
+    "source": {
+      "checkout": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine",
+      "branch": "feature/rules-checking",
+      "base_commit": "cdfafea0c9645819470dc8f5337a3de2abd401e0",
+      "remote_fetch_verified": true,
+      "ahead_behind_origin_event_native_deltas": [
+        0,
+        0
+      ],
+      "changes": "uncommitted, isolated; no merge, rebase or stash needed"
+    },
+    "repaired_issue_groups": 16,
+    "focused": [
+      {
+        "cases": 33,
+        "passed": 33,
+        "seconds": 2.84,
+        "scope": "Final late-child capture, cutoff/cold-load/privacy and all selected-effect cases before provenance refinement",
+        "log": "/tmp/rules-checking-capture-final.log"
+      },
+      {
+        "cases": 276,
+        "passed": 276,
+        "seconds": 21.44,
+        "scope": "Final Prismatic spell provenance and public colour results, fixed dice, spell admission, capture cutoff and attributed passive/rider tests",
+        "log": "/tmp/rules-checking-prismatic-final.log",
+        "failing_first": "9 provenance cases failed; two successful nondamaging saves passed"
+      },
+      {
+        "cases": 1,
+        "passed": 1,
+        "seconds": 1.26,
+        "scope": "Distinct allied caster and recipient Dragon Breath lifecycle through both independently controlled serialized seat streams",
+        "test_file": "tests/player/test_handoff_dragons_breath_ally.py",
+        "qualification": "Added after full-suite collection; supplementary pass"
+      }
+    ],
+    "sdk": {
+      "python_passed": 91,
+      "monty_passed": 9,
+      "typescript_passed": 64,
+      "typescript_build": "passed",
+      "logs": [
+        "/tmp/dnd-handoff-sdk-python.log",
+        "/tmp/dnd-handoff-monty.log",
+        "/tmp/rules-checking-ts-sdk.log"
+      ]
+    },
+    "typecheck": {
+      "root_changed_modules_baseline_errors": 188,
+      "root_changed_modules_current_errors": 188,
+      "added_diagnostics": 0,
+      "capture_baseline_errors": 0,
+      "capture_current_errors": 0,
+      "qualification": "Scoped comparison, not a clean repository-wide typecheck"
+    },
+    "protocol": {
+      "version": 1,
+      "player_schema_version": 16,
+      "schema_digest": "2c11d7a9919c8aa9b1490628fff224627f19d6388c3884171d14a4a5cbecea22",
+      "definitions": 379,
+      "field_ledger_rows": 1925,
+      "change": "Additive optional fields; regenerate/update both SDKs at existing strict identity handshake"
+    },
+    "state_and_replay": [
+      {
+        "case": "fireball",
+        "seats": "faction",
+        "o1_differences": 0,
+        "sdk_cold_replay": "passed",
+        "reconnect_after_consumed_operation": "passed",
+        "directory": "/tmp/rules-checking-handoff-fireball-oracle",
+        "replay_log": "/tmp/rules-checking-handoff-fireball-replay.log"
+      },
+      {
+        "case": "room_reentry",
+        "seats": "31 independent character seats",
+        "o1_differences": 0,
+        "sdk_cold_replay": "passed",
+        "reconnect_after_consumed_operation": "passed",
+        "directory": "/tmp/rules-checking-handoff-room-oracle",
+        "replay_log": "/tmp/rules-checking-handoff-room-replay.log"
+      }
+    ],
+    "remaining_boundaries": [
+      {
+        "issue": "delayed_bead_retained_power_display",
+        "state": "Product decision: whether retained dice/DC must be public presentation data. Existing placement/detonation works."
+      },
+      {
+        "issue": "developer_fixture_test_bless_roster_grant",
+        "state": "Named developer fixture setup failure retained; ordinary roster grant catalog excludes developer spell declaration."
+      },
+      {
+        "issue": "drop_prone_not_offered",
+        "state": "Explicit current standard-action policy excludes voluntary Drop Prone; changing it requires human direction."
+      },
+      {
+        "issue": "hellish_rebuke_area_group_trigger",
+        "state": "Prior area/group gap remains unisolated; successful single-target baseline preserved, no generic reopening claimed."
+      }
+    ],
+    "full_suite": {
+      "status": "completed_with_two_preexisting_failures",
+      "log": "/tmp/dnd-handoff-full-suite.log",
+      "junit": "/tmp/dnd-handoff-full-suite.xml",
+      "qualification": "Started before final Prismatic origin refinement; that small source correction is separately covered by the 276-case final supplement.",
+      "collected": 7306,
+      "passed": 7283,
+      "failed": 2,
+      "xfailed": 21,
+      "warnings": 1,
+      "seconds": 595.29,
+      "failures": [
+        {
+          "node": "tests/manual/test_31_subjective_runtime_epochs.py::test_sorcerer_epoch_carries_metamagic_transforms_and_base_spell_levels",
+          "cause": "Existing AI semantics omit dnd.actions.Drop, dnd.actions.AllyHelp, dnd.actions.HelpAttack and dnd.summoning.actions.DismissSummon. Existing test remains failing; no assertion weakened."
+        },
+        {
+          "node": "tests/manual/test_71_authored_roster_catalog.py::test_every_srd_creature_factory_is_represented_in_a_roster",
+          "cause": "Existing authored roster inventory has no content.srd_5_1_cc:creature:creature.dretch@1. No invented roster entry to satisfy the census."
+        }
+      ],
+      "handoff_cases_collected": 99,
+      "extra_handoff_case_passed": 1,
+      "warning": "Existing test_transport_review synthetic version_rows tuple produces a Pydantic serializer warning.",
+      "comparison_to_previous_full_run": {
+        "previous_collected": 7195,
+        "added_nodes": 111,
+        "added_nodes_passed": 111,
+        "removed_nodes": 0,
+        "previous_failures_now_passing": 15,
+        "new_failing_nodes": 0,
+        "new_nodes_breakdown": {
+          "forced_occupancy": 12,
+          "handoff": 99
+        },
+        "summary_file": "/tmp/dnd-handoff-full-summary.json"
+      }
+    },
+    "new_handoff_regression_cases": 100,
+    "reviews": {
+      "plan_adherence": "No blocker in final capture/cutoff scope; existing queue and frozen native evidence preserved.",
+      "antislop_antiOOP": "No additional framework or unrelated gameplay changes. Reviewer caught Prismatic provenance loss after save reparenting; explicit original spell origin and failing-first native assertions repaired it."
+    },
+    "performance": {
+      "case": "fireball",
+      "mode": "ordinary",
+      "seats": "faction",
+      "method": "Three sequential baseline samples and three final samples using the same cached Python3.13 environment and Linux sources. Final samples ran after all test processes stopped; not a latency distribution.",
+      "baseline_source": "/tmp/rules-checking-handoff-base.6xPOSb",
+      "final_source": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine",
+      "results": {
+        "base": {
+          "samples_ms": {
+            "total_ms": [
+              118.582,
+              140.164,
+              120.078
+            ],
+            "native_ms": [
+              65.677,
+              79.886,
+              65.536
+            ],
+            "publication_ms": [
+              46.641,
+              52.761,
+              47.9
+            ]
+          },
+          "median_ms": {
+            "total_ms": 120.078,
+            "native_ms": 65.677,
+            "publication_ms": 47.9
+          },
+          "largest_update": {
+            "seat": "blue",
+            "bytes": 130728,
+            "log_bytes": 41332,
+            "non_log_bytes": 89396,
+            "world_bytes": 29746
+          },
+          "event_versions": [
+            571,
+            571,
+            571
+          ],
+          "deaths": [
+            [
+              "Gallery crowd 1",
+              "Gallery crowd 2",
+              "Gallery crowd 3",
+              "Gallery crowd 4",
+              "Gallery crowd 5",
+              "Gallery crowd 6"
+            ],
+            [
+              "Gallery crowd 1",
+              "Gallery crowd 2",
+              "Gallery crowd 3",
+              "Gallery crowd 4",
+              "Gallery crowd 5",
+              "Gallery crowd 6"
+            ],
+            [
+              "Gallery crowd 1",
+              "Gallery crowd 2",
+              "Gallery crowd 3",
+              "Gallery crowd 4",
+              "Gallery crowd 5",
+              "Gallery crowd 6"
+            ]
+          ]
+        },
+        "final": {
+          "samples_ms": {
+            "total_ms": [
+              150.981,
+              120.738,
+              119.567
+            ],
+            "native_ms": [
+              84.57,
+              67.704,
+              66.007
+            ],
+            "publication_ms": [
+              58.364,
+              46.847,
+              47.15
+            ]
+          },
+          "median_ms": {
+            "total_ms": 120.738,
+            "native_ms": 67.704,
+            "publication_ms": 47.15
+          },
+          "largest_update": {
+            "seat": "blue",
+            "bytes": 133102,
+            "log_bytes": 41332,
+            "non_log_bytes": 91770,
+            "world_bytes": 29746
+          },
+          "event_versions": [
+            571,
+            571,
+            571
+          ],
+          "deaths": [
+            [
+              "Gallery crowd 1",
+              "Gallery crowd 2",
+              "Gallery crowd 3",
+              "Gallery crowd 4",
+              "Gallery crowd 5",
+              "Gallery crowd 6"
+            ],
+            [
+              "Gallery crowd 1",
+              "Gallery crowd 2",
+              "Gallery crowd 3",
+              "Gallery crowd 4",
+              "Gallery crowd 5",
+              "Gallery crowd 6"
+            ],
+            [
+              "Gallery crowd 1",
+              "Gallery crowd 2",
+              "Gallery crowd 3",
+              "Gallery crowd 4",
+              "Gallery crowd 5",
+              "Gallery crowd 6"
+            ]
+          ]
+        }
+      }
+    }
+  }
+}

@@ -299,7 +299,7 @@ def capture_interval(
         is_admitted = (sheet is not None and audience.controls(sheet.actor_uuid)) or any(
             _admitted(event, observer_uuid=identity, battlefield_id=battlefield_id) for identity in audience.observers)
         if is_admitted:
-            admitted.append((index, _retained_event(event, audience)))
+            admitted.append((index, _retained_event(event, audience, end_cursor=end_cursor)))
             admitted_original.append((index, event))
             entry = seat_log_entry(event.combat_log, audience)
             if entry is not None:
@@ -320,7 +320,7 @@ def capture_interval(
         admitted=tuple(admitted),
         conditions=tuple(fact for _, event in admitted_original if (fact := _condition_fact(event)) is not None),
         logs=logs,
-        world_interval=WorldInterval(events=tuple((index, _cached_body(event, None, True, bodies))
+        world_interval=WorldInterval(events=tuple((index, _cached_body(event, None, True, bodies, end_cursor=end_cursor))
                 for index, event in completed),
             conditions=tuple(fact for _, event in completed if (fact := _condition_fact(event)) is not None),
             actor_fact_changes=_actor_fact_changes(records, (event for _, event in completed))),
@@ -335,7 +335,6 @@ def _event_header(event: Event) -> Event:
     Passive validation also preserves absent turn metadata during live capture.
     The header holds the version's frozen grant values themselves.
     """
-    children, lineage_children = EventQueue.child_links(event)
     header = Event.model_validate(dict(
         name=event.name, uuid=event.uuid, source_entity_uuid=event.source_entity_uuid,
         source_entity_name=event.source_entity_name,
@@ -348,8 +347,8 @@ def _event_header(event: Event) -> Event:
         status_message=event.status_message, outcome_code=event.outcome_code,
         outcome_source_entity_uuid=event.outcome_source_entity_uuid,
         is_first=event.is_first, is_last=event.is_last,
-        lineage_children_events=lineage_children,
-        children_events=children, parent_lineage=event.parent_lineage,
+        lineage_children_events=event.lineage_children_events,
+        children_events=event.children_events, parent_lineage=event.parent_lineage,
         children_lineages=event.children_lineages,
     ), context=PASSIVE_EVENT_REPLAY)
     header.identified_entity_observer_uuids = event.identified_entity_observer_uuids
@@ -406,31 +405,34 @@ def seat_log_entry(log: CombatLogEntry | None, audience: PlayerAudience, *,
 
 
 def _retained_event(event: Event, audience: PlayerAudience, *, omit_sensory_payload: bool = False,
-                    bodies: dict[tuple[UUID, bool, bool | None], Event] | None = None) -> Event:
+                    bodies: dict[tuple[UUID, bool, bool | None], Event] | None = None,
+                    end_cursor: int | None = None) -> Event:
     """The seat's retained event: the shared detached body (its combat log is the seat's `logs` entry)."""
     controls = _controller_redaction(event, audience)
-    return _cached_body(event, controls, omit_sensory_payload, bodies)
+    return _cached_body(event, controls, omit_sensory_payload, bodies, end_cursor=end_cursor)
 
 
 def _cached_body(event: Event, controls: bool | None, omit_sensory_payload: bool,
-                 bodies: dict[tuple[UUID, bool, bool | None], Event] | None) -> Event:
+                 bodies: dict[tuple[UUID, bool, bool | None], Event] | None, *,
+                 end_cursor: int | None = None) -> Event:
     """A version's retained body, built once per capture for its redaction and sensory payload choice."""
     key = (event.uuid, omit_sensory_payload, controls)
     body = bodies.get(key) if bodies is not None else None
     if body is None:
-        body = _retained_body(event, controls, omit_sensory_payload=omit_sensory_payload)
+        body = _retained_body(event, controls, omit_sensory_payload=omit_sensory_payload, end_cursor=end_cursor)
         if bodies is not None:
             bodies[key] = body
     return body
 
 
-def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload: bool) -> Event:
+def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload: bool,
+                   end_cursor: int | None = None) -> Event:
     """The selected event families' seat body, without constructing registered models (no combat log).
 
     Stored versions are frozen values (P7b): the body shares the version's payload by reference and
     carries its child links as of this capture.
     """
-    children, lineage_children = EventQueue.child_links(event)
+    children, lineage_children = EventQueue.child_links(event, end_cursor=end_cursor)
     common = {"use_register": False, "context": None, "combat_log": None,
               "children_events": children, "lineage_children_events": lineage_children}
     match event:
@@ -628,7 +630,8 @@ def capture_context(checkpoint: CaptureCheckpoint, roots: tuple[Event, ...] = ()
     the seats', the clients') takes their changes in the order they happened. A group is named by its root
     completing last; a root overlapping no other is its own group.
     """
-    context = CaptureContext(EventQueue.generation_id(), EventQueue.event_cursor(),
+    context = CaptureContext(EventQueue.generation_id(),
+        EventQueue.event_cursor() if end_cursor is None else end_cursor,
         roots=tuple(dict.fromkeys(root.uuid for root in roots)))
     graphs: dict[UUID, LineageGraph] = {}
     named: dict[UUID, Event] = {}
@@ -699,20 +702,21 @@ def _lineage_graph(root: Event, context: CaptureContext) -> LineageGraph:
         if event.phase not in (EventPhase.COMPLETION, EventPhase.CANCEL):
             raise ValueError("lineage requires terminal root and child facts")
         versions[event.lineage_uuid] = _lineage_versions(context, event.lineage_uuid)
-        if event.phase is EventPhase.CANCEL:
+        children_events, lineage_children = EventQueue.child_links(event, end_cursor=context.end_cursor)
+        if event.phase is EventPhase.CANCEL or lineage_children is not event.lineage_children_events:
             # Cancellation keeps raw parent/child version references; it does
             # not run completion's stable-lineage normalization. Resolve those
-            # existing references on the retained header as well as traversing
+            # existing references, including children emitted after a parent
+            # completed (such as damage after a save). Normalize the retained header as well as traversing
             # them, so cold consumers receive the same complete causal graph.
             children = []
-            children_events, lineage_children = EventQueue.child_links(event)
             for identity in dict.fromkeys(lineage_children + children_events):
                 child = EventQueue.get_event_by_uuid(identity)
                 if child is None:
-                    raise ValueError("canceled lineage is missing a required child")
+                    raise ValueError("lineage is missing a required child")
                 child_versions = _lineage_versions(context, child.lineage_uuid)
                 if not child_versions:
-                    raise ValueError("canceled lineage is missing a required child")
+                    raise ValueError("lineage is missing a required child")
                 children.append(child_versions[-1][1])
             event = event.model_copy(update={"children_lineages": list(dict.fromkeys(
                 child.lineage_uuid for child in children))})
@@ -774,7 +778,8 @@ def _capture_lineage(
         and event.uuid not in observed_source_ids
     }
     retained = tuple(_retained_event(nodes[event.lineage_uuid], audience,
-        omit_sensory_payload=event.uuid in omitted_sensory, bodies=context.bodies)
+        omit_sensory_payload=event.uuid in omitted_sensory, bodies=context.bodies,
+        end_cursor=context.end_cursor)
         for _, event in indexed if event.uuid == nodes[event.lineage_uuid].uuid)
     retained_root = next(event for event in retained if event.uuid == root.uuid)
     condition_ids = {fact.event_uuid for fact in conditions}
@@ -797,7 +802,7 @@ def _capture_lineage(
         end_cursor=indexed[-1][0] + 1,
         conditions=conditions,
         dispositions=dispositions,
-        observed_sources=tuple(_retained_event(event, audience, bodies=context.bodies)
+        observed_sources=tuple(_retained_event(event, audience, bodies=context.bodies, end_cursor=context.end_cursor)
             for _, event in indexed
             if event.uuid in observed_source_ids and event.uuid not in retained_ids),
         native_logs=graph.native_logs,

@@ -72,6 +72,8 @@ from dnd.types.spatial_effects import (
     SpatialEffectTriggerKind,
 )
 from dnd.types.character_progression import CharacterClass
+from dnd.core.item_types import ItemEffectPresentationState
+from dnd.types.actor import ConditionState
 
 
 MAX_SMITE_DICE = 5
@@ -741,6 +743,9 @@ class PaladinAuraBenefit(BaseCondition):
     )
     _purge: PreparedConditionRemovals | None = PrivateAttr(default=None)
 
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={"aura_kind": self.aura_kind})
+
     def model_post_init(self, context):
         super().model_post_init(context)
         self.name = f"Aura of {self.aura_kind.title()}:{self.zone_uuid}"
@@ -1136,6 +1141,12 @@ class SacredWeaponEffect(BaseCondition):
     )
     _light_uuid: UUID | None = PrivateAttr(default=None)
     _anchor_uuid: UUID | None = PrivateAttr(default=None)
+
+    def snapshot_item_effect(self) -> ItemEffectPresentationState:
+        return ItemEffectPresentationState(duration=self.duration.snapshot_summary(),
+            effect_uuid=self.uuid, behavior_id=self.get_semantic_key(),
+            display_name=self.get_display_name(), description=self.description,
+            applied_source_event_cursor=self.applied_source_event_cursor)
 
     def _apply(self, event):
         weapon = BaseBlock.get(self.target_entity_uuid)

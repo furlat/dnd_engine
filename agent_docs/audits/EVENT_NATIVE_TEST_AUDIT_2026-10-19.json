@@ -3811,7 +3811,8 @@
       "reproduction_script_embedded_with_goblin": true,
       "status": "unfixed_pending_human_traversal_rule",
       "repair_status": "Unfixed. Human clarification pending: forced movement blocks at any creature versus permits allied traversal with a legal final cell. No movement code changed.",
-      "baseline_status": "documented only; no movement engine fix authorized this turn"
+      "baseline_status": "documented only; no movement engine fix authorized this turn",
+      "rules_checking_status": "Fixed for the human-confirmed stop-before-blocking-creature rule; see rules_checking_followup. Historical full-run statuses are unchanged."
     },
     {
       "id": "AUDIT-PROJECTILE-GOBLIN-DEAD-AT-SETUP",
@@ -4946,5 +4947,39 @@
     "full_run_claim": "7157 passed,17 failed,21 xfailed. Later focused batch fixes14 of those failures; no second full run performed.",
     "authored_specialized_builds": "All14 original specialized builds and original25-member spell matrix remain preserved and passing.",
     "no_new_skips_or_xfails": true
+  },
+  "rules_checking_followup": {
+    "branch": "feature/rules-checking",
+    "base_commit": "cdfafea0c9645819470dc8f5337a3de2abd401e0",
+    "worktree": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine",
+    "human_rule": "A blocking allied or other creature stops a ground push on the preceding free cell; boundary walls do not occupy the whole owner tile.",
+    "repair": "Existing Entity.can_end_movement_at is checked at every attempted ground forced step, in prediction and authoritative commit. Voluntary traversal and dead/nonblocking exceptions are unchanged.",
+    "before": {
+      "failed": 4,
+      "passed": 8,
+      "log": "/tmp/rules-checking-occupancy-before.log"
+    },
+    "validation": {
+      "passed": 214,
+      "failed": 0,
+      "seconds": 11.6,
+      "junit": "/tmp/rules-checking-validated.xml",
+      "log": "/tmp/rules-checking-validated.log"
+    },
+    "review": "Plan adherence, antislop and antiOOP reviews pass. No new physics framework or cliff semantics.",
+    "geometry_probes": "/tmp/rules-checking-shove-review.log",
+    "cliff_findings": [
+      "Directional walls are boundary objects. A shove can enter their owner tile through a clear side and stops at the blocked edge.",
+      "Bare adjacent support-height drops already permit falls. The first fall ends the push; actual support loss determines damage.",
+      "Explicit cliff_face is a movement-only DirectionalWall with WALL structure and two bands above its owner support; placing it on either incident side blocks the fall. Current authored terraces use height differences without this object.",
+      "The nonwalking structural check rejects every movement-blocking contribution regardless of vertical interval. This conservative limit is unchanged.",
+      "Missing support and water-only support are rejected; no void death, trajectory, alternate landing search or stacked-floor inference is introduced."
+    ],
+    "separate_confirmed_bug": {
+      "description": "A FORCED_MOVEMENT EFFECT veto leaves the target at its original position, but Shove copies planned actual_distance and reports Shoved Target 10ft.",
+      "log": "/tmp/rules-checking-force-veto.log",
+      "status": "unfixed; separate reporting boundary"
+    },
+    "full_run_limitation": "This is a focused 214-case validation, not a new complete suite run."
   }
 }
