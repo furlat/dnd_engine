@@ -2,22 +2,25 @@
 
 20 October 2026. Backend handoff to NDClientGodot production ownership.
 
-Sixteen issue groups from the client backend review now have bounded backend
-repairs and regression coverage. Adopt the committed engine and updated
+Sixteen issue groups from the client backend review, plus its subsequent lazy
+position-region SDK refusal, now have bounded repairs and regression coverage.
+Adopt the committed engine and updated
 contracts, then re-record the unchanged legal client cases below. Backend tests
 qualify the producer boundaries; production Play and Studio acceptance still
 requires the new independent seat recordings and visual checks.
 
 ## Engine revision and checkout
 
-- Fixes commit: `a97bb55b0a5138d9b26289c7d58aeb8ee25678dc`.
+- Fixes commit: `09e93c439a3a5735ad06e8c6bc6c841660eb79b1`.
+  This includes the earlier producer fixes in
+  `a97bb55b0a5138d9b26289c7d58aeb8ee25678dc` and the subsequent SDK repair.
 - Active branch in the main engine folder: `feature/rules-checking`.
 - Main folder: `/mnt/c/Users/tommaso/Documents/Dev/dnd_engine`
   (`C:\Users\tommaso\Documents\Dev\dnd_engine` on Windows).
 - Integration base: `cdfafea0c9645819470dc8f5337a3de2abd401e0`.
   The client's original evidence used the older frozen
   `211b71134ed15c89e62232587381f7e15a5961c3` export.
-- The earlier rules-checking worktree remains detached at the fixes commit.
+- The earlier rules-checking worktree remains detached at `a97bb55b0`.
   The local main checkout is ready; no remote push or replacement of the
   client's frozen engine export is claimed.
 
@@ -47,6 +50,34 @@ Canonical files are [the schema](../sdk/protocol/player-api-v1.schema.json),
 [field ledger](../sdk/protocol/field-ledger.json). Both
 `sdk/python/src/dnd_player` and `sdk/player-typescript/src` are regenerated.
 The [protocol notes](../sdk/protocol/README.md) describe the additions.
+
+### Lazy position-region SDK correction
+
+The original 78,716-byte targeting Choices response reproduced the Python SDK
+refusal before Preview: Drop rows 15 and 16 were available and affordable, with
+empty target sets and nonnull regions. Both supported SDK validators incorrectly
+required enumerated targets for every available action. Their old fixtures
+covered only enumerated choices, so the earlier 91 Python / 64 TypeScript passes
+did not establish lazy-region admission.
+
+Both SDKs now follow the native contract: available rows require targets or a
+nonnull region, including `{}` with schema defaults. Unavailable rows may retain
+region metadata but cannot carry enumerated targets. Affordability, reference,
+ordinal, generation and schema checks remain intact. Admission preserves the
+payload; it does not enumerate cells or decide whether an aim is legal.
+
+The unchanged original response now passes `validate` and `decode` in both SDKs.
+Each SDK has 15 new public-boundary regression cases; the two available-region
+cases failed before the fix. Final suites: **106 Python tests, 79 TypeScript
+tests and TypeScript build passed**. Four existing native compound-selection /
+Preview cases also passed. No schema or identity changed in this correction.
+Reinstall/rebuild the recorder's SDK from the fixes commit even if its protocol
+identity already matches: the identity does not distinguish this code repair.
+
+After promoting the engine export and SDK together, rerun the unchanged Fireball
+footprint and Magic Missile ordered-prefix/undo targeting witness. Its original
+failure remains evidence with zero checks and no Preview or gameplay commands;
+offline admission is not a successful targeting recording or client acceptance.
 
 ## Published facts and producer corrections
 
@@ -153,7 +184,8 @@ cases. The final Prismatic provenance correction was validated separately by
 276 passing cases; one subsequently added ally-recipient Dragon's Breath case
 also passed, bringing new handoff coverage to 100 cases.
 
-Python SDK: 91 passed; Monty: 9 passed; TypeScript build and 64 tests passed.
+At the producer-fix revision: Python SDK 91 passed, Monty 9 passed, and TypeScript
+build / 64 tests passed. The later SDK correction's results are recorded above.
 Scoped typecheck adds no diagnostics to the baseline's existing 188; capture
 has zero. Fireball with faction seats and room re-entry with 31 independent
 character seats have zero live-versus-client state differences. Fresh-process

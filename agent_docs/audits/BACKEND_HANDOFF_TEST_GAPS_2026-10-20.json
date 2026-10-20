@@ -1023,5 +1023,65 @@
         }
       }
     }
+  },
+  "subsequent_sdk_lazy_region_repair": {
+    "fixes_commit": "09e93c439a3a5735ad06e8c6bc6c841660eb79b1",
+    "requested_behavior": "Admit schema-valid lazy position regions through the public SDK without enumerating targets or bypassing relational checks.",
+    "boundary": "ChoicesResponse transport.validate and transport.decode in both supported SDKs.",
+    "input": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/tests/fixtures/schema16/recording-boundary-failures/targeting_free_aim_choices/0001-choices-response.json",
+    "original_response_bytes": 78716,
+    "original_discovery_indices": [
+      15,
+      16
+    ],
+    "original_actions": [
+      "Drop (Potion of Greater Invisibility)",
+      "Drop (Potion of Haste)"
+    ],
+    "before": "Unchanged original response raises ProtocolError: Contradictory action availability and target set in Python. TypeScript contained the identical faulty relation. Both SDK regression suites fail the explicit and sparse-default available-region cases before the fix.",
+    "why_tests_missed_it": "SDK choice fixtures contained enumerated targets and unavailable empty sets, but no available lazy region. Native compound/region tests validated server models without crossing SDK admission. Prior stream replay and SDK suite passes did not establish lazy Choices admission.",
+    "repair": "Align both SDKs with native AvailableActionInfo: unavailable forbids enumerated targets; available requires targets or a nonnull region. An empty region object is valid sparse-default metadata. Unavailable empty rows may retain a region.",
+    "preserved_checks": [
+      "schema",
+      "source affordability",
+      "response-local references",
+      "discovery ordinal",
+      "discovery generation"
+    ],
+    "regression_tests": [
+      "sdk/python/tests/test_choices.py::test_lazy_position_region_admitted_without_expanding_targets",
+      "sdk/python/tests/test_choices.py::test_lazy_region_does_not_bypass_admission",
+      "sdk/player-typescript/src/tests/choices.test.ts"
+    ],
+    "validation": {
+      "new_cases_per_sdk": 15,
+      "python_sdk": {
+        "passed": 106,
+        "seconds": 4.24,
+        "log": "/tmp/rules-checking-lazy-sdk-python.log"
+      },
+      "typescript_sdk": {
+        "passed": 79,
+        "build": "passed",
+        "log": "/tmp/rules-checking-lazy-sdk-ts.log"
+      },
+      "native_compound_preview": {
+        "passed": 4,
+        "seconds": 3.0,
+        "log": "/tmp/rules-checking-lazy-native-preview.log"
+      },
+      "original_response_replay": "Passed unchanged through Python and TypeScript validate/decode; rows 15/16 retain empty target sets and nonnull regions.",
+      "failing_first_logs": [
+        "/tmp/rules-checking-lazy-sdk-before-python.log",
+        "/tmp/rules-checking-lazy-sdk-before-ts.log"
+      ],
+      "review": "Plan-adherence, antislop and antiOOP reviewer found no blockers in the four SDK files."
+    },
+    "limits": [
+      "No schema/identity or gameplay changes; prior full engine/performance counts above remain historical, not rerun for this SDK-only repair.",
+      "No client payload normalization, manufactured cells, recording-tool bypass or client file changes.",
+      "Immutable client export and installed recorder SDK still require promotion together; matching protocol identity alone does not prove this code repair is installed.",
+      "Original zero-check targeting witness remains failed evidence until the unchanged Fireball footprint and Magic Missile ordered-prefix/undo witness is rerun by client production."
+    ]
   }
 }
