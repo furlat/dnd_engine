@@ -1518,6 +1518,7 @@ class HolyNimbusEffect(BaseCondition):
                     actor.uuid,
                     parent_event=boundary.uuid,
                     effect_origin=self.effect_origin,
+                    source_condition_uuid=self.uuid,
                 )
 
         def advantage(source_uuid, target_uuid=None, context=None):

@@ -2036,14 +2036,18 @@ class Entity(BaseBlock):
         position: Tuple[int, int],
         *,
         subjective: bool = False,
+        observer: Optional["Entity"] = None,
     ) -> bool:
         """Return whether known creature occupancy permits ending at a cell.
 
         Subjective discovery cannot omit an endpoint solely because an
         imperceivable creature occupies it; doing so would disclose the hidden
-        blocker. Objective movement execution still rejects that destination
+        blocker. A placement chooser may observe another creature's displacement;
+        in that case its own senses, passed as `observer`, govern disclosure.
+        Objective movement execution still rejects that destination
         and records the collision when the attempted route reaches it.
         """
+        viewpoint = self if observer is None else observer
         for occupant_uuid in get_map().get_entities_at(position):
             occupant = Entity.get(occupant_uuid)
             if occupant is None:
@@ -2055,7 +2059,7 @@ class Entity(BaseBlock):
                 MovementMode.WALKING,
             ):
                 continue
-            if subjective and occupant.uuid not in self.senses.entities:
+            if subjective and occupant.uuid != viewpoint.uuid and occupant.uuid not in viewpoint.senses.entities:
                 continue
             return False
         return True

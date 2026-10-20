@@ -305,7 +305,14 @@ class SpatialCondition(BaseCondition):
             affected_positions=set(self._activation_positions or ()),
             parent_event=application_effect,
         )
-        self._commit_activation_footprint(change_effect)
+        try:
+            self._commit_activation_footprint(change_effect)
+        except BaseException:
+            # Formation admission can fail after these two effects opened.
+            # Close their actual cancellation before activate releases the owner.
+            change_effect.cancel(status_message="Spatial activation failed")
+            application_effect.cancel(status_message="Spatial activation failed")
+            raise
         event_handler_uuids: list[UUID] = []
         for anchor_handler in self._create_anchor_handlers():
             EventQueue.add_event_handler(anchor_handler)

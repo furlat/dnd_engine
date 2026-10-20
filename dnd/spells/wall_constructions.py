@@ -437,10 +437,13 @@ def construction_sections(geometry: WallAssemblyPresentationGeometry, panel_widt
 
 
 def displacement_plan(caster: Entity, geometry: WallAssemblyPresentationGeometry,
-                      *, side: str) -> dict[UUID, tuple[int, int]] | None:
+                      *, side: str, subjective: bool = False) -> dict[UUID, tuple[int, int]] | None:
     grid = get_map()
     shell = wall_shell_cells(geometry)
     occupants = {identity for position in shell for identity in grid.get_entities_at(position)}
+    if subjective:
+        occupants = {identity for identity in occupants
+                     if identity == caster.uuid or identity in caster.senses.entities}
     used: set[tuple[int, int]] = set()
     result = {}
     path = geometry.path
@@ -488,6 +491,21 @@ def displacement_plan(caster: Entity, geometry: WallAssemblyPresentationGeometry
                              - (segment.end[1] - segment.start[1]) * (position[0] - segment.start[0]))
                     if (cross > 0) != (side == "left"):
                         continue
+                # Keep the existing subjective reach check above. New occupancy
+                # checks use the chooser's perception; execution also checks each
+                # actual ground step, without exposing hidden blockers in Preview.
+                step = (0 if dx == 0 else 1 if dx > 0 else -1,
+                        0 if dy == 0 else 1 if dy > 0 else -1)
+                previous = entity_position
+                for _ in range(max(abs(dx), abs(dy))):
+                    reached = (previous[0] + step[0], previous[1] + step[1])
+                    if (reached in used or not entity.can_end_movement_at(
+                            reached, subjective=subjective, observer=caster)
+                            or not subjective and not grid.can_transition(previous, reached, entity.uuid)):
+                        break
+                    previous = reached
+                if previous != position:
+                    continue
                 candidates.append(position)
         if not candidates:
             return None
@@ -674,7 +692,8 @@ class ConstructWall(SpellAction):
                    or tile.surface.base_material is not Material.STONE for p in wall_shell_cells(geometry)):
                 return "Stone panels require existing stone support"
         caster = Entity.get(self.source_entity_uuid)
-        if caster is None or displacement_plan(caster, geometry, side=self.displacement_side) is None:
+        if caster is None or displacement_plan(caster, geometry,
+                side=self.displacement_side, subjective=subjective) is None:
             return "No free supported side for displaced creatures"
         return None
 
