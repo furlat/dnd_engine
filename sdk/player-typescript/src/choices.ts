@@ -96,7 +96,9 @@ export function checkChoices(choices: C.PlayerChoices): void {
     if ((action.discovery_generation ?? 0) !== choices.discovery_generation) throw new ProtocolError('Action belongs to a different discovery generation');
     const targets = at(sets, action.target_set, 'target_set');
     if ((action.availability_status === 'source_unaffordable') === action.can_afford) throw new ProtocolError('Contradictory source affordability');
-    if ((action.availability_status === 'available') !== (targets.length > 0)) throw new ProtocolError('Contradictory action availability and target set');
+    const available = action.availability_status === 'available';
+    if (!available && targets.length > 0) throw new ProtocolError('Contradictory action availability and target set');
+    if (available && targets.length === 0 && action.position_region == null) throw new ProtocolError('Available action requires targets or a free-aim region');
   }
 }
 export function checkPreview(preview: C.PlayerSelectionPreview): void {

@@ -25,6 +25,45 @@ function discovery(): sdk.PlayerChoices {
 }
 function decoded<T>(value: unknown, root = 'PlayerChoices'): T {return sdk.decode<T>(root, encoder.encode(JSON.stringify(value)));}
 
+function lazyChoicesResponse(): sdk.ChoicesResponse {
+  return {kind: 'choices', game_id: 'test', game_epoch: uuid, audience_id: uuid,
+    correlation_id: other, state_revision: 'r', force_attack: false,
+    choices: {discovery_generation: 1, entity_uuid: uuid, target_sets: [[]],
+      position_actions: [action(0, 0, 'position', {template_name: 'Drop', display_name: 'Drop (Potion of Haste)',
+        position_region: {range_feet: 5, candidate_source: 'visible', requires_unoccupied: false,
+          requires_walkable: false, requires_axis_or_diagonal_alignment: false, exclude_source_position: true}})]}};
+}
+
+for (const [status, canAfford] of [['available', true], ['no_valid_targets', true], ['source_unaffordable', false]] as const)
+  for (const defaultRegion of [false, true]) test(`lazy region: ${status}, defaults ${defaultRegion}`, () => {
+    const value = lazyChoicesResponse(); const row = value.choices.position_actions![0];
+    row.availability_status = status; row.can_afford = canAfford;
+    if (defaultRegion) row.position_region = {};
+    const before = structuredClone(value);
+    assert.equal(sdk.validate('ChoicesResponse', value), value);
+    const result = decoded<sdk.ChoicesResponse>(value, 'ChoicesResponse');
+    assert.deepEqual(result, before); assert.deepEqual(value, before);
+    assert.deepEqual(sdk.actionOptions(result.choices, sdk.allActions(result.choices)[0]), []);
+    assert.equal(result.choices.positions?.length ?? 0, 0);
+  });
+
+const badLazyRelations: [string, (row: sdk.PlayerAction, choices: sdk.PlayerChoices) => void][] = [
+  ['missing region', row => {delete row.position_region;}],
+  ['null region', row => {row.position_region = null;}],
+  ['invalid region', row => {(row.position_region as unknown as {candidate_source: string}).candidate_source = 'invented';}],
+  ['unavailable nonempty', (row, choices) => {row.availability_status = 'no_valid_targets';
+    choices.positions = [[1, 0]]; choices.target_sets![0].push({kind: 'position', index: 0, position: 0});}],
+  ['source affordable', row => {row.availability_status = 'source_unaffordable';}],
+  ['other unaffordable', row => {row.can_afford = false;}],
+  ['target set', row => {row.target_set = 999;}],
+  ['wrong generation', row => {row.discovery_generation = 2;}],
+  ['wrong ordinal', row => {row.discovery_index = 1;}],
+];
+for (const [name, mutate] of badLazyRelations) test(`lazy region does not bypass admission: ${name}`, () => {
+  const value = lazyChoicesResponse(); mutate(value.choices.position_actions![0], value.choices);
+  assert.throws(() => decoded(value, 'ChoicesResponse'), sdk.ProtocolError);
+});
+
 test('shared options retain branch indices, inheritance, self and ordered repeated selections', () => {
   const value = decoded<sdk.PlayerChoices>(discovery()); const before = JSON.stringify(value);
   const [chain, repeated, dash, unavailable] = sdk.allActions(value);

@@ -43,6 +43,67 @@ def decoded(value, root='PlayerChoices'):
     return sdk.decode(root, json.dumps(value).encode())
 
 
+def lazy_choices_response():
+    return {'kind': 'choices', 'game_id': 'test', 'game_epoch': UUID, 'audience_id': UUID,
+        'correlation_id': OTHER, 'state_revision': 'r', 'force_attack': False,
+        'choices': {'discovery_generation': 1, 'entity_uuid': UUID, 'target_sets': [[]],
+            'position_actions': [action(0, 0, 'position', template_name='Drop',
+                display_name='Drop (Potion of Haste)', position_region={
+                    'range_feet': 5, 'candidate_source': 'visible',
+                    'requires_unoccupied': False, 'requires_walkable': False,
+                    'requires_axis_or_diagonal_alignment': False,
+                    'exclude_source_position': True})]}}
+
+
+@pytest.mark.parametrize('status,can_afford', [
+    ('available', True), ('no_valid_targets', True), ('source_unaffordable', False)])
+@pytest.mark.parametrize('default_region', [False, True])
+def test_lazy_position_region_admitted_without_expanding_targets(status, can_afford, default_region):
+    value = lazy_choices_response()
+    row = value['choices']['position_actions'][0]
+    row.update(availability_status=status, can_afford=can_afford)
+    if default_region:
+        row['position_region'] = {}
+    before = deepcopy(value)
+    assert sdk.validate('ChoicesResponse', value) is value
+    result = decoded(value, 'ChoicesResponse')
+    assert result == before == value
+    choices = result['choices']
+    assert action_options(choices, next(all_actions(choices))) == []
+    assert not choices.get('positions')
+
+
+@pytest.mark.parametrize('case', ['missing_region', 'null_region', 'invalid_region',
+    'unavailable_nonempty', 'source_affordable', 'other_unaffordable',
+    'target_set', 'wrong_generation', 'wrong_ordinal'])
+def test_lazy_region_does_not_bypass_admission(case):
+    value = lazy_choices_response()
+    choices = value['choices']
+    row = choices['position_actions'][0]
+    if case == 'missing_region':
+        del row['position_region']
+    elif case == 'null_region':
+        row['position_region'] = None
+    elif case == 'invalid_region':
+        row['position_region']['candidate_source'] = 'invented'
+    elif case == 'unavailable_nonempty':
+        row['availability_status'] = 'no_valid_targets'
+        choices['positions'] = [[1, 0]]
+        choices['target_sets'][0].append({'kind': 'position', 'index': 0, 'position': 0})
+    elif case == 'source_affordable':
+        row['availability_status'] = 'source_unaffordable'
+    elif case == 'other_unaffordable':
+        row['can_afford'] = False
+    elif case == 'target_set':
+        row['target_set'] = 999
+    elif case == 'wrong_generation':
+        row['discovery_generation'] = 2
+    elif case == 'wrong_ordinal':
+        row['discovery_index'] = 1
+    with pytest.raises(sdk.ProtocolError):
+        decoded(value, 'ChoicesResponse')
+
+
 def test_shared_options_preserve_branch_scope_repetition_self_and_omitted_defaults():
     value = decoded(discovery())
     before = deepcopy(value)

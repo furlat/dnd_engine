@@ -155,8 +155,11 @@ def check_choices(choices: c.PlayerChoices) -> None:
         targets = _at(sets, action['target_set'], 'target_set')
         if (action['availability_status'] == 'source_unaffordable') == action['can_afford']:
             raise ProtocolError('Contradictory source affordability')
-        if (action['availability_status'] == 'available') != bool(targets):
+        available = action['availability_status'] == 'available'
+        if not available and targets:
             raise ProtocolError('Contradictory action availability and target set')
+        if available and not targets and action.get('position_region') is None:
+            raise ProtocolError('Available action requires targets or a free-aim region')
 
 
 def check_preview(preview: c.PlayerSelectionPreview) -> None:
