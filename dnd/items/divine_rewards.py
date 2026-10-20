@@ -47,6 +47,7 @@ class HealingIncenseZone(AreaCondition):
     name: str = "Healing Incense Aura"
     description: str = "Allies starting within ten feet regain1d4 HP from this item."
     source_item_uuid: UUID
+    has_visible_presence: bool = True
     anchor_kind: SpatialEffectAnchorKind = SpatialEffectAnchorKind.ENTITY
     layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
     occupancy_policy: SpatialEffectOccupancyPolicy = (
@@ -104,6 +105,7 @@ class HealingIncenseZone(AreaCondition):
                 holder.uuid,
                 source_description="Healing Incense",
                 parent_event=event.uuid,
+                source_condition_uuid=self.uuid,
                 effect_origin=EffectOrigin(
                     kind=EffectOriginKind.ITEM,
                     magical=True,

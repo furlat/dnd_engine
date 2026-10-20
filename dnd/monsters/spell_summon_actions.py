@@ -2053,6 +2053,12 @@ class ElementalMultiattackBonus(BaseCondition):
                     dice_numbers=original.dice_numbers,
                     damage_type=original.damage_type,
                     attack_magical=original.attack_magical,
+                    effect_origin=EffectOrigin(
+                        kind=EffectOriginKind.ACTION,
+                        source_id=self.get_semantic_key(),
+                        source_position=actor.position,
+                        source_event_lineage_uuid=str(boundary.lineage_uuid),
+                    ),
                     damage_bonus=parts(ModifiableValue(
                         source_entity_uuid=actor.uuid, base=0
                     )),
@@ -2118,6 +2124,7 @@ class MyrmidonTenacity(BaseCondition):
                     DamageType.BLUDGEONING,
                     actor.uuid,
                     parent_event=boundary.uuid,
+                    source_condition_uuid=self.uuid,
                 )
             return None
 
@@ -2505,6 +2512,12 @@ class MyrmidonStrikeDice(BaseCondition):
                 damage_dice=10,
                 dice_numbers=1,
                 damage_type=self.damage_type,
+                effect_origin=EffectOrigin(
+                    kind=EffectOriginKind.ACTION,
+                    source_id=self.get_semantic_key(),
+                    source_position=actor.position,
+                    source_event_lineage_uuid=str(boundary.lineage_uuid),
+                ),
                 damage_bonus=parts(ModifiableValue(
                     source_entity_uuid=actor.uuid, base=0
                 )),

@@ -65,7 +65,9 @@ class SpellSummonParameters(BaseModel):
     effect_origin: EffectOrigin | None = None
 
 
-def _sphere_damage(caster_uuid: UUID,target: Entity,*,dc: int,dice_count: int,event: Event,origin: EffectOrigin | None,context: SavingThrowContext | None=None):
+def _sphere_damage(caster_uuid: UUID,target: Entity,*,dc: int,dice_count: int,event: Event,
+                   origin: EffectOrigin | None,context: SavingThrowContext | None=None,
+                   source_condition_uuid: UUID | None=None):
     caster=Entity.get(caster_uuid)
     if caster is None:
         return
@@ -76,7 +78,7 @@ def _sphere_damage(caster_uuid: UUID,target: Entity,*,dc: int,dice_count: int,ev
         damage_bonus=parts(ModifiableValue(source_entity_uuid=caster.uuid,base=0)))
     roll=roll_spell_damage(damage, parent_event=event, attack_outcome=AttackOutcome.HIT, effect_origin=origin)
     target.receive_damage(roll.total//2 if saved else roll.total,DamageType.FIRE,caster.uuid,
-        damages=[damage],damage_rolls=[roll],parent_event=event.uuid,effect_origin=origin,
+        damages=[damage],damage_rolls=[roll],parent_event=event.uuid,effect_origin=origin,source_condition_uuid=source_condition_uuid,
         damage_save=DamageSaveContext(ability="dexterity", success=saved, success_fraction=0.5))
 
 
@@ -107,7 +109,8 @@ class FlamingSphereZone(AreaCondition):
             caster=Entity.get(self.source_entity_uuid)
             if target is not None and caster is not None and caster.is_enemy(target):
                 _sphere_damage(self.source_entity_uuid,target,dc=self.spell_dc,dice_count=self.dice_count,
-                    event=event,origin=self.effect_origin,context=self.saving_throw_context(effect_id="spell.flaming_sphere.aura"))
+                    event=event,origin=self.effect_origin,source_condition_uuid=self.uuid,
+                    context=self.saving_throw_context(effect_id="spell.flaming_sphere.aura"))
             return None
         return EventHandler(name="Flaming Sphere end-turn aura",source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[Trigger(event_type=EventType.TURN_END,event_phase=EventPhase.EXECUTION)],event_processor=expose)

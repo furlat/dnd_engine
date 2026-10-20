@@ -812,10 +812,12 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: Mapping[UUID, 
         case HealEvent():
             return (None if target is None else HealFact(source_entity_uuid=source, target_entity_uuid=target,
                 actual_healing=event.actual_healing, was_blocked=event.was_blocked,
-                source_condition_uuid=event.source_condition_uuid if target in actors and any(
+                source_condition_uuid=event.source_condition_uuid if (
+                    senses is not None and event.source_condition_uuid in senses.spatial_effects
+                    or target in actors and any(
                     member.condition_uuid == event.source_condition_uuid
                     and member.category is not ConditionCategory.INTERNAL
-                    for member in actors[target].conditions) else None,
+                    for member in actors[target].conditions)) else None,
                 resulting_normal_hp=event.resulting_normal_hp, resulting_temporary_hp=event.resulting_temporary_hp))
         case TemporaryHitPointsChangedEvent():
             return (None if event.entity_uuid not in known or not _identified(event, event.entity_uuid, observer)
