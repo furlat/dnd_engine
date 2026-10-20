@@ -1,0 +1,945 @@
+{
+  "schema": "dnd-engine/backend-content-blockers",
+  "schema_version": 1,
+  "date": "2026-10-20",
+  "fixes_commit": "59291eddead29e3002d8efae996dadb22aec3491",
+  "branch": "feature/rules-checking",
+  "client_report": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_CONTENT_BLOCKERS_2026-10-20.md",
+  "wall_issue": {
+    "original_cases": [
+      "spell.wall_of_force/baseline",
+      "spell.wall_of_ice/baseline",
+      "spell.wall_of_stone/baseline"
+    ],
+    "reproduction": "Loaded the original Force server configuration read-only into the current worker and repeated the original turn progression, panels/left selection and aim (6,7). Preview confirmed; Command raised the exact terminal-root/child invariant. No credentials or client files were copied or modified.",
+    "cause": "Wall planner chose the displaced creature's allied occupied destination. The shared forced-movement commit correctly refused it; activation failure left ConditionApplicationEvent and SpatialEffectChangeEvent at EFFECT.",
+    "repair": "The planner checks all straight-path occupancy/reservations and objective ground transitions. Subjective new occupancy checks use the caster as observer, explicitly include its own body and omit hidden shell occupants. Spatial activation failure cancels its own two opened events before existing cleanup/rethrow. Capture invariant unchanged.",
+    "observable_result": "Blocked selected left Preview is unconfirmable and direct submission spends nothing. Unblocked selected right forms and retires a wall in serialized independent seat operations. Dynamic second-section placement veto publishes cancellation with no partial wall or unfinished descendant.",
+    "why_old_tests_missed_it": "Direct wall .apply tests asserted native sections/damage/cleanup; the existing later-section-veto case never captured the canceled graph. Unoccupied success cases do not reach this failure path.",
+    "failing_first": {
+      "original_layout": "3 tests failed with the terminal invariant; /tmp/rules-checking-solid-wall-before.log",
+      "placement_veto": "All three new public-capture veto cases independently raised the same invariant on the a97bb55b0 baseline."
+    },
+    "tests": "tests/player/test_solid_wall_transport.py",
+    "limits": [
+      "No complete subjective physical-path redesign: prior reach checks remain.",
+      "Selected side remains authoritative; the formerly accepted blocked left side is not silently replaced.",
+      "Backend public fold/retirement checks do not replace client production visual qualification."
+    ]
+  },
+  "holy_nimbus_issue": {
+    "initial_evidence": "Client report was source inspection, with no new Nimbus recording claimed.",
+    "reproduction": "Two prepared level-20 Paladins activate real discovered Nimbus actions; actual enemy turn start emits two burns and serialized public capture originally reports source_condition_uuid=None.",
+    "repair": "HolyNimbusEffect.burn passes source_condition_uuid=self.uuid into existing receive_damage. No generalized handler exposure or schema addition.",
+    "tests": "tests/player/test_holy_nimbus_attribution.py",
+    "failing_first": "2 failed in 5.10 seconds; /tmp/dnd-holy-nimbus-before.log",
+    "validation": "Exact distinct owners, 10 Radiant damage per owner, native origin/turn ancestry, public membership joins, hidden-source redaction, ordinary Radiant untagged, retired owner no further burn. Existing cadence/save mechanic also passed.",
+    "why_old_tests_missed_it": "Native damage/save assertions bypassed public capture and the exact condition-owner join."
+  },
+  "validation": {
+    "affected_batch": {
+      "passed": 151,
+      "seconds": 26.37,
+      "log": "/tmp/rules-checking-content-final-tests.log"
+    },
+    "wall_and_cutoff_batch": {
+      "passed": 13,
+      "seconds": 17.12,
+      "log": "/tmp/rules-checking-solid-wall-current.log"
+    },
+    "nimbus_batch": {
+      "passed": 3,
+      "seconds": 10.18,
+      "log": "/tmp/dnd-holy-nimbus-after.log"
+    },
+    "crowded_wall_oracle": {
+      "o1_differences": 0,
+      "directory": "/tmp/rules-checking-solid-wall-oracle",
+      "log": "/tmp/rules-checking-solid-wall-oracle.log",
+      "timing_qualified": false
+    },
+    "review": "Independent plan-adherence, antislop and antiOOP source/test review found no blockers.",
+    "schema_changed": false,
+    "full_suite_rerun": false
+  },
+  "performance": {
+    "method": "Sequential baseline then final source runs on Linux, our test processes stopped; same cached Python 3.13 environment, PYTHONHASHSEED=71, fixed native input/dice. Three measured samples per case; four-actor case also retains one excluded warmup. Source on /mnt/c was not timed.",
+    "baseline_source": "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine",
+    "baseline_commit": "a97bb55b0a5138d9b26289c7d58aeb8ee25678dc",
+    "baseline_equivalence": "Subsequent pre-fix commits changed only SDK Choices code/tests and documentation, not native wall/spatial/entity code.",
+    "final_source": "/tmp/rules-checking-wall-final-source",
+    "final_source_contents": "Tracked 547808485 snapshot with the four final production edits overlaid, subsequently committed as fixes_commit.",
+    "python": "/home/tommaso/.cache/dnd-engine/venv/bin/python",
+    "small_case_boundary": "worker.dispatch plus PlayerOperation JSON encoding, with capture_application_operation timed separately; setup/Choices/Preview excluded.",
+    "small_case_runner": "/tmp/rules-checking-wall-timing.py",
+    "small_case_fixture": "tests/player/test_solid_wall_transport.py::wall_world",
+    "small_cases": [
+      {
+        "behavior": "spell.wall_of_force",
+        "displaced": false,
+        "baseline": {
+          "samples_including_warmup": [
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": false,
+              "sample": 0,
+              "warmup": true,
+              "dispatch_ms": 22.147073002997786,
+              "publication_ms": 3.6089440109208226,
+              "encoding_ms": 0.2064119908027351,
+              "total_ms": 22.35348499380052,
+              "max_packet_bytes": 7446,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": false,
+              "sample": 1,
+              "warmup": false,
+              "dispatch_ms": 224.60263699758798,
+              "publication_ms": 3.139136009849608,
+              "encoding_ms": 0.21405000006780028,
+              "total_ms": 224.81668699765578,
+              "max_packet_bytes": 7446,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": false,
+              "sample": 2,
+              "warmup": false,
+              "dispatch_ms": 13.913105998653919,
+              "publication_ms": 3.140126005746424,
+              "encoding_ms": 0.2142199664376676,
+              "total_ms": 14.127325965091586,
+              "max_packet_bytes": 7446,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": false,
+              "sample": 3,
+              "warmup": false,
+              "dispatch_ms": 19.51024803565815,
+              "publication_ms": 2.677795011550188,
+              "encoding_ms": 0.19540998619049788,
+              "total_ms": 19.70565802184865,
+              "max_packet_bytes": 7446,
+              "event_versions": 32
+            }
+          ],
+          "medians_excluding_warmup": {
+            "dispatch_ms": 19.51024803565815,
+            "publication_ms": 3.139136009849608,
+            "encoding_ms": 0.21405000006780028,
+            "total_ms": 19.70565802184865,
+            "max_packet_bytes": 7446,
+            "event_versions": 32
+          }
+        },
+        "final": {
+          "samples_including_warmup": [
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": false,
+              "sample": 0,
+              "warmup": true,
+              "dispatch_ms": 17.869100032839924,
+              "publication_ms": 3.290641005150974,
+              "encoding_ms": 0.19796198466792703,
+              "total_ms": 18.06706201750785,
+              "max_packet_bytes": 7446,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": false,
+              "sample": 1,
+              "warmup": false,
+              "dispatch_ms": 13.84303200757131,
+              "publication_ms": 2.9303579940460622,
+              "encoding_ms": 0.2328819828107953,
+              "total_ms": 14.075913990382105,
+              "max_packet_bytes": 7446,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": false,
+              "sample": 2,
+              "warmup": false,
+              "dispatch_ms": 13.430848019197583,
+              "publication_ms": 2.779556962195784,
+              "encoding_ms": 0.22288202308118343,
+              "total_ms": 13.653730042278767,
+              "max_packet_bytes": 7446,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": false,
+              "sample": 3,
+              "warmup": false,
+              "dispatch_ms": 14.187205990310758,
+              "publication_ms": 2.954946015961468,
+              "encoding_ms": 0.27452100766822696,
+              "total_ms": 14.461726997978985,
+              "max_packet_bytes": 7446,
+              "event_versions": 32
+            }
+          ],
+          "medians_excluding_warmup": {
+            "dispatch_ms": 13.84303200757131,
+            "publication_ms": 2.9303579940460622,
+            "encoding_ms": 0.2328819828107953,
+            "total_ms": 14.075913990382105,
+            "max_packet_bytes": 7446,
+            "event_versions": 32
+          }
+        }
+      },
+      {
+        "behavior": "spell.wall_of_force",
+        "displaced": true,
+        "baseline": {
+          "samples_including_warmup": [
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": true,
+              "sample": 0,
+              "warmup": true,
+              "dispatch_ms": 14.767758024390787,
+              "publication_ms": 3.3240560442209244,
+              "encoding_ms": 0.24377001682296395,
+              "total_ms": 15.01152804121375,
+              "max_packet_bytes": 9567,
+              "event_versions": 44
+            },
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": true,
+              "sample": 1,
+              "warmup": false,
+              "dispatch_ms": 15.028388996142894,
+              "publication_ms": 3.790947957895696,
+              "encoding_ms": 0.32510003075003624,
+              "total_ms": 15.35348902689293,
+              "max_packet_bytes": 9567,
+              "event_versions": 44
+            },
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": true,
+              "sample": 2,
+              "warmup": false,
+              "dispatch_ms": 15.201038972008973,
+              "publication_ms": 3.7757880054414272,
+              "encoding_ms": 0.3036599955521524,
+              "total_ms": 15.504698967561126,
+              "max_packet_bytes": 9567,
+              "event_versions": 44
+            },
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": true,
+              "sample": 3,
+              "warmup": false,
+              "dispatch_ms": 15.464720025192946,
+              "publication_ms": 3.888468025252223,
+              "encoding_ms": 0.2497999812476337,
+              "total_ms": 15.71452000644058,
+              "max_packet_bytes": 9567,
+              "event_versions": 44
+            }
+          ],
+          "medians_excluding_warmup": {
+            "dispatch_ms": 15.201038972008973,
+            "publication_ms": 3.790947957895696,
+            "encoding_ms": 0.3036599955521524,
+            "total_ms": 15.504698967561126,
+            "max_packet_bytes": 9567,
+            "event_versions": 44
+          }
+        },
+        "final": {
+          "samples_including_warmup": [
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": true,
+              "sample": 0,
+              "warmup": true,
+              "dispatch_ms": 19.756886002141982,
+              "publication_ms": 3.3892980427481234,
+              "encoding_ms": 0.2912110066972673,
+              "total_ms": 20.04809700883925,
+              "max_packet_bytes": 9567,
+              "event_versions": 44
+            },
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": true,
+              "sample": 1,
+              "warmup": false,
+              "dispatch_ms": 19.6202359511517,
+              "publication_ms": 5.858661024831235,
+              "encoding_ms": 0.2821310190483928,
+              "total_ms": 19.90236697020009,
+              "max_packet_bytes": 9567,
+              "event_versions": 44
+            },
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": true,
+              "sample": 2,
+              "warmup": false,
+              "dispatch_ms": 16.7309709941037,
+              "publication_ms": 3.9493910153396428,
+              "encoding_ms": 0.25056098820641637,
+              "total_ms": 16.981531982310116,
+              "max_packet_bytes": 9567,
+              "event_versions": 44
+            },
+            {
+              "behavior": "spell.wall_of_force",
+              "displaced": true,
+              "sample": 3,
+              "warmup": false,
+              "dispatch_ms": 16.637350956443697,
+              "publication_ms": 4.442125034984201,
+              "encoding_ms": 0.2616909914650023,
+              "total_ms": 16.8990419479087,
+              "max_packet_bytes": 9567,
+              "event_versions": 44
+            }
+          ],
+          "medians_excluding_warmup": {
+            "dispatch_ms": 16.7309709941037,
+            "publication_ms": 4.442125034984201,
+            "encoding_ms": 0.2616909914650023,
+            "total_ms": 16.981531982310116,
+            "max_packet_bytes": 9567,
+            "event_versions": 44
+          }
+        }
+      },
+      {
+        "behavior": "spell.wall_of_ice",
+        "displaced": false,
+        "baseline": {
+          "samples_including_warmup": [
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": false,
+              "sample": 0,
+              "warmup": true,
+              "dispatch_ms": 13.9239770360291,
+              "publication_ms": 3.2267660135403275,
+              "encoding_ms": 0.23961998522281647,
+              "total_ms": 14.163597021251917,
+              "max_packet_bytes": 8633,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": false,
+              "sample": 1,
+              "warmup": false,
+              "dispatch_ms": 14.673719007987529,
+              "publication_ms": 3.461797023192048,
+              "encoding_ms": 0.2560510183684528,
+              "total_ms": 14.929770026355982,
+              "max_packet_bytes": 8633,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": false,
+              "sample": 2,
+              "warmup": false,
+              "dispatch_ms": 13.981159019749612,
+              "publication_ms": 3.1464059720747173,
+              "encoding_ms": 0.2610399969853461,
+              "total_ms": 14.242199016734958,
+              "max_packet_bytes": 8633,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": false,
+              "sample": 3,
+              "warmup": false,
+              "dispatch_ms": 19.03624297119677,
+              "publication_ms": 3.3861720003187656,
+              "encoding_ms": 0.30381104443222284,
+              "total_ms": 19.340054015628994,
+              "max_packet_bytes": 8633,
+              "event_versions": 32
+            }
+          ],
+          "medians_excluding_warmup": {
+            "dispatch_ms": 14.673719007987529,
+            "publication_ms": 3.3861720003187656,
+            "encoding_ms": 0.2610399969853461,
+            "total_ms": 14.929770026355982,
+            "max_packet_bytes": 8633,
+            "event_versions": 32
+          }
+        },
+        "final": {
+          "samples_including_warmup": [
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": false,
+              "sample": 0,
+              "warmup": true,
+              "dispatch_ms": 16.087786993011832,
+              "publication_ms": 3.8289910298772156,
+              "encoding_ms": 0.27065101312473416,
+              "total_ms": 16.358438006136566,
+              "max_packet_bytes": 8633,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": false,
+              "sample": 1,
+              "warmup": false,
+              "dispatch_ms": 15.005321998614818,
+              "publication_ms": 3.2770889811217785,
+              "encoding_ms": 0.26176200481131673,
+              "total_ms": 15.267084003426135,
+              "max_packet_bytes": 8633,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": false,
+              "sample": 2,
+              "warmup": false,
+              "dispatch_ms": 15.09555202210322,
+              "publication_ms": 3.6871199845336378,
+              "encoding_ms": 0.2903220010921359,
+              "total_ms": 15.385874023195356,
+              "max_packet_bytes": 8633,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": false,
+              "sample": 3,
+              "warmup": false,
+              "dispatch_ms": 18.515720032155514,
+              "publication_ms": 5.467548966407776,
+              "encoding_ms": 0.4132719477638602,
+              "total_ms": 18.928991979919374,
+              "max_packet_bytes": 8633,
+              "event_versions": 32
+            }
+          ],
+          "medians_excluding_warmup": {
+            "dispatch_ms": 15.09555202210322,
+            "publication_ms": 3.6871199845336378,
+            "encoding_ms": 0.2903220010921359,
+            "total_ms": 15.385874023195356,
+            "max_packet_bytes": 8633,
+            "event_versions": 32
+          }
+        }
+      },
+      {
+        "behavior": "spell.wall_of_ice",
+        "displaced": true,
+        "baseline": {
+          "samples_including_warmup": [
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": true,
+              "sample": 0,
+              "warmup": true,
+              "dispatch_ms": 20.54069103905931,
+              "publication_ms": 5.30601100763306,
+              "encoding_ms": 0.4674809752032161,
+              "total_ms": 21.008172014262527,
+              "max_packet_bytes": 16117,
+              "event_versions": 73
+            },
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": true,
+              "sample": 1,
+              "warmup": false,
+              "dispatch_ms": 19.034589000511914,
+              "publication_ms": 4.735938971862197,
+              "encoding_ms": 0.39733003359287977,
+              "total_ms": 19.431919034104794,
+              "max_packet_bytes": 16117,
+              "event_versions": 73
+            },
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": true,
+              "sample": 2,
+              "warmup": false,
+              "dispatch_ms": 18.273378955200315,
+              "publication_ms": 4.605740017723292,
+              "encoding_ms": 0.38326100911945105,
+              "total_ms": 18.656639964319766,
+              "max_packet_bytes": 16117,
+              "event_versions": 73
+            },
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": true,
+              "sample": 3,
+              "warmup": false,
+              "dispatch_ms": 18.825290026143193,
+              "publication_ms": 4.822710994631052,
+              "encoding_ms": 0.40235096821561456,
+              "total_ms": 19.227640994358808,
+              "max_packet_bytes": 16117,
+              "event_versions": 73
+            }
+          ],
+          "medians_excluding_warmup": {
+            "dispatch_ms": 18.825290026143193,
+            "publication_ms": 4.735938971862197,
+            "encoding_ms": 0.39733003359287977,
+            "total_ms": 19.227640994358808,
+            "max_packet_bytes": 16117,
+            "event_versions": 73
+          }
+        },
+        "final": {
+          "samples_including_warmup": [
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": true,
+              "sample": 0,
+              "warmup": true,
+              "dispatch_ms": 22.764161985833198,
+              "publication_ms": 5.45841600978747,
+              "encoding_ms": 0.46070199459791183,
+              "total_ms": 23.22486398043111,
+              "max_packet_bytes": 16117,
+              "event_versions": 73
+            },
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": true,
+              "sample": 1,
+              "warmup": false,
+              "dispatch_ms": 20.50343301380053,
+              "publication_ms": 4.912197007797658,
+              "encoding_ms": 0.4718329873867333,
+              "total_ms": 20.975266001187265,
+              "max_packet_bytes": 16117,
+              "event_versions": 73
+            },
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": true,
+              "sample": 2,
+              "warmup": false,
+              "dispatch_ms": 21.953082003165036,
+              "publication_ms": 5.246900022029877,
+              "encoding_ms": 0.4918730119243264,
+              "total_ms": 22.444955015089363,
+              "max_packet_bytes": 16117,
+              "event_versions": 73
+            },
+            {
+              "behavior": "spell.wall_of_ice",
+              "displaced": true,
+              "sample": 3,
+              "warmup": false,
+              "dispatch_ms": 20.87118598865345,
+              "publication_ms": 5.1515279919840395,
+              "encoding_ms": 0.41971198515966535,
+              "total_ms": 21.290897973813117,
+              "max_packet_bytes": 16117,
+              "event_versions": 73
+            }
+          ],
+          "medians_excluding_warmup": {
+            "dispatch_ms": 20.87118598865345,
+            "publication_ms": 5.1515279919840395,
+            "encoding_ms": 0.4718329873867333,
+            "total_ms": 21.290897973813117,
+            "max_packet_bytes": 16117,
+            "event_versions": 73
+          }
+        }
+      },
+      {
+        "behavior": "spell.wall_of_stone",
+        "displaced": false,
+        "baseline": {
+          "samples_including_warmup": [
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": false,
+              "sample": 0,
+              "warmup": true,
+              "dispatch_ms": 16.3236340158619,
+              "publication_ms": 5.37861097836867,
+              "encoding_ms": 0.27969101211056113,
+              "total_ms": 16.60332502797246,
+              "max_packet_bytes": 8924,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": false,
+              "sample": 1,
+              "warmup": false,
+              "dispatch_ms": 14.845271012745798,
+              "publication_ms": 3.8458569906651974,
+              "encoding_ms": 0.27753994800150394,
+              "total_ms": 15.122810960747302,
+              "max_packet_bytes": 8924,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": false,
+              "sample": 2,
+              "warmup": false,
+              "dispatch_ms": 16.20990497758612,
+              "publication_ms": 4.872800956945866,
+              "encoding_ms": 0.26007002452388406,
+              "total_ms": 16.469975002110004,
+              "max_packet_bytes": 8924,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": false,
+              "sample": 3,
+              "warmup": false,
+              "dispatch_ms": 14.811041008215398,
+              "publication_ms": 3.7131280405446887,
+              "encoding_ms": 0.250530953053385,
+              "total_ms": 15.061571961268783,
+              "max_packet_bytes": 8924,
+              "event_versions": 32
+            }
+          ],
+          "medians_excluding_warmup": {
+            "dispatch_ms": 14.845271012745798,
+            "publication_ms": 3.8458569906651974,
+            "encoding_ms": 0.26007002452388406,
+            "total_ms": 15.122810960747302,
+            "max_packet_bytes": 8924,
+            "event_versions": 32
+          }
+        },
+        "final": {
+          "samples_including_warmup": [
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": false,
+              "sample": 0,
+              "warmup": true,
+              "dispatch_ms": 16.52135100448504,
+              "publication_ms": 4.076812008861452,
+              "encoding_ms": 0.2754220040515065,
+              "total_ms": 16.796773008536547,
+              "max_packet_bytes": 8924,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": false,
+              "sample": 1,
+              "warmup": false,
+              "dispatch_ms": 15.953955997247249,
+              "publication_ms": 4.420960962306708,
+              "encoding_ms": 0.27452100766822696,
+              "total_ms": 16.228477004915476,
+              "max_packet_bytes": 8924,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": false,
+              "sample": 2,
+              "warmup": false,
+              "dispatch_ms": 15.853944991249591,
+              "publication_ms": 4.14256303338334,
+              "encoding_ms": 0.269740994554013,
+              "total_ms": 16.123685985803604,
+              "max_packet_bytes": 8924,
+              "event_versions": 32
+            },
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": false,
+              "sample": 3,
+              "warmup": false,
+              "dispatch_ms": 16.45386399468407,
+              "publication_ms": 3.9122019661590457,
+              "encoding_ms": 0.2612610114738345,
+              "total_ms": 16.715125006157905,
+              "max_packet_bytes": 8924,
+              "event_versions": 32
+            }
+          ],
+          "medians_excluding_warmup": {
+            "dispatch_ms": 15.953955997247249,
+            "publication_ms": 4.14256303338334,
+            "encoding_ms": 0.269740994554013,
+            "total_ms": 16.228477004915476,
+            "max_packet_bytes": 8924,
+            "event_versions": 32
+          }
+        }
+      },
+      {
+        "behavior": "spell.wall_of_stone",
+        "displaced": true,
+        "baseline": {
+          "samples_including_warmup": [
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": true,
+              "sample": 0,
+              "warmup": true,
+              "dispatch_ms": 15.416064008604735,
+              "publication_ms": 4.374549025669694,
+              "encoding_ms": 0.2970800269395113,
+              "total_ms": 15.713144035544246,
+              "max_packet_bytes": 10905,
+              "event_versions": 44
+            },
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": true,
+              "sample": 1,
+              "warmup": false,
+              "dispatch_ms": 15.202482987660915,
+              "publication_ms": 4.371109011117369,
+              "encoding_ms": 0.2874199999496341,
+              "total_ms": 15.489902987610549,
+              "max_packet_bytes": 10905,
+              "event_versions": 44
+            },
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": true,
+              "sample": 2,
+              "warmup": false,
+              "dispatch_ms": 21.188226994127035,
+              "publication_ms": 9.33327100938186,
+              "encoding_ms": 0.31062099151313305,
+              "total_ms": 21.498847985640168,
+              "max_packet_bytes": 10905,
+              "event_versions": 44
+            },
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": true,
+              "sample": 3,
+              "warmup": false,
+              "dispatch_ms": 16.65574702201411,
+              "publication_ms": 4.422779020387679,
+              "encoding_ms": 0.3116810112260282,
+              "total_ms": 16.96742803324014,
+              "max_packet_bytes": 10905,
+              "event_versions": 44
+            }
+          ],
+          "medians_excluding_warmup": {
+            "dispatch_ms": 16.65574702201411,
+            "publication_ms": 4.422779020387679,
+            "encoding_ms": 0.31062099151313305,
+            "total_ms": 16.96742803324014,
+            "max_packet_bytes": 10905,
+            "event_versions": 44
+          }
+        },
+        "final": {
+          "samples_including_warmup": [
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": true,
+              "sample": 0,
+              "warmup": true,
+              "dispatch_ms": 16.380967979785055,
+              "publication_ms": 4.643675987608731,
+              "encoding_ms": 0.29918202199041843,
+              "total_ms": 16.680150001775473,
+              "max_packet_bytes": 10905,
+              "event_versions": 44
+            },
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": true,
+              "sample": 1,
+              "warmup": false,
+              "dispatch_ms": 16.690794960595667,
+              "publication_ms": 4.744737001601607,
+              "encoding_ms": 0.3025210462510586,
+              "total_ms": 16.993316006846726,
+              "max_packet_bytes": 10905,
+              "event_versions": 44
+            },
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": true,
+              "sample": 2,
+              "warmup": false,
+              "dispatch_ms": 16.904945019632578,
+              "publication_ms": 4.944057029206306,
+              "encoding_ms": 0.36423199344426394,
+              "total_ms": 17.269177013076842,
+              "max_packet_bytes": 10905,
+              "event_versions": 44
+            },
+            {
+              "behavior": "spell.wall_of_stone",
+              "displaced": true,
+              "sample": 3,
+              "warmup": false,
+              "dispatch_ms": 18.9198839943856,
+              "publication_ms": 4.815736960154027,
+              "encoding_ms": 0.35635201493278146,
+              "total_ms": 19.27623600931838,
+              "max_packet_bytes": 10905,
+              "event_versions": 44
+            }
+          ],
+          "medians_excluding_warmup": {
+            "dispatch_ms": 16.904945019632578,
+            "publication_ms": 4.815736960154027,
+            "encoding_ms": 0.35635201493278146,
+            "total_ms": 17.269177013076842,
+            "max_packet_bytes": 10905,
+            "event_versions": 44
+          }
+        }
+      }
+    ],
+    "crowded_gallery_wall_of_stone": {
+      "baseline": {
+        "reports": [
+          "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/.runtime/single-pass/gallery_crowd/content-blockers-stone-base-1.json",
+          "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/.runtime/single-pass/gallery_crowd/content-blockers-stone-base-2.json",
+          "/home/tommaso/.codex/worktrees/rules-checking/dnd_engine/.runtime/single-pass/gallery_crowd/content-blockers-stone-base-3.json"
+        ],
+        "samples": [
+          {
+            "total_ms": 104.81119703035802,
+            "native_ms": 74.63230402208865,
+            "publication_ms": 25.265422998927534,
+            "event_versions": 192,
+            "deaths": [],
+            "largest_update": {
+              "seat": "blue",
+              "bytes": 39128,
+              "log_bytes": 8900,
+              "non_log_bytes": 30228,
+              "world_bytes": 196
+            }
+          },
+          {
+            "total_ms": 107.53329400904477,
+            "native_ms": 76.05842396151274,
+            "publication_ms": 26.244222011882812,
+            "event_versions": 192,
+            "deaths": [],
+            "largest_update": {
+              "seat": "blue",
+              "bytes": 39128,
+              "log_bytes": 8900,
+              "non_log_bytes": 30228,
+              "world_bytes": 196
+            }
+          },
+          {
+            "total_ms": 120.01167400740087,
+            "native_ms": 84.36468697618693,
+            "publication_ms": 30.08318500360474,
+            "event_versions": 192,
+            "deaths": [],
+            "largest_update": {
+              "seat": "blue",
+              "bytes": 39128,
+              "log_bytes": 8900,
+              "non_log_bytes": 30228,
+              "world_bytes": 196
+            }
+          }
+        ],
+        "medians": {
+          "total_ms": 107.53329400904477,
+          "native_ms": 76.05842396151274,
+          "publication_ms": 26.244222011882812
+        }
+      },
+      "final": {
+        "reports": [
+          "/tmp/rules-checking-wall-final-source/.runtime/single-pass/gallery_crowd/content-blockers-stone-final-1.json",
+          "/tmp/rules-checking-wall-final-source/.runtime/single-pass/gallery_crowd/content-blockers-stone-final-2.json",
+          "/tmp/rules-checking-wall-final-source/.runtime/single-pass/gallery_crowd/content-blockers-stone-final-3.json"
+        ],
+        "samples": [
+          {
+            "total_ms": 109.04349299380556,
+            "native_ms": 77.6249659829773,
+            "publication_ms": 26.31426096195355,
+            "event_versions": 192,
+            "deaths": [],
+            "largest_update": {
+              "seat": "blue",
+              "bytes": 39128,
+              "log_bytes": 8900,
+              "non_log_bytes": 30228,
+              "world_bytes": 196
+            }
+          },
+          {
+            "total_ms": 107.71572001976892,
+            "native_ms": 76.83302002260461,
+            "publication_ms": 25.971256021875888,
+            "event_versions": 192,
+            "deaths": [],
+            "largest_update": {
+              "seat": "blue",
+              "bytes": 39128,
+              "log_bytes": 8900,
+              "non_log_bytes": 30228,
+              "world_bytes": 196
+            }
+          },
+          {
+            "total_ms": 113.86019398923963,
+            "native_ms": 82.59369200095534,
+            "publication_ms": 26.212466997094452,
+            "event_versions": 192,
+            "deaths": [],
+            "largest_update": {
+              "seat": "blue",
+              "bytes": 39128,
+              "log_bytes": 8900,
+              "non_log_bytes": 30228,
+              "world_bytes": 196
+            }
+          }
+        ],
+        "medians": {
+          "total_ms": 109.04349299380556,
+          "native_ms": 77.6249659829773,
+          "publication_ms": 26.212466997094452
+        }
+      }
+    },
+    "limits": [
+      "Three samples do not establish a latency distribution or zero overhead.",
+      "All packet sizes and event counts match for successful comparable cases.",
+      "Largest four-actor median increase is 2.063 ms for displaced Ice; crowded Stone median increases 1.510 ms (publication essentially unchanged).",
+      "Original crashing scene has no successful latency baseline; its corrected blocked-choice rejection is not counted as a faster cast.",
+      "Force undisplaced baseline includes a 224.817 ms outlier, retained above; no speedup claim."
+    ]
+  },
+  "client_adoption": "Adopt the cumulative fixes commit with matching engine/SDK; preserve original failures and rerun unchanged legal first_legal scenarios. No client export replacement, push, new client recording or production visual qualification claimed."
+}

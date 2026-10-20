@@ -2,8 +2,9 @@
 
 20 October 2026. Backend handoff to NDClientGodot production ownership.
 
-Sixteen issue groups from the client backend review, plus its subsequent lazy
-position-region SDK refusal, now have bounded repairs and regression coverage.
+Sixteen issue groups from the client backend review, plus the subsequent lazy
+position-region SDK, solid-wall cancellation and Holy Nimbus attribution defects,
+now have bounded repairs and regression coverage.
 Adopt the committed engine and updated
 contracts, then re-record the unchanged legal client cases below. Backend tests
 qualify the producer boundaries; production Play and Studio acceptance still
@@ -11,9 +12,10 @@ requires the new independent seat recordings and visual checks.
 
 ## Engine revision and checkout
 
-- Fixes commit: `09e93c439a3a5735ad06e8c6bc6c841660eb79b1`.
+- Fixes commit: `59291eddead29e3002d8efae996dadb22aec3491`.
   This includes the earlier producer fixes in
-  `a97bb55b0a5138d9b26289c7d58aeb8ee25678dc` and the subsequent SDK repair.
+  `a97bb55b0a5138d9b26289c7d58aeb8ee25678dc`, SDK repair `09e93c439`,
+  and the solid-wall / Nimbus repairs below.
 - Active branch in the main engine folder: `feature/rules-checking`.
 - Main folder: `/mnt/c/Users/tommaso/Documents/Dev/dnd_engine`
   (`C:\Users\tommaso\Documents\Dev\dnd_engine` on Windows).
@@ -78,6 +80,67 @@ After promoting the engine export and SDK together, rerun the unchanged Fireball
 footprint and Magic Missile ordered-prefix/undo targeting witness. Its original
 failure remains evidence with zero checks and no Preview or gameplay commands;
 offline admission is not a successful targeting recording or client acceptance.
+
+### Solid-wall cancellation and Holy Nimbus attribution
+
+The separate `BACKEND_CONTENT_BLOCKERS_2026-10-20.md` report is addressed by
+`59291eddead29e3002d8efae996dadb22aec3491`, with no schema or identity change.
+
+- **Wall of Force / Ice / Stone:** the original four-actor formation reproduced
+  the worker crash. The left-side displacement chose a tile occupied by the
+  displaced creature's ally. Movement correctly refused it, but failed spatial
+  activation left its application and CREATED effects unfinished. The native
+  owner now cancels those two opened events before its existing cleanup. Capture
+  still rejects any genuinely unfinished child; it neither invents completion
+  nor skips the child.
+- **Wall admission:** each proposed displacement checks occupied intermediate
+  cells and previously reserved destinations. Preview uses the caster's
+  knowledge for these occupancy checks, including its own occupied cell;
+  hidden creatures do not become a new occupancy oracle. Objective execution
+  also verifies each ground transition. The existing subjective physical reach
+  checks remain; this does not claim a general movement/perception redesign.
+  In the reported layout, selected **left** is blocked and now unconfirmable
+  without spending. Selected **right** is legal, forms the real wall and
+  retires through Drop Concentration. Keep the original scenario and its
+  `first_legal` selection policy; do not force the formerly accepted left row.
+- **Holy Nimbus:** each actual turn-start burn passes its emitting condition's
+  UUID into the existing damage path. `DamageResultFact.source_condition_uuid`
+  joins that exact publicly disclosed owner. Two simultaneous Nimbus owners
+  remain distinct; an unseen source stays redacted, ordinary Radiant damage
+  stays untagged, and removal stops the retired owner's burns.
+
+The affected batch passed **151 tests**. It includes all three wall cases,
+real second-section placement vetoes, detached public operation folds and wall
+retirement, hidden-blocker Preview, the unchanged terminal-cutoff guard, and
+Nimbus ownership/privacy/removal. The crowded Wall of Stone live-versus-client
+oracle has **zero differences**. Original client recordings remain historical;
+backend tests do not qualify the production visuals or replace new recordings.
+
+The human-requested timing check used sequential Linux-source runs with our
+test processes stopped, one Python 3.13 environment, fixed inputs, and three
+samples per side. Four-actor timings include worker dispatch, publication and
+JSON encoding; their extra warmup sample is excluded:
+
+| Spell / scene | Median total ms, before → after |
+| --- | --- |
+| Force, no displacement | 19.706 → 14.076 |
+| Force, one displaced creature | 15.505 → 16.982 |
+| Ice, no displacement | 14.930 → 15.386 |
+| Ice, one displaced creature | 19.228 → 21.291 |
+| Stone, no displacement | 15.123 → 16.228 |
+| Stone, one displaced creature | 16.967 → 17.269 |
+| Existing crowded Gallery Wall of Stone | 107.533 → 109.043 |
+
+Crowded Stone publication is **26.244 → 26.212 ms**; its largest packet remains
+**39,128 bytes**, with **192 event versions** and no deaths. All six small
+cases also retain packet sizes and event counts. The largest small-case median
+increase is 2.063 ms; this is not a zero-overhead or statistical-distribution
+claim. The raw Force baseline includes a 224.817 ms outlier, retained in the
+audit. The originally crashing case has no successful latency baseline.
+Timing samples exclude the separate oracle run.
+
+Full evidence, raw samples, test boundaries and limitations are in the
+[content blocker audit](audits/BACKEND_CONTENT_BLOCKERS_2026-10-20.json).
 
 ## Published facts and producer corrections
 
