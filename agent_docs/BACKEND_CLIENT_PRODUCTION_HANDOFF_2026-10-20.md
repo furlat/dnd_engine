@@ -3,7 +3,7 @@
 20 October 2026. Backend handoff to NDClientGodot production ownership.
 
 Sixteen issue groups from the client backend review, plus the subsequent lazy
-position-region SDK, solid-wall cancellation and Holy Nimbus attribution defects,
+position-region SDK, solid-wall cancellation, Holy Nimbus and remaining contact attribution defects,
 now have bounded repairs and regression coverage.
 Adopt the committed engine and updated
 contracts, then re-record the unchanged legal client cases below. Backend tests
@@ -12,10 +12,11 @@ requires the new independent seat recordings and visual checks.
 
 ## Engine revision and checkout
 
-- Fixes commit: `59291eddead29e3002d8efae996dadb22aec3491`.
+- Fixes commit: `0c2e5a0d74919402c6e528f40c580b7ca3c22e93`.
   This includes the earlier producer fixes in
   `a97bb55b0a5138d9b26289c7d58aeb8ee25678dc`, SDK repair `09e93c439`,
-  and the solid-wall / Nimbus repairs below.
+  solid-wall / Nimbus repair `59291edde`, and the Sphere / summon / Incense
+  attribution repairs below.
 - Active branch in the main engine folder: `feature/rules-checking`.
 - Main folder: `/mnt/c/Users/tommaso/Documents/Dev/dnd_engine`
   (`C:\Users\tommaso\Documents\Dev\dnd_engine` on Windows).
@@ -83,7 +84,7 @@ offline admission is not a successful targeting recording or client acceptance.
 
 ### Solid-wall cancellation and Holy Nimbus attribution
 
-The separate `BACKEND_CONTENT_BLOCKERS_2026-10-20.md` report is addressed by
+The wall and Nimbus entries in `BACKEND_CONTENT_BLOCKERS_2026-10-20.md` were addressed by
 `59291eddead29e3002d8efae996dadb22aec3491`, with no schema or identity change.
 
 - **Wall of Force / Ice / Stone:** the original four-actor formation reproduced
@@ -141,6 +142,78 @@ Timing samples exclude the separate oracle run.
 
 Full evidence, raw samples, test boundaries and limitations are in the
 [content blocker audit](audits/BACKEND_CONTENT_BLOCKERS_2026-10-20.json).
+
+### Flaming Sphere, eight summon phases and Healing Incense
+
+The subsequent attribution requests are repaired in
+`0c2e5a0d74919402c6e528f40c580b7ca3c22e93`. The client report says its frozen
+engine/SDK has selected `59291edde`; these additional producer repairs require
+a new engine export. Protocol 1, schema 16 and the digest above are unchanged.
+No new client recording, rendering or artwork qualification is claimed.
+
+- **Flaming Sphere END:** `DamageResultFact.source_condition_uuid` is the exact
+  emitting zone UUID. Join its observed
+  `spatial_effect.spell.flaming_sphere.aura` membership and
+  `anchor_entity_uuid` to the actual sphere. The damage's source actor remains
+  the original caster. Ram retains its existing action attribution; ordinary
+  fire damage does not acquire an aura owner.
+- **Four Elemental Multiattack bonuses:** each actual appended damage object
+  carries `source_id = condition.summon.elemental_multiattack_bonus`, so its
+  real `source_damage_uuid` now appears in `DamageResultFact.components`.
+  The existing prerequisite selector distinguishes Shocked, Prone, Burning
+  and Chilled. An ordinary Multiattack or prerequisite membership alone is
+  still not proof of a bonus packet.
+- **Three Myrmidon strikes:** the actual extra d10 components similarly carry
+  `condition.summon.myrmidon_strike_dice`; existing action/element selectors
+  distinguish Lightning, Fire and Cold. These conditions have no inherited
+  origin: the producer uses their bound semantic identity and actual damage
+  roll lineage with ACTION classification. Spell resistance, attack magical
+  flags and Chilled's Cold vulnerability remain intact. Intrinsic BODY weapons
+  and actual HELD weapons remain distinct; no equipment identity is invented.
+- **Tenacity:** its miss damage carries the exact emitting condition UUID in
+  `source_condition_uuid`. The attack remains a miss; ordinary Bludgeoning
+  damage does not gain Tenacity attribution.
+- **Healing Incense:** `HealFact.source_condition_uuid` is the actual emitting
+  `spatial_effect.item.devotees_mace.healing_incense` zone. The zone previously
+  inherited invisible presence and was absent from public membership, contrary
+  to the report's assumption. Its authored visible presence now publishes
+  membership, observed footprint and caster anchor through existing sensory
+  rules. Heal projection admits the UUID only for a currently observed zone,
+  alongside its prior recipient-condition rule. No new item field or broader
+  condition-handler publication was added. The client can use its already
+  selected reusable Incense healing art from this exact result.
+
+All 20 new cases failed before their respective fixes. They exercise actual
+native actions/turns and detached public updates: two simultaneous zone owners,
+all eight summon phases, hidden-source redaction, ordinary same-type negative
+controls, exact Sphere retirement and Incense cessation when its mace is
+unequipped. The combined affected batch passed **250 tests in 54.17 seconds**.
+The old tests checked HP/dice/riders or birth selectors without checking the
+later public result-to-owner join. No full-suite rerun or change to the known
+slot-six Myrmidon worker discovery omission is claimed.
+
+Sequential Linux-source timing, same Python 3.13 environment, fixed input/seed,
+tests stopped, one excluded warmup plus five samples per row and revision:
+
+| Actual operation | Median total ms, before → after | Largest update bytes, before → after |
+| --- | --- | --- |
+| Two Incense activations | 30.996 → 33.436 | 7,030 → 9,778 |
+| Two Incense turn-start heals | 7.012 → 7.417 | 2,617 → 2,743 |
+| Two Sphere END contacts | 13.026 → 12.319 | 12,200 → 12,452 |
+| Fire Elemental bonus Multiattack | 17.001 → 15.424 | 17,648 → 18,684 |
+| Fire Myrmidon Scorching Strike | 12.505 → 12.391 | 12,362 → 12,618 |
+| Air Myrmidon Tenacity miss | 8.731 → 8.759 | 6,802 → 6,928 |
+
+Totals include native execution, sheet publication/capture and PlayerUpdate
+JSON encoding, excluding setup and discovery; these are not worker/network
+latencies. The largest median increase is **2.440 ms** for two Incense
+activations, which now publish the previously missing zones: **48 → 52 native
+event versions** and **2,748 additional bytes** in the largest update. All other
+rows retain event counts; added bytes are the requested attribution fields.
+The two-heal tick increased **0.405 ms** and Tenacity **0.028 ms**. Faster rows
+are not a speedup claim, and five samples do not establish a latency distribution.
+The [audit](audits/BACKEND_CONTENT_BLOCKERS_2026-10-20.json) retains every raw
+sample, native/publication/encoding breakdown and the exact timing runner.
 
 ## Published facts and producer corrections
 

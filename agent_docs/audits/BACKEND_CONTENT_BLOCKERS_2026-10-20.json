@@ -2,7 +2,7 @@
   "schema": "dnd-engine/backend-content-blockers",
   "schema_version": 1,
   "date": "2026-10-20",
-  "fixes_commit": "59291eddead29e3002d8efae996dadb22aec3491",
+  "fixes_commit": "0c2e5a0d74919402c6e528f40c580b7ca3c22e93",
   "branch": "feature/rules-checking",
   "client_report": "/mnt/c/Users/tommaso/Documents/Dev/NDClientGodot/agent_docs/BACKEND_CONTENT_BLOCKERS_2026-10-20.md",
   "wall_issue": {
@@ -68,7 +68,7 @@
     "baseline_commit": "a97bb55b0a5138d9b26289c7d58aeb8ee25678dc",
     "baseline_equivalence": "Subsequent pre-fix commits changed only SDK Choices code/tests and documentation, not native wall/spatial/entity code.",
     "final_source": "/tmp/rules-checking-wall-final-source",
-    "final_source_contents": "Tracked 547808485 snapshot with the four final production edits overlaid, subsequently committed as fixes_commit.",
+    "final_source_contents": "Tracked 547808485 snapshot with the four wall/Nimbus production edits overlaid, subsequently committed as wall_and_nimbus_fixes_commit.",
     "python": "/home/tommaso/.cache/dnd-engine/venv/bin/python",
     "small_case_boundary": "worker.dispatch plus PlayerOperation JSON encoding, with capture_application_operation timed separately; setup/Choices/Preview excluded.",
     "small_case_runner": "/tmp/rules-checking-wall-timing.py",
@@ -941,5 +941,1115 @@
       "Force undisplaced baseline includes a 224.817 ms outlier, retained above; no speedup claim."
     ]
   },
-  "client_adoption": "Adopt the cumulative fixes commit with matching engine/SDK; preserve original failures and rerun unchanged legal first_legal scenarios. No client export replacement, push, new client recording or production visual qualification claimed."
+  "client_adoption": "Adopt the cumulative fixes commit with matching engine/SDK; preserve original failures and rerun unchanged legal first_legal scenarios. No client export replacement, push, new client recording or production visual qualification claimed.",
+  "wall_and_nimbus_fixes_commit": "59291eddead29e3002d8efae996dadb22aec3491",
+  "contact_attribution_followup": {
+    "fixes_commit": "0c2e5a0d74919402c6e528f40c580b7ca3c22e93",
+    "client_report_revision": "Source inspection of frozen 59291edde; report now says frozen engine/SDK selected. No new client recording verified here.",
+    "flaming_sphere": {
+      "cause": "END helper lost exact zone identity beneath the target turn.",
+      "repair": "Pass actual zone UUID via existing receive_damage source_condition_uuid. Ram retains default None.",
+      "failing_first": "2 failed in 10.15 seconds at detached DamageResultFact owner map; /tmp/flaming-sphere-attribution.log",
+      "tests": "tests/player/test_flaming_sphere_attribution.py",
+      "coverage": "Two native prepared Wizard casts; observed exact zone membership and sphere anchors; full initialization JSON fold and detached updates; blind-recipient redaction; ordinary Fire and Ram negative controls; exact zone retirement and remaining contact."
+    },
+    "summon_eight_phases": {
+      "cause": "Seven appended Damage producers lacked effect_origin; actual summon-born conditions also have no inherited origin. Tenacity omitted emitting condition UUID.",
+      "repair": "Bonus objects use ACTION-kind origins from their bound condition semantic ID and actual roll lineage/position. Tenacity passes its actual condition UUID. Existing attack_magical flags preserved.",
+      "failing_first": "16 failed in 8.24 seconds at public attribution, after fixture corrections; /tmp/dnd-summon-contact-before.log",
+      "focused_final": "16 passed in 5.41 seconds; /tmp/dnd-summon-contact-after.log",
+      "tests": "tests/player/test_summon_contact_attribution.py",
+      "coverage": "Four Elemental prerequisites, three Myrmidon strikes and Tenacity, each visible/unseen. Real appended Damage UUIDs and semantic sources; hidden identifiers redacted; BODY versus HELD weapons; spell-resistance classification and actual Chilled Cold vulnerability; ordinary same-type results untagged.",
+      "why_old_tests_missed_it": "High-level summon offense tests asserted HP/action/rider; Tenacity test asserted critical miss plus 4 HP; public selector test asserted birth state only. None captured the later attributed result.",
+      "limits": "Known slot-six Myrmidon worker discovery omission remains outside this change. No invented unarmed or equipment geometry proof."
+    },
+    "healing_incense": {
+      "cause": "Native heal omitted zone UUID; HealFact admitted only recipient conditions. Additionally the actual zone inherited has_visible_presence=False and never appeared in public membership.",
+      "repair": "Authored visible presence uses existing sensory observation; native heal passes real zone UUID; projection admits it only while the zone is currently observed, preserving prior recipient-condition policy.",
+      "intentional_disclosure_addition": "Visible Incense zone membership, observed footprint and normally disclosed caster anchor. No new item field, renderer or handler exposure.",
+      "failing_first": [
+        "Observed owner assertion failed; /tmp/incense-failing-first.log",
+        "Presence-only repair then 2 failed in 6.31 seconds at exact public heal UUIDs; /tmp/incense-presence-only.log"
+      ],
+      "focused_final": "34 passed in 22.25 seconds including existing intervention and passive attribution tests; /tmp/incense-after.log",
+      "tests": "tests/player/test_healing_incense_attribution.py",
+      "coverage": "Two real intervention rewards and discovered item activations; exact zone content/anchors; two actual turn-start heals; detached update folds; blind-recipient redaction even after previous observation; ordinary same-holder heal untagged; unequipping one exact mace stops its contribution.",
+      "why_old_tests_missed_it": "Reward tests checked native amount and charge/equipment ownership; discovery test checked activation and native zone existence. Neither required observed spatial membership or captured later HealFact ownership."
+    },
+    "validation": {
+      "affected_batch_passed": 250,
+      "seconds": 54.17,
+      "log": "/tmp/rules-checking-contact-final-tests.log",
+      "new_tests": 20,
+      "review": "Independent final plan-adherence, antislop and antiOOP review passed with no blockers.",
+      "schema_changed": false,
+      "full_suite_rerun": false,
+      "client_files_changed": false,
+      "client_recordings_rerun": false,
+      "tests": [
+        "tests/player/test_flaming_sphere_attribution.py",
+        "tests/player/test_healing_incense_attribution.py",
+        "tests/player/test_summon_contact_attribution.py",
+        "tests/player/test_holy_nimbus_attribution.py",
+        "tests/player/test_handoff_passive_attribution.py",
+        "tests/player/test_handoff_condition_owners.py",
+        "tests/player/test_handoff_vitriolic.py",
+        "tests/player/test_handoff_discovery_regressions.py",
+        "tests/player/test_duration_spatial_review.py",
+        "tests/player/test_spatial_duration_initialization.py",
+        "tests/player/test_completed_parent_capture.py",
+        "tests/player/test_solid_wall_transport.py",
+        "tests/engine/test_bg3_spell_summons.py",
+        "tests/engine/test_high_level_spell_summons.py",
+        "tests/engine/test_high_level_spell_review_regressions.py",
+        "tests/engine/test_class_presentation_facts.py",
+        "tests/progression/test_divine_intervention.py"
+      ]
+    },
+    "performance": {
+      "method": "Sequential baseline then final; no concurrent test or other benchmark processes from this task. Same Linux source directory, Python environment, PYTHONHASHSEED=71 and fixed native input/dice. One excluded warmup plus five measured fresh-scene samples per row and revision. Setup/discovery outside timing; native execution, publish_sheets/capture and PlayerUpdate JSON encoding timed separately. Not server/network latency or a latency distribution.",
+      "baseline_commit": "1622796374ef0e4cbaa33b438a6c52cce5e66dfb",
+      "baseline_native_code_commit": "59291eddead29e3002d8efae996dadb22aec3491",
+      "source_directory": "/tmp/rules-checking-contact-source",
+      "source_method": "git archive baseline HEAD, with identical three new test helper files on both sides. After all baseline runs, overlay only the four production files committed as fixes_commit for final runs.",
+      "python": "/home/tommaso/.cache/dnd-engine/venv/bin/python",
+      "runner": "/tmp/rules-checking-contact-timing.py",
+      "runner_source": "import argparse\nimport json\nfrom time import perf_counter\n\nfrom dnd.core.dice import fixed_dice_faces\nfrom dnd.core.events import EventQueue\nfrom dnd.content_system.bootstrap import bootstrap_content_system\nfrom dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME\nfrom dnd.actions_functional import execute_available_action, get_available_actions\nfrom dnd.monsters.spell_summon_actions import Burning\nfrom dnd.player.application import capture_application_operation, initialize_audiences\nfrom dnd.player.content_composition import ui_content_manifest\nfrom tests.player.test_emitted_update_replica import operation_since\nfrom tests.player.test_flaming_sphere_attribution import sphere_arena, cast_spheres\nfrom tests.player.test_healing_incense_attribution import incense_arena, use\nfrom tests.player.test_summon_contact_attribution import contact\n\n\ndef measure(case, sample, session, audiences, catalog, action):\n    cursor = EventQueue.event_cursor()\n    started = perf_counter()\n    action()\n    native_end = perf_counter()\n    updates = capture_application_operation(audiences, operation_since(session, cursor), catalog)\n    publication_end = perf_counter()\n    encoded = tuple(update.model_dump_json().encode() for update in updates.values())\n    ended = perf_counter()\n    print(json.dumps(dict(case=case, sample=sample, warmup=sample == 0,\n        native_ms=(native_end-started)*1000, publication_ms=(publication_end-native_end)*1000,\n        encoding_ms=(ended-publication_end)*1000, total_ms=(ended-started)*1000,\n        max_packet_bytes=max(map(len, encoded)), total_packet_bytes=sum(map(len, encoded)),\n        event_versions=EventQueue.event_cursor()-cursor)), flush=True)\n\n\nparser = argparse.ArgumentParser()\nparser.add_argument('--kind', choices=('incense', 'sphere', 'elemental', 'myrmidon', 'tenacity'), required=True)\nparser.add_argument('--samples', type=int, default=6)\nargs = parser.parse_args()\nSERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())\ncatalog = ui_content_manifest()\nfor sample in range(args.samples):\n    if args.kind in ('elemental', 'myrmidon', 'tenacity'):\n        fixture = contact.__wrapped__()\n        session, prepare = next(fixture)\n        try:\n            form, prerequisite, behavior = {\n                'elemental': ('fire_elemental', Burning, 'action.monster.multiattack'),\n                'myrmidon': ('fire_myrmidon', None, 'action.fire_myrmidon.scorching_strike'),\n                'tenacity': ('air_myrmidon', None, 'action.attack'),\n            }[args.kind]\n            actor, recipient, audiences, catalog = prepare(form, prerequisite=prerequisite)\n            available = get_available_actions(actor)\n            row = next(row for row in available.entity_actions if row.behavior_id == behavior\n                and any(binding.target_uuid == recipient.uuid for binding in row.valid_targets))\n            binding = next(binding for binding in row.valid_targets if binding.target_uuid == recipient.uuid)\n            hp = recipient.get_normal_hp()\n            with fixed_dice_faces(1 if args.kind == 'tenacity' else 2, *([2] * 200)):\n                measure(args.kind, sample, session, audiences, catalog,\n                    lambda: execute_available_action(actor, row, binding))\n            assert recipient.get_normal_hp() < hp\n        finally:\n            fixture.close()\n        continue\n    fixture = (incense_arena if args.kind == 'incense' else sphere_arena).__wrapped__()\n    session, owners, recipient = next(fixture)\n    try:\n        if args.kind == 'incense':\n            for holder in owners:\n                use(holder, 'action.class.cleric.divine_intervention.arm_thy_servant')\n            audiences, _ = initialize_audiences(session, catalog)\n            measure('incense_two_activations', sample, session, audiences, catalog,\n                lambda: [use(holder, 'action.item.devotees_mace.healing_incense') for holder in owners])\n            hp = recipient.get_normal_hp()\n            with fixed_dice_faces(2, 2):\n                measure('incense_two_heals', sample, session, audiences, catalog, recipient.on_turn_start)\n            assert recipient.get_normal_hp() == hp + 4\n        else:\n            audiences, _ = initialize_audiences(session, catalog)\n            cast_spheres(session, owners, audiences, catalog)\n            hp = recipient.get_normal_hp()\n            with fixed_dice_faces(*([2] * 60)):\n                measure('sphere_two_end_contacts', sample, session, audiences, catalog, recipient.on_turn_end)\n            assert recipient.get_normal_hp() == hp - 8\n    finally:\n        fixture.close()\n",
+      "cases": {
+        "elemental": {
+          "baseline": {
+            "samples_including_warmup": [
+              {
+                "case": "elemental",
+                "sample": 0,
+                "warmup": true,
+                "native_ms": 16.825038008391857,
+                "publication_ms": 4.636378958821297,
+                "encoding_ms": 0.33757102210074663,
+                "total_ms": 21.7989879893139,
+                "max_packet_bytes": 17648,
+                "total_packet_bytes": 35008,
+                "event_versions": 77
+              },
+              {
+                "case": "elemental",
+                "sample": 1,
+                "warmup": false,
+                "native_ms": 11.191166006028652,
+                "publication_ms": 4.350228002294898,
+                "encoding_ms": 0.28971099527552724,
+                "total_ms": 15.831105003599077,
+                "max_packet_bytes": 17648,
+                "total_packet_bytes": 35008,
+                "event_versions": 77
+              },
+              {
+                "case": "elemental",
+                "sample": 2,
+                "warmup": false,
+                "native_ms": 13.762674992904067,
+                "publication_ms": 4.367348039522767,
+                "encoding_ms": 0.28155097970739007,
+                "total_ms": 18.411574012134224,
+                "max_packet_bytes": 17648,
+                "total_packet_bytes": 35008,
+                "event_versions": 77
+              },
+              {
+                "case": "elemental",
+                "sample": 3,
+                "warmup": false,
+                "native_ms": 11.62925804965198,
+                "publication_ms": 4.332006967160851,
+                "encoding_ms": 0.29813102446496487,
+                "total_ms": 16.259396041277796,
+                "max_packet_bytes": 17648,
+                "total_packet_bytes": 35008,
+                "event_versions": 77
+              },
+              {
+                "case": "elemental",
+                "sample": 4,
+                "warmup": false,
+                "native_ms": 12.954363017342985,
+                "publication_ms": 4.695017996709794,
+                "encoding_ms": 0.31184201361611485,
+                "total_ms": 17.961223027668893,
+                "max_packet_bytes": 17648,
+                "total_packet_bytes": 35008,
+                "event_versions": 77
+              },
+              {
+                "case": "elemental",
+                "sample": 5,
+                "warmup": false,
+                "native_ms": 11.957408976741135,
+                "publication_ms": 4.680488025769591,
+                "encoding_ms": 0.36329199792817235,
+                "total_ms": 17.0011890004389,
+                "max_packet_bytes": 17648,
+                "total_packet_bytes": 35008,
+                "event_versions": 77
+              }
+            ],
+            "median": {
+              "native_ms": 11.957408976741135,
+              "publication_ms": 4.367348039522767,
+              "encoding_ms": 0.29813102446496487,
+              "total_ms": 17.0011890004389,
+              "max_packet_bytes": 17648,
+              "total_packet_bytes": 35008,
+              "event_versions": 77
+            }
+          },
+          "final": {
+            "samples_including_warmup": [
+              {
+                "case": "elemental",
+                "sample": 0,
+                "warmup": true,
+                "native_ms": 15.359264973085374,
+                "publication_ms": 4.6866390039213,
+                "encoding_ms": 0.3436020342633128,
+                "total_ms": 20.389506011269987,
+                "max_packet_bytes": 18684,
+                "total_packet_bytes": 37080,
+                "event_versions": 77
+              },
+              {
+                "case": "elemental",
+                "sample": 1,
+                "warmup": false,
+                "native_ms": 11.408029997255653,
+                "publication_ms": 4.302537010516971,
+                "encoding_ms": 0.3039020230062306,
+                "total_ms": 16.014469030778855,
+                "max_packet_bytes": 18684,
+                "total_packet_bytes": 37080,
+                "event_versions": 77
+              },
+              {
+                "case": "elemental",
+                "sample": 2,
+                "warmup": false,
+                "native_ms": 10.742166021373123,
+                "publication_ms": 4.379308025818318,
+                "encoding_ms": 0.30301196966320276,
+                "total_ms": 15.424486016854644,
+                "max_packet_bytes": 18684,
+                "total_packet_bytes": 37080,
+                "event_versions": 77
+              },
+              {
+                "case": "elemental",
+                "sample": 3,
+                "warmup": false,
+                "native_ms": 10.599266039207578,
+                "publication_ms": 4.466946993488818,
+                "encoding_ms": 0.33999199513345957,
+                "total_ms": 15.406205027829856,
+                "max_packet_bytes": 18684,
+                "total_packet_bytes": 37080,
+                "event_versions": 77
+              },
+              {
+                "case": "elemental",
+                "sample": 4,
+                "warmup": false,
+                "native_ms": 10.314623999875039,
+                "publication_ms": 3.96836397703737,
+                "encoding_ms": 0.299752049613744,
+                "total_ms": 14.582740026526153,
+                "max_packet_bytes": 18684,
+                "total_packet_bytes": 37080,
+                "event_versions": 77
+              },
+              {
+                "case": "elemental",
+                "sample": 5,
+                "warmup": false,
+                "native_ms": 10.96356799826026,
+                "publication_ms": 4.646778979804367,
+                "encoding_ms": 0.3324220306240022,
+                "total_ms": 15.942769008688629,
+                "max_packet_bytes": 18684,
+                "total_packet_bytes": 37080,
+                "event_versions": 77
+              }
+            ],
+            "median": {
+              "native_ms": 10.742166021373123,
+              "publication_ms": 4.379308025818318,
+              "encoding_ms": 0.3039020230062306,
+              "total_ms": 15.424486016854644,
+              "max_packet_bytes": 18684,
+              "total_packet_bytes": 37080,
+              "event_versions": 77
+            }
+          }
+        },
+        "incense_two_activations": {
+          "baseline": {
+            "samples_including_warmup": [
+              {
+                "case": "incense_two_activations",
+                "sample": 0,
+                "warmup": true,
+                "native_ms": 26.10103297047317,
+                "publication_ms": 3.8950040470808744,
+                "encoding_ms": 0.11262099724262953,
+                "total_ms": 30.108658014796674,
+                "max_packet_bytes": 7030,
+                "total_packet_bytes": 12910,
+                "event_versions": 48
+              },
+              {
+                "case": "incense_two_activations",
+                "sample": 1,
+                "warmup": false,
+                "native_ms": 24.80773499701172,
+                "publication_ms": 5.2775240037590265,
+                "encoding_ms": 0.12231996515765786,
+                "total_ms": 30.207578965928406,
+                "max_packet_bytes": 7030,
+                "total_packet_bytes": 12910,
+                "event_versions": 48
+              },
+              {
+                "case": "incense_two_activations",
+                "sample": 2,
+                "warmup": false,
+                "native_ms": 26.19999396847561,
+                "publication_ms": 3.9421950350515544,
+                "encoding_ms": 0.10938098421320319,
+                "total_ms": 30.251569987740368,
+                "max_packet_bytes": 7030,
+                "total_packet_bytes": 12910,
+                "event_versions": 48
+              },
+              {
+                "case": "incense_two_activations",
+                "sample": 3,
+                "warmup": false,
+                "native_ms": 26.565564970951527,
+                "publication_ms": 4.523369017988443,
+                "encoding_ms": 0.11785101378336549,
+                "total_ms": 31.206785002723336,
+                "max_packet_bytes": 7030,
+                "total_packet_bytes": 12910,
+                "event_versions": 48
+              },
+              {
+                "case": "incense_two_activations",
+                "sample": 4,
+                "warmup": false,
+                "native_ms": 26.556946977507323,
+                "publication_ms": 4.335227014962584,
+                "encoding_ms": 0.10394002310931683,
+                "total_ms": 30.996114015579224,
+                "max_packet_bytes": 7030,
+                "total_packet_bytes": 12910,
+                "event_versions": 48
+              },
+              {
+                "case": "incense_two_activations",
+                "sample": 5,
+                "warmup": false,
+                "native_ms": 26.90051996614784,
+                "publication_ms": 4.662088002078235,
+                "encoding_ms": 0.11095002992078662,
+                "total_ms": 31.673557998146862,
+                "max_packet_bytes": 7030,
+                "total_packet_bytes": 12910,
+                "event_versions": 48
+              }
+            ],
+            "median": {
+              "native_ms": 26.556946977507323,
+              "publication_ms": 4.523369017988443,
+              "encoding_ms": 0.11095002992078662,
+              "total_ms": 30.996114015579224,
+              "max_packet_bytes": 7030,
+              "total_packet_bytes": 12910,
+              "event_versions": 48
+            }
+          },
+          "final": {
+            "samples_including_warmup": [
+              {
+                "case": "incense_two_activations",
+                "sample": 0,
+                "warmup": true,
+                "native_ms": 28.337294002994895,
+                "publication_ms": 5.82819600822404,
+                "encoding_ms": 0.24082098389044404,
+                "total_ms": 34.40631099510938,
+                "max_packet_bytes": 9778,
+                "total_packet_bytes": 18221,
+                "event_versions": 52
+              },
+              {
+                "case": "incense_two_activations",
+                "sample": 1,
+                "warmup": false,
+                "native_ms": 27.699169993866235,
+                "publication_ms": 5.530055030249059,
+                "encoding_ms": 0.20664097974076867,
+                "total_ms": 33.43586600385606,
+                "max_packet_bytes": 9778,
+                "total_packet_bytes": 18221,
+                "event_versions": 52
+              },
+              {
+                "case": "incense_two_activations",
+                "sample": 2,
+                "warmup": false,
+                "native_ms": 27.654079953208566,
+                "publication_ms": 5.092102044727653,
+                "encoding_ms": 0.2321709762327373,
+                "total_ms": 32.978352974168956,
+                "max_packet_bytes": 9778,
+                "total_packet_bytes": 18221,
+                "event_versions": 52
+              },
+              {
+                "case": "incense_two_activations",
+                "sample": 3,
+                "warmup": false,
+                "native_ms": 28.763897018507123,
+                "publication_ms": 4.667557950597256,
+                "encoding_ms": 0.18986203940585256,
+                "total_ms": 33.62131700851023,
+                "max_packet_bytes": 9778,
+                "total_packet_bytes": 18221,
+                "event_versions": 52
+              },
+              {
+                "case": "incense_two_activations",
+                "sample": 4,
+                "warmup": false,
+                "native_ms": 25.30445600859821,
+                "publication_ms": 4.499157948885113,
+                "encoding_ms": 0.1878710463643074,
+                "total_ms": 29.99148500384763,
+                "max_packet_bytes": 9778,
+                "total_packet_bytes": 18221,
+                "event_versions": 52
+              },
+              {
+                "case": "incense_two_activations",
+                "sample": 5,
+                "warmup": false,
+                "native_ms": 28.09546299977228,
+                "publication_ms": 7.077983987983316,
+                "encoding_ms": 0.47719303984194994,
+                "total_ms": 35.65064002759755,
+                "max_packet_bytes": 9778,
+                "total_packet_bytes": 18221,
+                "event_versions": 52
+              }
+            ],
+            "median": {
+              "native_ms": 27.699169993866235,
+              "publication_ms": 5.092102044727653,
+              "encoding_ms": 0.20664097974076867,
+              "total_ms": 33.43586600385606,
+              "max_packet_bytes": 9778,
+              "total_packet_bytes": 18221,
+              "event_versions": 52
+            }
+          }
+        },
+        "incense_two_heals": {
+          "baseline": {
+            "samples_including_warmup": [
+              {
+                "case": "incense_two_heals",
+                "sample": 0,
+                "warmup": true,
+                "native_ms": 8.60312400618568,
+                "publication_ms": 2.2594640031456947,
+                "encoding_ms": 0.07247098255902529,
+                "total_ms": 10.9350589918904,
+                "max_packet_bytes": 2617,
+                "total_packet_bytes": 5234,
+                "event_versions": 34
+              },
+              {
+                "case": "incense_two_heals",
+                "sample": 1,
+                "warmup": false,
+                "native_ms": 5.247673019766808,
+                "publication_ms": 2.2959550260566175,
+                "encoding_ms": 0.07173995254561305,
+                "total_ms": 7.615367998369038,
+                "max_packet_bytes": 2617,
+                "total_packet_bytes": 5234,
+                "event_versions": 34
+              },
+              {
+                "case": "incense_two_heals",
+                "sample": 2,
+                "warmup": false,
+                "native_ms": 4.649067996069789,
+                "publication_ms": 2.028153045102954,
+                "encoding_ms": 0.06372097413986921,
+                "total_ms": 6.740942015312612,
+                "max_packet_bytes": 2617,
+                "total_packet_bytes": 5234,
+                "event_versions": 34
+              },
+              {
+                "case": "incense_two_heals",
+                "sample": 3,
+                "warmup": false,
+                "native_ms": 4.827669006772339,
+                "publication_ms": 2.128633961547166,
+                "encoding_ms": 0.05596998380497098,
+                "total_ms": 7.012272952124476,
+                "max_packet_bytes": 2617,
+                "total_packet_bytes": 5234,
+                "event_versions": 34
+              },
+              {
+                "case": "incense_two_heals",
+                "sample": 4,
+                "warmup": false,
+                "native_ms": 5.003831000067294,
+                "publication_ms": 2.3393750307150185,
+                "encoding_ms": 0.06411998765543103,
+                "total_ms": 7.407326018437743,
+                "max_packet_bytes": 2617,
+                "total_packet_bytes": 5234,
+                "event_versions": 34
+              },
+              {
+                "case": "incense_two_heals",
+                "sample": 5,
+                "warmup": false,
+                "native_ms": 4.665107000619173,
+                "publication_ms": 2.0511529874056578,
+                "encoding_ms": 0.05848001455888152,
+                "total_ms": 6.774740002583712,
+                "max_packet_bytes": 2617,
+                "total_packet_bytes": 5234,
+                "event_versions": 34
+              }
+            ],
+            "median": {
+              "native_ms": 4.827669006772339,
+              "publication_ms": 2.128633961547166,
+              "encoding_ms": 0.06372097413986921,
+              "total_ms": 7.012272952124476,
+              "max_packet_bytes": 2617,
+              "total_packet_bytes": 5234,
+              "event_versions": 34
+            }
+          },
+          "final": {
+            "samples_including_warmup": [
+              {
+                "case": "incense_two_heals",
+                "sample": 0,
+                "warmup": true,
+                "native_ms": 10.358102968893945,
+                "publication_ms": 2.250705030746758,
+                "encoding_ms": 0.061139988247305155,
+                "total_ms": 12.669947987888008,
+                "max_packet_bytes": 2743,
+                "total_packet_bytes": 5486,
+                "event_versions": 34
+              },
+              {
+                "case": "incense_two_heals",
+                "sample": 1,
+                "warmup": false,
+                "native_ms": 5.093711952213198,
+                "publication_ms": 2.2633130429312587,
+                "encoding_ms": 0.06006099283695221,
+                "total_ms": 7.417085987981409,
+                "max_packet_bytes": 2743,
+                "total_packet_bytes": 5486,
+                "event_versions": 34
+              },
+              {
+                "case": "incense_two_heals",
+                "sample": 2,
+                "warmup": false,
+                "native_ms": 4.95488103479147,
+                "publication_ms": 2.307023969478905,
+                "encoding_ms": 0.06929098162800074,
+                "total_ms": 7.3311959858983755,
+                "max_packet_bytes": 2743,
+                "total_packet_bytes": 5486,
+                "event_versions": 34
+              },
+              {
+                "case": "incense_two_heals",
+                "sample": 3,
+                "warmup": false,
+                "native_ms": 4.5205390197224915,
+                "publication_ms": 1.8899320275522768,
+                "encoding_ms": 0.06498995935544372,
+                "total_ms": 6.475461006630212,
+                "max_packet_bytes": 2743,
+                "total_packet_bytes": 5486,
+                "event_versions": 34
+              },
+              {
+                "case": "incense_two_heals",
+                "sample": 4,
+                "warmup": false,
+                "native_ms": 5.444314039777964,
+                "publication_ms": 2.6913259644061327,
+                "encoding_ms": 0.06757100345566869,
+                "total_ms": 8.203211007639766,
+                "max_packet_bytes": 2743,
+                "total_packet_bytes": 5486,
+                "event_versions": 34
+              },
+              {
+                "case": "incense_two_heals",
+                "sample": 5,
+                "warmup": false,
+                "native_ms": 5.360402981750667,
+                "publication_ms": 2.2951840073801577,
+                "encoding_ms": 0.06747001316398382,
+                "total_ms": 7.723057002294809,
+                "max_packet_bytes": 2743,
+                "total_packet_bytes": 5486,
+                "event_versions": 34
+              }
+            ],
+            "median": {
+              "native_ms": 5.093711952213198,
+              "publication_ms": 2.2951840073801577,
+              "encoding_ms": 0.06747001316398382,
+              "total_ms": 7.417085987981409,
+              "max_packet_bytes": 2743,
+              "total_packet_bytes": 5486,
+              "event_versions": 34
+            }
+          }
+        },
+        "myrmidon": {
+          "baseline": {
+            "samples_including_warmup": [
+              {
+                "case": "myrmidon",
+                "sample": 0,
+                "warmup": true,
+                "native_ms": 8.960784994997084,
+                "publication_ms": 4.166885977610946,
+                "encoding_ms": 0.3173620207235217,
+                "total_ms": 13.445032993331552,
+                "max_packet_bytes": 12362,
+                "total_packet_bytes": 24667,
+                "event_versions": 51
+              },
+              {
+                "case": "myrmidon",
+                "sample": 1,
+                "warmup": false,
+                "native_ms": 8.83173500187695,
+                "publication_ms": 4.002249042969197,
+                "encoding_ms": 0.32323197228834033,
+                "total_ms": 13.157216017134488,
+                "max_packet_bytes": 12362,
+                "total_packet_bytes": 24667,
+                "event_versions": 51
+              },
+              {
+                "case": "myrmidon",
+                "sample": 2,
+                "warmup": false,
+                "native_ms": 8.254610991571099,
+                "publication_ms": 3.992815036326647,
+                "encoding_ms": 0.25735097005963326,
+                "total_ms": 12.504776997957379,
+                "max_packet_bytes": 12362,
+                "total_packet_bytes": 24667,
+                "event_versions": 51
+              },
+              {
+                "case": "myrmidon",
+                "sample": 3,
+                "warmup": false,
+                "native_ms": 8.16833000862971,
+                "publication_ms": 4.016504972241819,
+                "encoding_ms": 0.25770103093236685,
+                "total_ms": 12.442536011803895,
+                "max_packet_bytes": 12362,
+                "total_packet_bytes": 24667,
+                "event_versions": 51
+              },
+              {
+                "case": "myrmidon",
+                "sample": 4,
+                "warmup": false,
+                "native_ms": 7.963198993820697,
+                "publication_ms": 4.159524978604168,
+                "encoding_ms": 0.2685320214368403,
+                "total_ms": 12.391255993861705,
+                "max_packet_bytes": 12362,
+                "total_packet_bytes": 24667,
+                "event_versions": 51
+              },
+              {
+                "case": "myrmidon",
+                "sample": 5,
+                "warmup": false,
+                "native_ms": 8.405052998568863,
+                "publication_ms": 4.069144953973591,
+                "encoding_ms": 0.2608810318633914,
+                "total_ms": 12.735078984405845,
+                "max_packet_bytes": 12362,
+                "total_packet_bytes": 24667,
+                "event_versions": 51
+              }
+            ],
+            "median": {
+              "native_ms": 8.254610991571099,
+              "publication_ms": 4.016504972241819,
+              "encoding_ms": 0.2608810318633914,
+              "total_ms": 12.504776997957379,
+              "max_packet_bytes": 12362,
+              "total_packet_bytes": 24667,
+              "event_versions": 51
+            }
+          },
+          "final": {
+            "samples_including_warmup": [
+              {
+                "case": "myrmidon",
+                "sample": 0,
+                "warmup": true,
+                "native_ms": 9.794129990041256,
+                "publication_ms": 3.7541729980148375,
+                "encoding_ms": 0.26744097704067826,
+                "total_ms": 13.815743965096772,
+                "max_packet_bytes": 12618,
+                "total_packet_bytes": 25179,
+                "event_versions": 51
+              },
+              {
+                "case": "myrmidon",
+                "sample": 1,
+                "warmup": false,
+                "native_ms": 9.771631041076034,
+                "publication_ms": 5.57094399118796,
+                "encoding_ms": 0.30226202215999365,
+                "total_ms": 15.644837054423988,
+                "max_packet_bytes": 12618,
+                "total_packet_bytes": 25179,
+                "event_versions": 51
+              },
+              {
+                "case": "myrmidon",
+                "sample": 2,
+                "warmup": false,
+                "native_ms": 8.267422032076865,
+                "publication_ms": 3.917974012438208,
+                "encoding_ms": 0.2570909564383328,
+                "total_ms": 12.442487000953406,
+                "max_packet_bytes": 12618,
+                "total_packet_bytes": 25179,
+                "event_versions": 51
+              },
+              {
+                "case": "myrmidon",
+                "sample": 3,
+                "warmup": false,
+                "native_ms": 8.073529985267669,
+                "publication_ms": 3.896003996487707,
+                "encoding_ms": 0.2649520174600184,
+                "total_ms": 12.234485999215394,
+                "max_packet_bytes": 12618,
+                "total_packet_bytes": 25179,
+                "event_versions": 51
+              },
+              {
+                "case": "myrmidon",
+                "sample": 4,
+                "warmup": false,
+                "native_ms": 8.21674196049571,
+                "publication_ms": 3.908434009645134,
+                "encoding_ms": 0.26566098676994443,
+                "total_ms": 12.390836956910789,
+                "max_packet_bytes": 12618,
+                "total_packet_bytes": 25179,
+                "event_versions": 51
+              },
+              {
+                "case": "myrmidon",
+                "sample": 5,
+                "warmup": false,
+                "native_ms": 7.999788969755173,
+                "publication_ms": 4.084726038854569,
+                "encoding_ms": 0.27143198531121016,
+                "total_ms": 12.355946993920952,
+                "max_packet_bytes": 12618,
+                "total_packet_bytes": 25179,
+                "event_versions": 51
+              }
+            ],
+            "median": {
+              "native_ms": 8.21674196049571,
+              "publication_ms": 3.917974012438208,
+              "encoding_ms": 0.26566098676994443,
+              "total_ms": 12.390836956910789,
+              "max_packet_bytes": 12618,
+              "total_packet_bytes": 25179,
+              "event_versions": 51
+            }
+          }
+        },
+        "sphere_two_end_contacts": {
+          "baseline": {
+            "samples_including_warmup": [
+              {
+                "case": "sphere_two_end_contacts",
+                "sample": 0,
+                "warmup": true,
+                "native_ms": 9.25419497070834,
+                "publication_ms": 4.756148031447083,
+                "encoding_ms": 0.30264200177043676,
+                "total_ms": 14.31298500392586,
+                "max_packet_bytes": 12200,
+                "total_packet_bytes": 24384,
+                "event_versions": 62
+              },
+              {
+                "case": "sphere_two_end_contacts",
+                "sample": 1,
+                "warmup": false,
+                "native_ms": 9.069102990906686,
+                "publication_ms": 3.7703830166719854,
+                "encoding_ms": 0.21618098253384233,
+                "total_ms": 13.055666990112513,
+                "max_packet_bytes": 12200,
+                "total_packet_bytes": 24384,
+                "event_versions": 62
+              },
+              {
+                "case": "sphere_two_end_contacts",
+                "sample": 2,
+                "warmup": false,
+                "native_ms": 9.513575991149992,
+                "publication_ms": 3.288369975052774,
+                "encoding_ms": 0.22407103097066283,
+                "total_ms": 13.026016997173429,
+                "max_packet_bytes": 12200,
+                "total_packet_bytes": 24384,
+                "event_versions": 62
+              },
+              {
+                "case": "sphere_two_end_contacts",
+                "sample": 3,
+                "warmup": false,
+                "native_ms": 7.979406975209713,
+                "publication_ms": 4.199915973003954,
+                "encoding_ms": 0.23613101802766323,
+                "total_ms": 12.41545396624133,
+                "max_packet_bytes": 12200,
+                "total_packet_bytes": 24384,
+                "event_versions": 62
+              },
+              {
+                "case": "sphere_two_end_contacts",
+                "sample": 4,
+                "warmup": false,
+                "native_ms": 10.316842002794147,
+                "publication_ms": 4.368956026155502,
+                "encoding_ms": 0.1979709486477077,
+                "total_ms": 14.883768977597356,
+                "max_packet_bytes": 12200,
+                "total_packet_bytes": 24384,
+                "event_versions": 62
+              },
+              {
+                "case": "sphere_two_end_contacts",
+                "sample": 5,
+                "warmup": false,
+                "native_ms": 8.342720044311136,
+                "publication_ms": 4.259384993929416,
+                "encoding_ms": 0.24227198446169496,
+                "total_ms": 12.844377022702247,
+                "max_packet_bytes": 12200,
+                "total_packet_bytes": 24384,
+                "event_versions": 62
+              }
+            ],
+            "median": {
+              "native_ms": 9.069102990906686,
+              "publication_ms": 4.199915973003954,
+              "encoding_ms": 0.22407103097066283,
+              "total_ms": 13.026016997173429,
+              "max_packet_bytes": 12200,
+              "total_packet_bytes": 24384,
+              "event_versions": 62
+            }
+          },
+          "final": {
+            "samples_including_warmup": [
+              {
+                "case": "sphere_two_end_contacts",
+                "sample": 0,
+                "warmup": true,
+                "native_ms": 9.254188043996692,
+                "publication_ms": 4.0584749658592045,
+                "encoding_ms": 0.23174099624156952,
+                "total_ms": 13.544404006097466,
+                "max_packet_bytes": 12452,
+                "total_packet_bytes": 24888,
+                "event_versions": 62
+              },
+              {
+                "case": "sphere_two_end_contacts",
+                "sample": 1,
+                "warmup": false,
+                "native_ms": 9.355958027299494,
+                "publication_ms": 4.395905998535454,
+                "encoding_ms": 0.23563194554299116,
+                "total_ms": 13.987495971377939,
+                "max_packet_bytes": 12452,
+                "total_packet_bytes": 24888,
+                "event_versions": 62
+              },
+              {
+                "case": "sphere_two_end_contacts",
+                "sample": 2,
+                "warmup": false,
+                "native_ms": 8.520231989677995,
+                "publication_ms": 3.5732330288738012,
+                "encoding_ms": 0.2251510159112513,
+                "total_ms": 12.318616034463048,
+                "max_packet_bytes": 12452,
+                "total_packet_bytes": 24888,
+                "event_versions": 62
+              },
+              {
+                "case": "sphere_two_end_contacts",
+                "sample": 3,
+                "warmup": false,
+                "native_ms": 7.876478019170463,
+                "publication_ms": 3.5532210022211075,
+                "encoding_ms": 0.22230198374018073,
+                "total_ms": 11.652001005131751,
+                "max_packet_bytes": 12452,
+                "total_packet_bytes": 24888,
+                "event_versions": 62
+              },
+              {
+                "case": "sphere_two_end_contacts",
+                "sample": 4,
+                "warmup": false,
+                "native_ms": 8.680682978592813,
+                "publication_ms": 3.9315340109169483,
+                "encoding_ms": 0.2257410087622702,
+                "total_ms": 12.837957998272032,
+                "max_packet_bytes": 12452,
+                "total_packet_bytes": 24888,
+                "event_versions": 62
+              },
+              {
+                "case": "sphere_two_end_contacts",
+                "sample": 5,
+                "warmup": false,
+                "native_ms": 8.157270960509777,
+                "publication_ms": 3.7748030154034495,
+                "encoding_ms": 0.25472103152424097,
+                "total_ms": 12.186795007437468,
+                "max_packet_bytes": 12452,
+                "total_packet_bytes": 24888,
+                "event_versions": 62
+              }
+            ],
+            "median": {
+              "native_ms": 8.520231989677995,
+              "publication_ms": 3.7748030154034495,
+              "encoding_ms": 0.2257410087622702,
+              "total_ms": 12.318616034463048,
+              "max_packet_bytes": 12452,
+              "total_packet_bytes": 24888,
+              "event_versions": 62
+            }
+          }
+        },
+        "tenacity": {
+          "baseline": {
+            "samples_including_warmup": [
+              {
+                "case": "tenacity",
+                "sample": 0,
+                "warmup": true,
+                "native_ms": 5.3191829938441515,
+                "publication_ms": 3.0713590094819665,
+                "encoding_ms": 0.19141100347042084,
+                "total_ms": 8.581953006796539,
+                "max_packet_bytes": 6802,
+                "total_packet_bytes": 13522,
+                "event_versions": 33
+              },
+              {
+                "case": "tenacity",
+                "sample": 1,
+                "warmup": false,
+                "native_ms": 5.613073997665197,
+                "publication_ms": 2.709707012400031,
+                "encoding_ms": 0.1772909890860319,
+                "total_ms": 8.50007199915126,
+                "max_packet_bytes": 6802,
+                "total_packet_bytes": 13522,
+                "event_versions": 33
+              },
+              {
+                "case": "tenacity",
+                "sample": 2,
+                "warmup": false,
+                "native_ms": 5.5483439937233925,
+                "publication_ms": 2.9915680061094463,
+                "encoding_ms": 0.1908809645101428,
+                "total_ms": 8.730792964342982,
+                "max_packet_bytes": 6802,
+                "total_packet_bytes": 13522,
+                "event_versions": 33
+              },
+              {
+                "case": "tenacity",
+                "sample": 3,
+                "warmup": false,
+                "native_ms": 5.857827025465667,
+                "publication_ms": 3.05621896404773,
+                "encoding_ms": 0.19848102238029242,
+                "total_ms": 9.11252701189369,
+                "max_packet_bytes": 6802,
+                "total_packet_bytes": 13522,
+                "event_versions": 33
+              },
+              {
+                "case": "tenacity",
+                "sample": 4,
+                "warmup": false,
+                "native_ms": 5.285581981297582,
+                "publication_ms": 3.825974010396749,
+                "encoding_ms": 0.24980102898553014,
+                "total_ms": 9.361357020679861,
+                "max_packet_bytes": 6802,
+                "total_packet_bytes": 13522,
+                "event_versions": 33
+              },
+              {
+                "case": "tenacity",
+                "sample": 5,
+                "warmup": false,
+                "native_ms": 5.308807012625039,
+                "publication_ms": 2.3401739890687168,
+                "encoding_ms": 0.16645097639411688,
+                "total_ms": 7.815431978087872,
+                "max_packet_bytes": 6802,
+                "total_packet_bytes": 13522,
+                "event_versions": 33
+              }
+            ],
+            "median": {
+              "native_ms": 5.5483439937233925,
+              "publication_ms": 2.9915680061094463,
+              "encoding_ms": 0.1908809645101428,
+              "total_ms": 8.730792964342982,
+              "max_packet_bytes": 6802,
+              "total_packet_bytes": 13522,
+              "event_versions": 33
+            }
+          },
+          "final": {
+            "samples_including_warmup": [
+              {
+                "case": "tenacity",
+                "sample": 0,
+                "warmup": true,
+                "native_ms": 5.788435984868556,
+                "publication_ms": 3.1341699650511146,
+                "encoding_ms": 0.18001103308051825,
+                "total_ms": 9.102616983000189,
+                "max_packet_bytes": 6928,
+                "total_packet_bytes": 13774,
+                "event_versions": 33
+              },
+              {
+                "case": "tenacity",
+                "sample": 1,
+                "warmup": false,
+                "native_ms": 5.871536035556346,
+                "publication_ms": 2.7118870057165623,
+                "encoding_ms": 0.17512094927951694,
+                "total_ms": 8.758543990552425,
+                "max_packet_bytes": 6928,
+                "total_packet_bytes": 13774,
+                "event_versions": 33
+              },
+              {
+                "case": "tenacity",
+                "sample": 2,
+                "warmup": false,
+                "native_ms": 5.911446991376579,
+                "publication_ms": 2.7039969572797418,
+                "encoding_ms": 0.17652101814746857,
+                "total_ms": 8.79196496680379,
+                "max_packet_bytes": 6928,
+                "total_packet_bytes": 13774,
+                "event_versions": 33
+              },
+              {
+                "case": "tenacity",
+                "sample": 3,
+                "warmup": false,
+                "native_ms": 5.4696950246579945,
+                "publication_ms": 2.9225170146673918,
+                "encoding_ms": 0.183831958565861,
+                "total_ms": 8.576043997891247,
+                "max_packet_bytes": 6928,
+                "total_packet_bytes": 13774,
+                "event_versions": 33
+              },
+              {
+                "case": "tenacity",
+                "sample": 4,
+                "warmup": false,
+                "native_ms": 5.774365970864892,
+                "publication_ms": 2.890317002311349,
+                "encoding_ms": 0.2312019933015108,
+                "total_ms": 8.895884966477752,
+                "max_packet_bytes": 6928,
+                "total_packet_bytes": 13774,
+                "event_versions": 33
+              },
+              {
+                "case": "tenacity",
+                "sample": 5,
+                "warmup": false,
+                "native_ms": 5.543684994336218,
+                "publication_ms": 2.7851969934999943,
+                "encoding_ms": 0.1879410119727254,
+                "total_ms": 8.516822999808937,
+                "max_packet_bytes": 6928,
+                "total_packet_bytes": 13774,
+                "event_versions": 33
+              }
+            ],
+            "median": {
+              "native_ms": 5.774365970864892,
+              "publication_ms": 2.7851969934999943,
+              "encoding_ms": 0.183831958565861,
+              "total_ms": 8.758543990552425,
+              "max_packet_bytes": 6928,
+              "total_packet_bytes": 13774,
+              "event_versions": 33
+            }
+          }
+        }
+      },
+      "interpretation": "Largest median increase 2.440 ms for two Incense activations: newly published real zone observations add 4 native event versions and 2748 bytes to largest update. Two-heal tick +0.405 ms; Tenacity +0.028 ms. Other rows have lower medians, not claimed speedups. All non-activation rows keep event counts; packet growth is added exact attribution. These small samples do not establish a distribution or zero overhead."
+    }
+  }
 }
