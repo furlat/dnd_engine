@@ -430,7 +430,14 @@ async def run(host: Host) -> None:
                     elif reply.query_error is not None:
                         active_query.future.set_exception(ApiFailure(wire.ErrorResponseTooLarge()))
                     elif reply.rejection is not None:
-                        error = wire.ErrorStaleDiscovery() if reply.rejection == 'stale_discovery' else wire.ErrorStaleState()
+                        if reply.rejection == 'stale_discovery':
+                            error = wire.ErrorStaleDiscovery()
+                        elif reply.rejection == 'stale_state':
+                            error = wire.ErrorStaleState()
+                        elif reply.rejection == 'not_your_turn':
+                            error = wire.ErrorNotYourTurn()
+                        else:
+                            error = wire.ErrorInvalidRequest()
                         active_query.future.set_exception(ApiFailure(error))
                     else:
                         assert response is not None

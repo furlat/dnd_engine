@@ -1202,6 +1202,10 @@ class BaseAction(BaseObject):
         default=False,
         description="Whether dead entities remain eligible targets.",
     )
+    include_zero_hp: bool = Field(
+        default=False,
+        description="Whether living zero-HP creatures remain eligible during discovery.",
+    )
     aoe_require_targets: bool = Field(
         default=True,
         description="Whether AoE discovery requires at least one affected entity before exposing a position.",

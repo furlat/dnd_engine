@@ -1844,6 +1844,7 @@ class Regenerate(SpellAction):
         description="Touch range for the target.",
     )
     concentration: bool = Field(default=False, description="Whether the spell requires concentration.")
+    include_zero_hp: bool = True
     include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
 

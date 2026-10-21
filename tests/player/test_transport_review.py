@@ -16,7 +16,7 @@ from dnd.player.audience import PlayerAudience
 from dnd.player.facts import PlayerInitialization, PlayerWorld
 
 
-def test_stale_and_out_of_turn_commands_keep_receipts_but_foreign_actor_does_not(tmp_path):
+def test_command_receipts_and_query_errors_preserve_rejection_categories(tmp_path):
     async def exercise():
         token = "review-seat-credential-only"
         app = create_app(ServerConfig(encounter_id=None,
@@ -71,6 +71,37 @@ def test_stale_and_out_of_turn_commands_keep_receipts_but_foreign_actor_does_not
                     "state_revision": publication.state_revision, "intent": {"kind": "end_turn"}})
                 assert response.status_code == 403
                 assert seat.next_command_number == 3 and 3 not in seat.receipts
+
+                query = {"actor_uuid": str(active), "state_revision": publication.state_revision,
+                    "force_attack": False, "correlation_id": str(uuid4())}
+                response = await client.post("/api/v1/games/encounter/choices", headers=headers, json=query)
+                assert response.status_code == 200, response.text
+                choices = response.json()["choices"]
+                generation = choices["discovery_generation"]
+                action = next(row for row in choices["entity_actions"]
+                    if choices["target_sets"][row["target_set"]])
+                target = choices["target_sets"][action["target_set"]][0]
+                preview = {"actor_uuid": str(active), "state_revision": publication.state_revision,
+                    "discovery_generation": generation, "correlation_id": str(uuid4()),
+                    "selection": {"action_index": action["discovery_index"],
+                        "target_indices": [target["index"]], "extra_target_positions": []}}
+                for changes, status, code in (
+                    ({"selection": {"action_index": 999999, "target_indices": [],
+                        "extra_target_positions": []}}, 400, "invalid_request"),
+                    ({"selection": {**preview["selection"], "target_indices": [999999]}}, 400, "invalid_request"),
+                    ({"discovery_generation": generation + 1}, 409, "stale_discovery"),
+                    ({"state_revision": "old-state"}, 409, "stale_state"),
+                    ({"actor_uuid": str(other)}, 409, "not_your_turn"),
+                ):
+                    response = await client.post("/api/v1/games/encounter/preview", headers=headers,
+                        json={**preview, **changes})
+                    assert response.status_code == status, response.text
+                    assert response.json()["code"] == code
+                    assert seat.publication == publication
+                    assert seat.next_command_number == 3
+                response = await client.post("/api/v1/games/encounter/preview", headers=headers, json=preview)
+                assert response.status_code == 200, response.text
+                assert seat.publication == publication
         finally:
             await service.shutdown(app.state.player_service)
 

@@ -5647,7 +5647,8 @@ class Entity(BaseBlock):
         include_dead: bool,
         include_self: bool,
         default_pool: Dict[UUID, Tuple[int, int]],
-        target_pool_cache: Optional[Dict[Tuple[str, bool, bool], Dict[UUID, Tuple[int, int]]]] = None,
+        target_pool_cache: Optional[Dict[Tuple[str, bool, bool, bool], Dict[UUID, Tuple[int, int]]]] = None,
+        *, include_zero_hp: bool = False,
     ) -> Dict[UUID, Tuple[int, int]]:
         """Compute entity target pool based on valid_target_filter.
 
@@ -5657,18 +5658,28 @@ class Entity(BaseBlock):
             include_self: Whether to add the acting entity.
             default_pool: Precomputed pool from the outer discovery filter.
             target_pool_cache: Per-discovery cache for repeated spell variants.
+            include_zero_hp: Admit living zero-HP recipients without admitting dead creatures.
 
         Returns:
             Visible target positions keyed by entity UUID.
         """
-        cache_key = (action_filter, include_dead, include_self)
+        cache_key = (action_filter, include_dead, include_self, include_zero_hp)
         if target_pool_cache is not None:
             cached = target_pool_cache.get(cache_key)
             if cached is not None:
                 return cached
 
-        if action_filter == "all":
-            pool: Dict[UUID, Tuple[int, int]] = {}
+        pool: Dict[UUID, Tuple[int, int]]
+        if include_zero_hp and not include_dead:
+            pool = {
+                uid: contact.position for uid, contact in self.senses.entities.items()
+                if uid != self.uuid and (other := Entity.get(uid)) is not None and other.is_active
+                and (action_filter == "all"
+                    or (action_filter in ("allies", "self_or_allies") and self.is_ally(other))
+                    or (action_filter == "enemies" and self.is_enemy(other)))
+            }
+        elif action_filter == "all":
+            pool = {}
             for k, contact in self.senses.entities.items():
                 if k == self.uuid:
                     continue
@@ -5689,11 +5700,11 @@ class Entity(BaseBlock):
         return pool
 
     def _has_positive_normal_hp_for_discovery(self, entity: "Entity") -> bool:
-        """Return whether action discovery should treat an entity as alive.
+        """Return whether an entity passes ordinary positive-HP discovery.
 
         This mirrors the normal-HP portion of `has_hp` without allocating the
         combined Constitution modifier object for every AoE preview target.
-        Encounter death-save semantics are handled outside target discovery.
+        Healing actions separately admit living zero-HP recipients.
         """
         if entity.health.life_state is LifeState.DEAD:
             return False
@@ -5761,7 +5772,8 @@ class Entity(BaseBlock):
             other = Entity.get(identity)
             if other is None or (identity == self.uuid and not template.include_self):
                 continue
-            if not (include_dead or template.include_dead) and not self._has_positive_normal_hp_for_discovery(other):
+            if not (include_dead or template.include_dead) and not (
+                    other.is_active if template.include_zero_hp else self._has_positive_normal_hp_for_discovery(other)):
                 continue
             pool[identity] = position
         return pool
@@ -5876,7 +5888,10 @@ class Entity(BaseBlock):
             affected_uuids = filtered
 
         template_include_dead = template.include_dead
-        if not template_include_dead and not include_dead:
+        if not template_include_dead and not include_dead and template.include_zero_hp:
+            affected_uuids = [uid for uid in affected_uuids
+                if (other := Entity.get(uid)) is not None and other.is_active]
+        elif not template_include_dead and not include_dead:
             # Perceived occupants' HP is a scan fact, computed once per creature per call.
             affected_uuids = [
                 uid for uid in affected_uuids
@@ -6003,7 +6018,7 @@ class Entity(BaseBlock):
         timing = action_timing_enabled()
         started = time.perf_counter() if timing else 0.0
         registered_entity_actions = self.registered_actions
-        target_pool_cache: Dict[Tuple[str, bool, bool], Dict[UUID, Tuple[int, int]]] = {}
+        target_pool_cache: Dict[Tuple[str, bool, bool, bool], Dict[UUID, Tuple[int, int]]] = {}
         if timing:
             record_action_timing("available_actions.entity_actions.list_templates_ms", started)
 
@@ -6053,7 +6068,8 @@ class Entity(BaseBlock):
                 if source_requirements_met:
                     target_pool = self._compute_target_pool(
                         template.valid_target_filter, include_dead or template.include_dead,
-                        template.include_self, potential_targets, target_pool_cache
+                        template.include_self, potential_targets, target_pool_cache,
+                        include_zero_hp=template.include_zero_hp,
                     )
                     target_pool = self._with_object_targets(template, target_pool)
                     target_pool = self._with_touch_targets(template, target_pool, include_dead=include_dead)
@@ -7104,7 +7120,7 @@ class Entity(BaseBlock):
         """
         grid = get_map()
         visible_position_set = self._visible_cells(caster_visible_positions)
-        target_pool_cache: Dict[Tuple[str, bool, bool], Dict[UUID, Tuple[int, int]]] = {}
+        target_pool_cache: Dict[Tuple[str, bool, bool, bool], Dict[UUID, Tuple[int, int]]] = {}
 
         use_sources: List[
             Tuple[BaseAction, Optional[UUID], str, Optional[int], bool]
@@ -7237,7 +7253,8 @@ class Entity(BaseBlock):
             elif use_template.target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY, TargetType.CREATURE_OR_OBJECT):
                 target_pool = self._compute_target_pool(
                     use_template.valid_target_filter, include_dead or use_template.include_dead,
-                    use_template.include_self, potential_targets, target_pool_cache
+                    use_template.include_self, potential_targets, target_pool_cache,
+                    include_zero_hp=use_template.include_zero_hp,
                 )
                 target_pool = self._with_object_targets(use_template, target_pool)
                 target_pool = self._with_touch_targets(use_template, target_pool, include_dead=include_dead)

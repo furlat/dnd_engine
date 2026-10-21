@@ -4206,6 +4206,7 @@ class CureWounds(SpellAction):
         default_factory=lambda: Range(type=RangeType.REACH, normal=5),
         description="Range contract used when validating targets for cure wounds.",
     )
+    include_zero_hp: bool = True
     include_self: bool = Field(default=True, description="Whether cure wounds can include the caster among valid targets.")
     valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for cure wounds.")
 
@@ -4261,6 +4262,7 @@ class HealingWord(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
         description="Range contract used when validating targets for healing word.",
     )
+    include_zero_hp: bool = True
     include_self: bool = Field(default=True, description="Whether healing word can include the caster among valid targets.")
     valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for healing word.")
 
@@ -4320,6 +4322,7 @@ class PrayerOfHealing(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=30),
         description="Range contract used when validating targets for prayer of healing.",
     )
+    include_zero_hp: bool = True
     include_self: bool = Field(default=True, description="Whether prayer of healing can include the caster among valid targets.")
     valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for prayer of healing.")
     allow_same_target: bool = Field(default=False, description="Whether prayer of healing may select the same entity more than once.")
@@ -4380,6 +4383,7 @@ class MassHealingWord(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
         description="Range contract used when validating targets for mass healing word.",
     )
+    include_zero_hp: bool = True
     include_self: bool = Field(default=True, description="Whether mass healing word can include the caster among valid targets.")
     valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for mass healing word.")
     allow_same_target: bool = Field(default=False, description="Whether mass healing word may select the same entity more than once.")
@@ -4447,6 +4451,7 @@ class MassCureWounds(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
         description="Range contract used when validating targets for mass cure wounds.",
     )
+    include_zero_hp: bool = True
     include_self: bool = Field(default=True, description="Whether mass cure wounds can include the caster among valid targets.")
     valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for mass cure wounds.")
 
@@ -4519,6 +4524,7 @@ class HealSpell(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
         description="Range contract used when validating targets for heal spell.",
     )
+    include_zero_hp: bool = True
     include_self: bool = Field(default=True, description="Whether heal spell can include the caster among valid targets.")
     valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for heal spell.")
 
@@ -4578,6 +4584,7 @@ class MassHeal(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
         description="Range contract used when validating targets for mass heal.",
     )
+    include_zero_hp: bool = True
     include_self: bool = Field(default=True, description="Whether mass heal can include the caster among valid targets.")
     valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for mass heal.")
     allow_same_target: bool = Field(default=False, description="Whether mass heal may select the same entity more than once.")
@@ -5882,6 +5889,7 @@ class PowerWordHeal(SpellAction):
     spell_school: str = "enchantment"
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
     target_type: TargetType = TargetType.ENTITY
+    include_zero_hp: bool = True
     include_self: bool = True
     verbal: bool = True
     somatic: bool = False

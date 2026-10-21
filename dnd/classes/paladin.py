@@ -562,6 +562,7 @@ class LayOnHands(BaseAction):
 
     name: str = "Lay on Hands"
     target_type: TargetType = TargetType.ENTITY
+    include_zero_hp: bool = True
     include_self: bool = True
     valid_target_filter: str = "self_or_allies"
     mode: Literal["lesser", "greater", "cure"] = "lesser"
