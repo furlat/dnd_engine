@@ -1,6 +1,11 @@
 # Backend fixes for client production adoption
 
-20 October 2026. Backend handoff to NDClientGodot production ownership.
+20 October 2026; updated 21 October. Backend handoff to NDClientGodot production ownership.
+
+The latest [trap and Glyph follow-up](BACKEND_TRAP_GLYPH_HANDOFF_2026-10-21.md)
+adds observed hardware anchors, corrects their loss-of-sight refresh and preserves
+actual witnessed Glyph damage attribution. It documents the required client-owned
+visibility correction, validation and measured timing limits.
 
 Sixteen issue groups from the client backend review, plus the subsequent lazy
 position-region SDK, solid-wall cancellation, Holy Nimbus and remaining contact attribution defects,
@@ -12,11 +17,11 @@ requires the new independent seat recordings and visual checks.
 
 ## Engine revision and checkout
 
-- Fixes commit: `0c2e5a0d74919402c6e528f40c580b7ca3c22e93`.
+- Fixes commit: `2948cf033cb87271707081c568d38b9fc166d9b2`.
   This includes the earlier producer fixes in
   `a97bb55b0a5138d9b26289c7d58aeb8ee25678dc`, SDK repair `09e93c439`,
-  solid-wall / Nimbus repair `59291edde`, and the Sphere / summon / Incense
-  attribution repairs below.
+  solid-wall / Nimbus repair `59291edde`, Sphere / summon / Incense repair
+  `0c2e5a0d7`, and the 21 October trap / Glyph follow-up linked above.
 - Active branch in the main engine folder: `feature/rules-checking`.
 - Main folder: `/mnt/c/Users/tommaso/Documents/Dev/dnd_engine`
   (`C:\Users\tommaso\Documents\Dev\dnd_engine` on Windows).

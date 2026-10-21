@@ -1,0 +1,2566 @@
+{
+  "date": "2026-10-21",
+  "base_revision": "8d4a185e797d3aba94cfc484337f66ff09c7dd58",
+  "fixes_revision": "2948cf033cb87271707081c568d38b9fc166d9b2",
+  "scope": "Backend observed trap object anchors, targeted lost-object anchor refresh, and witnessed retired Glyph damage attribution. Client correction is handed off, not implemented here.",
+  "schema": {
+    "protocol_version": 1,
+    "player_schema_version": 16,
+    "schema_digest": "2c11d7a9919c8aa9b1490628fff224627f19d6388c3884171d14a4a5cbecea22"
+  },
+  "failing_first": {
+    "traps": "8 failed on missing exact public anchor; producer fields alone yielded 7 passed, 1 failed on stale hidden anchor; targeted object-contact refresh yielded 8 passed.",
+    "glyph": "Initial matrix: 15 real trigger cases failed on missing public result UUID, unrelated-removal control passed. Final suite includes 17 cases, detached reduction and same-root unrelated cause control."
+  },
+  "verification": {
+    "combined_regressions": {
+      "passed": 788,
+      "xfailed": 1,
+      "warnings": 1,
+      "seconds": 252.02,
+      "scope": "All tests/player; engine ground hardware, gas/jaw/pressure/tripwire/trap mechanics/discovery/ground contact/avoidance/payloads/body release; BG3 spell fields; sensory hazard refresh, light/stealth, initial replay, movement origin, shared conditions, settlement oracle, spell handoff senses.",
+      "warning": "Existing test_transport_review terminal publication fixture serializes version_rows=() instead of VersionRows."
+    },
+    "new_tests": 25,
+    "focused_pyright": {
+      "baseline_errors": 11,
+      "final_errors": 11,
+      "new_errors": 0
+    },
+    "review": "Independent plan, antislop and antiOOP review clear; no client edit or new gameplay/schema system."
+  },
+  "timing_method": {
+    "python": "/home/tommaso/.cache/dnd-engine/venv/bin/python (Python 3.13)",
+    "hash_seed": 71,
+    "before_source": "/tmp/rules-checking-trap-glyph-before",
+    "after_source": "/tmp/rules-checking-trap-glyph-after",
+    "measurement": "Native action/install, publish_sheets and capture/publication, JSON encoding. Setup, process startup, client display and action discovery excluded. Gallery includes construction and native operation capture; reference client fold and post-reply collection are outside total and recorded separately.",
+    "order": "Initial before/after batches; small-case repeats after/before then before/after because initial medians differed. Fireball three fresh-process pairs, alternating side order.",
+    "warmups": "Sample0 of each small-case process excluded; all 16 warmup records retained.",
+    "process_load": "Our test/static processes stopped. External desktop workload not controlled.",
+    "interpretation": "No consistent median increase across repeated small-case batches; noisy ranges (Glyph final up to49.302ms) prevent claiming a hard no-tail-regression guarantee. All raw samples retained. Fireball remains above historical100ms/100KB goals; no target attainment claimed."
+  },
+  "summary": {
+    "glyph_held_entry": {
+      "before": {
+        "measured_samples": 15,
+        "medians_ms": {
+          "native_ms": 21.845524956006557,
+          "publication_ms": 8.477188006509095,
+          "encoding_ms": 0.441659998614341,
+          "total_ms": 31.277153990231454
+        },
+        "total_ms_range": [
+          24.79179500369355,
+          34.31267599808052
+        ],
+        "max_packet_bytes": 22236,
+        "event_versions": [
+          118
+        ]
+      },
+      "after": {
+        "measured_samples": 15,
+        "medians_ms": {
+          "native_ms": 20.816831034608185,
+          "publication_ms": 8.70033202227205,
+          "encoding_ms": 0.44575700303539634,
+          "total_ms": 29.76739901350811
+        },
+        "total_ms_range": [
+          26.642401004210114,
+          49.301914987154305
+        ],
+        "max_packet_bytes": 22362,
+        "event_versions": [
+          118
+        ]
+      }
+    },
+    "five_trap_installations": {
+      "before": {
+        "measured_samples": 15,
+        "medians_ms": {
+          "native_ms": 23.88978097587824,
+          "publication_ms": 7.994982006493956,
+          "encoding_ms": 0.3064399934373796,
+          "total_ms": 32.189344987273216
+        },
+        "total_ms_range": [
+          28.24441302800551,
+          39.03348004678264
+        ],
+        "max_packet_bytes": 12011,
+        "event_versions": [
+          95
+        ]
+      },
+      "after": {
+        "measured_samples": 15,
+        "medians_ms": {
+          "native_ms": 23.480859003029764,
+          "publication_ms": 8.389619993977249,
+          "encoding_ms": 0.33074297243729234,
+          "total_ms": 31.63437801413238
+        },
+        "total_ms_range": [
+          29.619920998811722,
+          38.37444103555754
+        ],
+        "max_packet_bytes": 12301,
+        "event_versions": [
+          95
+        ]
+      }
+    },
+    "anchor_housing_door_open": {
+      "before": {
+        "measured_samples": 5,
+        "medians_ms": {
+          "native_ms": 3.3485839958302677,
+          "publication_ms": 2.2187759750522673,
+          "encoding_ms": 0.12448302004486322,
+          "total_ms": 5.668339028488845
+        },
+        "total_ms_range": [
+          5.410029029008001,
+          6.245906988624483
+        ],
+        "max_packet_bytes": 3211,
+        "event_versions": [
+          5
+        ]
+      },
+      "after": {
+        "measured_samples": 5,
+        "medians_ms": {
+          "native_ms": 3.452979028224945,
+          "publication_ms": 2.433537971228361,
+          "encoding_ms": 0.11588801862671971,
+          "total_ms": 6.001071014907211
+        },
+        "total_ms_range": [
+          5.322562996298075,
+          10.399029997643083
+        ],
+        "max_packet_bytes": 3281,
+        "event_versions": [
+          5
+        ]
+      }
+    },
+    "anchor_housing_door_close": {
+      "before": {
+        "measured_samples": 5,
+        "medians_ms": {
+          "native_ms": 3.0222440254874527,
+          "publication_ms": 1.944973017089069,
+          "encoding_ms": 0.08669198723509908,
+          "total_ms": 5.083266994915903
+        },
+        "total_ms_range": [
+          4.265918978489935,
+          5.149308999534696
+        ],
+        "max_packet_bytes": 1919,
+        "event_versions": [
+          5
+        ]
+      },
+      "after": {
+        "measured_samples": 5,
+        "medians_ms": {
+          "native_ms": 2.927535038907081,
+          "publication_ms": 1.744324981700629,
+          "encoding_ms": 0.07997697684913874,
+          "total_ms": 4.751836997456849
+        },
+        "total_ms_range": [
+          4.081405000761151,
+          7.101762981619686
+        ],
+        "max_packet_bytes": 1955,
+        "event_versions": [
+          5
+        ]
+      }
+    },
+    "crowded_fireball": {
+      "before": {
+        "measured_samples": 3,
+        "medians_ms": {
+          "native_ms": 69.4381200009957,
+          "publication_ms": 50.44652795186266,
+          "encoding_ms": 2.1009379997849464,
+          "total_ms": 125.7936600013636
+        },
+        "total_ms_range": [
+          125.61787397135049,
+          143.05231801699847
+        ],
+        "largest_update_bytes": 133102,
+        "event_versions": [
+          571
+        ],
+        "schema_builds": [
+          [],
+          [],
+          []
+        ],
+        "client_fold_max_median_ms": 4.084095009602606,
+        "post_reply_gc_median_ms": 4.314
+      },
+      "after": {
+        "measured_samples": 3,
+        "medians_ms": {
+          "native_ms": 69.8093079845421,
+          "publication_ms": 48.90639299992472,
+          "encoding_ms": 2.135060029104352,
+          "total_ms": 124.8682799632661
+        },
+        "total_ms_range": [
+          124.1265909629874,
+          131.20610103942454
+        ],
+        "largest_update_bytes": 133102,
+        "event_versions": [
+          571
+        ],
+        "schema_builds": [
+          [],
+          [],
+          []
+        ],
+        "client_fold_max_median_ms": 4.221250012051314,
+        "post_reply_gc_median_ms": 4.136
+      }
+    }
+  },
+  "raw": {
+    "samples": [
+      {
+        "case": "glyph_held_entry",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 22.848527994938195,
+        "publication_ms": 7.951260020490736,
+        "encoding_ms": 0.4748940118588507,
+        "total_ms": 31.27468202728778,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 21.410605986602604,
+        "publication_ms": 7.909407024271786,
+        "encoding_ms": 0.4194079665467143,
+        "total_ms": 29.739420977421105,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 18.07238394394517,
+        "publication_ms": 7.518321042880416,
+        "encoding_ms": 0.4797260044142604,
+        "total_ms": 26.070430991239846,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 17.018446000292897,
+        "publication_ms": 7.36496300669387,
+        "encoding_ms": 0.40838599670678377,
+        "total_ms": 24.79179500369355,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 17.97696901485324,
+        "publication_ms": 7.502678956370801,
+        "encoding_ms": 0.441659998614341,
+        "total_ms": 25.92130796983838,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 17.96415902208537,
+        "publication_ms": 7.234249031171203,
+        "encoding_ms": 0.3982499474659562,
+        "total_ms": 25.596658000722528,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 28.640175994951278,
+        "publication_ms": 9.724383999127895,
+        "encoding_ms": 0.4908309783786535,
+        "total_ms": 38.855390972457826,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 19.69261298654601,
+        "publication_ms": 8.053558005485684,
+        "encoding_ms": 0.4132069880142808,
+        "total_ms": 28.159377980045974,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 19.331871008034796,
+        "publication_ms": 9.012699010781944,
+        "encoding_ms": 0.45483995927497745,
+        "total_ms": 28.799409978091717,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 18.465058994479477,
+        "publication_ms": 7.77343800291419,
+        "encoding_ms": 0.4039040068164468,
+        "total_ms": 26.642401004210114,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 20.816831034608185,
+        "publication_ms": 8.486330974847078,
+        "encoding_ms": 0.4642370040528476,
+        "total_ms": 29.76739901350811,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 20.434366015251726,
+        "publication_ms": 8.86953598819673,
+        "encoding_ms": 0.45414100168272853,
+        "total_ms": 29.758043005131185,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 23.208727012388408,
+        "publication_ms": 7.9812019830569625,
+        "encoding_ms": 0.2887439914047718,
+        "total_ms": 31.478672986850142,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 22.153377009090036,
+        "publication_ms": 7.374269014690071,
+        "encoding_ms": 0.2831100136972964,
+        "total_ms": 29.810756037477404,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 21.017627965193242,
+        "publication_ms": 7.209350005723536,
+        "encoding_ms": 0.27911103097721934,
+        "total_ms": 28.506089001893997,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 21.32521802559495,
+        "publication_ms": 7.687242003157735,
+        "encoding_ms": 0.28295000083744526,
+        "total_ms": 29.29541002959013,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 20.584672049153596,
+        "publication_ms": 7.30730895884335,
+        "encoding_ms": 0.352432020008564,
+        "total_ms": 28.24441302800551,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 21.891737007535994,
+        "publication_ms": 7.427805045153946,
+        "encoding_ms": 0.2845159615390003,
+        "total_ms": 29.60405801422894,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 23.315729980822653,
+        "publication_ms": 7.9095830442383885,
+        "encoding_ms": 0.286922964733094,
+        "total_ms": 31.512235989794135,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 21.941765036899596,
+        "publication_ms": 7.8929809969849885,
+        "encoding_ms": 0.2941919956356287,
+        "total_ms": 30.128938029520214,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 22.973834013100713,
+        "publication_ms": 8.29015503404662,
+        "encoding_ms": 0.3373239887878299,
+        "total_ms": 31.601313035935163,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 23.599637032020837,
+        "publication_ms": 7.714242965448648,
+        "encoding_ms": 0.34767802571877837,
+        "total_ms": 31.661558023188263,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 22.82824501162395,
+        "publication_ms": 8.230658015236259,
+        "encoding_ms": 0.33074297243729234,
+        "total_ms": 31.3896459992975,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 23.480859003029764,
+        "publication_ms": 7.871451030950993,
+        "encoding_ms": 0.2820679801516235,
+        "total_ms": 31.63437801413238,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_open",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 3.498448000755161,
+        "publication_ms": 2.533555030822754,
+        "encoding_ms": 0.12151699047535658,
+        "total_ms": 6.1535200220532715,
+        "max_packet_bytes": 3211,
+        "total_packet_bytes": 3391,
+        "event_versions": 5,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_close",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 2.7796929934993386,
+        "publication_ms": 1.8239619676023722,
+        "encoding_ms": 0.08548900950700045,
+        "total_ms": 4.689143970608711,
+        "max_packet_bytes": 1919,
+        "total_packet_bytes": 2099,
+        "event_versions": 5,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_open",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 3.5452430020086467,
+        "publication_ms": 2.5668260059319437,
+        "encoding_ms": 0.12448302004486322,
+        "total_ms": 6.236552027985454,
+        "max_packet_bytes": 3211,
+        "total_packet_bytes": 3391,
+        "event_versions": 5,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_close",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 3.046755969990045,
+        "publication_ms": 1.944973017089069,
+        "encoding_ms": 0.09153800783678889,
+        "total_ms": 5.083266994915903,
+        "max_packet_bytes": 1919,
+        "total_packet_bytes": 2099,
+        "event_versions": 5,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_open",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 3.3485839958302677,
+        "publication_ms": 2.120040007866919,
+        "encoding_ms": 0.1132289762608707,
+        "total_ms": 5.581852979958057,
+        "max_packet_bytes": 3211,
+        "total_packet_bytes": 3391,
+        "event_versions": 5,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_close",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 2.7452270151115954,
+        "publication_ms": 1.5045629697851837,
+        "encoding_ms": 0.06737001240253448,
+        "total_ms": 4.3171599972993135,
+        "max_packet_bytes": 1919,
+        "total_packet_bytes": 2099,
+        "event_versions": 5,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_open",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 3.2631949870847166,
+        "publication_ms": 2.0323320059105754,
+        "encoding_ms": 0.11450203601270914,
+        "total_ms": 5.410029029008001,
+        "max_packet_bytes": 3211,
+        "total_packet_bytes": 3391,
+        "event_versions": 5,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_close",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 2.5915519800037146,
+        "publication_ms": 1.6078220214694738,
+        "encoding_ms": 0.066544977016747,
+        "total_ms": 4.265918978489935,
+        "max_packet_bytes": 1919,
+        "total_packet_bytes": 2099,
+        "event_versions": 5,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_open",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 3.659508947748691,
+        "publication_ms": 2.4610450491309166,
+        "encoding_ms": 0.1253529917448759,
+        "total_ms": 6.245906988624483,
+        "max_packet_bytes": 3211,
+        "total_packet_bytes": 3391,
+        "event_versions": 5,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_close",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 3.0681119533255696,
+        "publication_ms": 1.9901960040442646,
+        "encoding_ms": 0.09100104216486216,
+        "total_ms": 5.149308999534696,
+        "max_packet_bytes": 1919,
+        "total_packet_bytes": 2099,
+        "event_versions": 5,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_open",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 3.3229170367121696,
+        "publication_ms": 2.2187759750522673,
+        "encoding_ms": 0.12664601672440767,
+        "total_ms": 5.668339028488845,
+        "max_packet_bytes": 3211,
+        "total_packet_bytes": 3391,
+        "event_versions": 5,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_close",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 3.0222440254874527,
+        "publication_ms": 1.978088985197246,
+        "encoding_ms": 0.08669198723509908,
+        "total_ms": 5.087024997919798,
+        "max_packet_bytes": 1919,
+        "total_packet_bytes": 2099,
+        "event_versions": 5,
+        "side": "before",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_open",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 3.602556011173874,
+        "publication_ms": 2.4060329888015985,
+        "encoding_ms": 0.11891598114743829,
+        "total_ms": 6.127504981122911,
+        "max_packet_bytes": 3281,
+        "total_packet_bytes": 3461,
+        "event_versions": 5,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_close",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 3.0552929965779185,
+        "publication_ms": 1.8406250164844096,
+        "encoding_ms": 0.08763500954955816,
+        "total_ms": 4.983553022611886,
+        "max_packet_bytes": 1955,
+        "total_packet_bytes": 2135,
+        "event_versions": 5,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_open",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 6.677179015241563,
+        "publication_ms": 3.509305010084063,
+        "encoding_ms": 0.2125459723174572,
+        "total_ms": 10.399029997643083,
+        "max_packet_bytes": 3281,
+        "total_packet_bytes": 3461,
+        "event_versions": 5,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_close",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 3.9114870014600456,
+        "publication_ms": 2.03862099442631,
+        "encoding_ms": 0.09242596570402384,
+        "total_ms": 6.0425339615903795,
+        "max_packet_bytes": 1955,
+        "total_packet_bytes": 2135,
+        "event_versions": 5,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_open",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 3.452979028224945,
+        "publication_ms": 2.433537971228361,
+        "encoding_ms": 0.11455401545390487,
+        "total_ms": 6.001071014907211,
+        "max_packet_bytes": 3281,
+        "total_packet_bytes": 3461,
+        "event_versions": 5,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_close",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 2.927535038907081,
+        "publication_ms": 1.744324981700629,
+        "encoding_ms": 0.07997697684913874,
+        "total_ms": 4.751836997456849,
+        "max_packet_bytes": 1955,
+        "total_packet_bytes": 2135,
+        "event_versions": 5,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_open",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 3.1931300181895494,
+        "publication_ms": 2.0235839765518904,
+        "encoding_ms": 0.1058490015566349,
+        "total_ms": 5.322562996298075,
+        "max_packet_bytes": 3281,
+        "total_packet_bytes": 3461,
+        "event_versions": 5,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_close",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 2.582428976893425,
+        "publication_ms": 1.4434870099648833,
+        "encoding_ms": 0.055489013902843,
+        "total_ms": 4.081405000761151,
+        "max_packet_bytes": 1955,
+        "total_packet_bytes": 2135,
+        "event_versions": 5,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_open",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 4.653644980862737,
+        "publication_ms": 3.3402469707652926,
+        "encoding_ms": 0.15364104183390737,
+        "total_ms": 8.147532993461937,
+        "max_packet_bytes": 3281,
+        "total_packet_bytes": 3461,
+        "event_versions": 5,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_close",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 4.308410978410393,
+        "publication_ms": 2.687682048417628,
+        "encoding_ms": 0.10566995479166508,
+        "total_ms": 7.101762981619686,
+        "max_packet_bytes": 1955,
+        "total_packet_bytes": 2135,
+        "event_versions": 5,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_open",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 3.2861329964362085,
+        "publication_ms": 2.301139000337571,
+        "encoding_ms": 0.11588801862671971,
+        "total_ms": 5.703160015400499,
+        "max_packet_bytes": 3281,
+        "total_packet_bytes": 3461,
+        "event_versions": 5,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "anchor_housing_door_close",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 2.729079977143556,
+        "publication_ms": 1.541279023513198,
+        "encoding_ms": 0.06319797830656171,
+        "total_ms": 4.3335569789633155,
+        "max_packet_bytes": 1955,
+        "total_packet_bytes": 2135,
+        "event_versions": 5,
+        "side": "after",
+        "batch": 0
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 24.95451894355938,
+        "publication_ms": 11.665633006487042,
+        "encoding_ms": 0.5261780461296439,
+        "total_ms": 37.146329996176064,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 1
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 19.980391953140497,
+        "publication_ms": 8.339369029272348,
+        "encoding_ms": 0.46369899064302444,
+        "total_ms": 28.78345997305587,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 1
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 20.515672978945076,
+        "publication_ms": 8.292842016089708,
+        "encoding_ms": 0.4403999773785472,
+        "total_ms": 29.24891497241333,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 1
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 22.15908298967406,
+        "publication_ms": 8.70033202227205,
+        "encoding_ms": 0.44248998165130615,
+        "total_ms": 31.301904993597418,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 1
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 20.991640049032867,
+        "publication_ms": 8.645960944704711,
+        "encoding_ms": 0.4214950022287667,
+        "total_ms": 30.059095995966345,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 1
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 21.04130800580606,
+        "publication_ms": 8.83852003607899,
+        "encoding_ms": 0.44575700303539634,
+        "total_ms": 30.325585044920444,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 1
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 30.31628398457542,
+        "publication_ms": 9.843527979683131,
+        "encoding_ms": 0.6618010229431093,
+        "total_ms": 40.82161298720166,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 1
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 23.375626013148576,
+        "publication_ms": 9.489607997238636,
+        "encoding_ms": 0.4731589579023421,
+        "total_ms": 33.338392968289554,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 1
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 23.187585989944637,
+        "publication_ms": 10.517021000850946,
+        "encoding_ms": 0.6080690072849393,
+        "total_ms": 34.31267599808052,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 1
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 23.070277995429933,
+        "publication_ms": 9.791081014554948,
+        "encoding_ms": 0.5216309800744057,
+        "total_ms": 33.382989990059286,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 1
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 22.873358975630254,
+        "publication_ms": 9.204305009916425,
+        "encoding_ms": 0.4335499834269285,
+        "total_ms": 32.51121396897361,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 1
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 22.592392982915044,
+        "publication_ms": 8.24910297524184,
+        "encoding_ms": 0.43565803207457066,
+        "total_ms": 31.277153990231454,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 1
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 30.975516012404114,
+        "publication_ms": 9.721992013510317,
+        "encoding_ms": 0.41209900518879294,
+        "total_ms": 41.109607031103224,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 1
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 27.180638047866523,
+        "publication_ms": 8.854898973368108,
+        "encoding_ms": 0.358936027623713,
+        "total_ms": 36.394473048858345,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 1
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 28.69835402816534,
+        "publication_ms": 9.312734997365624,
+        "encoding_ms": 0.36335201002657413,
+        "total_ms": 38.37444103555754,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 1
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 27.063034009188414,
+        "publication_ms": 9.520466963294894,
+        "encoding_ms": 0.3130450495518744,
+        "total_ms": 36.89654602203518,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 1
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 28.81562995025888,
+        "publication_ms": 8.551983046345413,
+        "encoding_ms": 0.3054330009035766,
+        "total_ms": 37.67304599750787,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 1
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 27.939655992668122,
+        "publication_ms": 8.487352984957397,
+        "encoding_ms": 0.33950601937249303,
+        "total_ms": 36.76651499699801,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 1
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 27.71596604725346,
+        "publication_ms": 10.123838961590081,
+        "encoding_ms": 0.32713403925299644,
+        "total_ms": 38.16693904809654,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 1
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 29.967563052196056,
+        "publication_ms": 8.729642955586314,
+        "encoding_ms": 0.33627403900027275,
+        "total_ms": 39.03348004678264,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 1
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 27.9180440120399,
+        "publication_ms": 9.418388013727963,
+        "encoding_ms": 0.3064399934373796,
+        "total_ms": 37.64287201920524,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 1
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 26.79338603047654,
+        "publication_ms": 9.842143976129591,
+        "encoding_ms": 0.414084002841264,
+        "total_ms": 37.049614009447396,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 1
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 28.43436400871724,
+        "publication_ms": 9.83568700030446,
+        "encoding_ms": 0.3061240422539413,
+        "total_ms": 38.57617505127564,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 1
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 27.696254022885114,
+        "publication_ms": 8.654328994452953,
+        "encoding_ms": 0.3173049772158265,
+        "total_ms": 36.667887994553894,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 1
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 29.70334596466273,
+        "publication_ms": 9.643012017477304,
+        "encoding_ms": 0.5184970214031637,
+        "total_ms": 39.8648550035432,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 2
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 21.845524956006557,
+        "publication_ms": 10.920692002400756,
+        "encoding_ms": 0.46071899123489857,
+        "total_ms": 33.22693594964221,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 2
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 23.707361018750817,
+        "publication_ms": 9.67286096420139,
+        "encoding_ms": 0.5441260291263461,
+        "total_ms": 33.92434801207855,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 2
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 18.81615596357733,
+        "publication_ms": 8.588485012296587,
+        "encoding_ms": 0.4251620266586542,
+        "total_ms": 27.82980300253257,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 2
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 23.299392021726817,
+        "publication_ms": 8.255446969997138,
+        "encoding_ms": 0.4164419951848686,
+        "total_ms": 31.971280986908823,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 2
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 19.691965950187296,
+        "publication_ms": 8.477188006509095,
+        "encoding_ms": 0.46088104136288166,
+        "total_ms": 28.630034998059273,
+        "max_packet_bytes": 22236,
+        "total_packet_bytes": 43497,
+        "event_versions": 118,
+        "side": "before",
+        "batch": 2
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 23.651754017919302,
+        "publication_ms": 11.069625965319574,
+        "encoding_ms": 0.4141220124438405,
+        "total_ms": 35.135501995682716,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 2
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 19.28962697274983,
+        "publication_ms": 7.823504973202944,
+        "encoding_ms": 0.4181450349278748,
+        "total_ms": 27.531276980880648,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 2
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 36.52136796154082,
+        "publication_ms": 12.13307399302721,
+        "encoding_ms": 0.6474730325862765,
+        "total_ms": 49.301914987154305,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 2
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 31.378047016914934,
+        "publication_ms": 11.950161017011851,
+        "encoding_ms": 0.444345991127193,
+        "total_ms": 43.77255402505398,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 2
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 25.882734975311905,
+        "publication_ms": 8.994081988930702,
+        "encoding_ms": 0.8100820123218,
+        "total_ms": 35.68689897656441,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 2
+      },
+      {
+        "case": "glyph_held_entry",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 33.88153197010979,
+        "publication_ms": 12.306108023039997,
+        "encoding_ms": 0.5073379725217819,
+        "total_ms": 46.69497796567157,
+        "max_packet_bytes": 22362,
+        "total_packet_bytes": 43749,
+        "event_versions": 118,
+        "side": "after",
+        "batch": 2
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 24.25083500565961,
+        "publication_ms": 8.11752799199894,
+        "encoding_ms": 0.2991170040331781,
+        "total_ms": 32.66748000169173,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 2
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 24.48878501309082,
+        "publication_ms": 8.177098003216088,
+        "encoding_ms": 0.31414401018992066,
+        "total_ms": 32.98002702649683,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 2
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 24.433139013126493,
+        "publication_ms": 8.505574020091444,
+        "encoding_ms": 0.3160299966111779,
+        "total_ms": 33.254743029829115,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 2
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 23.88978097587824,
+        "publication_ms": 7.990916026756167,
+        "encoding_ms": 0.30864798463881016,
+        "total_ms": 32.189344987273216,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 2
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 23.246967990417033,
+        "publication_ms": 7.898645999375731,
+        "encoding_ms": 0.3040960291400552,
+        "total_ms": 31.44971001893282,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 2
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 23.10903900070116,
+        "publication_ms": 7.994982006493956,
+        "encoding_ms": 0.29820395866408944,
+        "total_ms": 31.402224965859205,
+        "max_packet_bytes": 12011,
+        "total_packet_bytes": 23812,
+        "event_versions": 95,
+        "side": "before",
+        "batch": 2
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 0,
+        "warmup": true,
+        "native_ms": 23.39670597575605,
+        "publication_ms": 8.001476991921663,
+        "encoding_ms": 0.29247900238260627,
+        "total_ms": 31.69066197006032,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 2
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 1,
+        "warmup": false,
+        "native_ms": 21.708553016651422,
+        "publication_ms": 7.625171972904354,
+        "encoding_ms": 0.2861960092559457,
+        "total_ms": 29.619920998811722,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 2
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 2,
+        "warmup": false,
+        "native_ms": 22.36913301749155,
+        "publication_ms": 7.989999023266137,
+        "encoding_ms": 0.30964799225330353,
+        "total_ms": 30.66878003301099,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 2
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 3,
+        "warmup": false,
+        "native_ms": 25.38988000014797,
+        "publication_ms": 9.702319977805018,
+        "encoding_ms": 0.3480649902485311,
+        "total_ms": 35.44026496820152,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 2
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 4,
+        "warmup": false,
+        "native_ms": 22.912256012205034,
+        "publication_ms": 8.389619993977249,
+        "encoding_ms": 0.2984190359711647,
+        "total_ms": 31.600295042153448,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 2
+      },
+      {
+        "case": "five_trap_installations",
+        "sample": 5,
+        "warmup": false,
+        "native_ms": 22.6977730053477,
+        "publication_ms": 8.41513997875154,
+        "encoding_ms": 0.3889630315825343,
+        "total_ms": 31.501876015681773,
+        "max_packet_bytes": 12301,
+        "total_packet_bytes": 24392,
+        "event_versions": 95,
+        "side": "after",
+        "batch": 2
+      }
+    ],
+    "gallery": [
+      {
+        "side": "before",
+        "sample": 0,
+        "report": {
+          "status": "passed",
+          "case": "fireball",
+          "mode": "ordinary",
+          "godmode": false,
+          "recipe_options": {},
+          "seats": "faction",
+          "oracle": null,
+          "timing_qualified": true,
+          "python": "3.13.12 (main, Mar  3 2026, 15:01:51) [Clang 21.1.4 ]",
+          "operations": [
+            {
+              "kind": "spell.fireball",
+              "construction_ms": 0.11331704445183277,
+              "native_ms": 84.81679495889693,
+              "operation_ms": 4.535290005151182,
+              "publication_ms": 51.34397902293131,
+              "encoding_ms": 2.242936985567212,
+              "total_ms": 143.05231801699847,
+              "event_versions": 571,
+              "completed_facts": {
+                "sensory_update": 30,
+                "cast_spell": 16,
+                "spell_damage_roll_result": 15,
+                "spatial_tile_changed": 15,
+                "take_damage": 15,
+                "action_application_committed": 15,
+                "condition_application": 14,
+                "save_d20_roll": 10,
+                "saving_throw": 10,
+                "condition_membership_committed": 10,
+                "damage_applied": 10,
+                "actor_sheet": 7,
+                "life_state_change": 6,
+                "item_location_state": 6,
+                "spatial_effect_changed": 5,
+                "spatial_object_changed": 5,
+                "item_destruction": 5,
+                "spatial_effect_interaction": 2,
+                "action_costs_committed": 1,
+                "condition_removal": 1,
+                "area_reached": 1,
+                "spatial_light_changed": 1
+              },
+              "encoded_bytes": {
+                "amber": 114340,
+                "blue": 132590
+              },
+              "outcome": {
+                "name": "Fireball",
+                "total_targets": 15,
+                "total_damage": 416
+              },
+              "deaths": [
+                "Gallery crowd 1",
+                "Gallery crowd 2",
+                "Gallery crowd 3",
+                "Gallery crowd 4",
+                "Gallery crowd 5",
+                "Gallery crowd 6"
+              ],
+              "damaged": 10,
+              "arrived": [],
+              "departed": [],
+              "seat_bytes": {
+                "amber": {
+                  "bytes": 114852,
+                  "log_bytes": 41332,
+                  "world_bytes": 29680
+                },
+                "blue": {
+                  "bytes": 133102,
+                  "log_bytes": 41332,
+                  "world_bytes": 29746
+                }
+              },
+              "largest_update": {
+                "seat": "blue",
+                "bytes": 133102,
+                "log_bytes": 41332,
+                "non_log_bytes": 91770,
+                "world_bytes": 29746
+              },
+              "largest_non_log": {
+                "seat": "blue",
+                "bytes": 91770
+              },
+              "client_fold_ms": {
+                "max": 4.723443009424955,
+                "total": 8.625660033430904,
+                "records": 2
+              },
+              "schema_builds": [],
+              "gc": {
+                "collections": {},
+                "ms": {},
+                "young_survivors": 0,
+                "collect_after_ms": 4.709,
+                "cycles_found": 0,
+                "cycle_types": {}
+              },
+              "harness_built": []
+            }
+          ],
+          "startup_ms": 1369.677433045581,
+          "seat_slots": {
+            "amber": "amber",
+            "blue": "blue"
+          },
+          "setup": {
+            "wall_torches_lit": 26,
+            "creatures": 30,
+            "caster": {
+              "name": "Expedition sorcerer",
+              "position": [
+                26,
+                10
+              ]
+            },
+            "oil_barrel": [
+              44,
+              11
+            ]
+          },
+          "setup_ms": 25.88257205206901,
+          "setup_publications": [
+            {
+              "seat_bytes": {
+                "amber": {
+                  "bytes": 2959,
+                  "log_bytes": 0,
+                  "world_bytes": 482
+                },
+                "blue": {
+                  "bytes": 1896,
+                  "log_bytes": 0,
+                  "world_bytes": 488
+                }
+              },
+              "largest_update": {
+                "seat": "amber",
+                "bytes": 2959,
+                "log_bytes": 0,
+                "non_log_bytes": 2959,
+                "world_bytes": 482
+              },
+              "largest_non_log": {
+                "seat": "amber",
+                "bytes": 2959
+              },
+              "client_fold_ms": {
+                "max": 0.5329860141500831,
+                "total": 0.8307879907079041,
+                "records": 2
+              }
+            }
+          ]
+        }
+      },
+      {
+        "side": "after",
+        "sample": 0,
+        "report": {
+          "status": "passed",
+          "case": "fireball",
+          "mode": "ordinary",
+          "godmode": false,
+          "recipe_options": {},
+          "seats": "faction",
+          "oracle": null,
+          "timing_qualified": true,
+          "python": "3.13.12 (main, Mar  3 2026, 15:01:51) [Clang 21.1.4 ]",
+          "operations": [
+            {
+              "kind": "spell.fireball",
+              "construction_ms": 0.12662599328905344,
+              "native_ms": 73.68805800797418,
+              "operation_ms": 4.556147032417357,
+              "publication_ms": 50.7002099766396,
+              "encoding_ms": 2.135060029104352,
+              "total_ms": 131.20610103942454,
+              "event_versions": 571,
+              "completed_facts": {
+                "sensory_update": 30,
+                "cast_spell": 16,
+                "spell_damage_roll_result": 15,
+                "spatial_tile_changed": 15,
+                "take_damage": 15,
+                "action_application_committed": 15,
+                "condition_application": 14,
+                "save_d20_roll": 10,
+                "saving_throw": 10,
+                "condition_membership_committed": 10,
+                "damage_applied": 10,
+                "actor_sheet": 7,
+                "life_state_change": 6,
+                "item_location_state": 6,
+                "spatial_effect_changed": 5,
+                "spatial_object_changed": 5,
+                "item_destruction": 5,
+                "spatial_effect_interaction": 2,
+                "action_costs_committed": 1,
+                "condition_removal": 1,
+                "area_reached": 1,
+                "spatial_light_changed": 1
+              },
+              "encoded_bytes": {
+                "amber": 114340,
+                "blue": 132590
+              },
+              "outcome": {
+                "name": "Fireball",
+                "total_targets": 15,
+                "total_damage": 416
+              },
+              "deaths": [
+                "Gallery crowd 1",
+                "Gallery crowd 2",
+                "Gallery crowd 3",
+                "Gallery crowd 4",
+                "Gallery crowd 5",
+                "Gallery crowd 6"
+              ],
+              "damaged": 10,
+              "arrived": [],
+              "departed": [],
+              "seat_bytes": {
+                "amber": {
+                  "bytes": 114852,
+                  "log_bytes": 41332,
+                  "world_bytes": 29680
+                },
+                "blue": {
+                  "bytes": 133102,
+                  "log_bytes": 41332,
+                  "world_bytes": 29746
+                }
+              },
+              "largest_update": {
+                "seat": "blue",
+                "bytes": 133102,
+                "log_bytes": 41332,
+                "non_log_bytes": 91770,
+                "world_bytes": 29746
+              },
+              "largest_non_log": {
+                "seat": "blue",
+                "bytes": 91770
+              },
+              "client_fold_ms": {
+                "max": 4.093964002095163,
+                "total": 8.051024982705712,
+                "records": 2
+              },
+              "schema_builds": [],
+              "gc": {
+                "collections": {},
+                "ms": {},
+                "young_survivors": 0,
+                "collect_after_ms": 3.83,
+                "cycles_found": 0,
+                "cycle_types": {}
+              },
+              "harness_built": []
+            }
+          ],
+          "startup_ms": 1388.5313299833797,
+          "seat_slots": {
+            "amber": "amber",
+            "blue": "blue"
+          },
+          "setup": {
+            "wall_torches_lit": 26,
+            "creatures": 30,
+            "caster": {
+              "name": "Expedition sorcerer",
+              "position": [
+                26,
+                10
+              ]
+            },
+            "oil_barrel": [
+              44,
+              11
+            ]
+          },
+          "setup_ms": 27.913892990909517,
+          "setup_publications": [
+            {
+              "seat_bytes": {
+                "amber": {
+                  "bytes": 2959,
+                  "log_bytes": 0,
+                  "world_bytes": 482
+                },
+                "blue": {
+                  "bytes": 1896,
+                  "log_bytes": 0,
+                  "world_bytes": 488
+                }
+              },
+              "largest_update": {
+                "seat": "amber",
+                "bytes": 2959,
+                "log_bytes": 0,
+                "non_log_bytes": 2959,
+                "world_bytes": 482
+              },
+              "largest_non_log": {
+                "seat": "amber",
+                "bytes": 2959
+              },
+              "client_fold_ms": {
+                "max": 0.5429969751276076,
+                "total": 0.86952093988657,
+                "records": 2
+              }
+            }
+          ]
+        }
+      },
+      {
+        "side": "after",
+        "sample": 1,
+        "report": {
+          "status": "passed",
+          "case": "fireball",
+          "mode": "ordinary",
+          "godmode": false,
+          "recipe_options": {},
+          "seats": "faction",
+          "oracle": null,
+          "timing_qualified": true,
+          "python": "3.13.12 (main, Mar  3 2026, 15:01:51) [Clang 21.1.4 ]",
+          "operations": [
+            {
+              "kind": "spell.fireball",
+              "construction_ms": 0.11059996904805303,
+              "native_ms": 68.28777701593935,
+              "operation_ms": 4.431375011336058,
+              "publication_ms": 48.90639299992472,
+              "encoding_ms": 2.3904459667392075,
+              "total_ms": 124.1265909629874,
+              "event_versions": 571,
+              "completed_facts": {
+                "sensory_update": 30,
+                "cast_spell": 16,
+                "spell_damage_roll_result": 15,
+                "spatial_tile_changed": 15,
+                "take_damage": 15,
+                "action_application_committed": 15,
+                "condition_application": 14,
+                "save_d20_roll": 10,
+                "saving_throw": 10,
+                "condition_membership_committed": 10,
+                "damage_applied": 10,
+                "actor_sheet": 7,
+                "life_state_change": 6,
+                "item_location_state": 6,
+                "spatial_effect_changed": 5,
+                "spatial_object_changed": 5,
+                "item_destruction": 5,
+                "spatial_effect_interaction": 2,
+                "action_costs_committed": 1,
+                "condition_removal": 1,
+                "area_reached": 1,
+                "spatial_light_changed": 1
+              },
+              "encoded_bytes": {
+                "amber": 114340,
+                "blue": 132590
+              },
+              "outcome": {
+                "name": "Fireball",
+                "total_targets": 15,
+                "total_damage": 416
+              },
+              "deaths": [
+                "Gallery crowd 1",
+                "Gallery crowd 2",
+                "Gallery crowd 3",
+                "Gallery crowd 4",
+                "Gallery crowd 5",
+                "Gallery crowd 6"
+              ],
+              "damaged": 10,
+              "arrived": [],
+              "departed": [],
+              "seat_bytes": {
+                "amber": {
+                  "bytes": 114852,
+                  "log_bytes": 41332,
+                  "world_bytes": 29680
+                },
+                "blue": {
+                  "bytes": 133102,
+                  "log_bytes": 41332,
+                  "world_bytes": 29746
+                }
+              },
+              "largest_update": {
+                "seat": "blue",
+                "bytes": 133102,
+                "log_bytes": 41332,
+                "non_log_bytes": 91770,
+                "world_bytes": 29746
+              },
+              "largest_non_log": {
+                "seat": "blue",
+                "bytes": 91770
+              },
+              "client_fold_ms": {
+                "max": 4.43027401342988,
+                "total": 8.74268199549988,
+                "records": 2
+              },
+              "schema_builds": [],
+              "gc": {
+                "collections": {},
+                "ms": {},
+                "young_survivors": 0,
+                "collect_after_ms": 5.053,
+                "cycles_found": 0,
+                "cycle_types": {}
+              },
+              "harness_built": []
+            }
+          ],
+          "startup_ms": 1389.9413740145974,
+          "seat_slots": {
+            "amber": "amber",
+            "blue": "blue"
+          },
+          "setup": {
+            "wall_torches_lit": 26,
+            "creatures": 30,
+            "caster": {
+              "name": "Expedition sorcerer",
+              "position": [
+                26,
+                10
+              ]
+            },
+            "oil_barrel": [
+              44,
+              11
+            ]
+          },
+          "setup_ms": 26.450830046087503,
+          "setup_publications": [
+            {
+              "seat_bytes": {
+                "amber": {
+                  "bytes": 2959,
+                  "log_bytes": 0,
+                  "world_bytes": 482
+                },
+                "blue": {
+                  "bytes": 1896,
+                  "log_bytes": 0,
+                  "world_bytes": 488
+                }
+              },
+              "largest_update": {
+                "seat": "amber",
+                "bytes": 2959,
+                "log_bytes": 0,
+                "non_log_bytes": 2959,
+                "world_bytes": 482
+              },
+              "largest_non_log": {
+                "seat": "amber",
+                "bytes": 2959
+              },
+              "client_fold_ms": {
+                "max": 0.49185199895873666,
+                "total": 0.8290809928439558,
+                "records": 2
+              }
+            }
+          ]
+        }
+      },
+      {
+        "side": "before",
+        "sample": 1,
+        "report": {
+          "status": "passed",
+          "case": "fireball",
+          "mode": "ordinary",
+          "godmode": false,
+          "recipe_options": {},
+          "seats": "faction",
+          "oracle": null,
+          "timing_qualified": true,
+          "python": "3.13.12 (main, Mar  3 2026, 15:01:51) [Clang 21.1.4 ]",
+          "operations": [
+            {
+              "kind": "spell.fireball",
+              "construction_ms": 0.10789197403937578,
+              "native_ms": 68.62183200428262,
+              "operation_ms": 4.367233021184802,
+              "publication_ms": 50.44652795186266,
+              "encoding_ms": 2.0743890199810266,
+              "total_ms": 125.61787397135049,
+              "event_versions": 571,
+              "completed_facts": {
+                "sensory_update": 30,
+                "cast_spell": 16,
+                "spell_damage_roll_result": 15,
+                "spatial_tile_changed": 15,
+                "take_damage": 15,
+                "action_application_committed": 15,
+                "condition_application": 14,
+                "save_d20_roll": 10,
+                "saving_throw": 10,
+                "condition_membership_committed": 10,
+                "damage_applied": 10,
+                "actor_sheet": 7,
+                "life_state_change": 6,
+                "item_location_state": 6,
+                "spatial_effect_changed": 5,
+                "spatial_object_changed": 5,
+                "item_destruction": 5,
+                "spatial_effect_interaction": 2,
+                "action_costs_committed": 1,
+                "condition_removal": 1,
+                "area_reached": 1,
+                "spatial_light_changed": 1
+              },
+              "encoded_bytes": {
+                "amber": 114340,
+                "blue": 132590
+              },
+              "outcome": {
+                "name": "Fireball",
+                "total_targets": 15,
+                "total_damage": 416
+              },
+              "deaths": [
+                "Gallery crowd 1",
+                "Gallery crowd 2",
+                "Gallery crowd 3",
+                "Gallery crowd 4",
+                "Gallery crowd 5",
+                "Gallery crowd 6"
+              ],
+              "damaged": 10,
+              "arrived": [],
+              "departed": [],
+              "seat_bytes": {
+                "amber": {
+                  "bytes": 114852,
+                  "log_bytes": 41332,
+                  "world_bytes": 29680
+                },
+                "blue": {
+                  "bytes": 133102,
+                  "log_bytes": 41332,
+                  "world_bytes": 29746
+                }
+              },
+              "largest_update": {
+                "seat": "blue",
+                "bytes": 133102,
+                "log_bytes": 41332,
+                "non_log_bytes": 91770,
+                "world_bytes": 29746
+              },
+              "largest_non_log": {
+                "seat": "blue",
+                "bytes": 91770
+              },
+              "client_fold_ms": {
+                "max": 4.084095009602606,
+                "total": 7.511975010856986,
+                "records": 2
+              },
+              "schema_builds": [],
+              "gc": {
+                "collections": {},
+                "ms": {},
+                "young_survivors": 0,
+                "collect_after_ms": 4.314,
+                "cycles_found": 0,
+                "cycle_types": {}
+              },
+              "harness_built": []
+            }
+          ],
+          "startup_ms": 1334.307949990034,
+          "seat_slots": {
+            "amber": "amber",
+            "blue": "blue"
+          },
+          "setup": {
+            "wall_torches_lit": 26,
+            "creatures": 30,
+            "caster": {
+              "name": "Expedition sorcerer",
+              "position": [
+                26,
+                10
+              ]
+            },
+            "oil_barrel": [
+              44,
+              11
+            ]
+          },
+          "setup_ms": 26.76765399519354,
+          "setup_publications": [
+            {
+              "seat_bytes": {
+                "amber": {
+                  "bytes": 2959,
+                  "log_bytes": 0,
+                  "world_bytes": 482
+                },
+                "blue": {
+                  "bytes": 1896,
+                  "log_bytes": 0,
+                  "world_bytes": 488
+                }
+              },
+              "largest_update": {
+                "seat": "amber",
+                "bytes": 2959,
+                "log_bytes": 0,
+                "non_log_bytes": 2959,
+                "world_bytes": 482
+              },
+              "largest_non_log": {
+                "seat": "amber",
+                "bytes": 2959
+              },
+              "client_fold_ms": {
+                "max": 0.4632030031643808,
+                "total": 0.740247021894902,
+                "records": 2
+              }
+            }
+          ]
+        }
+      },
+      {
+        "side": "before",
+        "sample": 2,
+        "report": {
+          "status": "passed",
+          "case": "fireball",
+          "mode": "ordinary",
+          "godmode": false,
+          "recipe_options": {},
+          "seats": "faction",
+          "oracle": null,
+          "timing_qualified": true,
+          "python": "3.13.12 (main, Mar  3 2026, 15:01:51) [Clang 21.1.4 ]",
+          "operations": [
+            {
+              "kind": "spell.fireball",
+              "construction_ms": 0.12727896682918072,
+              "native_ms": 69.4381200009957,
+              "operation_ms": 4.518889996688813,
+              "publication_ms": 49.60843303706497,
+              "encoding_ms": 2.1009379997849464,
+              "total_ms": 125.7936600013636,
+              "event_versions": 571,
+              "completed_facts": {
+                "sensory_update": 30,
+                "cast_spell": 16,
+                "spell_damage_roll_result": 15,
+                "spatial_tile_changed": 15,
+                "take_damage": 15,
+                "action_application_committed": 15,
+                "condition_application": 14,
+                "save_d20_roll": 10,
+                "saving_throw": 10,
+                "condition_membership_committed": 10,
+                "damage_applied": 10,
+                "actor_sheet": 7,
+                "life_state_change": 6,
+                "item_location_state": 6,
+                "spatial_effect_changed": 5,
+                "spatial_object_changed": 5,
+                "item_destruction": 5,
+                "spatial_effect_interaction": 2,
+                "action_costs_committed": 1,
+                "condition_removal": 1,
+                "area_reached": 1,
+                "spatial_light_changed": 1
+              },
+              "encoded_bytes": {
+                "amber": 114340,
+                "blue": 132590
+              },
+              "outcome": {
+                "name": "Fireball",
+                "total_targets": 15,
+                "total_damage": 416
+              },
+              "deaths": [
+                "Gallery crowd 1",
+                "Gallery crowd 2",
+                "Gallery crowd 3",
+                "Gallery crowd 4",
+                "Gallery crowd 5",
+                "Gallery crowd 6"
+              ],
+              "damaged": 10,
+              "arrived": [],
+              "departed": [],
+              "seat_bytes": {
+                "amber": {
+                  "bytes": 114852,
+                  "log_bytes": 41332,
+                  "world_bytes": 29680
+                },
+                "blue": {
+                  "bytes": 133102,
+                  "log_bytes": 41332,
+                  "world_bytes": 29746
+                }
+              },
+              "largest_update": {
+                "seat": "blue",
+                "bytes": 133102,
+                "log_bytes": 41332,
+                "non_log_bytes": 91770,
+                "world_bytes": 29746
+              },
+              "largest_non_log": {
+                "seat": "blue",
+                "bytes": 91770
+              },
+              "client_fold_ms": {
+                "max": 4.052922013215721,
+                "total": 7.375304005108774,
+                "records": 2
+              },
+              "schema_builds": [],
+              "gc": {
+                "collections": {},
+                "ms": {},
+                "young_survivors": 0,
+                "collect_after_ms": 3.929,
+                "cycles_found": 0,
+                "cycle_types": {}
+              },
+              "harness_built": []
+            }
+          ],
+          "startup_ms": 1342.9425520007499,
+          "seat_slots": {
+            "amber": "amber",
+            "blue": "blue"
+          },
+          "setup": {
+            "wall_torches_lit": 26,
+            "creatures": 30,
+            "caster": {
+              "name": "Expedition sorcerer",
+              "position": [
+                26,
+                10
+              ]
+            },
+            "oil_barrel": [
+              44,
+              11
+            ]
+          },
+          "setup_ms": 26.62679395871237,
+          "setup_publications": [
+            {
+              "seat_bytes": {
+                "amber": {
+                  "bytes": 2959,
+                  "log_bytes": 0,
+                  "world_bytes": 482
+                },
+                "blue": {
+                  "bytes": 1896,
+                  "log_bytes": 0,
+                  "world_bytes": 488
+                }
+              },
+              "largest_update": {
+                "seat": "amber",
+                "bytes": 2959,
+                "log_bytes": 0,
+                "non_log_bytes": 2959,
+                "world_bytes": 482
+              },
+              "largest_non_log": {
+                "seat": "amber",
+                "bytes": 2959
+              },
+              "client_fold_ms": {
+                "max": 0.44102000538259745,
+                "total": 0.6869410281069577,
+                "records": 2
+              }
+            }
+          ]
+        }
+      },
+      {
+        "side": "after",
+        "sample": 2,
+        "report": {
+          "status": "passed",
+          "case": "fireball",
+          "mode": "ordinary",
+          "godmode": false,
+          "recipe_options": {},
+          "seats": "faction",
+          "oracle": null,
+          "timing_qualified": true,
+          "python": "3.13.12 (main, Mar  3 2026, 15:01:51) [Clang 21.1.4 ]",
+          "operations": [
+            {
+              "kind": "spell.fireball",
+              "construction_ms": 0.11268199887126684,
+              "native_ms": 69.8093079845421,
+              "operation_ms": 4.581552988383919,
+              "publication_ms": 48.32542600343004,
+              "encoding_ms": 2.0393109880387783,
+              "total_ms": 124.8682799632661,
+              "event_versions": 571,
+              "completed_facts": {
+                "sensory_update": 30,
+                "cast_spell": 16,
+                "spell_damage_roll_result": 15,
+                "spatial_tile_changed": 15,
+                "take_damage": 15,
+                "action_application_committed": 15,
+                "condition_application": 14,
+                "save_d20_roll": 10,
+                "saving_throw": 10,
+                "condition_membership_committed": 10,
+                "damage_applied": 10,
+                "actor_sheet": 7,
+                "life_state_change": 6,
+                "item_location_state": 6,
+                "spatial_effect_changed": 5,
+                "spatial_object_changed": 5,
+                "item_destruction": 5,
+                "spatial_effect_interaction": 2,
+                "action_costs_committed": 1,
+                "condition_removal": 1,
+                "area_reached": 1,
+                "spatial_light_changed": 1
+              },
+              "encoded_bytes": {
+                "amber": 114340,
+                "blue": 132590
+              },
+              "outcome": {
+                "name": "Fireball",
+                "total_targets": 15,
+                "total_damage": 416
+              },
+              "deaths": [
+                "Gallery crowd 1",
+                "Gallery crowd 2",
+                "Gallery crowd 3",
+                "Gallery crowd 4",
+                "Gallery crowd 5",
+                "Gallery crowd 6"
+              ],
+              "damaged": 10,
+              "arrived": [],
+              "departed": [],
+              "seat_bytes": {
+                "amber": {
+                  "bytes": 114852,
+                  "log_bytes": 41332,
+                  "world_bytes": 29680
+                },
+                "blue": {
+                  "bytes": 133102,
+                  "log_bytes": 41332,
+                  "world_bytes": 29746
+                }
+              },
+              "largest_update": {
+                "seat": "blue",
+                "bytes": 133102,
+                "log_bytes": 41332,
+                "non_log_bytes": 91770,
+                "world_bytes": 29746
+              },
+              "largest_non_log": {
+                "seat": "blue",
+                "bytes": 91770
+              },
+              "client_fold_ms": {
+                "max": 4.221250012051314,
+                "total": 7.814682030584663,
+                "records": 2
+              },
+              "schema_builds": [],
+              "gc": {
+                "collections": {},
+                "ms": {},
+                "young_survivors": 0,
+                "collect_after_ms": 4.136,
+                "cycles_found": 0,
+                "cycle_types": {}
+              },
+              "harness_built": []
+            }
+          ],
+          "startup_ms": 1386.1825659987517,
+          "seat_slots": {
+            "amber": "amber",
+            "blue": "blue"
+          },
+          "setup": {
+            "wall_torches_lit": 26,
+            "creatures": 30,
+            "caster": {
+              "name": "Expedition sorcerer",
+              "position": [
+                26,
+                10
+              ]
+            },
+            "oil_barrel": [
+              44,
+              11
+            ]
+          },
+          "setup_ms": 28.358790965285152,
+          "setup_publications": [
+            {
+              "seat_bytes": {
+                "amber": {
+                  "bytes": 2959,
+                  "log_bytes": 0,
+                  "world_bytes": 482
+                },
+                "blue": {
+                  "bytes": 1896,
+                  "log_bytes": 0,
+                  "world_bytes": 488
+                }
+              },
+              "largest_update": {
+                "seat": "amber",
+                "bytes": 2959,
+                "log_bytes": 0,
+                "non_log_bytes": 2959,
+                "world_bytes": 482
+              },
+              "largest_non_log": {
+                "seat": "amber",
+                "bytes": 2959
+              },
+              "client_fold_ms": {
+                "max": 0.4105480038560927,
+                "total": 0.6503440090455115,
+                "records": 2
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "reproduction_scripts": {
+    "rules-checking-trap-glyph-timing.py": "\"\"\"Bounded native -> publication -> JSON timings; setup and checks unmeasured.\"\"\"\nimport argparse\nfrom dataclasses import replace\nimport json\nimport random\nfrom time import perf_counter\n\nfrom dnd.actions import Move\nfrom dnd.content.items.ground_hardware_builders import materialize_ground_hardware\nfrom dnd.content.items.environment_item_builders import build_authored_door\nfrom dnd.content_system.bootstrap import bootstrap_content_system\nfrom dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME\nfrom dnd.core.dice import fixed_dice_faces\nfrom dnd.core.events import EventPhase, EventQueue, MechanismInstallEvent\nfrom dnd.core.gridmap import get_map\nfrom dnd.core.modifiers import NumericalModifier\nfrom dnd.core.values import Channel, Kind, add_modifier\nfrom dnd.player.application import capture_application_operation, initialize_audiences\nfrom dnd.player.audience import PlayerAudience\nfrom dnd.player.content_composition import ui_content_manifest\nfrom dnd.player.session import close_session, create_session, publish_sheets\nfrom dnd.spatial.environmental_conditions import SpikeTrap\nfrom dnd.spatial.gas_traps import GasVent\nfrom dnd.spatial.jaws import JawTrap\nfrom dnd.spatial.triggers import PressurePlate, Tripwire\nfrom dnd.spells.abjuration import GlyphOfWarding, GlyphOfWardingZone\nfrom dnd.types.character_progression import CharacterClass\nfrom dnd.types.controls import ActivationLink\nfrom dnd.types.world import CardinalDirection\nfrom tests.manual.spell_regression_support import force_save_result\nfrom tests.player.test_emitted_update_replica import operation_since\nfrom tests.progression.prepared_class_support import prepared_build\n\n\ndef measure(case, sample, session, audiences, catalog, action):\n    cursor = EventQueue.event_cursor()\n    start = perf_counter()\n    result = action()\n    native_end = perf_counter()\n    updates = capture_application_operation(audiences, operation_since(session, cursor), catalog)\n    published = perf_counter()\n    packets = [update.model_dump_json().encode() for update in updates.values()]\n    end = perf_counter()\n    print(json.dumps(dict(case=case, sample=sample, warmup=sample == 0,\n        native_ms=(native_end-start)*1000, publication_ms=(published-native_end)*1000,\n        encoding_ms=(end-published)*1000, total_ms=(end-start)*1000,\n        max_packet_bytes=max(map(len, packets)), total_packet_bytes=sum(map(len, packets)),\n        event_versions=EventQueue.event_cursor()-cursor)), flush=True)\n    return result\n\n\ndef install(mechanism, item_id):\n    cause = EventQueue.publish_declaration(MechanismInstallEvent(name='Install measured trap',\n        source_entity_uuid=mechanism.source_entity_uuid, use_register=False))\n    cause = cause.phase_to(EventPhase.EXECUTION).phase_to(EventPhase.EFFECT)\n    body = materialize_ground_hardware(mechanism, item_id=item_id, parent_event=cause)\n    cause.phase_to(EventPhase.COMPLETION)\n    return body\n\n\nparser = argparse.ArgumentParser()\nparser.add_argument('--case', choices=('glyph', 'traps', 'doors'), required=True)\nparser.add_argument('--samples', type=int, default=6)\nargs = parser.parse_args()\nSERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())\ncatalog = ui_content_manifest()\nfor sample in range(args.samples):\n    random.seed(6)\n    session = create_session(player_builds=(prepared_build(CharacterClass.WIZARD, 7),),\n        enemy_positions=((14, 12), (14, 14)))\n    try:\n        caster = session.game.entities[session.player_uuids[0]]\n        enemy = next(actor for actor in session.game.entities.values() if actor.position == (14, 12))\n        add_modifier(enemy.health.max_hit_points_bonus, Channel.SELF_STATIC, Kind.VALUE,\n            NumericalModifier(name='Survive measured Glyph contact', value=100, source_entity_uuid=enemy.uuid))\n        session = replace(session, player_uuids=(*session.player_uuids, enemy.uuid))\n        session.seats['recipient'] = PlayerAudience((enemy.uuid,), (enemy.uuid,))\n        publish_sheets(session)\n        force_save_result(enemy, 'dexterity', succeeds=False)\n        if args.case == 'doors':\n            doors = {}\n            for direction in CardinalDirection:\n                door = build_authored_door('environment.door.fantasy_a1')\n                door.place_on_grid((13, 11), boundary_direction=direction)\n                doors[direction] = door\n            spikes = SpikeTrap(source_entity_uuid=caster.uuid, position=(13, 11),\n                affected_positions={(13, 11), (11, 11)})\n            body = install(spikes, 'environment.trap.spikes')\n        audiences, _ = initialize_audiences(session, catalog)\n        if args.case == 'glyph':\n            cursor = EventQueue.event_cursor()\n            result = GlyphOfWarding(source_entity_uuid=caster.uuid, end_position=(11, 10), payload='fire').apply()\n            assert result is not None and not result.canceled\n            capture_application_operation(audiences, operation_since(session, cursor), catalog)\n            zone, = (z for z in get_map().get_spatial_conditions() if isinstance(z, GlyphOfWardingZone))\n            assert all(zone.uuid in runtime.projection.audience_composition.view.spatial_effects\n                for runtime in audiences.values())\n            hp = enemy.get_normal_hp()\n            with fixed_dice_faces(*([3] * 200)):\n                result = measure('glyph_held_entry', sample, session, audiences, catalog,\n                    lambda: Move(source_entity_uuid=enemy.uuid, end_position=(12, 11)).apply())\n            assert result is not None and not result.canceled\n            assert not zone.applied and enemy.get_normal_hp() == hp - 15\n        elif args.case == 'traps':\n            gas = GasVent(source_entity_uuid=caster.uuid, position=(9, 11), affected_positions={(9, 11)})\n            link = ActivationLink(target_condition_uuid=gas.uuid)\n            rows = (\n                (gas, 'environment.trap.gas_vent'),\n                (JawTrap(source_entity_uuid=caster.uuid, position=(10, 12), affected_positions={(10, 12)}), 'environment.trap.jaw'),\n                (PressurePlate(source_entity_uuid=caster.uuid, position=(10, 11), affected_positions={(10, 11)}, link=link), 'environment.trap.pressure_plate'),\n                (Tripwire(source_entity_uuid=caster.uuid, position=(11, 12), across=(12, 12),\n                    affected_positions={(11, 12), (12, 12)}, link=link), 'environment.trap.tripwire'),\n                (SpikeTrap(source_entity_uuid=caster.uuid, position=(9, 12), affected_positions={(9, 12)}), 'environment.trap.spikes'),\n            )\n            items = measure('five_trap_installations', sample, session, audiences, catalog,\n                lambda: [install(mechanism, item_id) for mechanism, item_id in rows])\n            assert len(items) == 5 and all(mechanism.applied for mechanism, _ in rows)\n            assert all(mechanism.uuid in audiences['party'].projection.audience_composition.view.spatial_effects\n                for mechanism, _ in rows)\n        else:\n            view = audiences['party'].projection.audience_composition.view\n            assert body.uuid not in view.objects and spikes.uuid in view.spatial_effects\n            measure('anchor_housing_door_open', sample, session, audiences, catalog,\n                doors[CardinalDirection.WEST].open)\n            assert body.uuid in audiences['party'].projection.audience_composition.view.objects\n            measure('anchor_housing_door_close', sample, session, audiences, catalog,\n                doors[CardinalDirection.WEST].close)\n            view = audiences['party'].projection.audience_composition.view\n            assert body.uuid not in view.objects and spikes.uuid in view.spatial_effects\n    finally:\n        close_session(session)\n",
+    "rules-checking-trap-glyph-run-timings.py": "import json\nimport os\nfrom pathlib import Path\nimport subprocess\n\npython = '/home/tommaso/.cache/dnd-engine/venv/bin/python'\nresults = {'samples': [], 'gallery': []}\nfor case in ('glyph', 'traps', 'doors'):\n    for side in ('before', 'after'):\n        root = Path('/tmp/rules-checking-trap-glyph-' + side)\n        env = {**os.environ, 'PYTHONPATH': str(root), 'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONHASHSEED': '71'}\n        completed = subprocess.run([python, '/tmp/rules-checking-trap-glyph-timing.py', '--case', case],\n            cwd=root, env=env, text=True, capture_output=True, timeout=120)\n        Path(f'/tmp/trap-glyph-{side}-{case}.log').write_text(completed.stdout + completed.stderr)\n        if completed.returncode:\n            raise RuntimeError(completed.stderr[-3000:])\n        rows = [json.loads(line) for line in completed.stdout.splitlines() if line.startswith('{')]\n        for row in rows:\n            row['side'] = side\n        results['samples'].extend(rows)\n        Path('/tmp/rules-checking-trap-glyph-timings.json').write_text(json.dumps(results, indent=2))\n        print(f'{case} {side}: {len(rows)} samples completed', flush=True)\nfor sample in range(3):\n    for side in (('before', 'after') if sample % 2 == 0 else ('after', 'before')):\n        root = Path('/tmp/rules-checking-trap-glyph-' + side)\n        env = {**os.environ, 'PYTHONPATH': str(root), 'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONHASHSEED': '71'}\n        name = f'trap_glyph_fireball_{side}_{sample}'\n        completed = subprocess.run([python, 'devtools/performance/gallery_crowd.py', '--case', 'fireball',\n            '--mode', 'ordinary', '--name', name], cwd=root, env=env, text=True, capture_output=True, timeout=180)\n        Path('/tmp/' + name + '.log').write_text(completed.stdout + completed.stderr)\n        if completed.returncode:\n            raise RuntimeError(completed.stderr[-3000:])\n        report = json.loads((root / '.runtime/single-pass/gallery_crowd' / (name + '.json')).read_text())\n        assert report['status'] == 'passed' and report['timing_qualified']\n        results['gallery'].append({'side': side, 'sample': sample, 'report': report})\n        Path('/tmp/rules-checking-trap-glyph-timings.json').write_text(json.dumps(results, indent=2))\n        print(f'crowded Fireball {side} sample {sample}: {report[\"operations\"][0][\"total_ms\"]:.3f} ms', flush=True)\n",
+    "rules-checking-trap-glyph-repeat-timings.py": "import json\nimport os\nfrom pathlib import Path\nimport subprocess\n\npath=Path('/tmp/rules-checking-trap-glyph-timings.json')\nresults=json.loads(path.read_text())\nfor row in results['samples']:\n    row['batch']=0\nfor batch in (1,2):\n    for case in ('glyph','traps'):\n        for side in (('after','before') if batch == 1 else ('before','after')):\n            root=Path('/tmp/rules-checking-trap-glyph-'+side)\n            env={**os.environ,'PYTHONPATH':str(root),'PYTHONDONTWRITEBYTECODE':'1','PYTHONHASHSEED':'71'}\n            completed=subprocess.run(['/home/tommaso/.cache/dnd-engine/venv/bin/python',\n                '/tmp/rules-checking-trap-glyph-timing.py','--case',case],cwd=root,env=env,text=True,capture_output=True,timeout=120)\n            Path(f'/tmp/trap-glyph-{side}-{case}-batch{batch}.log').write_text(completed.stdout+completed.stderr)\n            if completed.returncode:\n                raise RuntimeError(completed.stderr[-3000:])\n            for line in completed.stdout.splitlines():\n                if line.startswith('{'):\n                    results['samples'].append({**json.loads(line),'side':side,'batch':batch})\n            path.write_text(json.dumps(results,indent=2))\n            print(case,side,'batch',batch,'completed',flush=True)\n"
+  }
+}
