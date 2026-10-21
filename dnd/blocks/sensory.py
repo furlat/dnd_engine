@@ -45,6 +45,7 @@ from dnd.types.senses import (
     PerceivedContact, PerceivedLightSource, PerceivedSpatialEffect, SenseMode, SenseModesKey, SensesType,
     VolumeSurfaceSight, SensesSnapshot as SensesSnapshot,
 )
+from dnd.types.spatial_effects import SpatialEffectAnchorKind
 from dnd.types.world import CardinalDirection, LightLevel, WorldEdgeChannel
 
 
@@ -2527,6 +2528,8 @@ class SpatialSensesSystem:
         affected_seen = (now & marks).any(axis=(1, 2)).tolist()
         results: List[Dict[UUID, Optional[PerceivedSpatialEffect]]] = [{} for _ in views]
         surfaces_of: Dict[int, Set[Position]] = {}
+        object_changes: Dict[UUID, List[int]] = {}
+        object_contact_views: Set[int] = set()
         # The fixture stage reads the visible cells, the seen volumes and the cells the facts name: while
         # the first two held and no named cell is visible or a volume surface, the published fixtures
         # stand. An observation also reads the observer's contacts (a fixture's anchor) and its passive
@@ -2540,6 +2543,10 @@ class SpatialSensesSystem:
                     and volumes == view.field.volumes and upper == view.field.upper
                     and not affected_seen[index] and surfaces.isdisjoint(cells)):
                 surfaces_of[index] = surfaces
+                if contact_changes is not None and contact_changes[1]:
+                    object_contact_views.add(index)
+                    for identity in contact_changes[1]:
+                        object_changes.setdefault(identity, []).append(index)
         # A published fixture is touched when it holds volume, upper-surface or suppression cells, or when
         # one of its cells changed.
         touched_of: Dict[int, Set[UUID]] = {}
@@ -2551,13 +2558,15 @@ class SpatialSensesSystem:
                     touched.add(identity)
                 elif any_changed[index] and previous.positions and _gather(changed[index], box, previous.positions).any():
                     touched.add(identity)
-        # Only a footprint meeting a re-observed cell or a volume surface can be observed now: each
-        # condition's footprint is read once, against every observing view.
-        live = [index for index, surfaces in surfaces_of.items() if any_reobserved[index] or surfaces]
+        # A footprint is observed on changed cells, volume surfaces or a changed object anchor's
+        # remaining visible cells. Each footprint is read once against every observing view.
+        live = [index for index, surfaces in surfaces_of.items()
+                if any_reobserved[index] or surfaces or index in object_contact_views]
         candidates_of: Dict[int, Dict[UUID, Tuple[SpatialConditionOwner, Set[Position], Set[Position]]]] = {
             index: {} for index in live}
         if live:
             rows_of = np.array(live, dtype=np.int64)
+            order_of = {index: order for order, index in enumerate(live)}
             reobserved_live = reobserved[rows_of]
             surface_masks = {order: _cells_mask(surfaces_of[index], box) for order, index in enumerate(live)
                              if surfaces_of[index]}
@@ -2572,6 +2581,11 @@ class SpatialSensesSystem:
                 inside_footprint = footprint.values[x0 - fx0:x1 - fx0 + 1, y0 - fy0:y1 - fy0 + 1]
                 part = (slice(x0 - box[0], x1 - box[0] + 1), slice(y0 - box[1], y1 - box[1] + 1))
                 hit_cells = inside_footprint & reobserved_live[:, part[0], part[1]]
+                # An anchor contact can change while the effect's other visible cells hold.
+                # Re-observe only this owner's visible footprint for those observers.
+                if condition.anchor_kind is SpatialEffectAnchorKind.WORLD_OBJECT and condition.anchor_uuid is not None:
+                    for index in object_changes.get(condition.anchor_uuid, ()):
+                        hit_cells[order_of[index]] |= inside_footprint & now[index][part]
                 for order, surface_mask in surface_masks.items():
                     index = live[order]
                     volumes, upper, _ = sights[index]
@@ -2604,7 +2618,7 @@ class SpatialSensesSystem:
                 i, j = position[0] - box[0], position[1] - box[1]
                 return 0 <= i < visible_now.shape[0] and 0 <= j < visible_now.shape[1] and bool(visible_now[i, j])
 
-            if not any_reobserved[index] and not surfaces:
+            if not any_reobserved[index] and not surfaces and not candidates_of.get(index):
                 before_values = {identity: senses.spatial_effects.get(identity) for identity in touched}
                 for identity in touched:
                     previous = senses.spatial_effects[identity]

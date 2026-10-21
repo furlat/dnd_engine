@@ -72,6 +72,7 @@ from dnd.types.senses import OBSCUREMENT_BITS, OpticalObscurement, PerceivedSpat
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.residues import ResidueFieldState
 from dnd.types.spatial_effects import (
+    SpatialEffectAnchorKind,
     SpatialEffectLayer,
     SpatialEffectOccupancyPolicy,
 )
@@ -289,6 +290,9 @@ class SpatialConditionOwner(Protocol):
 
     @property
     def anchor_uuid(self) -> Optional[UUID]: ...
+
+    @property
+    def anchor_kind(self) -> SpatialEffectAnchorKind: ...
 
     @property
     def hazard_filter(self) -> Optional[HazardFilter]: ...

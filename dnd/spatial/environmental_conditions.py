@@ -51,6 +51,7 @@ from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.traps import TrapConditionPayload, TrapDamage, TrapPayload, TrapState
 from dnd.types.world import OccupancyLayer, SpatialChannel
 from dnd.types.spatial_effects import (
+    SpatialEffectAnchorKind,
     SpatialEffectBlockingPolicy,
     SpatialEffectChangeOperation,
     SpatialEffectInteractionOperation,
@@ -1097,10 +1098,13 @@ class SpikeTrap(SpatialCondition):
         """Provide only the requested perceivable cells, with native state text."""
         if not discovered and not self.is_hazard_perceived_by(observer_uuid):
             return None
+        observer = Entity.get(observer_uuid)
         return PerceivedSpatialEffect(
             content_ref=self.content_ref, name=self.name,
             description=self.describe_trap(), positions=tuple(sorted(positions)),
             trap_state=self.trap_state,
+            anchor_item_uuid=(self.anchor_uuid if self.anchor_kind is SpatialEffectAnchorKind.WORLD_OBJECT
+                and observer is not None and self.anchor_uuid in observer.senses.objects else None),
         )
 
     def set_trap_state(self, state: TrapState, *, parent_event: Event) -> bool:

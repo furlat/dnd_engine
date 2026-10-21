@@ -444,7 +444,8 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: Mapping[UUID, 
                   entered: Collection[UUID], known: Collection[UUID],
                   observed_objects: set[UUID], senses: SensesSnapshot | None, keys: "NativeKeys",
                   step: BodiesStep, sent: StaticSent, pending: StaticSent,
-                  declaration_senses: DeclarationSenses | None = None
+                  declaration_senses: DeclarationSenses | None = None,
+                  removed_damage_source: UUID | None = None,
                   ) -> PlayerFact | None:
     source = event.source_entity_uuid if event.source_entity_uuid in known and _identified(event, event.source_entity_uuid, observer) else None
     target = event.target_entity_uuid if event.target_entity_uuid in known and _identified(event, event.target_entity_uuid, observer) else None
@@ -800,7 +801,8 @@ def _project_fact(event: Event, observer: PlayerAudience, actors: Mapping[UUID, 
                     for component in event.components),
                 spatial_source=spatial_source,
                 source_condition_uuid=event.source_condition_uuid if (
-                    senses is not None and event.source_condition_uuid in senses.spatial_effects
+                    removed_damage_source is not None and event.source_condition_uuid == removed_damage_source
+                    or senses is not None and event.source_condition_uuid in senses.spatial_effects
                     or any(
                         member.condition_uuid == event.source_condition_uuid
                         and member.category is not ConditionCategory.INTERNAL
@@ -1152,6 +1154,9 @@ class SeatWalk:
     # identity at entry; a remote control's undisclosed target gains no identity.
     observed_objects: set[UUID] = field(default_factory=set)
     delivery_declarations: dict[UUID, DeclarationSenses | None] = field(default_factory=dict)
+    # Only a completed removal disclosed in this group, keyed by its immediate
+    # native cause and exact zone. Never retained as remembered field sight.
+    observed_spatial_removals: set[tuple[UUID, UUID]] = field(default_factory=set)
     destroyed_contacts: dict[UUID, PlayerObject] = field(default_factory=dict)
     nodes: list[PlayerNode] = field(default_factory=list)
     bodies: list[BodyRecord] = field(default_factory=list)
@@ -1429,10 +1434,31 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
         if isinstance(cause, DeathEvent) and not cause.canceled and cause.entity_uuid == event.entity_uuid:
             declaration_senses = walk.delivery_declarations.get(cause.lineage_uuid)
     known = walk.known
+    # A result may follow its own source's removal. Only that exact witnessed
+    # removal and immediate cause qualify; requests retain ordinary disclosure.
+    removed_damage_source = None
+    if (isinstance(event, DamageAppliedEvent) and not event.canceled
+            and event.phase is EventPhase.COMPLETION and event.source_condition_uuid is not None):
+        request = walk.by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
+        if (isinstance(request, TakeDamageEvent) and not request.canceled
+                and request.phase is EventPhase.COMPLETION
+                and request.source_condition_uuid == event.source_condition_uuid
+                and request.parent_lineage is not None
+                and (request.parent_lineage, event.source_condition_uuid) in walk.observed_spatial_removals):
+            removed_damage_source = event.source_condition_uuid
     # A sensory event's fact is its settlement's composed change, at the settlement's first event of the seat.
     fact = (sensory_fact if isinstance(event, SensoryUpdateEvent) else _project_fact(event, observer, actors,
             facts.get(event.uuid), walk.events, walk.entered, known, observed_objects, view, keys,
-            step, state.static_sent, walk.pending, declaration_senses))
+            step, state.static_sent, walk.pending, declaration_senses, removed_damage_source))
+    if (isinstance(fact, SpatialEffectStateFact) and fact.operation is SpatialEffectChangeOperation.REMOVED
+            and not event.canceled and event.phase is EventPhase.COMPLETION):
+        removal = walk.by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
+        condition = facts.get(removal.uuid) if removal is not None else None
+        if (removal is not None and removal.event_type is EventType.CONDITION_REMOVAL
+                and not removal.canceled and removal.phase is EventPhase.COMPLETION
+                and condition is not None and condition.condition_uuid == fact.spatial_effect_uuid
+                and removal.parent_lineage is not None):
+            walk.observed_spatial_removals.add((removal.parent_lineage, fact.spatial_effect_uuid))
     if fact is not None:
         # The seat folds this event's after-values: its stamps of the bodies the event wrote no longer hold.
         walk.body_stamps.update(dict.fromkeys(step.changed))

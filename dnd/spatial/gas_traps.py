@@ -27,7 +27,7 @@ from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.transitions import bind_spatial_interactions
 from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
 from dnd.types.spatial_effects import (
-    SpatialEffectChangeOperation, SpatialEffectInteractionIntensity,
+    SpatialEffectAnchorKind, SpatialEffectChangeOperation, SpatialEffectInteractionIntensity,
     SpatialEffectInteractionOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy,
     SpatialEffectTransitionAction, SpatialEffectTriggerKind,
 )
@@ -172,8 +172,11 @@ class GasVent(SpatialCondition):
         state = {TrapState.READY: "Ready to release gas on a control signal.",
                  TrapState.ACTIVATED: "Discharged; reset is required before another release.",
                  TrapState.DEACTIVATED: "Disabled. Previously released gas may remain."}[self.trap_state]
+        observer = Entity.get(observer_uuid)
         return PerceivedSpatialEffect(content_ref=self.content_ref, name=self.name,
-            description=state, positions=tuple(sorted(positions)), trap_state=self.trap_state)
+            description=state, positions=tuple(sorted(positions)), trap_state=self.trap_state,
+            anchor_item_uuid=(self.anchor_uuid if self.anchor_kind is SpatialEffectAnchorKind.WORLD_OBJECT
+                and observer is not None and self.anchor_uuid in observer.senses.objects else None))
 
     def _set_mode(self, state: TrapState, *, parent_event: Event) -> bool:
         if not self.is_active_spatial_condition() or self.trap_state is state:

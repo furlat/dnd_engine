@@ -23,7 +23,9 @@ from dnd.spatial.restraints import EscapeSpatialRestraintAction, SpatialRestrain
 from dnd.spatial.trap_payloads import apply_trap_payload, retreat_after_saved_entry
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.abilities import SkillName
-from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy
+from dnd.types.spatial_effects import (
+    SpatialEffectAnchorKind, SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy,
+)
 from dnd.types.traps import TrapDamage, TrapPayload, TrapState
 from dnd.types.world import OccupancyLayer, SpatialChannel
 from dnd.actions import Move
@@ -99,8 +101,11 @@ class JawTrap(SpatialCondition):
             description = "Open and disabled."
         else:
             description = "Closed and holding a creature." if self.linked_conditions else "Closed and empty; reset before reuse."
+        observer = Entity.get(observer_uuid)
         return PerceivedSpatialEffect(content_ref=self.content_ref, name=self.name, description=description,
-            positions=tuple(sorted(positions)), trap_state=self.trap_state)
+            positions=tuple(sorted(positions)), trap_state=self.trap_state,
+            anchor_item_uuid=(self.anchor_uuid if self.anchor_kind is SpatialEffectAnchorKind.WORLD_OBJECT
+                and observer is not None and self.anchor_uuid in observer.senses.objects else None))
 
     def _publish_state(self, *, parent_event: Event, previous_state: TrapState) -> None:
         positions = set(self.affected_positions)

@@ -23,7 +23,9 @@ from dnd.spatial.portals import Portal
 from dnd.types.controls import ActivationLink, ControlLink
 from dnd.types.event_facts import GroupEntryKind
 from dnd.types.senses import PerceivedSpatialEffect
-from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy
+from dnd.types.spatial_effects import (
+    SpatialEffectAnchorKind, SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy,
+)
 from dnd.types.traps import TrapState
 from dnd.types.world import OccupancyLayer
 
@@ -53,9 +55,12 @@ class PressurePlate(SpatialCondition):
                                 observer_uuid: UUID, discovered: bool = False) -> PerceivedSpatialEffect | None:
         if not discovered and not self.is_hazard_perceived_by(observer_uuid):
             return None
+        observer = Entity.get(observer_uuid)
         return PerceivedSpatialEffect(content_ref=self.content_ref, name=self.name,
             description="The plate is pressed down." if self.pressed else "The plate is released.",
-            positions=tuple(sorted(positions)), pressed=self.pressed)
+            positions=tuple(sorted(positions)), pressed=self.pressed,
+            anchor_item_uuid=(self.anchor_uuid if self.anchor_kind is SpatialEffectAnchorKind.WORLD_OBJECT
+                and observer is not None and self.anchor_uuid in observer.senses.objects else None))
 
     def _refresh_pressure(self, parent_event: Event) -> None:
         grid = get_map()
@@ -184,10 +189,13 @@ class Tripwire(SpatialCondition):
                                 observer_uuid: UUID, discovered: bool = False) -> PerceivedSpatialEffect | None:
         if not discovered and not self.is_hazard_perceived_by(observer_uuid):
             return None
+        observer = Entity.get(observer_uuid)
         return PerceivedSpatialEffect(content_ref=self.content_ref, name=self.name,
             description="A taut wire triggers its connected mechanism when crossed on foot.",
             positions=tuple(sorted(positions)), anchor_position=self.position if self.position in positions else None,
-            direction=(self.across[0] - self.position[0], self.across[1] - self.position[1]))
+            direction=(self.across[0] - self.position[0], self.across[1] - self.position[1]),
+            anchor_item_uuid=(self.anchor_uuid if self.anchor_kind is SpatialEffectAnchorKind.WORLD_OBJECT
+                and observer is not None and self.anchor_uuid in observer.senses.objects else None))
 
     def _apply(self, execution_event: Event) -> tuple[
         list[tuple[UUID, UUID]], list[UUID], list[UUID], list[UUID], Event,
