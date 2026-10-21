@@ -1,0 +1,933 @@
+{
+  "date": "2026-10-21",
+  "base_revision": "d3082e0932",
+  "scope": [
+    "living zero-HP healing discovery and preview",
+    "HTTP query rejection categories"
+  ],
+  "environment": {
+    "python": "3.13.12",
+    "interpreter": "/home/tommaso/.cache/dnd-engine/venv/bin/python",
+    "source": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine",
+    "measurement": "Setup, process startup and tests excluded from measured spans; samples run sequentially without test/static-check workers.",
+    "crowded_comparison": "Three fresh-process runs per side, alternating order. Baseline source is an isolated Linux snapshot matching HEAD before repair in all six touched production files; repaired source uses the main Windows-mounted checkout. Startup/setup costs are retained separately and excluded from operation timings."
+  },
+  "failing_first": {
+    "healing_spell_life_state_cases": 18,
+    "http_invalid_selection": "400 invalid_request expected; baseline returned 409 stale_state"
+  },
+  "typecheck": {
+    "production_files": 6,
+    "existing_errors_before": 99,
+    "existing_errors_after": 99,
+    "new_diagnostics": 0
+  },
+  "samples": [
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 0,
+      "warmup": true,
+      "discovery_ms": 14.420640014577657,
+      "preview_ms": 0.8706770022399724,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 1,
+      "warmup": false,
+      "discovery_ms": 10.956162004731596,
+      "preview_ms": 0.7860750192776322,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 2,
+      "warmup": false,
+      "discovery_ms": 10.611131030600518,
+      "preview_ms": 0.6917910068295896,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 3,
+      "warmup": false,
+      "discovery_ms": 11.098155984655023,
+      "preview_ms": 0.7002619677223265,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 4,
+      "warmup": false,
+      "discovery_ms": 10.806296020746231,
+      "preview_ms": 0.8040149696171284,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 5,
+      "warmup": false,
+      "discovery_ms": 10.655982012394816,
+      "preview_ms": 0.7693840307183564,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 6,
+      "warmup": false,
+      "discovery_ms": 10.535448032896966,
+      "preview_ms": 0.6819110130891204,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 7,
+      "warmup": false,
+      "discovery_ms": 10.500297998078167,
+      "preview_ms": 0.7219630060717463,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 8,
+      "warmup": false,
+      "discovery_ms": 10.729853995144367,
+      "preview_ms": 0.9157389868050814,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 9,
+      "warmup": false,
+      "discovery_ms": 10.848767997231334,
+      "preview_ms": 0.768603989854455,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 10,
+      "warmup": false,
+      "discovery_ms": 10.83806698443368,
+      "preview_ms": 0.6895110127516091,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 11,
+      "warmup": false,
+      "discovery_ms": 10.938301973510534,
+      "preview_ms": 0.6975720170885324,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_healthy",
+      "sample": 12,
+      "warmup": false,
+      "discovery_ms": 10.675073019228876,
+      "preview_ms": 0.7323029567487538,
+      "patient_in_preview": true
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 0,
+      "warmup": true,
+      "discovery_ms": 10.1865180185996,
+      "preview_ms": 0.6970620015636086,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 1,
+      "warmup": false,
+      "discovery_ms": 9.43898397963494,
+      "preview_ms": 0.8068250026553869,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 2,
+      "warmup": false,
+      "discovery_ms": 10.1710069575347,
+      "preview_ms": 0.7563040126115084,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 3,
+      "warmup": false,
+      "discovery_ms": 9.71694296458736,
+      "preview_ms": 0.7747740019112825,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 4,
+      "warmup": false,
+      "discovery_ms": 9.483145957347006,
+      "preview_ms": 0.7610940374433994,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 5,
+      "warmup": false,
+      "discovery_ms": 9.633910027332604,
+      "preview_ms": 0.6886119954288006,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 6,
+      "warmup": false,
+      "discovery_ms": 9.499606036115438,
+      "preview_ms": 0.6869420176371932,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 7,
+      "warmup": false,
+      "discovery_ms": 9.6671610372141,
+      "preview_ms": 0.6847009644843638,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 8,
+      "warmup": false,
+      "discovery_ms": 9.6244000014849,
+      "preview_ms": 0.8560869609937072,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 9,
+      "warmup": false,
+      "discovery_ms": 9.656290989369154,
+      "preview_ms": 0.8735680021345615,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 10,
+      "warmup": false,
+      "discovery_ms": 9.8451980156824,
+      "preview_ms": 0.7922649965621531,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 11,
+      "warmup": false,
+      "discovery_ms": 9.64041001861915,
+      "preview_ms": 0.8036550134420395,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "cleric_stable",
+      "sample": 12,
+      "warmup": false,
+      "discovery_ms": 9.80531598906964,
+      "preview_ms": 0.8720069890841842,
+      "patient_in_preview": false
+    },
+    {
+      "side": "before",
+      "case": "fireball_worker_command",
+      "sample": 0,
+      "warmup": true,
+      "total_ms": 43.79902203800157,
+      "records": 2
+    },
+    {
+      "side": "before",
+      "case": "fireball_worker_command",
+      "sample": 1,
+      "warmup": false,
+      "total_ms": 47.25828004302457,
+      "records": 2
+    },
+    {
+      "side": "before",
+      "case": "fireball_worker_command",
+      "sample": 2,
+      "warmup": false,
+      "total_ms": 41.219381033442914,
+      "records": 2
+    },
+    {
+      "side": "before",
+      "case": "fireball_worker_command",
+      "sample": 3,
+      "warmup": false,
+      "total_ms": 41.2034320179373,
+      "records": 2
+    },
+    {
+      "side": "before",
+      "case": "fireball_worker_command",
+      "sample": 4,
+      "warmup": false,
+      "total_ms": 40.450531989336014,
+      "records": 2
+    },
+    {
+      "side": "before",
+      "case": "fireball_worker_command",
+      "sample": 5,
+      "warmup": false,
+      "total_ms": 54.49545895680785,
+      "records": 2
+    },
+    {
+      "side": "before",
+      "case": "fireball_worker_command",
+      "sample": 6,
+      "warmup": false,
+      "total_ms": 45.6619139877148,
+      "records": 2
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 0,
+      "warmup": true,
+      "discovery_ms": 18.08975002495572,
+      "preview_ms": 0.9300509700551629,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 1,
+      "warmup": false,
+      "discovery_ms": 11.789935000706464,
+      "preview_ms": 0.7102309609763324,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 2,
+      "warmup": false,
+      "discovery_ms": 11.259142018388957,
+      "preview_ms": 0.651018985081464,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 3,
+      "warmup": false,
+      "discovery_ms": 11.014571005944163,
+      "preview_ms": 0.6728700245730579,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 4,
+      "warmup": false,
+      "discovery_ms": 11.002579994965345,
+      "preview_ms": 0.6892600213177502,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 5,
+      "warmup": false,
+      "discovery_ms": 10.768829029984772,
+      "preview_ms": 0.7628630264662206,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 6,
+      "warmup": false,
+      "discovery_ms": 11.286602995824069,
+      "preview_ms": 0.6453680107370019,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 7,
+      "warmup": false,
+      "discovery_ms": 11.01663097506389,
+      "preview_ms": 0.6562789785675704,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 8,
+      "warmup": false,
+      "discovery_ms": 10.980580002069473,
+      "preview_ms": 0.6693699979223311,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 9,
+      "warmup": false,
+      "discovery_ms": 11.511361983139068,
+      "preview_ms": 0.6936500431038439,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 10,
+      "warmup": false,
+      "discovery_ms": 10.928207018878311,
+      "preview_ms": 0.6303370464593172,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 11,
+      "warmup": false,
+      "discovery_ms": 11.410327977500856,
+      "preview_ms": 0.7130810408852994,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_healthy",
+      "sample": 12,
+      "warmup": false,
+      "discovery_ms": 11.536344012711197,
+      "preview_ms": 0.7591629982925951,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 0,
+      "warmup": true,
+      "discovery_ms": 10.37724205525592,
+      "preview_ms": 0.7033600122667849,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 1,
+      "warmup": false,
+      "discovery_ms": 9.999387024436146,
+      "preview_ms": 0.7247320027090609,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 2,
+      "warmup": false,
+      "discovery_ms": 9.9846160155721,
+      "preview_ms": 0.6288770237006247,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 3,
+      "warmup": false,
+      "discovery_ms": 10.218595969490707,
+      "preview_ms": 0.70385099388659,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 4,
+      "warmup": false,
+      "discovery_ms": 11.186173011083156,
+      "preview_ms": 0.7474829908460379,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 5,
+      "warmup": false,
+      "discovery_ms": 10.232617030851543,
+      "preview_ms": 0.7424720097333193,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 6,
+      "warmup": false,
+      "discovery_ms": 10.049859003629535,
+      "preview_ms": 0.6630889838561416,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 7,
+      "warmup": false,
+      "discovery_ms": 10.378053004387766,
+      "preview_ms": 0.7068609702400863,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 8,
+      "warmup": false,
+      "discovery_ms": 10.851104045286775,
+      "preview_ms": 0.6855300161987543,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 9,
+      "warmup": false,
+      "discovery_ms": 10.68475702777505,
+      "preview_ms": 0.7236109813675284,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 10,
+      "warmup": false,
+      "discovery_ms": 10.763050988316536,
+      "preview_ms": 0.7845050422474742,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 11,
+      "warmup": false,
+      "discovery_ms": 10.39468398084864,
+      "preview_ms": 0.7252520299516618,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "cleric_stable",
+      "sample": 12,
+      "warmup": false,
+      "discovery_ms": 11.00910099921748,
+      "preview_ms": 0.7058510091155767,
+      "patient_in_preview": true
+    },
+    {
+      "side": "after",
+      "case": "fireball_worker_command",
+      "sample": 0,
+      "warmup": true,
+      "total_ms": 44.98642100952566,
+      "records": 2
+    },
+    {
+      "side": "after",
+      "case": "fireball_worker_command",
+      "sample": 1,
+      "warmup": false,
+      "total_ms": 44.03480398468673,
+      "records": 2
+    },
+    {
+      "side": "after",
+      "case": "fireball_worker_command",
+      "sample": 2,
+      "warmup": false,
+      "total_ms": 41.847468994092196,
+      "records": 2
+    },
+    {
+      "side": "after",
+      "case": "fireball_worker_command",
+      "sample": 3,
+      "warmup": false,
+      "total_ms": 41.33616801118478,
+      "records": 2
+    },
+    {
+      "side": "after",
+      "case": "fireball_worker_command",
+      "sample": 4,
+      "warmup": false,
+      "total_ms": 42.32860199408606,
+      "records": 2
+    },
+    {
+      "side": "after",
+      "case": "fireball_worker_command",
+      "sample": 5,
+      "warmup": false,
+      "total_ms": 44.23301498172805,
+      "records": 2
+    },
+    {
+      "side": "after",
+      "case": "fireball_worker_command",
+      "sample": 6,
+      "warmup": false,
+      "total_ms": 46.51748400647193,
+      "records": 2
+    }
+  ],
+  "reproduction_script": "import json\nfrom pathlib import Path\nfrom time import perf_counter\nfrom dnd.content_system.bootstrap import bootstrap_content_system\nfrom dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME\nfrom dnd.actions_functional import get_available_actions, free_aim_target, preview_available_selection\nfrom dnd.core.creature_types import DamageType\nfrom dnd.core.dice import fixed_dice_faces\nfrom dnd.player.commands import ActionSelection\nfrom tests.player.test_zero_hp_healing import healing_scene\nfrom tests.player.test_compact_choices import world, request_choices, rows\nfrom tests.player.test_handoff_discovery_regressions import submit\n\nSERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())\nfixture=healing_scene.__wrapped__()\ncaster,patient=next(fixture)\ntry:\n for state in ('healthy','stable'):\n  if state=='stable':\n   patient.receive_damage(patient.get_normal_hp(),DamageType.FORCE,caster.uuid)\n   patient.stabilize()\n  for sample in range(13):\n   started=perf_counter()\n   available=get_available_actions(caster,include_aoe_preview=False)\n   end=perf_counter()\n   row=next(r for r in available.all_actions if r.behavior_id=='spell.mass_cure_wounds')\n   target=free_aim_target(row,patient.position)\n   preview_start=perf_counter()\n   preview=preview_available_selection(caster,row,(target,),cast_at_level=5)\n   preview_end=perf_counter()\n   print(json.dumps(dict(case='cleric_'+state,sample=sample,warmup=sample==0,discovery_ms=(end-started)*1000,preview_ms=(preview_end-preview_start)*1000,patient_in_preview=patient.uuid in preview.affected_entity_uuids)),flush=True)\nfinally: fixture.close()\nfor sample in range(7):\n fixture=world.__wrapped__(Path('/unused-memory-only-configuration'))\n runtime,seat,publication=next(fixture)\n try:\n  actor=runtime.session.game.entities[publication.boundary.input_actor_uuid]\n  discovered=request_choices((runtime,seat,publication)).choices\n  row=next(r for r in rows(discovered) if r.behavior_id=='spell.fireball')\n  enemy=next(e for e in runtime.session.game.entities.values() if actor.is_enemy(e))\n  selection=ActionSelection(row.discovery_index,(),extra_target_positions=(enemy.position,),cast_at_level=3)\n  with fixed_dice_faces(*([2]*200)):\n   started=perf_counter()\n   records=submit(runtime,seat,actor,discovered,selection,1)\n   end=perf_counter()\n  print(json.dumps(dict(case='fireball_worker_command',sample=sample,warmup=sample==0,total_ms=(end-started)*1000,records=len(records))),flush=True)\n finally: fixture.close()\n",
+  "summary": {
+    "cleric_healthy": {
+      "before": {
+        "samples": 12,
+        "discovery_ms": {
+          "median": 10.7680750079453,
+          "minimum": 10.500297998078167,
+          "maximum": 11.098155984655023
+        },
+        "preview_ms": {
+          "median": 0.7271329814102501,
+          "minimum": 0.6819110130891204,
+          "maximum": 0.9157389868050814
+        }
+      },
+      "after": {
+        "samples": 12,
+        "discovery_ms": {
+          "median": 11.137886496726424,
+          "minimum": 10.768829029984772,
+          "maximum": 11.789935000706464
+        },
+        "preview_ms": {
+          "median": 0.681065022945404,
+          "minimum": 0.6303370464593172,
+          "maximum": 0.7628630264662206
+        }
+      }
+    },
+    "cleric_stable": {
+      "before": {
+        "samples": 12,
+        "discovery_ms": {
+          "median": 9.648350503994152,
+          "minimum": 9.43898397963494,
+          "maximum": 10.1710069575347
+        },
+        "preview_ms": {
+          "median": 0.7835194992367178,
+          "minimum": 0.6847009644843638,
+          "maximum": 0.8735680021345615
+        }
+      },
+      "after": {
+        "samples": 12,
+        "discovery_ms": {
+          "median": 10.386368492618203,
+          "minimum": 9.9846160155721,
+          "maximum": 11.186173011083156
+        },
+        "preview_ms": {
+          "median": 0.7152359758038074,
+          "minimum": 0.6288770237006247,
+          "maximum": 0.7845050422474742
+        }
+      }
+    },
+    "fireball_worker_command": {
+      "before": {
+        "samples": 6,
+        "total_ms": {
+          "median": 43.440647510578856,
+          "minimum": 40.450531989336014,
+          "maximum": 54.49545895680785
+        }
+      },
+      "after": {
+        "samples": 6,
+        "total_ms": {
+          "median": 43.181702989386395,
+          "minimum": 41.33616801118478,
+          "maximum": 46.51748400647193
+        }
+      }
+    },
+    "crowded_fireball": {
+      "before": {
+        "samples": 3,
+        "median_ms": 144.32894700439647
+      },
+      "after": {
+        "samples": 3,
+        "median_ms": 133.86145303957164
+      }
+    }
+  },
+  "review": {
+    "plan_adherence": "passed",
+    "antislop": "passed",
+    "antiOOP": "passed",
+    "reviewer": "healing_plan_review",
+    "scope": "No client files or public wire changes; passive native policy and existing targeting/cache/error owners."
+  },
+  "limits": [
+    "Bounded timing samples, not tail-latency qualification.",
+    "Stable-patient discovery includes newly legal recipients; the broken baseline omitted that work.",
+    "Repository-wide known failures outside this targeted batch were not requalified."
+  ],
+  "verification": {
+    "passed": 672,
+    "xfailed": 1,
+    "seconds": 335.34,
+    "warning": "Existing transport fixture serializes version_rows=() where VersionRows is expected.",
+    "command": "UV_PROJECT_ENVIRONMENT=/home/tommaso/.cache/dnd-engine/venv PYTHONDONTWRITEBYTECODE=1 uv run --no-sync python -m pytest tests/player tests/engine/test_action_discovery.py tests/engine/test_bounded_recipient_discovery.py tests/engine/test_deferred_aoe_discovery.py tests/engine/test_spell_handoff_holy.py tests/engine/test_high_level_spell_support.py tests/architecture/test_action_discovery_requirements.py tests/progression/test_paladin_features.py tests/progression/test_paladin_interactions.py tests/manual/test_136_healing_spell_legacy_contract.py -q --tb=short"
+  },
+  "fixes_revision": "9f81d52676d4cea78be0be951dfc51a756050032",
+  "protocol": {
+    "version": 1,
+    "schema_version": 16,
+    "digest": "2c11d7a9919c8aa9b1490628fff224627f19d6388c3884171d14a4a5cbecea22",
+    "changed": false
+  },
+  "crowded_fireball": [
+    {
+      "side": "before",
+      "sample": 0,
+      "source": "/tmp/rules-checking-trap-glyph-after",
+      "status": "passed",
+      "timing_qualified": true,
+      "python": "3.13.12 (main, Mar  3 2026, 15:01:51) [Clang 21.1.4 ]",
+      "startup_ms": 1477.7654359932058,
+      "setup_ms": 28.844309970736504,
+      "operation": {
+        "construction_ms": 0.1510599977336824,
+        "native_ms": 75.61344304122031,
+        "operation_ms": 4.903396998997778,
+        "publication_ms": 63.7735269847326,
+        "encoding_ms": 2.321615000255406,
+        "total_ms": 146.76304202293977,
+        "event_versions": 571,
+        "largest_update": {
+          "seat": "blue",
+          "bytes": 133102,
+          "log_bytes": 41332,
+          "non_log_bytes": 91770,
+          "world_bytes": 29746
+        },
+        "deaths": [
+          "Gallery crowd 1",
+          "Gallery crowd 2",
+          "Gallery crowd 3",
+          "Gallery crowd 4",
+          "Gallery crowd 5",
+          "Gallery crowd 6"
+        ],
+        "schema_builds": []
+      }
+    },
+    {
+      "side": "after",
+      "sample": 0,
+      "source": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine",
+      "status": "passed",
+      "timing_qualified": true,
+      "python": "3.13.12 (main, Mar  3 2026, 15:01:51) [Clang 21.1.4 ]",
+      "startup_ms": 1499.4947210070677,
+      "setup_ms": 29.332652979064733,
+      "operation": {
+        "construction_ms": 0.16418698942288756,
+        "native_ms": 74.34061501407996,
+        "operation_ms": 4.782631993293762,
+        "publication_ms": 51.41281196847558,
+        "encoding_ms": 2.0969570032320917,
+        "total_ms": 132.79720296850428,
+        "event_versions": 571,
+        "largest_update": {
+          "seat": "blue",
+          "bytes": 133102,
+          "log_bytes": 41332,
+          "non_log_bytes": 91770,
+          "world_bytes": 29746
+        },
+        "deaths": [
+          "Gallery crowd 1",
+          "Gallery crowd 2",
+          "Gallery crowd 3",
+          "Gallery crowd 4",
+          "Gallery crowd 5",
+          "Gallery crowd 6"
+        ],
+        "schema_builds": []
+      }
+    },
+    {
+      "side": "after",
+      "sample": 1,
+      "source": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine",
+      "status": "passed",
+      "timing_qualified": true,
+      "python": "3.13.12 (main, Mar  3 2026, 15:01:51) [Clang 21.1.4 ]",
+      "startup_ms": 1550.2327129943296,
+      "setup_ms": 29.41161103080958,
+      "operation": {
+        "construction_ms": 0.15085801715031266,
+        "native_ms": 74.80108097661287,
+        "operation_ms": 4.692153015639633,
+        "publication_ms": 52.09412198746577,
+        "encoding_ms": 2.1232390427030623,
+        "total_ms": 133.86145303957164,
+        "event_versions": 571,
+        "largest_update": {
+          "seat": "blue",
+          "bytes": 133102,
+          "log_bytes": 41332,
+          "non_log_bytes": 91770,
+          "world_bytes": 29746
+        },
+        "deaths": [
+          "Gallery crowd 1",
+          "Gallery crowd 2",
+          "Gallery crowd 3",
+          "Gallery crowd 4",
+          "Gallery crowd 5",
+          "Gallery crowd 6"
+        ],
+        "schema_builds": []
+      }
+    },
+    {
+      "side": "before",
+      "sample": 1,
+      "source": "/tmp/rules-checking-trap-glyph-after",
+      "status": "passed",
+      "timing_qualified": true,
+      "python": "3.13.12 (main, Mar  3 2026, 15:01:51) [Clang 21.1.4 ]",
+      "startup_ms": 1607.1405310067348,
+      "setup_ms": 34.924593986943364,
+      "operation": {
+        "construction_ms": 0.14203897444531322,
+        "native_ms": 74.94320103432983,
+        "operation_ms": 4.996414994820952,
+        "publication_ms": 53.70723601663485,
+        "encoding_ms": 2.2177029750309885,
+        "total_ms": 136.00659399526194,
+        "event_versions": 571,
+        "largest_update": {
+          "seat": "blue",
+          "bytes": 133102,
+          "log_bytes": 41332,
+          "non_log_bytes": 91770,
+          "world_bytes": 29746
+        },
+        "deaths": [
+          "Gallery crowd 1",
+          "Gallery crowd 2",
+          "Gallery crowd 3",
+          "Gallery crowd 4",
+          "Gallery crowd 5",
+          "Gallery crowd 6"
+        ],
+        "schema_builds": []
+      }
+    },
+    {
+      "side": "before",
+      "sample": 2,
+      "source": "/tmp/rules-checking-trap-glyph-after",
+      "status": "passed",
+      "timing_qualified": true,
+      "python": "3.13.12 (main, Mar  3 2026, 15:01:51) [Clang 21.1.4 ]",
+      "startup_ms": 1504.1692840168253,
+      "setup_ms": 30.34470899729058,
+      "operation": {
+        "construction_ms": 0.16544997924938798,
+        "native_ms": 77.60574104031548,
+        "operation_ms": 4.88276599207893,
+        "publication_ms": 59.26359898876399,
+        "encoding_ms": 2.4113910039886832,
+        "total_ms": 144.32894700439647,
+        "event_versions": 571,
+        "largest_update": {
+          "seat": "blue",
+          "bytes": 133102,
+          "log_bytes": 41332,
+          "non_log_bytes": 91770,
+          "world_bytes": 29746
+        },
+        "deaths": [
+          "Gallery crowd 1",
+          "Gallery crowd 2",
+          "Gallery crowd 3",
+          "Gallery crowd 4",
+          "Gallery crowd 5",
+          "Gallery crowd 6"
+        ],
+        "schema_builds": []
+      }
+    },
+    {
+      "side": "after",
+      "sample": 2,
+      "source": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine",
+      "status": "passed",
+      "timing_qualified": true,
+      "python": "3.13.12 (main, Mar  3 2026, 15:01:51) [Clang 21.1.4 ]",
+      "startup_ms": 1660.4206149931997,
+      "setup_ms": 28.61535595729947,
+      "operation": {
+        "construction_ms": 0.1400680048391223,
+        "native_ms": 79.19392199255526,
+        "operation_ms": 4.77637501899153,
+        "publication_ms": 56.15689296973869,
+        "encoding_ms": 2.614458033349365,
+        "total_ms": 142.88171601947397,
+        "event_versions": 571,
+        "largest_update": {
+          "seat": "blue",
+          "bytes": 133102,
+          "log_bytes": 41332,
+          "non_log_bytes": 91770,
+          "world_bytes": 29746
+        },
+        "deaths": [
+          "Gallery crowd 1",
+          "Gallery crowd 2",
+          "Gallery crowd 3",
+          "Gallery crowd 4",
+          "Gallery crowd 5",
+          "Gallery crowd 6"
+        ],
+        "schema_builds": []
+      }
+    }
+  ],
+  "crowded_reproduction_script": "import json\nimport os\nfrom pathlib import Path\nimport subprocess\n\npython='/home/tommaso/.cache/dnd-engine/venv/bin/python'\nroots={'before':Path('/tmp/rules-checking-trap-glyph-after'),\n       'after':Path('/mnt/c/Users/tommaso/Documents/Dev/dnd_engine')}\nresults=[]\nfor sample in range(3):\n for side in (('before','after') if sample%2==0 else ('after','before')):\n  root=roots[side]\n  name=f'healing_query_fireball_{side}_{sample}'\n  env={**os.environ,'PYTHONPATH':str(root),'PYTHONDONTWRITEBYTECODE':'1','PYTHONHASHSEED':'71'}\n  completed=subprocess.run([python,'devtools/performance/gallery_crowd.py','--case','fireball',\n      '--mode','ordinary','--name',name],cwd=root,env=env,text=True,capture_output=True,timeout=180)\n  Path('/tmp/'+name+'.log').write_text(completed.stdout+completed.stderr)\n  if completed.returncode: raise RuntimeError(completed.stderr[-3000:])\n  report=json.loads((root/'.runtime/single-pass/gallery_crowd'/f'{name}.json').read_text())\n  assert report['status']=='passed' and report['timing_qualified']\n  results.append({'side':side,'sample':sample,'report':report})\n  Path('/tmp/healing-query-crowded-timings.json').write_text(json.dumps(results,indent=2))\n  print(side,sample,report['operations'][0]['total_ms'],flush=True)\n"
+}

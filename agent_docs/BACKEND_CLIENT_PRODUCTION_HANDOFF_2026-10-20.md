@@ -2,7 +2,10 @@
 
 20 October 2026; updated 21 October. Backend handoff to NDClientGodot production ownership.
 
-The latest [trap and Glyph follow-up](BACKEND_TRAP_GLYPH_HANDOFF_2026-10-21.md)
+The latest repair fixes zero-HP healing discovery and HTTP preview rejection
+categories; its details and timing limits are in the final section below.
+
+The earlier [trap and Glyph follow-up](BACKEND_TRAP_GLYPH_HANDOFF_2026-10-21.md)
 adds observed hardware anchors, corrects their loss-of-sight refresh and preserves
 actual witnessed Glyph damage attribution. It documents the required client-owned
 visibility correction, validation and measured timing limits.
@@ -17,11 +20,12 @@ requires the new independent seat recordings and visual checks.
 
 ## Engine revision and checkout
 
-- Fixes commit: `2948cf033cb87271707081c568d38b9fc166d9b2`.
+- Fixes commit: `9f81d52676d4cea78be0be951dfc51a756050032`.
   This includes the earlier producer fixes in
   `a97bb55b0a5138d9b26289c7d58aeb8ee25678dc`, SDK repair `09e93c439`,
   solid-wall / Nimbus repair `59291edde`, Sphere / summon / Incense repair
-  `0c2e5a0d7`, and the 21 October trap / Glyph follow-up linked above.
+  `0c2e5a0d7`, the trap / Glyph repair `2948cf033`, and the zero-HP healing /
+  HTTP query repair documented below.
 - Active branch in the main engine folder: `feature/rules-checking`.
 - Main folder: `/mnt/c/Users/tommaso/Documents/Dev/dnd_engine`
   (`C:\Users\tommaso\Documents\Dev\dnd_engine` on Windows).
@@ -364,3 +368,75 @@ terrain-generation system was introduced.
 Detailed issue mapping, tests and limits are in the
 [backend audit](audits/BACKEND_HANDOFF_TEST_GAPS_2026-10-20.json) and
 [progress record](ENGINE_SINGLE_PASS_PROGRESS_2026-10-17.md).
+
+## 21 October: zero-HP healing and preview error categories
+
+The latest repair addresses the current Cure Wounds report and the separate
+HTTP error-category defect left over from the original Help report.
+
+Healing discovery now distinguishes living zero-HP recipients from actual dead
+creatures. Cure Wounds, Healing Word, Prayer of Healing, Mass Healing Word,
+Mass Cure Wounds, Heal, Mass Heal, Power Word Heal, Regenerate and Lay on Hands
+opt into the existing native target paths with explicit zero-HP eligibility.
+The cached perceived pools, touch additions and subjective area previews apply
+the same distinction. Ordinary attack discovery and dead-recipient exclusion
+are preserved. Mass Cure Wounds preview now includes the observed zero-HP
+patient that its existing native execution heals.
+
+HTTP query handling translates a native invalid selection to the existing
+`400 invalid_request`, rather than falsely returning `409 stale_state`.
+Genuine stale-state, stale-discovery and out-of-turn rejections retain their
+existing categories. Command receipt categories are unchanged. Protocol 1,
+schema 16 and its digest remain unchanged; no SDK generation is required.
+
+The new regression matrix covers nine healing spells in both dying and stable
+states, dead-recipient exclusion, and both healing Lay on Hands forms. A real
+worker journey uses creator-granted Spare the Dying, later discovers/previews
+and executes Cure Wounds on the same patient, verifies published life/healing
+facts, then discovers and executes that patient's movement. The real HTTP test
+covers invalid action/target indices, genuine stale revisions/generations,
+out-of-turn queries, and a subsequent valid preview without changing state.
+The existing ordinary attack exclusion regression is included in validation.
+
+The earlier stabilization regression stopped at stable zero HP; it never
+completed healing and movement. The earlier Help regression called the worker
+directly, bypassing the HTTP host's error translation. These missing boundary
+checks are now covered. The eighteen healing/life-state cases and the invalid
+HTTP selection expectation reproduced the defects before repair.
+
+Client ownership: export the new fixes commit and re-record the unchanged
+`survival.stabilize/heal_and_walk` case. Keep the original failed recording.
+Use actual offered targets and preview recipients; no recorder workaround or
+client-generated target is needed. No client files or frozen exports were
+modified by this backend work.
+
+Validation: **672 passed, 1 existing xfailed in 335.34 seconds** across all player
+tests and the related native discovery, healing, high-level support, paladin and
+architecture tests. The existing transport-fixture serializer warning remains.
+Scoped Pyright found the same 99 existing diagnostics across six production
+files, with **zero new diagnostics**. Plan, antislop and antiOOP review passed.
+
+Bounded medians in milliseconds, before → after:
+
+| Operation | Before | After | Samples per side |
+| --- | ---: | ---: | ---: |
+| Healthy cleric discovery | 10.768 | 11.138 | 12 |
+| Stable-patient discovery | 9.648 | 10.386 | 12 |
+| Mass Cure preview, healthy | 0.727 | 0.681 | 12 |
+| Mass Cure preview, stable | 0.784 | 0.715 | 12 |
+| Small Fireball worker command and JSON round trip | 43.441 | 43.182 | 6 |
+| Crowded Fireball native/publication/encoding | 144.329 | 133.861 | 3 |
+
+Discovery has a small measured increase; stable-patient discovery now also
+validates recipients the broken baseline omitted. Crowded Fireball preserves
+571 event versions, six deaths, a 133,102-byte largest update and zero runtime
+schema builds. These bounded samples show no expensive-spell regression; they
+are not a speedup or tail-latency guarantee. Existing Fireball latency/packet
+size targets remain unmet.
+
+The small comparisons ran from the same main checkout before/after; crowded
+runs alternated an isolated Linux baseline and the Windows-mounted repaired
+checkout using the same Python 3.13 environment. Setup/startup are outside the
+measured operations and retained separately. Test/static-check workers were
+stopped. Raw samples, startup/source details and reproduction scripts are in
+[the healing/query audit](audits/BACKEND_HEALING_QUERY_2026-10-21.json).
