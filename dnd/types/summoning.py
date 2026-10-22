@@ -1,6 +1,7 @@
 """Passive choices and provenance for temporary creature existence."""
 
 from enum import Enum
+from types import MappingProxyType
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,6 +22,23 @@ class SummonFamily(str, Enum):
     FIEND = "fiend"
 
 
+class DragonColor(str, Enum):
+    BLACK = "black"
+    BLUE = "blue"
+    GREEN = "green"
+    RED = "red"
+    WHITE = "white"
+
+
+DRAGON_COLOR_DAMAGE = MappingProxyType({
+    DragonColor.BLACK: DamageType.ACID,
+    DragonColor.BLUE: DamageType.LIGHTNING,
+    DragonColor.GREEN: DamageType.POISON,
+    DragonColor.RED: DamageType.FIRE,
+    DragonColor.WHITE: DamageType.COLD,
+})
+
+
 class SummonManifestation(str, Enum):
     SPELL_CONSTRUCT = "spell_construct"
     NATURAL = "natural"
@@ -38,6 +56,7 @@ class SummonDepartureCause(str, Enum):
     EXPIRED = "expired"
     DISMISSED = "dismissed"
     DEFEATED = "defeated"
+    CASTER_DEFEATED = "caster_defeated"
     SUSTAIN_LOST = "sustain_lost"
     CLOSED = "closed"
 
@@ -49,8 +68,6 @@ class SummonSelection(BaseModel):
     form_id: str = Field(min_length=1)
     cast_at_level: int = Field(ge=1, le=9)
     target_position: tuple[int, int]
-    breath_type: DamageType = DamageType.FIRE
-    shared_resistance: DamageType = DamageType.FIRE
 
 
 class SummonRules(BaseModel):

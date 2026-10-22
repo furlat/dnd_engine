@@ -804,6 +804,8 @@ class TestBless(SpellAction):
 class SleepEffect(BaseCondition):
     """Own Sleep's unconscious transform and wake-on-damage handler."""
     name: str = Field(default="Sleep", description="Condition name.")
+    denies_consciousness: bool = Field(default=True,
+        description="Magical sleep makes its target unconscious.")
     description: str = Field(default="Magically asleep", description="Rules-facing condition summary.")
     tags: Set[ConditionTag] = Field(
         default_factory=lambda: {ConditionTag.MAGICAL},

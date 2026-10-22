@@ -1,5 +1,28 @@
 We are working on NDClient.
 
+For the three newly authorized production publication repairs (Ice destruction,
+Myrmidon Landing identity and Arcane Sword anchor), follow the
+[production fact repair plan](agent_docs/plans/PRODUCTION_FACT_REPAIRS_2026-10-22.md).
+All three are implemented and independently reviewed; 219 selected tests passed
+with one expected failure. The plan records timings, the client handoff and a
+separate pre-existing summon content-declaration failure found by a broader check.
+
+For the human-requested change making summons follow their caster's control,
+see the [summon controller ownership plan](agent_docs/plans/SUMMON_CONTROLLER_OWNERSHIP_PLAN_2026-10-22.md).
+Implementation and the requested fair Monty summoner match are complete. The plan
+records the pre-change summon/sensory timings, independent reviews, validation
+limits and the human-requested single dragon color choice. The
+[client handoff](agent_docs/SUMMON_CONTROL_CLIENT_HANDOFF_2026-10-22.md) describes
+schema 18 and links the match evidence. The human then identified
+missing caster-zero-HP dismissal independent of concentration. The
+[caster defeat cleanup plan](agent_docs/plans/SUMMON_CASTER_DEFEAT_CLEANUP_PLAN_2026-10-22.md)
+is implemented; regressions and source review passed. The fresh independent
+match ended naturally and both SDKs/replay passed. Its summons had already
+departed before caster defeat, so direct live dismissal is explicitly not
+exercised; native and real-worker cases prove that boundary with living summons.
+The earlier duel's weapon-survival
+behavior is defect evidence, not acceptance of the corrected lifetime rule.
+
 Follow the [NDClient implementation plan](/home/tommaso/Dev/NDClient/agent_docs/NDCLIENT_IMPLEMENTATION_PLAN_COMPLETE_2026-10-11_v3.md).
 
 For the human-requested server movement optimization, follow the

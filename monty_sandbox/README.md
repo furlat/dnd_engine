@@ -120,6 +120,56 @@ See [duel evidence](evidence/duel/summary.json). An earlier goblin duel ended on
 Amber's first hit before Blue could act, so the visible rematch uses the sturdier
 native skeleton recipe. These are demonstrations, not a performance benchmark.
 
+## Summoner agent match
+
+After updating both the server and sandbox SDK, start a new private match:
+
+```sh
+./monty_sandbox/arena run --summoner-duel \
+  --server-python /home/tommaso/.cache/dnd-engine/venv/bin/python \
+  --output .runtime/monty-summoners-RUN --seed 7 --plain
+```
+
+Both sides are the same creator-backed level-5 Life Cleric, with the same normal
+equipment, HP and spell slots. They start at mirrored positions `(4, 7)` and
+`(10, 7)` on the 15×15 bright open floor, use ordinary seeded initiative, and have
+CODEX controllers. Each receives the same **encounter-only Conjure Animals grant**
+at caster level 5. This is a test scenario, not a cleric class rule. Casting uses
+normal paid level-3 slots; Wolf is an admitted rank-3 form. The build also prepares
+Spiritual Weapon, which can coexist as a second summon under its existing rules.
+No inherited goblin shortbow grant, extra HP or extra spell slots are added.
+
+Supply two independent agents separately. Give one only seat `amber`, the other
+only `blue`, and the same opening instruction: summon a Wolf at rank 3 using a
+legal placement, then choose tactics from that seat's own observations. Each
+agent opens its own session using the real MCP bridge, for example:
+
+```sh
+monty_sandbox/.venv/bin/python -m monty_sandbox.call open_session \
+  --url http://127.0.0.1:18894/mcp <<'JSON'
+{"seat":"amber"}
+JSON
+```
+
+Blue uses `{"seat":"blue"}`. Each keeps its own returned `session_id` and
+`game_ref`, and calls `execute` with unique request IDs through the same bridge.
+Read `game_read`/`game_events`, discover with `game_choices`, preview selections,
+and submit commands with `game_act`. Poll pending executions with `wait_execution`
+using the same request ID. Agents must not read private configuration, credentials
+or the opponent's operator trace. A canned driver is not an agent match.
+
+Current `audience.controlled` includes newly granted summons and removes revoked
+ones. Use the latest input actor and membership, not the startup roster or names.
+`game_wait` recognizes both human and Codex input boundaries and returns at
+`outside_encounter` when the encounter ends. Monty retains raw
+records and folds only membership; it does not reconstruct the whole game state.
+
+Acceptance requires both actual casts, recorded ownership grants, summon input
+turns and committed commands on the summoned actors. Save the encounter-end outcome
+or explicitly report an incomplete match. Keep the operator journal and the
+server's authorized packet spool: the journal alone is not a complete replay.
+Agent reasoning and MCP polling time are separate from backend timing results.
+
 ## Run locally
 
 Run these commands from the repository root in WSL/Linux. Dependencies stay in two
@@ -139,8 +189,8 @@ explicitly; it is a local package installation, not an editable source import:
 uv sync --project monty_sandbox --locked --reinstall-package dnd-player-sdk
 ```
 
-Restart the game and MCP processes together after updating. Current code uses
-player schema 8; an older SDK is rejected by the protocol handshake. Load the
+Restart the game and MCP processes together after updating. The SDK and server
+must have the same exported protocol identity; a mismatch is rejected by the handshake. Load the
 updated `examples/scouts.py` into a fresh workspace. Previously exported source
 that reads `valid_targets` or `next_targets` must be migrated before reuse; loading
 old source does not rewrite it. Historical evidence folders remain old recordings.
@@ -183,7 +233,7 @@ sessions survive its connection closing.
 
 | Tool | Arguments | Result |
 | --- | --- | --- |
-| `open_session` | `seat: string \| null = null`, `toolkit: Toolkit \| null = null` | `session_id`, `seat`, `guide`, configured `available_seats`, `loaded_tools`, `games`, `game_ref` and initial `observation` (last two null without a seat) |
+| `open_session` | `seat: string \| null = null`, `toolkit: Toolkit \| null = null`, `expected_attachment_epoch: string \| null = null` | `session_id`, `seat`, `guide`, configured `available_seats`, `loaded_tools`, `games`, `game_ref` and initial `observation` (last two null without a seat) |
 | `join_game` | `session_id`, `seat` | `game_ref`, initial `observation` including native identity and workspace metadata |
 | `archive_game` | `session_id`, `game_ref` | Frozen observation with `mode: "archived"`; repeated archive returns the same retained state |
 | `export_tools` | `session_id`, `names: list[string]` | `Toolkit`: `{format: "monty-tools-v1", sources: [{name, code}, ...]}` in requested order |
@@ -204,13 +254,13 @@ games and unsaved state. An exported bundle remains usable independently.
 | Function | Returns |
 | --- | --- |
 | `await game_list()` | `{games: [{game_ref, seat, identity, mode, record_count}, ...]}` |
-| `await game_read(game_ref)` | Native status, consumed cursor, audience, record count/bytes, recent commands and any unresolved command; plus workspace metadata |
+| `await game_read(game_ref)` | Native status, consumed cursor, current audience, record count/bytes, recent commands and any unresolved command; plus workspace metadata |
 | `await game_events(game_ref, after=-1, limit=16)` | Native records, `game_ref`, `next_after`, `has_more`; maximum 64 records per call |
-| `await game_choices(game_ref, force_attack=False)` | Schema-8 choices response for that game's current controlled actor |
-| `await game_preview(game_ref, actor_uuid, state_revision, discovery_generation, selection)` | Schema-8 preview response with its own lookup domains |
+| `await game_choices(game_ref, force_attack=False)` | Choices response for that game's current controlled actor |
+| `await game_preview(game_ref, actor_uuid, state_revision, discovery_generation, selection)` | Preview response with its own lookup domains |
 | `await game_act(game_ref, actor_uuid, state_revision, intent)` | Settled command receipt and observation |
 | `await game_receipt(game_ref)` | Resolves that game's saved unresolved command using its original number and payload |
-| `await game_wait(game_ref, timeout_seconds=20)` | Observation at this seat's input/terminal boundary, plus `wait_timed_out` |
+| `await game_wait(game_ref, timeout_seconds=20)` | Observation at this seat's input, natural encounter end, or terminal boundary, plus `wait_timed_out` |
 
 Use native discovery indexes and target indexes unchanged. Use Preview for
 compound selection or exact effects; direct commands do not require a prior
@@ -219,8 +269,8 @@ committing an action: inspect receipts before deciding what to do next. Ambiguou
 commands remain saved outside Monty and block new actions until resolved.
 
 Large stream values stay in the host/REPL until the snippet explicitly returns or
-prints them. This prototype offers raw records and native choices, with no state
-reducer. The sample filters combat logs and chooses actions inside Monty. It does
+prints them. This prototype offers raw records and native choices, with only an ordered
+membership fold. The sample filters combat logs and chooses actions inside Monty. It does
 not invoke nested language models.
 
 Choices share lookup tables; Monty can index the admitted dictionaries directly:
@@ -262,9 +312,14 @@ event order. The sandbox forwards those records unchanged and adds no reducer.
 This endpoint is for trusted local clients, binds loopback, and has no MCP auth.
 Separate clients have isolated REPL globals but share the endpoint's configured
 seat aliases; this is not a tenant authorization boundary. Server credentials stay
-in the host and never enter Monty. A claimed seat cannot be opened twice, and the
-client refuses to replace an existing server attachment. Closing a session does
-not detach the seat on the current server; use a fresh match for another trial.
+in the host and never enter Monty. By default, the client refuses to replace an
+existing server attachment. Closing a session does not detach its seat. To resume
+your same seat in a fresh session, close the old session, then call
+`open_session(seat=..., expected_attachment_epoch=...)` with that seat's last
+known `status.attachment_epoch`. The explicit epoch must match bootstrap and the
+server's attachment compare-and-swap; stale values fail. The new session catches
+up the same records and command counter. Keep its new `game_ref` and never replay
+old commands. Omitting the epoch does not take over a previously attached seat.
 
 At most four sessions, eight game entries per session (including archives), 16 saved
 source blocks per session (up to 32,768 characters each), 128 executions per session,

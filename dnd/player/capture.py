@@ -17,6 +17,7 @@ from dnd.spells.abjuration import CounterspellReactionEvent
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent, ConditionStateChangedEvent
 from dnd.core.events import (
+    ControllerAssignmentChangedEvent,
     SpellMasteryStudiedEvent, ConditionMembershipCommittedEvent, RestResourcesRecoveredEvent, PermanentFeatureUsedEvent, ActionApplicationCommittedEvent, MaximumHitPointReductionEvent, EffectApplicationEvent, ActionCostsCommittedEvent, RestCompletedEvent, SpellbookChangedEvent, SpellPreparationChangedEvent, HealingAppliedEvent, SpellDamageRollResultEvent,
     AreaReachEvent,
     DamageAppliedEvent,
@@ -55,7 +56,7 @@ from dnd.core.events import (
 )
 from dnd.core.item_types import ItemLocation
 from dnd.subjective_combat_log import SharedRenders, project_combat_log
-from dnd.player.audience import PlayerAudience, resolve_audience
+from dnd.player.audience import PlayerAudience, assign_control, resolve_audience
 
 from dnd.player.event_record import RecordedCombatLog, RecordedEvent
 from dnd.player.sheet_facts import sheet_fact
@@ -436,6 +437,8 @@ def _retained_body(event: Event, controls: bool | None, *, omit_sensory_payload:
     common = {"use_register": False, "context": None, "combat_log": None,
               "children_events": children, "lineage_children_events": lineage_children}
     match event:
+        case ControllerAssignmentChangedEvent():
+            copied = event.model_copy(update=common)
         case SensoryUpdateEvent() if omit_sensory_payload:
             copied = _event_header(event).model_copy(update=common)
         case AttackEvent():
@@ -686,8 +689,12 @@ def capture_lineages(
         context = capture_context(CaptureCheckpoint(EventQueue.generation_id()), roots)
     elif tuple(dict.fromkeys(root.uuid for root in roots)) != context.roots:
         raise ValueError("A capture context captures the roots it was built from")
-    return tuple(_capture_lineage(root, observer_uuid=observer_uuid, audience=audience, context=context,
-        omit_foreign_sensory_payloads=omit_foreign_sensory_payloads) for root in context.groups)
+    result = []
+    for root in context.groups:
+        lineage, audience = _capture_lineage(root, observer_uuid=observer_uuid, audience=audience, context=context,
+            omit_foreign_sensory_payloads=omit_foreign_sensory_payloads)
+        result.append(lineage)
+    return tuple(result)
 
 
 def _lineage_graph(root: Event, context: CaptureContext) -> LineageGraph:
@@ -759,7 +766,7 @@ def _merged_graph(graphs: tuple[LineageGraph, ...]) -> LineageGraph:
 def _capture_lineage(
     root: Event, *, observer_uuid: UUID, audience: PlayerAudience, context: CaptureContext,
     omit_foreign_sensory_payloads: bool = False,
-) -> CompletedLineage:
+) -> tuple[CompletedLineage, PlayerAudience]:
     generation = context.generation
     if generation != EventQueue.generation_id():
         raise RuntimeError("EventQueue generation changed during lineage capture")
@@ -771,16 +778,28 @@ def _capture_lineage(
         reference.source_event_uuid for event in nodes.values()
         if isinstance(event, SensoryUpdateEvent) for reference in event.observed_changes
     }
-    omitted_sensory = {
-        event.uuid for event in nodes.values()
-        if omit_foreign_sensory_payloads and isinstance(event, SensoryUpdateEvent)
-        and not audience.observes(event.observer_uuid) and _safe_to_detach(event)
-        and event.uuid not in observed_source_ids
-    }
-    retained = tuple(_retained_event(nodes[event.lineage_uuid], audience,
-        omit_sensory_payload=event.uuid in omitted_sensory, bodies=context.bodies,
-        end_cursor=context.end_cursor)
-        for _, event in indexed if event.uuid == nodes[event.lineage_uuid].uuid)
+    starting_audience = audience
+    omitted_sensory: set[UUID] = set()
+    retained_rows: list[Event] = []
+    observed_sources: list[Event] = []
+    for _, event in indexed:
+        terminal = event.uuid == nodes[event.lineage_uuid].uuid
+        if (terminal and isinstance(event, ControllerAssignmentChangedEvent)
+                and not event.canceled and event.phase is EventPhase.COMPLETION):
+            audience = assign_control(audience, event.entity_uuid,
+                event.previous_external_owner_uuid, event.new_external_owner_uuid)
+        if terminal:
+            omit = (omit_foreign_sensory_payloads and isinstance(event, SensoryUpdateEvent)
+                and not audience.observes(event.observer_uuid) and _safe_to_detach(event)
+                and event.uuid not in observed_source_ids)
+            if omit:
+                omitted_sensory.add(event.uuid)
+            retained_rows.append(_retained_event(nodes[event.lineage_uuid], audience, omit_sensory_payload=omit,
+                bodies=context.bodies, end_cursor=context.end_cursor))
+        elif event.uuid in observed_source_ids:
+            observed_sources.append(_retained_event(event, audience, bodies=context.bodies,
+                end_cursor=context.end_cursor))
+    retained = tuple(retained_rows)
     retained_root = next(event for event in retained if event.uuid == root.uuid)
     condition_ids = {fact.event_uuid for fact in conditions}
     dispositions = tuple(
@@ -788,13 +807,12 @@ def _capture_lineage(
         for event in retained
         if type(event) is Event and event.uuid not in condition_ids
     )
-    retained_ids = {event.uuid for event in retained}
     if generation != EventQueue.generation_id():
         raise RuntimeError("EventQueue generation changed during lineage capture")
     return CompletedLineage(
         generation=generation,
         observer_uuid=observer_uuid,
-        audience=audience,
+        audience=starting_audience,
         root=retained_root,
         events=retained,
         objective_rows=graph.objective_rows,
@@ -802,12 +820,10 @@ def _capture_lineage(
         end_cursor=indexed[-1][0] + 1,
         conditions=conditions,
         dispositions=dispositions,
-        observed_sources=tuple(_retained_event(event, audience, bodies=context.bodies, end_cursor=context.end_cursor)
-            for _, event in indexed
-            if event.uuid in observed_source_ids and event.uuid not in retained_ids),
+        observed_sources=tuple(observed_sources),
         native_logs=graph.native_logs,
         actor_fact_changes=_actor_fact_changes(context.records, retained),
-    )
+    ), audience
 
 
 __all__ = [

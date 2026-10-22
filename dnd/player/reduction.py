@@ -18,9 +18,9 @@ from dnd.core.life_types import LifeState
 from dnd.types.cells import EMPTY_CELLS, EMPTY_VALUES, CellMask, cell_in
 from dnd.types.event_facts import EventType, SpatialChangeType
 from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect, SensesSnapshot
-from dnd.player.audience import perceived_entities, resolve_audience
+from dnd.player.audience import PlayerAudience, perceived_entities, resolve_audience
 from dnd.player.facts import (
-    ActorBirth, ActorChangeFact, BodyRecord, ItemRecord, AttackFact, DamageResultFact, HealFact, ItemChargeFact, LifeFact, PlayerItem,
+    AudienceFact, ActorBirth, ActorChangeFact, BodyRecord, ItemRecord, AttackFact, DamageResultFact, HealFact, ItemChargeFact, LifeFact, PlayerItem,
     PlayerActor, PlayerCharacterSheet, PlayerFact, SheetChanges, SheetPatch, PlayerHUDPatch, PlayerHUDSnapshot, PlayerInitialization, PlayerLineage, PlayerNode, PlayerSequence,
     PlayerState, PlayerUpdate, SensoryFact, SensoryRows, SpatialEffectContent, SpatialEffectSighting, SpatialFact, TurnFact,
     VersionRows, WorldUpdate, TemporaryHitPointsFact, FactionFact, PlayerObject, StaticStore, PlayerLightSource,
@@ -34,7 +34,7 @@ from dnd.player.world_reduction import fold_static_rows, fold_world_update
 # These received families have ordinary state presentation, without a separate
 # actor cue. This describes the reducer below; it is not a second dispatcher.
 STATE_PRESENTATION_KINDS = frozenset({
-    "temporary_hit_points", "spatial", "turn", "sensory", "item_charge", "faction",
+    "temporary_hit_points", "spatial", "turn", "sensory", "audience", "item_charge", "faction",
 })
 
 
@@ -512,10 +512,36 @@ def fold_composed_sensory(target: PlayerState, fact: SensoryFact, values: Compos
             target.actors[identity] = replace(target.actors[identity], last_visual_position=contact.position)
 
 
+def _apply_audience(target: PlayerState, audience: PlayerAudience) -> None:
+    """Advance membership and remap cached member bits once at its occurrence."""
+    before = target.viewing_audience
+    if audience.revision != before.revision + 1 or target.observer_uuid not in audience.observers:
+        raise ValueError("Audience membership must advance one revision and retain the stream observer")
+    if before.observers != audience.observers:
+        positions = {identity: 1 << index for index, identity in enumerate(audience.observers)}
+        remap = tuple((1 << index, positions.get(identity, 0)) for index, identity in enumerate(before.observers))
+        for rows in (target.entity_members, target.object_contact_members, target.effect_members, target.object_members):
+            for identity, bits in rows.items():
+                rows[identity] = sum(new for old, new in remap if bits & old)
+    for identity in before.controlled:
+        if not audience.controls(identity) and (actor := target.actors.get(identity)) is not None:
+            target.actors[identity] = replace(actor, controlled_items=None)
+    if target.hud_snapshot is not None:
+        target.hud_snapshot = replace(target.hud_snapshot,
+            sheets=tuple(sheet for sheet in target.hud_snapshot.sheets if audience.controls(sheet.actor_uuid)))
+    target.audience = audience
+
+
 def apply_player_fact(target: PlayerState, fact: PlayerFact, values: ComposedValues) -> None:
     """Fold an already-disclosed committed fact of a group (`values`) into player memory: a sensory fact by the
     composed fold, a spatial or turn fact's senses and turn part, then any other fact's records part."""
     match fact:
+        case AudienceFact():
+            _apply_audience(target, fact.audience)
+            if fact.sensory is not None:
+                fold_composed_sensory(target, fact.sensory, values)
+            clear_unseen_positions(target)
+            return
         case SensoryFact():
             fold_composed_sensory(target, fact, values)
             clear_unseen_positions(target)
@@ -625,14 +651,22 @@ def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: V
 
 def occurrence_order(nodes: tuple[PlayerNode, ...],
                      bodies: tuple[BodyRecord, ...]) -> Iterator[BodyRecord | PlayerNode]:
-    """The one fold order of a received group: each node after the bodies entering at or before its version."""
+    """Bodies precede their node except at a membership transition: grant/revoke
+    takes effect before any private body details at that same occurrence."""
     pending = iter(sorted(bodies, key=lambda row: row.occurrence))
     observation = next(pending, None)
     for node in nodes:
-        while observation is not None and observation.occurrence <= node.occurrence:
+        while observation is not None and observation.occurrence < node.occurrence:
             yield observation
             observation = next(pending, None)
-        yield node
+        membership = isinstance(node.fact, AudienceFact)
+        if membership:
+            yield node
+        while observation is not None and observation.occurrence == node.occurrence:
+            yield observation
+            observation = next(pending, None)
+        if not membership:
+            yield node
     if observation is not None:
         yield observation
     yield from pending
@@ -648,9 +682,16 @@ def _apply_nodes(result: PlayerState, nodes: tuple[PlayerNode, ...], versions: V
             case BodyRecord():
                 enter_body(result, row)
             case PlayerNode():
+                membership = row.fact if not row.canceled and isinstance(row.fact, AudienceFact) else None
+                if membership is not None:
+                    _apply_audience(result, membership.audience)
                 if row.occurrence in world_updates:
                     fold_world_update(result, world_updates[row.occurrence])
-                if not row.canceled and row.fact is not None:
+                if membership is not None:
+                    if membership.sensory is not None:
+                        fold_composed_sensory(result, membership.sensory, values)
+                    clear_unseen_positions(result)
+                elif not row.canceled and row.fact is not None:
                     apply_committed_player_fact(result, row.fact, values, source_cursor=row.occurrence,
                         occurrences=occurrences)
 

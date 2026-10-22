@@ -1627,26 +1627,26 @@ class SpatialSensesSystem:
         self._recompute([observer_uuid], {observer_uuid: None}, {}, None)
 
     def publish_observer_refresh(
-        self, observer_uuid: UUID, before: PublishedSenses,
+        self, observer_uuid: UUID, before: PublishedSenses, *,
+        initial: bool = False, parent_event: Event | None = None,
     ) -> Optional[SensoryUpdateEvent]:
-        """Record an independent explicit refresh after existing cache updates."""
+        """Record existing perception; a re-admitted observer can publish an initial under its assignment cause."""
         senses = self.senses_by_observer.get(observer_uuid)
         if senses is None:
             return None
         after = published_senses(senses)
-        initial = observer_uuid not in self.published_observers
+        initial = initial or observer_uuid not in self.published_observers
         started = time.perf_counter() if action_timing_enabled() else 0.0
         change = _cell_change(before, after, initial)
         if action_timing_enabled():
             record_action_timing("sensory.settlement.cell_changes_ms", started)
-        return self._emit_refresh(observer_uuid, before, after, initial, change)
+        return self._emit_refresh(observer_uuid, before, after, initial, change, parent_event=parent_event)
 
     def _emit_refresh(self, observer_uuid: UUID, before: PublishedSenses, after: PublishedSenses, initial: bool,
-                      change: CellChange) -> Optional[SensoryUpdateEvent]:
-        """Publish an independent refresh (registered at once). It is its own settlement, even when a group's
-        settlement emits it: a refresh has no cause, so it is a root of its own, captured apart from the group's
-        settled observers, and a settlement composes only within one captured group."""
-        event = emit_sensory_update_delta(observer_uuid, None, before, after, SensoryUpdateReason.UNKNOWN,
+                      change: CellChange, *, parent_event: Event | None = None) -> Optional[SensoryUpdateEvent]:
+        """Publish a refresh in its own settlement. Ordinary refreshes remain independent roots;
+        re-admission supplies the exact committed assignment as its causal parent."""
+        event = emit_sensory_update_delta(observer_uuid, parent_event, before, after, SensoryUpdateReason.UNKNOWN,
                                           initial=initial, cells=change, settlement=self._settlement())
         if event is not None:
             self.published_observers.add(observer_uuid)

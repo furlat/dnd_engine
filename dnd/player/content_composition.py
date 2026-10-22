@@ -9,7 +9,7 @@ from dnd.player.content import UIContentManifest
 from dnd.core.content.descriptors import ContentDescriptor, ContentVisibility
 from dnd.core.item_types import ItemEffectPresentationState
 from dnd.player.facts import (
-    ActionFact, ActorChangeFact, AttackFact, BodyRecord, SpellFact, ItemLook, ItemRecord, MechanismActivationFact,
+    AudienceFact, ActionFact, ActorChangeFact, AttackFact, BodyRecord, SpellFact, ItemLook, ItemRecord, MechanismActivationFact,
     ObjectDestroyedFact, PlayerActor, PlayerInitialization, PlayerLineage, PlayerNode, PlayerState, SensoryFact,
     VisualLoadout, WorldUpdate,
 )
@@ -105,7 +105,7 @@ def _witnessed_content(bodies: tuple[BodyRecord, ...], world_updates: tuple[Worl
         known.update(effect.behavior_id for row in update.contents_changed for item in row.upserted
             for effect in item.state.item_effects)
     for node in nodes:
-        fact = node.fact
+        fact = node.fact.sensory if isinstance(node.fact, AudienceFact) else node.fact
         if isinstance(fact, (ActionFact, AttackFact, SpellFact)) and fact.behavior_id is not None:
             known.add(fact.behavior_id)
         if isinstance(fact, AttackFact):

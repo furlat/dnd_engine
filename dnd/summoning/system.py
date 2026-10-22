@@ -8,13 +8,15 @@ from dnd.ai.runtime.controller import NativeAIController
 from dnd.ai.runtime.knowledge_system import AIKnowledgeSystem
 from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.content_system.installed_creature_materialization import materialize_installed_creature
+from dnd.controller import Controller, ControllerExecutionMode
 from dnd.core.base_block import BaseBlock, ConditionRemovalReceipt, PreparedInitialConditions, PreparedConditionApplication
 from dnd.core.base_conditions import BaseCondition, ConditionRemovalEvent, Duration
-from dnd.core.condition_types import DurationType, InvoluntarySustainLoss
+from dnd.core.condition_types import DurationType, InvoluntarySustainLoss, SustainLossCause
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
 from dnd.core.creature_types import CreatureType
-from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, OpenGroup, SummonAdmissionEvent, Trigger
+from dnd.core.events import DamageAppliedEvent, Event, EventHandler, EventPhase, EventQueue, EventType, LifeStateChangeEvent, OpenGroup, SummonAdmissionEvent, Trigger
+from dnd.core.life_types import LifeState
 from dnd.core.gridmap import get_map
 from dnd.core.view import cell_visible
 from dnd.encounter import Encounter, EncounterState, PreparedCombatantJoin
@@ -26,7 +28,7 @@ from dnd.summoning.forms import SPELL_SPECIFICATIONS, selected_form
 from dnd.core.content.recipes import ContentRecipe
 from dnd.monsters.spell_summon_actions import DragonSharedResistance
 from dnd.monsters.spell_summons import SpellSummonParameters, FlamingSphereAura
-from dnd.types.summoning import SummonFamily, SummonDepartureCause, SummonManifestation, SummonOrigin, SummonRules, SummonSelection, SummonSustain, TerminalOwnerRelease
+from dnd.types.summoning import DRAGON_COLOR_DAMAGE, DragonColor, SummonFamily, SummonDepartureCause, SummonManifestation, SummonOrigin, SummonRules, SummonSelection, SummonSustain, TerminalOwnerRelease
 
 
 @dataclass(slots=True)
@@ -34,7 +36,8 @@ class SummonMembership:
     entity: Entity
     existence: Summoned
     control: SummonControl | None
-    controller: NativeAIController
+    controller: Controller | None
+    owned_ai: NativeAIController | None = None
 
 
 @dataclass(slots=True)
@@ -65,6 +68,9 @@ class SummoningSystem:
         self._group_events: list[Event] = []
         self._preparing_retirement: set[UUID] = set()
         self._condition_members: dict[UUID, SummonMembership] = {}
+        self._control_transitions: dict[UUID, NativeAIController] = {}
+        self._control_failures: dict[UUID, BaseException] = {}
+        self._pending_control_losses: dict[UUID, DamageAppliedEvent] = {}
         self._system_name = f"summoning:{id(game)}"
         if self._system_name in EventQueue._pre_completion_systems:
             raise ValueError("Summoning is already bound to this game")
@@ -81,7 +87,8 @@ class SummoningSystem:
         self._removal_participant = BaseBlock.register_condition_removal_participant(self)
         self._settled_hook = BaseBlock.register_condition_graph_settled_hook(self._settled)
         EventQueue.add_pre_completion_system(self._system_name, self,
-            {EventType.CONDITION_REMOVAL, EventType.TAKE_DAMAGE, EventType.DEATH, EventType.INSTANT_DEATH})
+            {EventType.CONDITION_REMOVAL, EventType.TAKE_DAMAGE, EventType.DEATH,
+                EventType.INSTANT_DEATH, EventType.LIFE_STATE_CHANGE})
         game.add_close_callback(self.close)
 
     def summon_placement_error(self, caster_uuid: UUID, selection: SummonSelection, *, subjective: bool) -> str | None:
@@ -97,6 +104,8 @@ class SummoningSystem:
             return "Summoning requires a present caster in the bound active encounter"
         if not caster.faction:
             return "Summoning requires the caster to have an allegiance"
+        if self.encounter.get_controller_for(caster_uuid) is None:
+            return "Summoning requires a usable caster controller"
         position = selection.target_position
         specification = SPELL_SPECIFICATIONS[selection.family]
         if (not cell_visible(caster.senses.cells, position)
@@ -177,14 +186,14 @@ class SummoningSystem:
                 spell_dc=caster.spell_save_dc(spellcasting_source_id=action.spellcasting_source_id if action else None),
                 effect_origin=event.get_effect_origin(),
                 attack_bonus=caster.spell_attack_bonus(spellcasting_source_id=action.spellcasting_source_id if action else None).normalized_score,
-                breath_type=selection.breath_type,shared_resistance=selection.shared_resistance)
+                dragon_color=DragonColor(selection.form_id) if selection.family is SummonFamily.DRAGON else DragonColor.RED)
             recipe=ContentRecipe.create(ref=form.recipe.ref,parameters=parameters.model_dump(mode="json"))
         entity = materialize_installed_creature(recipe, runtime_entity_uuid=uuid4(),
             display_name=form.display_name, faction=caster.faction, position=selection.target_position,
             deployment_role=CreatureDeploymentRole(role_id="summoning.creature"),
             possession_mode=CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY)
         add_stand_when_healed_handler(entity)
-        controller: NativeAIController | None = None
+        owned_ai: NativeAIController | None = None
         initial: PreparedInitialConditions | None = None
         join: PreparedCombatantJoin | None = None
         concentration: PreparedSpellConcentration | None = None
@@ -213,11 +222,19 @@ class SummoningSystem:
             initial = entity.prepare_initial_conditions(conditions, parent_event=event)
             if control is not None:
                 existence.sub_conditions.append(control.uuid)
-            controller = NativeAIController.create(source_entity_uuid=entity.uuid,
-                game_id=str(self.uuid), assignment_id=str(entity.uuid), controlled_entity_uuids=(entity.uuid,),
-                knowledge=self.ai_knowledge)
+            caster_controller = self.encounter.get_controller_for(caster.uuid)
+            if caster_controller is None:
+                raise ValueError("Summoning requires a usable caster controller")
+            if caster_controller.execution_mode is ControllerExecutionMode.EXTERNAL:
+                controller = caster_controller
+                external_owner = caster.uuid
+            else:
+                owned_ai = self._create_owned_ai(entity)
+                controller = owned_ai
+                external_owner = None
             deployment = self.game.prepare_deployment(entity, selection.target_position, parent_event=event)
-            join = self.encounter.prepare_combatant_join(entity, controller, after_uuid=caster.uuid)
+            join = self.encounter.prepare_combatant_join(entity, controller, after_uuid=caster.uuid,
+                external_owner_uuid=external_owner, promote_companion=False, parent_event=event)
             if rules.sustain is not SummonSustain.NONE:
                 assert action is not None
                 admitted = action.prepare_concentration(event)
@@ -241,7 +258,7 @@ class SummoningSystem:
                 independent_owner=admitted_owner
             if selection.family is SummonFamily.DRAGON:
                 resistance=DragonSharedResistance(source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid,
-                    body_uuid=entity.uuid,damage_type=selection.shared_resistance,parent_condition=existence.uuid,
+                    body_uuid=entity.uuid,damage_type=DRAGON_COLOR_DAMAGE[DragonColor(selection.form_id)],parent_condition=existence.uuid,
                     effect_origin=event.get_effect_origin())
                 admitted_resistance=caster.prepare_condition_application(resistance,parent_event=event)
                 if not isinstance(admitted_resistance,PreparedConditionApplication):raise ValueError("Shared resistance refused")
@@ -257,7 +274,7 @@ class SummoningSystem:
                 raise ValueError("Concentration replacement no longer has valid destinations")
             if concentration is not None and selection.target_position in concentration.condition.prepared_removal_occupancies():
                 raise ValueError("Summon destination conflicts with concentration cleanup")
-            return PreparedSummon(SummonMembership(entity, existence, control, controller),
+            return PreparedSummon(SummonMembership(entity, existence, control, controller, owned_ai),
                 initial, birth, deployment, join, concentration, independent_owner,shared_resistance)
         except BaseException as error:
             errors: list[BaseException] = []
@@ -275,13 +292,13 @@ class SummoningSystem:
                     self.encounter.cancel_combatant_join(join)
                 except BaseException as cleanup_error:
                     errors.append(cleanup_error)
-            if controller is not None:
+            if owned_ai is not None:
                 try:
-                    controller.close()
+                    owned_ai.close()
                 except BaseException as cleanup_error:
                     errors.append(cleanup_error)
                 finally:
-                    controller.remove_from_register()
+                    owned_ai.remove_from_register()
             if initial is not None:
                 for application in reversed(initial.applications):
                     try:
@@ -320,13 +337,17 @@ class SummoningSystem:
                 member.entity.commit_initial_conditions(prepared.initial)
                 member.entity.commit_birth(prepared.birth)
                 self.game.commit_deployment(prepared.deployment)
-                self.encounter.commit_combatant_join(prepared.join)
+                self.encounter.commit_combatant_join(prepared.join, publish=False)
                 self.memberships[member.entity.uuid] = member
                 self._condition_members[member.existence.uuid] = member
                 if member.control is not None:
                     self._condition_members[member.control.uuid] = member
                 self._committed_casts.add(event.lineage_uuid)
                 prepared.committed = True
+                try:
+                    self.encounter.publish_combatant_join(prepared.join)
+                except BaseException as error:
+                    errors.append(error)
                 if prepared.independent_owner is not None:
                     assert caster is not None
                     try:
@@ -357,9 +378,10 @@ class SummoningSystem:
                         errors.append(error)
         except BaseException as error:
             errors.append(error)
-        if prepared.committed and member.entity.uuid in self.memberships and member.entity.has_runtime_agency():
+        if (prepared.committed and member.entity.uuid in self.memberships and member.entity.has_runtime_agency()
+                and member.owned_ai is not None):
             try:
-                member.controller.start([member.entity])
+                member.owned_ai.start([member.entity])
             except BaseException as error:
                 errors.append(error)
         if errors:
@@ -368,9 +390,35 @@ class SummoningSystem:
     def prepare_condition_removal(self, owner_uuid: UUID | None, condition_uuid: UUID,
                                   event: Event, terminal_release: TerminalOwnerRelease | None,
                                   involuntary_loss: InvoluntarySustainLoss | None) -> bool:
-        del involuntary_loss
         member = self._condition_members.get(condition_uuid)
-        if member is None or condition_uuid != member.existence.uuid:
+        if member is None:
+            return True
+        if member.control is not None and condition_uuid == member.control.uuid:
+            if owner_uuid != member.entity.uuid:
+                raise RuntimeError("Summon control has changed native owner")
+            if involuntary_loss is not None and involuntary_loss.cause is SustainLossCause.ZERO_HP:
+                damage = EventQueue.get_event_by_uuid(involuntary_loss.parent_event_uuid)
+                if isinstance(damage, DamageAppliedEvent) and damage.parent_lineage is not None and not any(
+                    version.phase is EventPhase.COMPLETION
+                    for version in EventQueue.get_events_by_lineage(damage.parent_lineage)
+                ):
+                    self._pending_control_losses[condition_uuid] = damage
+                    return True
+            if (member.owned_ai is not None or member.existence.uuid in self._retirements
+                    or member.existence.uuid in self._preparing_retirement
+                    or terminal_release is not None and terminal_release.entity_uuid == member.entity.uuid
+                    or condition_uuid in self._control_transitions or condition_uuid in self._control_failures):
+                return True
+            try:
+                self._control_transitions[condition_uuid] = self._create_owned_ai(member.entity)
+            except BaseException as error:
+                if involuntary_loss is None:
+                    return False
+                # Required sustain loss cannot retain an external command lease.
+                # Settle the removal, revoke it, then report the committed failure.
+                self._control_failures[condition_uuid] = error
+            return True
+        if condition_uuid != member.existence.uuid:
             return True
         if owner_uuid != member.entity.uuid:
             raise RuntimeError("Summon existence has changed native owner")
@@ -388,11 +436,22 @@ class SummoningSystem:
             self._preparing_retirement.discard(condition_uuid)
 
     def validate_condition_removal(self, condition_uuid: UUID) -> bool:
+        controller = self._control_transitions.get(condition_uuid)
+        if controller is not None and Controller.get(controller.uuid) is not controller:
+            return False
         prepared = self._retirements.get(condition_uuid)
         return prepared is None or prepared.entity.entity.validate_prepared_retirement(prepared.entity)
 
     def cancel_condition_removal(self, condition_uuid: UUID, reason: str) -> None:
         del reason
+        self._pending_control_losses.pop(condition_uuid, None)
+        self._control_failures.pop(condition_uuid, None)
+        controller = self._control_transitions.pop(condition_uuid, None)
+        if controller is not None:
+            try:
+                controller.close()
+            finally:
+                controller.remove_from_register()
         prepared = self._retirements.pop(condition_uuid, None)
         if prepared is not None:
             prepared.entity.entity.cancel_retirement(prepared.entity)
@@ -414,6 +473,42 @@ class SummoningSystem:
         self._resolve(event)
 
     def _resolve(self, event: Event) -> None:
+        if isinstance(event, LifeStateChangeEvent):
+            if event.new_state is LifeState.ALIVE:
+                return
+            errors: list[BaseException] = []
+            parent = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event is not None else None
+            with self.encounter.membership_execution(), BaseBlock.condition_removal_scope():
+                for member in tuple(self.memberships.values()):
+                    if member.existence.origin.summoner_uuid != event.entity_uuid or not member.existence.applied:
+                        continue
+                    try:
+                        if not self._depart(member, SummonDepartureCause.CASTER_DEFEATED, parent):
+                            raise RuntimeError("Mandatory caster defeat retirement was not admitted")
+                    except BaseException as error:
+                        errors.append(error)
+            if errors:
+                raise BaseExceptionGroup("Caster defeat cleanup failed", errors)
+            return
+        if event.event_type is EventType.TAKE_DAMAGE and self._pending_control_losses:
+            errors: list[BaseException] = []
+            for condition_uuid, damage in tuple(self._pending_control_losses.items()):
+                if damage.parent_lineage != event.lineage_uuid:
+                    continue
+                self._pending_control_losses.pop(condition_uuid)
+                member = self._condition_members.get(condition_uuid)
+                if member is None or not member.existence.applied:
+                    continue
+                incoming = None
+                failure = None
+                if member.owned_ai is None:
+                    try:
+                        incoming = self._create_owned_ai(member.entity)
+                    except BaseException as error:
+                        failure = error
+                self._release_control(member, damage, incoming, failure, errors)
+            if errors:
+                raise BaseExceptionGroup("Deferred summon control loss failed", errors)
         if isinstance(event, ConditionRemovalEvent):
             member = self._condition_members.get(event.condition.uuid)
             if member is not None and event.condition.uuid == member.existence.uuid and not member.existence.applied:
@@ -440,7 +535,10 @@ class SummoningSystem:
                     if prepared is None:
                         raise RuntimeError("Committed summon departure lacks admitted native retirement")
                     member.entity.revoke_runtime_agency()
-                    self.encounter.request_combatant_leave(member.entity.uuid, parent_event=parent)
+                    try:
+                        self.encounter.request_combatant_leave(member.entity.uuid, parent_event=parent)
+                    except BaseException as error:
+                        errors.append(error)
                     try:
                         self.game.commit_entity_retirement(prepared)
                     except BaseException as error:
@@ -448,31 +546,77 @@ class SummoningSystem:
                     finally:
                         if prepared.entity.committed:
                             try:
-                                member.controller.close()
+                                if member.owned_ai is not None:
+                                    member.owned_ai.close()
                             except BaseException as error:
                                 errors.append(error)
-                            member.controller.remove_from_register()
+                            if member.owned_ai is not None:
+                                member.owned_ai.remove_from_register()
                             CREATURE_RUNTIME_BINDINGS.discard(member.entity.uuid)
                             self.memberships.pop(member.entity.uuid, None)
                             self._condition_members.pop(member.existence.uuid, None)
                             if member.control is not None:
                                 self._condition_members.pop(member.control.uuid, None)
+                                self._pending_control_losses.pop(member.control.uuid, None)
                     self.encounter.finish_combatant_leaves()
-                elif (member.control is not None and receipt.condition_uuid == member.control.uuid
-                      and member.existence.uuid not in ending and member.existence.applied):
-                    member.entity.set_faction(f"uncontrolled_summon:{member.entity.uuid}", parent_event=parent)
-                    if self.encounter.state is EncounterState.ACTIVE:
-                        self.encounter._check_encounter_end()
+                elif member.control is not None and receipt.condition_uuid == member.control.uuid:
+                    if receipt.condition_uuid in self._pending_control_losses:
+                        member.controller = None
+                        self.encounter.set_controller_for(member.entity.uuid, None,
+                            promote_companion=False, parent_event=parent)
+                        continue
+                    incoming = self._control_transitions.pop(receipt.condition_uuid, None)
+                    failure = self._control_failures.pop(receipt.condition_uuid, None)
+                    if member.existence.uuid in ending or not member.existence.applied:
+                        if incoming is not None:
+                            try:
+                                incoming.close()
+                            finally:
+                                incoming.remove_from_register()
+                        continue
+                    self._release_control(member, parent, incoming, failure, errors)
             except BaseException as error:
                 errors.append(error)
         if errors:
             raise BaseExceptionGroup("Committed summon departures failed to publish", errors)
+
+    def _release_control(self, member: SummonMembership, parent: Event | None,
+                         incoming: NativeAIController | None, failure: BaseException | None,
+                         errors: list[BaseException]) -> None:
+        if member.owned_ai is None:
+            member.owned_ai = incoming
+        member.controller = member.owned_ai
+        try:
+            self.encounter.set_controller_for(member.entity.uuid, member.controller,
+                promote_companion=False, parent_event=parent)
+        except BaseException as error:
+            errors.append(error)
+        if member.controller is None:
+            errors.append(failure or RuntimeError("Committed Fey control loss lacks admitted AI assignment"))
+        try:
+            member.entity.set_faction(f"uncontrolled_summon:{member.entity.uuid}", parent_event=parent)
+        except BaseException as error:
+            errors.append(error)
+        if incoming is not None and member.entity.has_runtime_agency():
+            try:
+                incoming.start([member.entity])
+            except BaseException as error:
+                errors.append(error)
+        if self.encounter.state is EncounterState.ACTIVE:
+            self.encounter._check_encounter_end()
 
     def _depart(self, member: SummonMembership, cause: SummonDepartureCause,
                 parent_event: Event | None = None) -> bool:
         release = member.existence.terminal_release(cause, parent_event.uuid if parent_event is not None else None)
         return member.entity.remove_condition_by_uuid(member.existence.uuid,
             parent_event=parent_event, terminal_release=release)
+
+    def _create_owned_ai(self, entity: Entity) -> NativeAIController:
+        if self.ai_knowledge.generation != EventQueue.generation_id():
+            raise ValueError("Summon AI knowledge belongs to an earlier runtime generation")
+        return NativeAIController.create(source_entity_uuid=entity.uuid,
+            game_id=str(self.uuid), assignment_id=str(entity.uuid),
+            controlled_entity_uuids=(entity.uuid,), knowledge=self.ai_knowledge)
 
     def rebind_encounter(self, encounter: Encounter) -> None:
         """Join a later active encounter without recreating surviving creatures."""
@@ -482,40 +626,75 @@ class SummoningSystem:
             raise ValueError("Rebind requires an already-composed active encounter")
         if encounter is self.encounter:
             return
-        joins: list[tuple[SummonMembership, NativeAIController, PreparedCombatantJoin]] = []
+        joins: list[tuple[SummonMembership, Controller, NativeAIController | None, PreparedCombatantJoin]] = []
         try:
             for member in self.memberships.values():
                 controlled = member.control is None or member.control.applied
                 anchor = member.existence.origin.summoner_uuid if controlled else None
                 if controlled and anchor not in encounter.combatants:
                     raise ValueError("Controlled survivor requires its summoner in the new encounter")
-                controller = NativeAIController.create(source_entity_uuid=member.entity.uuid,
-                    game_id=str(self.uuid), assignment_id=str(member.entity.uuid),
-                    controlled_entity_uuids=(member.entity.uuid,), knowledge=self.ai_knowledge)
+                caster_controller = encounter.get_controller_for(anchor) if anchor is not None else None
+                if controlled and caster_controller is None:
+                    raise ValueError("Controlled survivor requires a usable caster controller")
+                owned_ai = None
+                if caster_controller is not None and caster_controller.execution_mode is ControllerExecutionMode.EXTERNAL:
+                    controller = caster_controller
+                    external_owner = anchor
+                else:
+                    owned_ai = self._create_owned_ai(member.entity)
+                    controller = owned_ai
+                    external_owner = None
                 try:
-                    join = encounter.prepare_combatant_join(member.entity, controller, after_uuid=anchor)
+                    join = encounter.prepare_combatant_join(member.entity, controller, after_uuid=anchor,
+                        external_owner_uuid=external_owner, promote_companion=False)
                 except BaseException:
-                    controller.close()
-                    controller.remove_from_register()
+                    if owned_ai is not None:
+                        try:
+                            owned_ai.close()
+                        finally:
+                            owned_ai.remove_from_register()
                     raise
-                joins.append((member, controller, join))
-            for _, _, join in joins:
+                joins.append((member, controller, owned_ai, join))
+            for _, _, _, join in joins:
                 encounter.validate_combatant_join(join)
         except BaseException:
-            for _, controller, join in joins:
+            for _, _, owned_ai, join in joins:
                 encounter.cancel_combatant_join(join)
-                controller.close()
-                controller.remove_from_register()
+                if owned_ai is not None:
+                    try:
+                        owned_ai.close()
+                    finally:
+                        owned_ai.remove_from_register()
             raise
-        for member, controller, join in joins:
-            self.encounter.release_inactive_combatant(member.entity.uuid)
-            member.controller.close()
-            member.controller.remove_from_register()
-            encounter.commit_combatant_join(join)
+        errors: list[BaseException] = []
+        for member, controller, owned_ai, join in joins:
+            try:
+                self.encounter.release_inactive_combatant(member.entity.uuid)
+            except BaseException as error:
+                errors.append(error)
+            if member.owned_ai is not None:
+                try:
+                    member.owned_ai.close()
+                except BaseException as error:
+                    errors.append(error)
+                finally:
+                    member.owned_ai.remove_from_register()
+            encounter.commit_combatant_join(join, publish=False)
             member.controller = controller
+            member.owned_ai = owned_ai
         self.encounter = encounter
-        for member, controller, _ in joins:
-            controller.start([member.entity])
+        for member, _, owned_ai, join in joins:
+            try:
+                encounter.publish_combatant_join(join, initialize_observer=True)
+            except BaseException as error:
+                errors.append(error)
+            if owned_ai is not None:
+                try:
+                    owned_ai.start([member.entity])
+                except BaseException as error:
+                    errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Committed summon rebind failed to publish", errors)
 
     def close(self, parent_event: Event | None = None) -> None:
         if self._closed:
@@ -535,8 +714,17 @@ class SummoningSystem:
         """Resolve departures recorded while the group was open, in arrival order."""
         del group
         events, self._group_events = self._group_events, []
-        for event in events:
-            self._resolve(event)
+        if not events:
+            return
+        errors: list[BaseException] = []
+        with self.encounter.membership_execution():
+            for event in events:
+                try:
+                    self._resolve(event)
+                except BaseException as error:
+                    errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Grouped summon settlement failed", errors)
 
     def reset(self) -> None:
         """Drop this binding silently when the existing runtime generation resets."""
@@ -544,7 +732,19 @@ class SummoningSystem:
             return
         self._closed = True
         for member in tuple(self.memberships.values()):
-            member.controller.close()
+            if member.owned_ai is not None:
+                try:
+                    member.owned_ai.close()
+                finally:
+                    member.owned_ai.remove_from_register()
+        for controller in self._control_transitions.values():
+            try:
+                controller.close()
+            finally:
+                controller.remove_from_register()
+        self._control_transitions.clear()
+        self._control_failures.clear()
+        self._pending_control_losses.clear()
         for handler in self._handlers:
             handler.remove()
             handler.remove_from_register()

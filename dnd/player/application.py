@@ -1,15 +1,16 @@
 """One capture/projection path for local play, the network owner and headless probes."""
 
+from bisect import bisect_left
 from dataclasses import dataclass, replace
 
-from dnd.core.events import EventQueue
+from dnd.core.events import ControllerAssignmentChangedEvent, EventPhase, EventQueue
 from dnd.player.capture import (CaptureCheckpoint, Disposition, capture_context, capture_interval, capture_lineages,
     seat_log_entry)
 from dnd.player.content import UIContentManifest
 from dnd.core.content.descriptors import ContentDescriptor, ContentVisibility
 from dnd.player.content_composition import (ContentCatalog, index_content_catalog, observed_content_additions,
     startup_content)
-from dnd.player.audience import perceived_entities
+from dnd.player.audience import assign_control, perceived_entities, resolve_audience
 from dnd.player.facts import CombatLogAppend, PlayerInitialization, PlayerLineage, PlayerUpdate
 from dnd.player.projection import (ProjectionState, SeatLogInputs, SessionProjection, begin_projections,
     known_connector_uuids, project_hud, project_lineages, project_log_appends)
@@ -116,10 +117,35 @@ def capture_application_operation(runtimes: dict[str, AudienceRuntime], operatio
         sent = projection.static_sent
         known = known_before[seat]
         known_content_keys = frozenset(sent.content)
+        log_audiences = {}
+        if operation.original_logs:
+            captured = natives[seat]
+            before_audience = resolve_audience(projection.observer_uuid, captured[0].audience) if captured else audience
+            current = before_audience
+            transitions = []
+            for native in captured:
+                indexes = {row.event_uuid: row.source_index for row in native.objective_rows}
+                for event in native.events:
+                    if (isinstance(event, ControllerAssignmentChangedEvent) and not event.canceled
+                            and event.phase is EventPhase.COMPLETION):
+                        after = assign_control(current, event.entity_uuid,
+                            event.previous_external_owner_uuid, event.new_external_owner_uuid)
+                        if after is not current:
+                            transitions.append((indexes[event.uuid], after))
+                            current = after
+            if transitions:
+                cursors = dict(operation.original_log_cursors)
+                indexes = [index for index, _ in transitions]
+                for index, _ in operation.original_logs:
+                    if index not in cursors:
+                        raise ValueError("A standalone log spanning an ownership transition requires its native cursor")
+                    position = bisect_left(indexes, cursors[index]) - 1
+                    log_audiences[index] = transitions[position][1] if position >= 0 else before_audience
         appends = tuple(CombatLogAppend(generation=projection.generation, observer_uuid=projection.observer_uuid,
             encounter_log_index=index, operation_end_cursor=operation.end_cursor, entry=entry)
-            for index, original in operation.original_logs if (entry := seat_log_entry(original, audience,
-                known_entity_names=known.names, known_content_ids=known.content_ids)) is not None)
+            for index, original in operation.original_logs if (entry := seat_log_entry(original,
+                log_audiences.get(index, audience), known_entity_names=known.names,
+                known_content_ids=known.content_ids)) is not None)
         appends = project_log_appends(projection, appends)
         hud = project_hud(audience, (event for native in natives[seat] for event in native.events),
             (order_before, perceived_before[seat]), checkpoint.initiative,

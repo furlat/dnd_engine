@@ -29,7 +29,7 @@ export type Kind = "health";
 export type Status = "ok";
 export type Kind1 = "bootstrap";
 export type ProtocolVersion = 1;
-export type PlayerSchemaVersion = 16;
+export type PlayerSchemaVersion = 18;
 export type SchemaDigest = string;
 export type GameId = string;
 export type GameEpoch = string;
@@ -37,6 +37,7 @@ export type AudienceId = string;
 export type Lifecycle =
   | "starting"
   | "waiting_for_human"
+  | "waiting_for_codex"
   | "advancing"
   | "outside_encounter"
   | "delivery_blocked"
@@ -209,6 +210,7 @@ export type Fact =
       | TurnFact
       | ActionFact
       | SensoryFact
+      | AudienceFact
       | ItemChargeFact
       | SpatialEffectStateFact
       | ObjectDamageFact
@@ -871,7 +873,7 @@ export type Position3 = [number, number];
 export type ObjectUuid = string | null;
 export type CommitOccurrence = number | null;
 export type TerminalDeparture = boolean;
-export type SummonDepartureCause = "expired" | "dismissed" | "defeated" | "sustain_lost" | "closed";
+export type SummonDepartureCause = "expired" | "dismissed" | "defeated" | "caster_defeated" | "sustain_lost" | "closed";
 export type BirthOccurrence = number;
 export type SummonManifestation = "spell_construct" | "natural" | "fey_spirit" | "fiend";
 export type Kind22 = "faction";
@@ -931,6 +933,7 @@ export type EventType =
   | "world_modified"
   | "entity_created"
   | "entity_faction_changed"
+  | "controller_assignment_changed"
   | "summon_admission"
   | "entity_level_added"
   | "entity_level_removed"
@@ -1026,7 +1029,8 @@ export type Description4 = string;
 export type LightSourcesAdded = number[];
 export type LightSourcesPatched = number[];
 export type LightSourcesRemoved = number[];
-export type Kind26 = "item_charge";
+export type Kind26 = "audience";
+export type Kind27 = "item_charge";
 export type SourceEntityUuid11 = string;
 export type ItemUuid6 = string;
 export type ChargesAfter = number;
@@ -1036,7 +1040,7 @@ export type ItemDestroyed = boolean;
  * Operation in the existing finite-item resource event family.
  */
 export type ItemResourceChange = "consume" | "recharge";
-export type Kind27 = "spatial_effect_state";
+export type Kind28 = "spatial_effect_state";
 export type SpatialEffectUuid1 = string;
 export type Positions2 = [number, number][];
 export type PreviousPressed = boolean | null;
@@ -1052,11 +1056,11 @@ export type SpatialEffectChangeOperation =
 export type SpatialEffectInteractionOperation =
   "ignite" | "douse" | "freeze" | "electrify" | "vaporize" | "disperse" | "dry";
 export type RemovedPositions = [number, number][];
-export type Kind28 = "object_damage";
+export type Kind29 = "object_damage";
 export type ObjectUuid1 = string;
 export type AppliedDamage1 = number;
 export type ResultingHp = number;
-export type Kind29 = "object_destroyed";
+export type Kind30 = "object_destroyed";
 export type ObjectUuid2 = string;
 export type ReplacementUuid = string | null;
 export type ObjectUuid3 = string;
@@ -1129,7 +1133,7 @@ export type ConstructionGeometry2 =
   | null;
 export type ConstructionSuppressions2 = SpellSuppression[];
 export type KnownToCreator2 = boolean;
-export type Kind30 = "mechanism_activation";
+export type Kind31 = "mechanism_activation";
 export type MechanismUuid = string | null;
 export type MechanismContentId = string;
 export type TargetEntityUuid9 = string | null;
@@ -1142,7 +1146,7 @@ export type Direction4 = [number, number];
 export type AffectedPositions = [number, number][];
 export type EndPosition3 = [number, number] | null;
 export type Committed2 = boolean;
-export type Kind31 = "saving_throw";
+export type Kind32 = "saving_throw";
 export type TargetEntityUuid10 = string;
 export type AbilityName = "strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma";
 export type Succeeded3 = boolean;
@@ -1213,7 +1217,7 @@ export type Data =
   | UnknownMovementLogData
   | SpatialChangeLogData
   | SpatialInteractionLogData;
-export type Kind32 = "attack";
+export type Kind33 = "attack";
 /**
  * Display name of the attacking entity.
  */
@@ -1404,7 +1408,7 @@ export type ControllerRevalidation = boolean;
  * Typed subjective change that required controller revalidation.
  */
 export type ControllerRevalidationReason = string | null;
-export type Kind33 = "movement";
+export type Kind34 = "movement";
 /**
  * Display name of the moving entity.
  */
@@ -1455,7 +1459,7 @@ export type ControllerRevalidation1 = boolean;
  * Typed subjective change that required controller revalidation.
  */
 export type ControllerRevalidationReason1 = string | null;
-export type Kind34 = "jump_movement";
+export type Kind35 = "jump_movement";
 export type MovementType = "jump";
 /**
  * @minItems 2
@@ -1515,7 +1519,7 @@ export type ControllerRevalidation2 = boolean;
  * Typed subjective change that required controller revalidation.
  */
 export type ControllerRevalidationReason2 = string | null;
-export type Kind35 = "connector_movement";
+export type Kind36 = "connector_movement";
 export type MovementType1 = "connector";
 /**
  * @minItems 2
@@ -1536,7 +1540,7 @@ export type ConnectorPresentationKey1 = string;
  * Whether transfer exposes the real source-exit reaction boundary.
  */
 export type ConnectorProvocationPolicy = "provokes_source_exit" | "does_not_provoke";
-export type Kind36 = "saving_throw";
+export type Kind37 = "saving_throw";
 /**
  * Display name of the saving entity.
  */
@@ -1569,7 +1573,7 @@ export type Success = boolean;
  * Display name of the effect that requested the save.
  */
 export type SourceName1 = string | null;
-export type Kind37 = "spell_save";
+export type Kind38 = "spell_save";
 /**
  * Display name of the spellcaster.
  */
@@ -1634,7 +1638,7 @@ export type DamageType3 = string;
  * Target HP after spell resolution, if known.
  */
 export type TargetHpAfter = number | null;
-export type Kind38 = "spell_interruption";
+export type Kind39 = "spell_interruption";
 /**
  * Stable reaction outcome identity.
  */
@@ -1683,7 +1687,7 @@ export type CheckDc = number | null;
  * Whether the reaction interrupted the incoming spell.
  */
 export type Succeeded5 = boolean;
-export type Kind39 = "skill_check";
+export type Kind40 = "skill_check";
 /**
  * Display name of the checking entity.
  */
@@ -1712,7 +1716,7 @@ export type AdvantageBreakdown2 = ModifierBreakdown[];
  * Whether the check succeeded, when a DC exists.
  */
 export type Success1 = boolean | null;
-export type Kind40 = "entity_spotted";
+export type Kind41 = "entity_spotted";
 /**
  * Display name of the observer.
  */
@@ -1741,7 +1745,7 @@ export type PassivePerception1 = number;
  * Stealth DC that was beaten.
  */
 export type StealthDc = number;
-export type Kind41 = "hazard_detected";
+export type Kind42 = "hazard_detected";
 /**
  * Display name of the observer.
  */
@@ -1766,7 +1770,7 @@ export type PassivePerception2 = number;
  * Stealth DC that was beaten.
  */
 export type StealthDc1 = number;
-export type Kind42 = "damage_taken";
+export type Kind43 = "damage_taken";
 /**
  * Display name of the damaged entity.
  */
@@ -1795,7 +1799,7 @@ export type Blocked = boolean | null;
  * Human-readable reason the damage was blocked.
  */
 export type BlockedReason = string | null;
-export type Kind43 = "heal";
+export type Kind44 = "heal";
 /**
  * Display name of the healed entity.
  */
@@ -1812,7 +1816,7 @@ export type Amount = number;
  * Description of the healing source.
  */
 export type SourceDescription = string;
-export type Kind44 = "action";
+export type Kind45 = "action";
 /**
  * Display name of the acting entity.
  */
@@ -1837,7 +1841,7 @@ export type TargetName5 = string | null;
  * UUID string of the target, if any.
  */
 export type TargetUuid4 = string | null;
-export type Kind45 = "turn";
+export type Kind46 = "turn";
 /**
  * Display name of the turn entity.
  */
@@ -1854,7 +1858,7 @@ export type RoundNumber1 = number;
  * Admitted initiative index, or unknown.
  */
 export type TurnIndex = number | null;
-export type Kind46 = "multi_entity_action";
+export type Kind47 = "multi_entity_action";
 /**
  * Display name of the action.
  */
@@ -1899,7 +1903,7 @@ export type AoeShape = string | null;
  * Area-of-effect origin or center, if applicable.
  */
 export type AoeCenter = [number, number] | null;
-export type Kind47 = "roll_modification";
+export type Kind48 = "roll_modification";
 /**
  * Mechanical roll category whose result changed.
  */
@@ -1942,19 +1946,19 @@ export type PacketDamageType = string | null;
  * Dice expression for an affected damage packet.
  */
 export type PacketDice = string | null;
-export type Kind48 = "empty";
-export type Kind49 = "condition_removed";
+export type Kind49 = "empty";
+export type Kind50 = "condition_removed";
 export type ConditionName = string;
 export type RevealsTarget = boolean;
-export type Kind50 = "death";
+export type Kind51 = "death";
 export type EntityName8 = string;
 export type FinalHp = number;
-export type Kind51 = "spell_damage";
+export type Kind52 = "spell_damage";
 export type SpellName3 = string;
 export type TargetName6 = string;
 export type Damage1 = number;
 export type DamageType5 = string;
-export type Kind52 = "death_save";
+export type Kind53 = "death_save";
 export type EntityName9 = string;
 export type EntityUuid14 = string;
 export type Roll = number;
@@ -1965,7 +1969,7 @@ export type Failures = number;
 export type BecameStable = boolean;
 export type RegainedHitPoint = boolean;
 export type Died = boolean;
-export type Kind53 = "shove";
+export type Kind54 = "shove";
 export type ActionType = "shove";
 export type TargetWeight = number;
 export type MaxShoveWeight = number;
@@ -1980,7 +1984,7 @@ export type EndPosition7 = [number, number] | null;
 export type KnockedProne1 = boolean;
 export type BlockedBy = string | null;
 export type IsAlly = boolean;
-export type Kind54 = "step_movement";
+export type Kind55 = "step_movement";
 export type Type = "step_movement";
 /**
  * @minItems 2
@@ -1998,7 +2002,7 @@ export type DisclosedPath2 = [number, number][];
 export type FromElevationFeet1 = number;
 export type ToElevationFeet1 = number;
 export type Committed3 = boolean;
-export type Kind55 = "forced_movement";
+export type Kind56 = "forced_movement";
 export type Type1 = "forced_movement";
 export type Cause = string;
 /**
@@ -2012,7 +2016,7 @@ export type Blocked1 = boolean;
 export type BlockedBy1 = string | null;
 export type StartPosition6 = [number, number] | null;
 export type EndPosition8 = [number, number] | null;
-export type Kind56 = "observed_movement";
+export type Kind57 = "observed_movement";
 export type Type2 = "movement";
 export type EntityName10 = string;
 export type EntityUuid15 = string;
@@ -2025,13 +2029,13 @@ export type EndPosition9 = [number, number] | null;
 export type Path6 = [number, number][];
 export type DistanceFeet3 = number | null;
 export type MovementCost4 = number | null;
-export type Kind57 = "unlocated_movement";
+export type Kind58 = "unlocated_movement";
 export type Type3 = "movement";
 export type ObservationComplete1 = false;
-export type Kind58 = "unknown_movement";
+export type Kind59 = "unknown_movement";
 export type Type4 = "movement";
 export type Observed = true;
-export type Kind59 = "spatial_change";
+export type Kind60 = "spatial_change";
 /**
  * Observable lifecycle operations for a spatial condition.
  */
@@ -2043,7 +2047,7 @@ export type ContentIdentity = string;
  */
 export type SpatialEffectLayer = "ground_surface" | "cloud" | "field";
 export type AffectedPositions1 = [number, number][];
-export type Kind60 = "spatial_interaction";
+export type Kind61 = "spatial_interaction";
 export type Intensity = "minor" | "moderate" | "strong";
 export type AffectedPositions2 = [number, number][];
 export type SourceItemId1 = string | null;
@@ -2547,7 +2551,7 @@ export type Hazards = CellValues1[];
 export type Lineage = number;
 export type ApplicationId1 = string | null;
 export type Resolutions = PlayerResolution[];
-export type Kind61 = "ack";
+export type Kind62 = "ack";
 export type ActorUuid3 = string;
 export type StateRevision1 = string;
 export type ForceAttack = boolean;
@@ -2555,12 +2559,12 @@ export type CorrelationId = string;
 export type GameId2 = string;
 export type GameEpoch2 = string;
 export type AudienceId2 = string;
-export type Kind62 = "choices";
+export type Kind63 = "choices";
 export type StateRevision2 = string;
 export type CorrelationId1 = string;
 export type ForceAttack1 = boolean;
 export type Uuid2 = string;
-export type Kind63 = "creature" | "object";
+export type Kind64 = "creature" | "object";
 export type Name15 = string | null;
 export type Subjects = ChoiceSubject[];
 export type Positions3 = [number, number][];
@@ -2579,7 +2583,7 @@ export type FromPosition2 = number;
 export type ToPosition2 = number;
 export type OpportunityAttackExposures = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures = ChoiceExposure[];
-export type Kind64 = "subject";
+export type Kind65 = "subject";
 export type Subject = number;
 export type Position16 = number | null;
 export type Index2 = number;
@@ -2593,7 +2597,7 @@ export type Path8 = number[] | null;
 export type SafePath1 = number[] | null;
 export type OpportunityAttackExposures1 = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures1 = ChoiceExposure[];
-export type Kind65 = "position";
+export type Kind66 = "position";
 export type Position17 = number;
 export type Index3 = number;
 export type Distance2 = number | null;
@@ -2606,7 +2610,7 @@ export type Path9 = number[] | null;
 export type SafePath2 = number[] | null;
 export type OpportunityAttackExposures2 = ChoiceExposure[];
 export type SafePathOpportunityAttackExposures2 = ChoiceExposure[];
-export type Kind66 = "self";
+export type Kind67 = "self";
 export type TargetSets = (SubjectBinding | PositionBinding | SelfBinding)[][];
 export type DiscoveryGeneration = number;
 export type EntityUuid16 = string;
@@ -2654,13 +2658,13 @@ export type TargetType =
  * Position input required after choosing a discovery target.
  */
 export type PositionSelection = (SinglePositionSelection | PositionPathSelection | EntityDestinationSelection) | null;
-export type Kind67 = "single";
-export type Kind68 = "path";
+export type Kind68 = "single";
+export type Kind69 = "path";
 export type MaxLengthFeet = number;
 export type MaxSegments = number;
 export type AllowOriginStart = boolean;
 export type OriginStartOffsetCells = number;
-export type Kind69 = "entity_destination";
+export type Kind70 = "entity_destination";
 export type RangeFeet1 = number | null;
 export type CandidateSource = "visible" | "reachable";
 export type RequiresUnoccupied = boolean;
@@ -3221,7 +3225,7 @@ export type CastAtLevel1 = number | null;
 export type GameId3 = string;
 export type GameEpoch3 = string;
 export type AudienceId3 = string;
-export type Kind70 = "preview";
+export type Kind71 = "preview";
 export type StateRevision4 = string;
 export type Subjects1 = ChoiceSubject[];
 export type Positions4 = [number, number][];
@@ -3292,10 +3296,10 @@ export type Intent =
   | ToggleHandlerIntent
   | PrepareSpellsIntent
   | StudySpellMasteryIntent;
-export type Kind71 = "execute_selection";
+export type Kind72 = "execute_selection";
 export type DiscoveryGeneration3 = number;
-export type Kind72 = "end_turn";
-export type Kind73 = "equip";
+export type Kind73 = "end_turn";
+export type Kind74 = "equip";
 export type ItemUuid10 = string;
 export type Slot2 = WeaponSlot | BodyPart | RingSlot;
 /**
@@ -3306,35 +3310,35 @@ export type BodyPart = "Head" | "Body" | "Hands" | "Legs" | "Feet" | "Amulet" | 
  * Concrete ring positions for items whose body part is ``RING``.
  */
 export type RingSlot = "Left Ring" | "Right Ring";
-export type Kind74 = "unequip";
+export type Kind75 = "unequip";
 export type Slot3 = WeaponSlot | BodyPart | RingSlot;
-export type Kind75 = "toggle_handler";
+export type Kind76 = "toggle_handler";
 export type DiscoveryGeneration4 = number;
 export type HandlerUuid = string;
 export type Enabled2 = boolean;
-export type Kind76 = "prepare_spells";
-export type Kind77 = "study_spell_mastery";
+export type Kind77 = "prepare_spells";
+export type Kind78 = "study_spell_mastery";
 export type RankOneSpellId = string;
 export type RankTwoSpellId = string;
 export type Hours = number;
-export type Kind78 = "receipt";
+export type Kind79 = "receipt";
 export type Receipt =
   PendingReceipt | CommittedReceipt | RejectedReceipt | IndeterminateReceipt | ExpiredReceipt | UnknownReceipt;
 export type GameId4 = string;
 export type GameEpoch4 = string;
 export type AudienceId4 = string;
 export type CommandNumber1 = number;
-export type Kind79 = "pending";
+export type Kind80 = "pending";
 export type GameId5 = string;
 export type GameEpoch5 = string;
 export type AudienceId5 = string;
 export type CommandNumber2 = number;
-export type Kind80 = "committed";
+export type Kind81 = "committed";
 export type GameId6 = string;
 export type GameEpoch6 = string;
 export type AudienceId6 = string;
 export type CommandNumber3 = number;
-export type Kind81 = "rejected";
+export type Kind82 = "rejected";
 export type Reason4 =
   | "stale_state"
   | "stale_discovery"
@@ -3349,23 +3353,23 @@ export type GameId7 = string;
 export type GameEpoch7 = string;
 export type AudienceId7 = string;
 export type CommandNumber4 = number;
-export type Kind82 = "indeterminate";
+export type Kind83 = "indeterminate";
 export type IncidentId1 = string;
 export type GameId8 = string;
 export type GameEpoch8 = string;
 export type AudienceId8 = string;
 export type CommandNumber5 = number;
-export type Kind83 = "expired";
+export type Kind84 = "expired";
 export type GameId9 = string;
 export type GameEpoch9 = string;
 export type AudienceId9 = string;
 export type CommandNumber6 = number;
-export type Kind84 = "unknown";
-export type Kind85 = "content";
+export type Kind85 = "unknown";
+export type Kind86 = "content";
 export type Revision1 = string;
 export type Descriptors = ContentDescriptor[];
-export type Kind86 = "ready";
-export type Kind87 = "stream_status";
+export type Kind87 = "ready";
+export type Kind88 = "stream_status";
 export type Generation1 = string;
 export type ObserverUuid3 = string;
 export type Lineage1 = number;
@@ -3383,7 +3387,7 @@ export type EncounterLogIndex = number;
 export type OperationEndCursor = number;
 export type CombatLogAppends = CombatLogAppend[];
 export type ContentAdditions1 = ContentDescriptor[];
-export type Kind88 = "operation";
+export type Kind89 = "operation";
 export type StateRevision6 = string;
 export type CommandNumber7 = number | null;
 export type ApiError =
@@ -3414,140 +3418,140 @@ export type ApiError =
   | ErrorGameFailed
   | ErrorGameClosed
   | ErrorInternalFailure;
-export type Kind89 = "error";
+export type Kind90 = "error";
 export type IncidentId2 = string | null;
 export type Code = "invalid_request";
 export type HttpStatus = 400;
 export type Retryable = false;
-export type Kind90 = "error";
+export type Kind91 = "error";
 export type IncidentId3 = string | null;
 export type Code1 = "unauthenticated";
 export type HttpStatus1 = 401;
 export type Retryable1 = false;
-export type Kind91 = "error";
+export type Kind92 = "error";
 export type IncidentId4 = string | null;
 export type Code2 = "forbidden";
 export type HttpStatus2 = 403;
 export type Retryable2 = false;
-export type Kind92 = "error";
+export type Kind93 = "error";
 export type IncidentId5 = string | null;
 export type Code3 = "game_not_found";
 export type HttpStatus3 = 404;
 export type Retryable3 = false;
-export type Kind93 = "error";
+export type Kind94 = "error";
 export type IncidentId6 = string | null;
 export type Code4 = "epoch_mismatch";
 export type HttpStatus4 = 409;
 export type Retryable4 = false;
-export type Kind94 = "error";
+export type Kind95 = "error";
 export type IncidentId7 = string | null;
 export type Code5 = "audience_mismatch";
 export type HttpStatus5 = 403;
 export type Retryable5 = false;
-export type Kind95 = "error";
+export type Kind96 = "error";
 export type IncidentId8 = string | null;
 export type Code6 = "attachment_replaced";
 export type HttpStatus6 = 409;
 export type Retryable6 = false;
-export type Kind96 = "error";
+export type Kind97 = "error";
 export type IncidentId9 = string | null;
 export type Code7 = "attachment_conflict";
 export type HttpStatus7 = 409;
 export type Retryable7 = false;
-export type Kind97 = "error";
+export type Kind98 = "error";
 export type IncidentId10 = string | null;
 export type Code8 = "command_conflict";
 export type HttpStatus8 = 409;
 export type Retryable8 = false;
-export type Kind98 = "error";
+export type Kind99 = "error";
 export type IncidentId11 = string | null;
 export type Code9 = "command_number";
 export type HttpStatus9 = 409;
 export type Retryable9 = false;
-export type Kind99 = "error";
+export type Kind100 = "error";
 export type IncidentId12 = string | null;
 export type Code10 = "stale_state";
 export type HttpStatus10 = 409;
 export type Retryable10 = false;
-export type Kind100 = "error";
+export type Kind101 = "error";
 export type IncidentId13 = string | null;
 export type Code11 = "stale_discovery";
 export type HttpStatus11 = 409;
 export type Retryable11 = false;
-export type Kind101 = "error";
+export type Kind102 = "error";
 export type IncidentId14 = string | null;
 export type Code12 = "not_your_turn";
 export type HttpStatus12 = 409;
 export type Retryable12 = false;
-export type Kind102 = "error";
+export type Kind103 = "error";
 export type IncidentId15 = string | null;
 export type Code13 = "catch_up_required";
 export type HttpStatus13 = 409;
 export type Retryable13 = false;
-export type Kind103 = "error";
+export type Kind104 = "error";
 export type IncidentId16 = string | null;
 export type Code14 = "query_superseded";
 export type HttpStatus14 = 409;
 export type Retryable14 = false;
-export type Kind104 = "error";
+export type Kind105 = "error";
 export type IncidentId17 = string | null;
 export type Code15 = "invalid_cursor";
 export type HttpStatus15 = 400;
 export type Retryable15 = false;
-export type Kind105 = "error";
+export type Kind106 = "error";
 export type IncidentId18 = string | null;
 export type Code16 = "resume_unavailable";
 export type HttpStatus16 = 410;
 export type Retryable16 = false;
-export type Kind106 = "error";
+export type Kind107 = "error";
 export type IncidentId19 = string | null;
 export type Code17 = "protocol_mismatch";
 export type HttpStatus17 = 409;
 export type Retryable17 = false;
-export type Kind107 = "error";
+export type Kind108 = "error";
 export type IncidentId20 = string | null;
 export type Code18 = "request_too_large";
 export type HttpStatus18 = 413;
 export type Retryable18 = false;
-export type Kind108 = "error";
+export type Kind109 = "error";
 export type IncidentId21 = string | null;
 export type Code19 = "response_too_large";
 export type HttpStatus19 = 500;
 export type Retryable19 = false;
-export type Kind109 = "error";
+export type Kind110 = "error";
 export type IncidentId22 = string | null;
 export type Code20 = "busy";
 export type HttpStatus20 = 429;
 export type Retryable20 = true;
 export type RetryAfterMs = number;
-export type Kind110 = "error";
+export type Kind111 = "error";
 export type IncidentId23 = string | null;
 export type Code21 = "starting";
 export type HttpStatus21 = 503;
 export type Retryable21 = true;
 export type RetryAfterMs1 = number;
-export type Kind111 = "error";
+export type Kind112 = "error";
 export type IncidentId24 = string | null;
 export type Code22 = "recording_capacity";
 export type HttpStatus22 = 503;
 export type Retryable22 = true;
 export type RetryAfterMs2 = number;
-export type Kind112 = "error";
+export type Kind113 = "error";
 export type IncidentId25 = string | null;
 export type Code23 = "game_terminal";
 export type HttpStatus23 = 409;
 export type Retryable23 = false;
-export type Kind113 = "error";
+export type Kind114 = "error";
 export type IncidentId26 = string | null;
 export type Code24 = "game_failed";
 export type HttpStatus24 = 503;
 export type Retryable24 = false;
-export type Kind114 = "error";
+export type Kind115 = "error";
 export type IncidentId27 = string | null;
 export type Code25 = "game_closed";
 export type HttpStatus25 = 410;
 export type Retryable25 = false;
-export type Kind115 = "error";
+export type Kind116 = "error";
 export type IncidentId28 = string | null;
 export type Code26 = "internal_failure";
 export type HttpStatus26 = 500;
@@ -4555,8 +4559,19 @@ export interface SpatialEffectContent1 {
   name: Name6;
   description: Description4;
 }
-export interface ItemChargeFact {
+/**
+ * Ordered current control and observation membership; apply before following facts.
+ *
+ * Observer bits refer to this after-value from this occurrence onward. Removal
+ * can also change the composed view, using the group's ordinary sensory rows.
+ */
+export interface AudienceFact {
   kind?: Kind26;
+  audience: PlayerAudience;
+  sensory?: SensoryFact | null;
+}
+export interface ItemChargeFact {
+  kind?: Kind27;
   source_entity_uuid: SourceEntityUuid11;
   item_uuid: ItemUuid6;
   charges_after: ChargesAfter;
@@ -4569,7 +4584,7 @@ export interface ItemChargeFact {
  * removed (`removed_positions`); its `positions` are left out.
  */
 export interface SpatialEffectStateFact {
-  kind?: Kind27;
+  kind?: Kind28;
   spatial_effect_uuid: SpatialEffectUuid1;
   positions?: Positions2;
   previous_state: TrapState | null;
@@ -4584,7 +4599,7 @@ export interface SpatialEffectStateFact {
  * The completed damage result for an observed item, not an actor.
  */
 export interface ObjectDamageFact {
-  kind?: Kind28;
+  kind?: Kind29;
   object_uuid: ObjectUuid1;
   applied_damage: AppliedDamage1;
   resulting_hp: ResultingHp;
@@ -4594,7 +4609,7 @@ export interface ObjectDamageFact {
  * A witnessed break; replacement identity is retained only for old recordings.
  */
 export interface ObjectDestroyedFact {
-  kind?: Kind29;
+  kind?: Kind30;
   object_uuid: ObjectUuid2;
   replacement_uuid?: ReplacementUuid;
   placement: WorldObjectPlacement;
@@ -4668,7 +4683,7 @@ export interface FloorItem {
  * A witnessed discharge with independently disclosed origin and footprint.
  */
 export interface MechanismActivationFact {
-  kind?: Kind30;
+  kind?: Kind31;
   mechanism_uuid: MechanismUuid;
   mechanism_content_id: MechanismContentId;
   target_entity_uuid: TargetEntityUuid9;
@@ -4682,7 +4697,7 @@ export interface MechanismActivationFact {
  * The disclosed outcome of one native save, without private roll modifiers.
  */
 export interface SavingThrowFact {
-  kind?: Kind31;
+  kind?: Kind32;
   target_entity_uuid: TargetEntityUuid10;
   ability_name: AbilityName;
   succeeded: Succeeded3;
@@ -4744,7 +4759,7 @@ export interface PlayerLogEntry {
  *     is_threatened: Whether the attacker was threatened while attacking.
  */
 export interface AttackLogData {
-  kind?: Kind32;
+  kind?: Kind33;
   attacker_name: AttackerName;
   attacker_uuid: AttackerUuid;
   target_name: TargetName1;
@@ -4822,7 +4837,7 @@ export interface MovementLogData {
   termination_reason?: TerminationReason;
   controller_revalidation?: ControllerRevalidation;
   controller_revalidation_reason?: ControllerRevalidationReason;
-  kind?: Kind33;
+  kind?: Kind34;
 }
 export interface JumpMovementLogData {
   entity_name: EntityName1;
@@ -4836,7 +4851,7 @@ export interface JumpMovementLogData {
   termination_reason?: TerminationReason1;
   controller_revalidation?: ControllerRevalidation1;
   controller_revalidation_reason?: ControllerRevalidationReason1;
-  kind?: Kind34;
+  kind?: Kind35;
   movement_type?: MovementType;
   objective_end_position: ObjectiveEndPosition;
   start_elevation_feet: StartElevationFeet2;
@@ -4855,7 +4870,7 @@ export interface ConnectorMovementLogData {
   termination_reason?: TerminationReason2;
   controller_revalidation?: ControllerRevalidation2;
   controller_revalidation_reason?: ControllerRevalidationReason2;
-  kind?: Kind35;
+  kind?: Kind36;
   movement_type?: MovementType1;
   objective_end_position: ObjectiveEndPosition1;
   start_elevation_feet: StartElevationFeet3;
@@ -4882,7 +4897,7 @@ export interface ConnectorMovementLogData {
  *     source_name: Display name of the effect that requested the save.
  */
 export interface SavingThrowLogData {
-  kind?: Kind36;
+  kind?: Kind37;
   entity_name: EntityName3;
   entity_uuid: EntityUuid9;
   ability: Ability;
@@ -4928,7 +4943,7 @@ export interface DiceRollDisplay1 {
  *     target_hp_after: Target HP after spell resolution, if known.
  */
 export interface SpellSaveLogData {
-  kind?: Kind37;
+  kind?: Kind38;
   caster_name: CasterName;
   caster_uuid: CasterUuid;
   target_name: TargetName2;
@@ -4963,7 +4978,7 @@ export interface DiceRollDisplay2 {
  * Structured result of one Counterspell reaction.
  */
 export interface SpellInterruptionLogData {
-  kind?: Kind38;
+  kind?: Kind39;
   outcome_code: OutcomeCode1;
   counterspeller_name: CounterspellerName;
   counterspeller_uuid: CounterspellerUuid;
@@ -4991,7 +5006,7 @@ export interface SpellInterruptionLogData {
  *     success: Whether the check succeeded, when a DC exists.
  */
 export interface SkillCheckLogData {
-  kind?: Kind39;
+  kind?: Kind40;
   entity_name: EntityName4;
   entity_uuid: EntityUuid10;
   skill: Skill;
@@ -5026,7 +5041,7 @@ export interface DiceRollDisplay3 {
  *     stealth_dc: Stealth DC that was beaten.
  */
 export interface EntitySpottedLogData {
-  kind?: Kind40;
+  kind?: Kind41;
   observer_name: ObserverName;
   observer_uuid: ObserverUuid1;
   target_name: TargetName3;
@@ -5047,7 +5062,7 @@ export interface EntitySpottedLogData {
  *     stealth_dc: Stealth DC that was beaten.
  */
 export interface HazardDetectedLogData {
-  kind?: Kind41;
+  kind?: Kind42;
   observer_name: ObserverName1;
   observer_uuid: ObserverUuid2;
   hazard_name: HazardName;
@@ -5068,7 +5083,7 @@ export interface HazardDetectedLogData {
  *     blocked_reason: Human-readable reason the damage was blocked.
  */
 export interface DamageTakenLogData {
-  kind?: Kind42;
+  kind?: Kind43;
   target_name: TargetName4;
   damage: Damage;
   damage_type: DamageType4;
@@ -5087,7 +5102,7 @@ export interface DamageTakenLogData {
  *     source_description: Description of the healing source.
  */
 export interface HealLogData {
-  kind?: Kind43;
+  kind?: Kind44;
   entity_name: EntityName5;
   entity_uuid: EntityUuid11;
   amount: Amount;
@@ -5105,7 +5120,7 @@ export interface HealLogData {
  *     target_uuid: UUID string of the target, when the action has one.
  */
 export interface ActionLogData {
-  kind?: Kind44;
+  kind?: Kind45;
   entity_name: EntityName6;
   entity_uuid: EntityUuid12;
   action_name: ActionName;
@@ -5123,7 +5138,7 @@ export interface ActionLogData {
  *     turn_index: Encounter initiative index.
  */
 export interface TurnLogData {
-  kind?: Kind45;
+  kind?: Kind46;
   entity_name: EntityName7;
   entity_uuid: EntityUuid13;
   round_number: RoundNumber1;
@@ -5146,7 +5161,7 @@ export interface TurnLogData {
  *     aoe_center: Area-of-effect origin or center, if applicable.
  */
 export interface MultiEntityLogData {
-  kind?: Kind46;
+  kind?: Kind47;
   action_name: ActionName1;
   caster_name: CasterName1;
   total_targets?: TotalTargets;
@@ -5163,7 +5178,7 @@ export interface MultiEntityLogData {
  * Structured ordered changes made to one effective roll result.
  */
 export interface RollModificationLogData {
-  kind?: Kind47;
+  kind?: Kind48;
   roll_type: RollType;
   modifications: Modifications;
 }
@@ -5185,27 +5200,27 @@ export interface RollModificationLogFact {
   packet_dice?: PacketDice;
 }
 export interface EmptyLogData {
-  kind?: Kind48;
+  kind?: Kind49;
 }
 export interface ConditionRemovedLogData {
-  kind?: Kind49;
+  kind?: Kind50;
   condition_name: ConditionName;
   reveals_target: RevealsTarget;
 }
 export interface DeathLogData {
-  kind?: Kind50;
+  kind?: Kind51;
   entity_name: EntityName8;
   final_hp: FinalHp;
 }
 export interface SpellDamageLogData {
-  kind?: Kind51;
+  kind?: Kind52;
   spell_name: SpellName3;
   target_name: TargetName6;
   damage: Damage1;
   damage_type: DamageType5;
 }
 export interface DeathSaveLogData {
-  kind?: Kind52;
+  kind?: Kind53;
   entity_name: EntityName9;
   entity_uuid: EntityUuid14;
   roll: Roll;
@@ -5218,7 +5233,7 @@ export interface DeathSaveLogData {
   died: Died;
 }
 export interface ShoveLogData {
-  kind?: Kind53;
+  kind?: Kind54;
   action_type?: ActionType;
   target_weight: TargetWeight;
   max_shove_weight: MaxShoveWeight;
@@ -5231,7 +5246,7 @@ export interface ShoveLogData {
   is_ally: IsAlly;
 }
 export interface StepMovementLogData {
-  kind?: Kind54;
+  kind?: Kind55;
   type?: Type;
   from_position: FromPosition1;
   to_position: ToPosition1;
@@ -5245,7 +5260,7 @@ export interface StepMovementLogData {
   committed: Committed3;
 }
 export interface ForcedMovementLogData {
-  kind?: Kind55;
+  kind?: Kind56;
   type?: Type1;
   cause: Cause;
   direction: Direction5;
@@ -5257,7 +5272,7 @@ export interface ForcedMovementLogData {
   end_position: EndPosition8;
 }
 export interface ObservedMovementLogData {
-  kind?: Kind56;
+  kind?: Kind57;
   type?: Type2;
   entity_name: EntityName10;
   entity_uuid: EntityUuid15;
@@ -5272,24 +5287,24 @@ export interface ObservedMovementLogData {
   movement_cost?: MovementCost4;
 }
 export interface UnlocatedMovementLogData {
-  kind?: Kind57;
+  kind?: Kind58;
   type?: Type3;
   observation_complete?: ObservationComplete1;
 }
 export interface UnknownMovementLogData {
-  kind?: Kind58;
+  kind?: Kind59;
   type?: Type4;
   observed?: Observed;
 }
 export interface SpatialChangeLogData {
-  kind?: Kind59;
+  kind?: Kind60;
   operation: SpatialEffectChangeOperation1;
   content_identity: ContentIdentity;
   layer: SpatialEffectLayer;
   affected_positions: AffectedPositions1;
 }
 export interface SpatialInteractionLogData {
-  kind?: Kind60;
+  kind?: Kind61;
   operation: SpatialEffectInteractionOperation;
   intensity: Intensity;
   affected_positions: AffectedPositions2;
@@ -6217,7 +6232,7 @@ export interface AckRequest {
   cursor: PlayerCursor;
 }
 export interface AckResponse {
-  kind?: Kind61;
+  kind?: Kind62;
   cursor: PlayerCursor;
   catch_up_cursor: PlayerCursor;
 }
@@ -6231,7 +6246,7 @@ export interface ChoicesResponse {
   game_id: GameId2;
   game_epoch: GameEpoch2;
   audience_id: AudienceId2;
-  kind?: Kind62;
+  kind?: Kind63;
   state_revision: StateRevision2;
   correlation_id: CorrelationId1;
   force_attack: ForceAttack1;
@@ -6253,7 +6268,7 @@ export interface PlayerChoices {
 }
 export interface ChoiceSubject {
   uuid: Uuid2;
-  kind: Kind63;
+  kind: Kind64;
   name?: Name15;
 }
 export interface SubjectBinding {
@@ -6268,7 +6283,7 @@ export interface SubjectBinding {
   safe_path?: SafePath;
   opportunity_attack_exposures?: OpportunityAttackExposures;
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures;
-  kind: Kind64;
+  kind: Kind65;
   subject: Subject;
   position?: Position16;
 }
@@ -6290,7 +6305,7 @@ export interface PositionBinding {
   safe_path?: SafePath1;
   opportunity_attack_exposures?: OpportunityAttackExposures1;
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures1;
-  kind: Kind65;
+  kind: Kind66;
   position: Position17;
 }
 export interface SelfBinding {
@@ -6305,7 +6320,7 @@ export interface SelfBinding {
   safe_path?: SafePath2;
   opportunity_attack_exposures?: OpportunityAttackExposures2;
   safe_path_opportunity_attack_exposures?: SafePathOpportunityAttackExposures2;
-  kind: Kind66;
+  kind: Kind67;
 }
 export interface PlayerAction {
   discovery_generation?: DiscoveryGeneration1;
@@ -6386,13 +6401,13 @@ export interface PlayerAction {
  * One selected position, such as a ring's center.
  */
 export interface SinglePositionSelection {
-  kind?: Kind67;
+  kind?: Kind68;
 }
 /**
  * Ordered vertices with an authored segment/length budget.
  */
 export interface PositionPathSelection {
-  kind?: Kind68;
+  kind?: Kind69;
   max_length_feet: MaxLengthFeet;
   max_segments?: MaxSegments;
   allow_origin_start?: AllowOriginStart;
@@ -6402,7 +6417,7 @@ export interface PositionPathSelection {
  * One creature followed by one independently selected destination.
  */
 export interface EntityDestinationSelection {
-  kind?: Kind69;
+  kind?: Kind70;
 }
 /**
  * Where a position action may aim (plan §14.4 region descriptors).
@@ -6657,7 +6672,7 @@ export interface PreviewResponse {
   game_id: GameId3;
   game_epoch: GameEpoch3;
   audience_id: AudienceId3;
-  kind?: Kind70;
+  kind?: Kind71;
   state_revision: StateRevision4;
   request: PreviewRequest;
   preview: PlayerSelectionPreview;
@@ -6705,15 +6720,15 @@ export interface CommandRequest {
   intent: Intent;
 }
 export interface ExecuteSelectionIntent {
-  kind?: Kind71;
+  kind?: Kind72;
   discovery_generation: DiscoveryGeneration3;
   selection: ActionSelection;
 }
 export interface EndTurnIntent {
-  kind?: Kind72;
+  kind?: Kind73;
 }
 export interface EquipIntent {
-  kind?: Kind73;
+  kind?: Kind74;
   item: EquipItem;
 }
 export interface EquipItem {
@@ -6721,14 +6736,14 @@ export interface EquipItem {
   slot: Slot2;
 }
 export interface UnequipIntent {
-  kind?: Kind74;
+  kind?: Kind75;
   item: UnequipItem;
 }
 export interface UnequipItem {
   slot: Slot3;
 }
 export interface ToggleHandlerIntent {
-  kind?: Kind75;
+  kind?: Kind76;
   discovery_generation: DiscoveryGeneration4;
   handler: ToggleHandler;
 }
@@ -6737,11 +6752,11 @@ export interface ToggleHandler {
   enabled: Enabled2;
 }
 export interface PrepareSpellsIntent {
-  kind?: Kind76;
+  kind?: Kind77;
   selection: PreparedSpellSelection;
 }
 export interface StudySpellMasteryIntent {
-  kind?: Kind77;
+  kind?: Kind78;
   selection: SpellMasteryStudy;
 }
 export interface SpellMasteryStudy {
@@ -6750,7 +6765,7 @@ export interface SpellMasteryStudy {
   hours?: Hours;
 }
 export interface ReceiptResponse {
-  kind?: Kind78;
+  kind?: Kind79;
   receipt: Receipt;
 }
 export interface PendingReceipt {
@@ -6758,14 +6773,14 @@ export interface PendingReceipt {
   game_epoch: GameEpoch4;
   audience_id: AudienceId4;
   command_number: CommandNumber1;
-  kind?: Kind79;
+  kind?: Kind80;
 }
 export interface CommittedReceipt {
   game_id: GameId5;
   game_epoch: GameEpoch5;
   audience_id: AudienceId5;
   command_number: CommandNumber2;
-  kind?: Kind80;
+  kind?: Kind81;
   cursor: PlayerCursor;
 }
 export interface RejectedReceipt {
@@ -6773,7 +6788,7 @@ export interface RejectedReceipt {
   game_epoch: GameEpoch6;
   audience_id: AudienceId6;
   command_number: CommandNumber3;
-  kind?: Kind81;
+  kind?: Kind82;
   reason: Reason4;
 }
 export interface IndeterminateReceipt {
@@ -6781,7 +6796,7 @@ export interface IndeterminateReceipt {
   game_epoch: GameEpoch7;
   audience_id: AudienceId7;
   command_number: CommandNumber4;
-  kind?: Kind82;
+  kind?: Kind83;
   incident_id: IncidentId1;
 }
 export interface ExpiredReceipt {
@@ -6789,29 +6804,29 @@ export interface ExpiredReceipt {
   game_epoch: GameEpoch8;
   audience_id: AudienceId8;
   command_number: CommandNumber5;
-  kind?: Kind83;
+  kind?: Kind84;
 }
 export interface UnknownReceipt {
   game_id: GameId9;
   game_epoch: GameEpoch9;
   audience_id: AudienceId9;
   command_number: CommandNumber6;
-  kind?: Kind84;
+  kind?: Kind85;
 }
 export interface ContentResponse {
-  kind?: Kind85;
+  kind?: Kind86;
   revision: Revision1;
   descriptors: Descriptors;
 }
 export interface StreamReady {
-  kind?: Kind86;
+  kind?: Kind87;
   protocol: ProtocolIdentity;
   after: PlayerCursor;
   head: PlayerCursor;
   status: StatusSnapshot;
 }
 export interface StreamStatus {
-  kind?: Kind87;
+  kind?: Kind88;
   status: StatusSnapshot;
 }
 export interface PlayerOperation {
@@ -6821,7 +6836,7 @@ export interface PlayerOperation {
   hud: PlayerHUDPatch | null;
   combat_log_appends: CombatLogAppends;
   content_additions: ContentAdditions1;
-  kind?: Kind88;
+  kind?: Kind89;
   protocol: ProtocolIdentity;
   cursor: PlayerCursor;
   state_revision: StateRevision6;
@@ -6892,98 +6907,98 @@ export interface CombatLogAppend {
   entry: PlayerLogEntry;
 }
 export interface ErrorInvalidRequest {
-  kind?: Kind89;
+  kind?: Kind90;
   incident_id?: IncidentId2;
   code?: Code;
   http_status?: HttpStatus;
   retryable?: Retryable;
 }
 export interface ErrorUnauthenticated {
-  kind?: Kind90;
+  kind?: Kind91;
   incident_id?: IncidentId3;
   code?: Code1;
   http_status?: HttpStatus1;
   retryable?: Retryable1;
 }
 export interface ErrorForbidden {
-  kind?: Kind91;
+  kind?: Kind92;
   incident_id?: IncidentId4;
   code?: Code2;
   http_status?: HttpStatus2;
   retryable?: Retryable2;
 }
 export interface ErrorGameNotFound {
-  kind?: Kind92;
+  kind?: Kind93;
   incident_id?: IncidentId5;
   code?: Code3;
   http_status?: HttpStatus3;
   retryable?: Retryable3;
 }
 export interface ErrorEpochMismatch {
-  kind?: Kind93;
+  kind?: Kind94;
   incident_id?: IncidentId6;
   code?: Code4;
   http_status?: HttpStatus4;
   retryable?: Retryable4;
 }
 export interface ErrorAudienceMismatch {
-  kind?: Kind94;
+  kind?: Kind95;
   incident_id?: IncidentId7;
   code?: Code5;
   http_status?: HttpStatus5;
   retryable?: Retryable5;
 }
 export interface ErrorAttachmentReplaced {
-  kind?: Kind95;
+  kind?: Kind96;
   incident_id?: IncidentId8;
   code?: Code6;
   http_status?: HttpStatus6;
   retryable?: Retryable6;
 }
 export interface ErrorAttachmentConflict {
-  kind?: Kind96;
+  kind?: Kind97;
   incident_id?: IncidentId9;
   code?: Code7;
   http_status?: HttpStatus7;
   retryable?: Retryable7;
 }
 export interface ErrorCommandConflict {
-  kind?: Kind97;
+  kind?: Kind98;
   incident_id?: IncidentId10;
   code?: Code8;
   http_status?: HttpStatus8;
   retryable?: Retryable8;
 }
 export interface ErrorCommandNumber {
-  kind?: Kind98;
+  kind?: Kind99;
   incident_id?: IncidentId11;
   code?: Code9;
   http_status?: HttpStatus9;
   retryable?: Retryable9;
 }
 export interface ErrorStaleState {
-  kind?: Kind99;
+  kind?: Kind100;
   incident_id?: IncidentId12;
   code?: Code10;
   http_status?: HttpStatus10;
   retryable?: Retryable10;
 }
 export interface ErrorStaleDiscovery {
-  kind?: Kind100;
+  kind?: Kind101;
   incident_id?: IncidentId13;
   code?: Code11;
   http_status?: HttpStatus11;
   retryable?: Retryable11;
 }
 export interface ErrorNotYourTurn {
-  kind?: Kind101;
+  kind?: Kind102;
   incident_id?: IncidentId14;
   code?: Code12;
   http_status?: HttpStatus12;
   retryable?: Retryable12;
 }
 export interface ErrorCatchUpRequired {
-  kind?: Kind102;
+  kind?: Kind103;
   incident_id?: IncidentId15;
   code?: Code13;
   http_status?: HttpStatus13;
@@ -6991,21 +7006,21 @@ export interface ErrorCatchUpRequired {
   required_cursor: PlayerCursor;
 }
 export interface ErrorQuerySuperseded {
-  kind?: Kind103;
+  kind?: Kind104;
   incident_id?: IncidentId16;
   code?: Code14;
   http_status?: HttpStatus14;
   retryable?: Retryable14;
 }
 export interface ErrorInvalidCursor {
-  kind?: Kind104;
+  kind?: Kind105;
   incident_id?: IncidentId17;
   code?: Code15;
   http_status?: HttpStatus15;
   retryable?: Retryable15;
 }
 export interface ErrorResumeUnavailable {
-  kind?: Kind105;
+  kind?: Kind106;
   incident_id?: IncidentId18;
   code?: Code16;
   http_status?: HttpStatus16;
@@ -7013,28 +7028,28 @@ export interface ErrorResumeUnavailable {
   earliest_cursor: PlayerCursor | null;
 }
 export interface ErrorProtocolMismatch {
-  kind?: Kind106;
+  kind?: Kind107;
   incident_id?: IncidentId19;
   code?: Code17;
   http_status?: HttpStatus17;
   retryable?: Retryable17;
 }
 export interface ErrorRequestTooLarge {
-  kind?: Kind107;
+  kind?: Kind108;
   incident_id?: IncidentId20;
   code?: Code18;
   http_status?: HttpStatus18;
   retryable?: Retryable18;
 }
 export interface ErrorResponseTooLarge {
-  kind?: Kind108;
+  kind?: Kind109;
   incident_id?: IncidentId21;
   code?: Code19;
   http_status?: HttpStatus19;
   retryable?: Retryable19;
 }
 export interface ErrorBusy {
-  kind?: Kind109;
+  kind?: Kind110;
   incident_id?: IncidentId22;
   code?: Code20;
   http_status?: HttpStatus20;
@@ -7042,7 +7057,7 @@ export interface ErrorBusy {
   retry_after_ms?: RetryAfterMs;
 }
 export interface ErrorStarting {
-  kind?: Kind110;
+  kind?: Kind111;
   incident_id?: IncidentId23;
   code?: Code21;
   http_status?: HttpStatus21;
@@ -7050,7 +7065,7 @@ export interface ErrorStarting {
   retry_after_ms?: RetryAfterMs1;
 }
 export interface ErrorRecordingCapacity {
-  kind?: Kind111;
+  kind?: Kind112;
   incident_id?: IncidentId24;
   code?: Code22;
   http_status?: HttpStatus22;
@@ -7058,28 +7073,28 @@ export interface ErrorRecordingCapacity {
   retry_after_ms?: RetryAfterMs2;
 }
 export interface ErrorGameTerminal {
-  kind?: Kind112;
+  kind?: Kind113;
   incident_id?: IncidentId25;
   code?: Code23;
   http_status?: HttpStatus23;
   retryable?: Retryable23;
 }
 export interface ErrorGameFailed {
-  kind?: Kind113;
+  kind?: Kind114;
   incident_id?: IncidentId26;
   code?: Code24;
   http_status?: HttpStatus24;
   retryable?: Retryable24;
 }
 export interface ErrorGameClosed {
-  kind?: Kind114;
+  kind?: Kind115;
   incident_id?: IncidentId27;
   code?: Code25;
   http_status?: HttpStatus25;
   retryable?: Retryable25;
 }
 export interface ErrorInternalFailure {
-  kind?: Kind115;
+  kind?: Kind116;
   incident_id?: IncidentId28;
   code?: Code26;
   http_status?: HttpStatus26;

@@ -904,6 +904,19 @@ class SensoryFact:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class AudienceFact:
+    """Ordered current control and observation membership; apply before following facts.
+
+    Observer bits refer to this after-value from this occurrence onward. Removal
+    can also change the composed view, using the group's ordinary sensory rows.
+    """
+
+    kind: Literal["audience"] = "audience"
+    audience: PlayerAudience
+    sensory: Annotated[SensoryFact | None, Field(exclude_if=_unset)] = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SpatialEffectStateFact:
     """A witnessed mechanical transition, restricted to disclosed fixture cells. A removal names only the cells it
     removed (`removed_positions`); its `positions` are left out."""
@@ -966,7 +979,7 @@ class ObjectDestroyedFact:
 PlayerFact = Annotated[
     AttackFact | SpellFact | AreaReachFact | MovementFact | StepFact | ForcedMovementFact | PortalTransferFact | ShoveFact
     | Annotated[DamageFact, Field(discriminator="stage")] | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact
-    | ActorChangeFact | SpatialFact | FactionFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
+    | ActorChangeFact | SpatialFact | FactionFact | TurnFact | ActionFact | SensoryFact | AudienceFact | ItemChargeFact | SpatialEffectStateFact
     | ObjectDamageFact | ObjectDestroyedFact | MechanismActivationFact | SavingThrowFact,
     Field(discriminator="kind"),
 ]
@@ -1499,7 +1512,7 @@ class PlayerSequence(BaseModel):
 
 class PlayerUpdate(BaseModel):
     """Atomic admitted after-values, independent of delivery/attachment metadata. Its envelope is stated once:
-    the generation and observer of its seat (the audience is the initialization's, fixed at Start)."""
+    the generation and observer of its seat (membership advances through ordered AudienceFact nodes)."""
     model_config = ConfigDict(extra="forbid", frozen=True)
     generation: UUID
     observer_uuid: UUID

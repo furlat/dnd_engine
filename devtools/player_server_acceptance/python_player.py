@@ -37,7 +37,7 @@ async def play():
                 if head is not None:
                     await wait_for_cursor(follower, head)
                 actor = current['boundary']['input_actor_uuid']
-                if actor is None or current['boundary']['lifecycle'] != 'waiting_for_human':
+                if actor is None or current['boundary']['lifecycle'] not in ('waiting_for_human', 'waiting_for_codex'):
                     await asyncio.sleep(.02)
                     continue
                 # Explicit ACK makes command readiness deterministic for this record-only consumer.

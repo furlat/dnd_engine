@@ -113,6 +113,24 @@ def test_operator_uses_each_games_controlled_actors_when_streams_interleave():
     assert 'one-agent' in line_summary({'kind':'stdout', 'agent':'one-agent', 'text':'hello'})
 
 
+def test_operator_shows_current_codex_summon_control_without_changing_another_game():
+    view = View()
+    for ref, actor in [('first', 'alice'), ('second', 'bob')]:
+        update(view, {'kind': 'game_joined', 'agent': 'one-agent', 'seat': ref, 'game_ref': ref,
+            'observation': {'audience': {'controlled': [actor]}}})
+    record = {'kind': 'record', 'agent': 'one-agent', 'seat': 'first', 'game_ref': 'first',
+        'boundary': {'lifecycle': 'waiting_for_codex', 'input_actor_uuid': 'wolf'},
+        'cursor': {'sequence': 3}, 'logs': []}
+    update(view, {**record, 'audience': {'controlled': ['alice', 'wolf']}})
+    assert view.seats['one-agent']['status'] == 'YOUR TURN'
+    update(view, {**record, 'audience': {'controlled': ['alice']}})
+    assert view.seats['one-agent']['status'] == 'waiting for opponent'
+    update(view, {**record, 'game_ref': 'second', 'seat': 'second',
+        'boundary': {'lifecycle': 'waiting_for_codex', 'input_actor_uuid': 'bob'}})
+    assert view.seats['one-agent']['status'] == 'YOUR TURN'
+    assert view.seats['one-agent']['controlled'] == ['bob']
+
+
 def test_exported_sources_work_in_fresh_workspace_without_implicit_history():
     async def check():
         async with Client(create_mcp({})) as client:

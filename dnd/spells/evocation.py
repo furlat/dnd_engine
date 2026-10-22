@@ -43,7 +43,7 @@ from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.modifiers import ArithmeticFactor
 from dnd.core.creature_types import Size
 from dnd.types.spell_suppression import SpellSuppression
-from dnd.conditions import prepare_control_removals, Prone
+from dnd.conditions import prepare_control_removals, Prone, Concentrating
 from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
 
@@ -6068,10 +6068,33 @@ class ResilientSphere(SpellAction):
         return self.apply_owned_condition(effect, ResilientSphereEffect(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid))
 
 
+@srd_condition_identity(content_id="spatial_effect.spell.arcane_sword", display_name="Arcane Sword",
+    description="The independently observed position of a retained force sword.")
+class ArcaneSwordAnchor(SpatialCondition):
+    crossing_channels: ClassVar[frozenset] = frozenset()
+    name: str = "Arcane Sword"
+    description: str = "A visible force sword sustained by its caster."
+    layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
+    occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
+    anchor_kind: SpatialEffectAnchorKind = SpatialEffectAnchorKind.INDEPENDENT_MOVABLE
+    has_visible_presence: bool = True
+    concentration_slot_uuid: UUID
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+
+    def get_spatial_observation(self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
+                                discovered: bool = False) -> Optional[PerceivedSpatialEffect]:
+        observed = super().get_spatial_observation(positions, observer_uuid=observer_uuid, discovered=discovered)
+        # The observed blade owns this stable reference. It identifies a caster
+        # only through independently disclosed concentration-slot state.
+        return observed.model_copy(update={"concentration_slot_uuid": self.concentration_slot_uuid}) if observed is not None else None
+
+
 class ArcaneSwordEffect(BaseCondition):
     name: str = "Arcane Sword"
     description: str = "A retained force sword anchor and two native bonus-action options."
     position: Tuple[int, int]
+    anchor_uuid: UUID | None = None
     spellcasting_source_id: UUID | None = None
     action_uuids: set[UUID] = Field(default_factory=empty_set)
     duration: Duration = Field(default_factory=lambda: Duration(duration=10, duration_type=DurationType.ROUNDS))
@@ -6080,13 +6103,24 @@ class ArcaneSwordEffect(BaseCondition):
     def _apply(self, event: Event):
         caster = Entity.get(self.source_entity_uuid)
         if caster is None: return [], [], [], [], event.cancel(status_message="Sword caster absent")
+        effect = event.phase_to(EventPhase.EFFECT)
+        if effect.canceled:
+            return [], [], [], [], effect
         for action in (ArcaneSwordStrike(source_entity_uuid=caster.uuid, grant_condition_uuid=self.uuid,
                 retained_casting_ability=caster.spellcasting.resolve_spellcasting_ability(self.spellcasting_source_id),
                 spellcasting_source_id=self.spellcasting_source_id, template=True),
                 MoveArcaneSword(source_entity_uuid=caster.uuid, grant_condition_uuid=self.uuid, template=True)):
             caster.register_action(action)
             self.action_uuids.add(action.uuid)
-        return [], [], [], [], event.phase_to(EventPhase.EFFECT)
+        return [], [], [], [], effect
+
+    def move_anchor(self, position: Tuple[int, int], *, parent_event: Event) -> bool:
+        anchor = BaseCondition.get(self.anchor_uuid) if self.anchor_uuid is not None else None
+        if not isinstance(anchor, ArcaneSwordAnchor) or not anchor.is_active_spatial_condition():
+            return False
+        anchor.relocate_anchor(position, parent_event=parent_event)
+        self.position = anchor.position
+        return self.position == position
 
     def _release_owned_runtime_state(self, *, parent_event: Event | None = None):
         caster = Entity.get(self.source_entity_uuid)
@@ -6214,7 +6248,8 @@ class ArcaneSwordStrike(SpellAction):
             return event.cancel(status_message="Sword has ended")
         effect=event.phase_to(EventPhase.EFFECT)
         if effect.canceled:return effect
-        owner.position=self.end_position
+        if not owner.move_anchor(self.end_position, parent_event=effect):
+            return effect.cancel(status_message="Sword anchor is absent")
         return arcane_sword_attack(self,effect,owner.position)
 
 
@@ -6243,11 +6278,16 @@ class MoveArcaneSword(BaseAction):
     def _apply_costs(self,event):
         return entity_action_economy_cost_applier(event,self.source_entity_uuid)
 
+    def _create_declaration_event(self, parent_event=None, use_register=True):
+        event = super()._create_declaration_event(parent_event, use_register)
+        return event.with_updates(target_position=self.end_position) if event is not None else None
+
     def _apply(self,event: ActionEvent):
         owner=BaseCondition.get(self.grant_condition_uuid)
         if not isinstance(owner,ArcaneSwordEffect) or self.end_position is None: return event.cancel(status_message="Sword absent")
         effect=event.phase_to(EventPhase.EFFECT)
-        if not effect.canceled:owner.position=self.end_position
+        if not effect.canceled and not owner.move_anchor(self.end_position, parent_event=effect):
+            return effect.cancel(status_message="Sword anchor is absent")
         return effect
 
 # ArcaneSwordEffect (defined above) creates ArcaneSwordStrike, MoveArcaneSword.
@@ -6255,7 +6295,7 @@ ArcaneSwordEffect.creates = (*ArcaneSwordEffect.creates, ArcaneSwordStrike, Move
 
 
 class ArcaneSword(SpellAction):
-    creates = (*SpellAction.creates, ArcaneSwordEffect)
+    creates = (*SpellAction.creates, ArcaneSwordEffect, ArcaneSwordAnchor)
     name: str = "Arcane Sword"
     description: str = "Create a concentrating force sword within sixty feet and make one 3d10 melee spell attack."
     spell_level: int = 7
@@ -6308,10 +6348,31 @@ class ArcaneSword(SpellAction):
 
     def _apply(self,event: SpellEvent):
         if self.end_position is None: return event.cancel(status_message="Sword anchor absent")
-        effect=self.apply_owned_condition(event.phase_to(EventPhase.EFFECT),ArcaneSwordEffect(
-            source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.source_entity_uuid,position=self.end_position,
-            spellcasting_source_id=self.spellcasting_source_id))
-        return effect if effect.canceled else arcane_sword_attack(self,effect,self.end_position)
+        owner = ArcaneSwordEffect(source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid, position=self.end_position,
+            spellcasting_source_id=self.spellcasting_source_id)
+        effect = self.apply_owned_condition(event.phase_to(EventPhase.EFFECT), owner)
+        if effect.canceled:
+            return effect
+        caster = Entity.get(self.source_entity_uuid)
+        concentration = BaseCondition.get(self.cast_concentrating_uuid) if self.cast_concentrating_uuid else None
+        slot_uuid = next((identity for identity, slot in concentration.concentration_slots.items()
+            if (self.source_entity_uuid, owner.uuid) in slot.linked_entries), None) if isinstance(concentration, Concentrating) else None
+        if caster is None or not owner.applied or slot_uuid is None:
+            return effect.cancel(status_message="Sword concentration has ended")
+        # Publish the blade only after both sustaining memberships are accepted.
+        anchor = ArcaneSwordAnchor(source_entity_uuid=caster.uuid, position=self.end_position,
+            effect_origin=owner.effect_origin, content_ref=get_content_declaration(ArcaneSwordAnchor).ref,
+            concentration_slot_uuid=slot_uuid)
+        admitted = anchor.activate(parent_event=effect)
+        if admitted is None or admitted.canceled or not anchor.applied or not owner.applied:
+            if anchor.applied:
+                anchor.deactivate(parent_event=effect)
+            caster.remove_condition_by_uuid(owner.uuid, parent_event=effect)
+            return effect.cancel(status_message="Sword anchor was not admitted")
+        owner.anchor_uuid = anchor.uuid
+        owner.add_linked_condition(anchor.uuid, anchor.uuid)
+        return arcane_sword_attack(self, effect, self.end_position)
 
 
 class FreezingSphere(SpellAction):

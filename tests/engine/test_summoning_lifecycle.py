@@ -126,7 +126,7 @@ def test_replacement_retires_previous_and_retains_only_new_birth(battle):
     assert next(iter(system.memberships.values())).entity.name == "Boar"
 
 
-def test_fey_control_loss_preserves_body_duration_and_controller(battle):
+def test_fey_control_loss_preserves_body_duration_and_replaces_external_controller(battle):
     game, encounter, system, caster, _ = battle
     member = cast_one(battle, ConjureFey,"jaguar",6)
     identity, controller, duration = member.entity.uuid, member.controller, member.existence.duration.duration
@@ -135,7 +135,9 @@ def test_fey_control_loss_preserves_body_duration_and_controller(battle):
     assert game.get_entity(identity) is member.entity
     assert member.entity.faction != caster.faction
     assert member.existence.duration.duration == duration
-    assert member.controller is controller
+    assert member.controller is member.owned_ai and member.owned_ai is not None
+    assert member.controller is not controller
+    assert encounter.get_controller_for(caster.uuid) is controller
     assert not DismissSummon(source_entity_uuid=caster.uuid, target_entity_uuid=identity).pre_validate()
     assert identity in encounter.combatants
 
@@ -350,9 +352,10 @@ def test_paid_interruption_preserves_previous_summon_and_has_no_new_birth(battle
         handler.remove_from_register()
 
 
-@pytest.mark.parametrize("spell,form,level,survives", (
-    (ConjureAnimals,"wolf",3,False),(ConjureFiend,"dretch",3,False),(ConjureFey,"jaguar",6,True)))
-def test_source_death_ends_required_sustain_even_when_removal_is_vetoed(battle, spell, form, level, survives):
+@pytest.mark.parametrize("spell,form,level", (
+    (ConjureAnimals,"wolf",3),(ConjureFiend,"dretch",3),(ConjureFey,"jaguar",6),
+    (SpiritualWeapon,"spiritual_weapon",3),(ConjureElemental,"air_elemental",5)))
+def test_source_death_ends_summons_even_when_removal_is_vetoed(battle, spell, form, level):
     game, _, system, caster, enemy = battle
     member = cast_one(battle, spell, form, level)
     identity, clock, controller = member.entity.uuid, member.existence.duration.duration, member.controller
@@ -363,14 +366,8 @@ def test_source_death_ends_required_sustain_even_when_removal_is_vetoed(battle, 
     EventQueue.add_event_handler(handler)
     try:
         caster.receive_damage(caster.get_hp() + caster.get_max_hp(), DamageType.FORCE, enemy.uuid)
-        assert (identity in game.entities) is survives
-        if survives:
-            assert system.memberships[identity].entity is member.entity
-            assert member.entity.faction != caster.faction
-            assert member.existence.duration.duration == clock
-            assert member.controller is controller
-        else:
-            assert identity not in system.memberships and Entity.get(identity) is None
+        assert identity not in game.entities
+        assert identity not in system.memberships and Entity.get(identity) is None
     finally:
         handler.remove()
         handler.remove_from_register()

@@ -29,6 +29,7 @@ from dnd.core.condition_types import ConditionCategory
 from dnd.core.effect_types import ResolutionRef
 from dnd.core.content.runtime import HandlerDispatchOutcome
 from dnd.core.events import (
+    ControllerAssignmentChangedEvent,
     AreaReachEvent,
     DamageAppliedEvent, DeathEvent, DeathSaveEvent, EncounterEvent, EntityCreatedEvent, EntityFactionChangedEvent, ItemDestructionEvent,
     Event, EventPhase, EventType, ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, LifeStateChangeEvent,
@@ -41,7 +42,7 @@ from dnd.types.event_facts import AppliedWorldFact
 from dnd.types.class_features import FontConversion
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult
 from dnd.types.summoning import SummonDepartureCause
-from dnd.player.audience import (AudienceComposition, ComposedChange, PlayerAudience, apply_settlement, depart_contact,
+from dnd.player.audience import (AudienceComposition, ComposedChange, PlayerAudience, apply_settlement, assign_control, depart_contact,
     resolve_audience)
 
 from dnd.player.actor_projection import fold_birth, fold_completed_actors
@@ -50,7 +51,7 @@ from dnd.player.bodies import (ActorChangeViews, View, body_digest, body_stampab
 from dnd.types.actor_facts import (ActorFactChange, ActorState, ChangeRow, ConditionFact, ConditionMember, ConditionRow,
     ItemEffectsRow, ItemStateRow)
 from dnd.player.facts import (
-    ActionCancellation, ActionFact, ActionReaction, ActorChangeFact, AreaReachFact, AttackFact, BodyRecord, ContentAttribution, DamageRequestFact, DamageResultFact,
+    AudienceFact, ActionCancellation, ActionFact, ActionReaction, ActorChangeFact, AreaReachFact, AttackFact, BodyRecord, ContentAttribution, DamageRequestFact, DamageResultFact,
     DeathSaveFact, ForcedMovementFact, PortalTransferFact, MechanismActivationFact, HealFact, ItemChargeFact, LifeFact,
     MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerFact, PlayerInitialization, PlayerLineage,
     PlayerNode, PlayerObject, PlayerHUDPatch, CombatLogAppend,
@@ -315,7 +316,7 @@ def _settlement_fact(change: ComposedChange, view: SensesSnapshot, state: "Proje
     added, patched, effects_removed, retired = [], [], [], []
     content: dict[UUID, SpatialEffectContent] = {}
     for identity, (before_effect, after_effect) in change.effects.items():
-        own = identity in owned
+        own = state.audience.controls(owned.get(identity))
         if after_effect is None:
             if before_effect is not None:
                 effects_removed.append(_uuid_row(table.uuids, identity))
@@ -1145,6 +1146,10 @@ class SeatWalk:
     # the others are `settled` there (plan §3.1: one composition per settlement).
     settlements: dict[UUID, tuple[SensoryUpdateEvent, ...]] = field(default_factory=dict)
     settled: frozenset[UUID] = frozenset()
+    # Only allocated for a group with assignment transitions. Disclosure uses
+    # membership at each event, never the group's final roster.
+    audiences: dict[UUID, PlayerAudience] | None = None
+    max_observers: int = 1
     # The bodies that entered the seat's view during the walk.
     entered: set[UUID] = field(default_factory=set)
     # Contacts the seat's view took before the session held their actor (seen before their birth completed):
@@ -1201,7 +1206,8 @@ def _seat_log(walk: SeatWalk, event: Event, observer: PlayerAudience) -> PlayerL
 def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event, ...],
                 conditions: tuple[ConditionFact, ...], actor_fact_changes: Mapping[UUID, ActorFactChange],
                 logs: Mapping[UUID, PlayerLogEntry], native_logs: Mapping[UUID, CombatLogEntry],
-                names: Mapping[UUID, str], log_inputs: SeatLogInputs, shared_logs: SharedLogEntries) -> SeatWalk:
+                names: Mapping[UUID, str], log_inputs: SeatLogInputs, shared_logs: SharedLogEntries,
+                observed_sources: tuple[Event, ...] = ()) -> SeatWalk:
     """A seat's walk over a group: its events (old recordings upgraded) and their schedules."""
     events = upgrade_recorded_spatial_commits(events, tuple(
         (row.lineage_uuid, row.event_uuid) for row in sorted(group.versions, key=lambda row: row.source_index)))
@@ -1236,33 +1242,54 @@ def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event,
                 and removed.change_type is SpatialChangeType.OBJECT_REMOVED and removed.object_uuid in destroyed_ids):
             assert removed.object_uuid is not None
             removal_starts.setdefault(removed.object_uuid, version.source_index)
+    # An observed intermediate version may erase the object before its retained
+    # completion. Capture removal contact at that source's actual fold boundary.
+    removal_events = (tuple(sorted((*events, *observed_sources), key=lambda event: indexes[event.uuid]))
+        if removal_starts and observed_sources else events)
     sent = state.static_sent
     # A settlement's events share its marker; an event recorded without one is a settlement of its own.
-    settlements: dict[int | UUID, list[SensoryUpdateEvent]] = {}
+    settlements: dict[tuple[int, int | UUID], list[SensoryUpdateEvent]] = {}
+    audience = state.audience
+    audiences = {} if any(isinstance(event, ControllerAssignmentChangedEvent) for event in events) else None
+    max_observers = len(audience.observers)
     for event in events:
-        if isinstance(event, SensoryUpdateEvent) and state.audience.observes(event.observer_uuid):
-            settlements.setdefault(event.settlement if event.settlement is not None else event.uuid, []).append(event)
+        if (isinstance(event, ControllerAssignmentChangedEvent) and not event.canceled
+                and event.phase is EventPhase.COMPLETION):
+            audience = assign_control(audience, event.entity_uuid,
+                event.previous_external_owner_uuid, event.new_external_owner_uuid)
+            max_observers = max(max_observers, len(audience.observers))
+        if audiences is not None:
+            audiences[event.uuid] = audience
+        if isinstance(event, SensoryUpdateEvent) and audience.observes(event.observer_uuid):
+            marker = event.settlement if event.settlement is not None else event.uuid
+            settlements.setdefault((audience.revision, marker), []).append(event)
     return SeatWalk(events=events, facts={row.event_uuid: row for row in conditions},
         actor_fact_changes=actor_fact_changes, logs=logs, native_logs=native_logs,
         names={str(identity): names[identity] for identity in sent.actor_births}, log_inputs=log_inputs,
         shared_logs=shared_logs,
         by_lineage=by_lineage,
         deliveries_at=_due(events, indexes, list(delivery_starts.items())),
-        removals_at=_due(events, indexes, list(removal_starts.items())),
+        removals_at=_due(removal_events, indexes, list(removal_starts.items())),
         explicit_destructions=frozenset(event.item_uuid for event in events if isinstance(event, ItemDestructionEvent)),
-        table=SensoryTable(), known=set(sent.actor_births),
+        table=SensoryTable(), known=set(sent.actor_births), audiences=audiences, max_observers=max_observers,
         settlements={members[0].uuid: tuple(members) for members in settlements.values()},
         settled=frozenset(event.uuid for members in settlements.values() for event in members[1:]),
         observed_objects=set(state.observed_objects))
 
 
-def _enter_event(walk: SeatWalk, state: "ProjectionState", world: WorldFacts, event: Event) -> None:
-    """A seat's part of an event before the session folds take its after-values: the captures due at its cursor."""
+def _enter_removals(walk: SeatWalk, state: "ProjectionState", world: WorldFacts, event: Event) -> None:
+    """Keep currently observed contact before this event or observed source writes it away."""
     view = state.audience_composition.view
     for identity in walk.removals_at.get(event.uuid, ()):
         if view is not None and identity in world.objects and object_observed(world, view, identity):
             walk.destroyed_contacts[identity] = disclosed_world_object(world, view, identity,
                 state.static_sent.object_looks | walk.pending.object_looks)
+
+
+def _enter_event(walk: SeatWalk, state: "ProjectionState", world: WorldFacts, event: Event) -> None:
+    """A seat's part of an event before the session folds take its after-values: the captures due at its cursor."""
+    _enter_removals(walk, state, world, event)
+    view = state.audience_composition.view
     for lineage in walk.deliveries_at.get(event.uuid, ()):
         senses = view
         walk.delivery_declarations[lineage] = (None if senses is None else DeclarationSenses(
@@ -1336,7 +1363,8 @@ def _enter_body(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", acto
 def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", world: WorldFacts,
                    digests: TileDigests, event: Event,
                    applied: AppliedWorldFact | None, folded: Mapping[UUID, AppliedWorldFact | None],
-                   before: CellMask, settlement: tuple[SensoryUpdateEvent, ...] = ()) -> None:
+                   before: CellMask, settlement: tuple[SensoryUpdateEvent, ...] = (),
+                   sensed: SensedWorld | None = None) -> None:
     """The seat's world update at an event (`before`: its composed view's visible cells before the event): what
     the event wrote or, at a settlement of its members (`settlement`, at its first event), what their senses
     changed and what the changes they saw happen wrote (folded at their own versions), each of those once per
@@ -1345,7 +1373,6 @@ def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", w
     records: tuple[AppliedWorldFact, ...] = (applied,) if applied is not None else ()
     # Each record publishes once per seat: a walked event's own, or an observed change's at the first sight of it.
     walk.published_sources.add(event.uuid)
-    sensed = None
     if settlement:
         sources = tuple(source for source in dict.fromkeys(row.source_event_uuid for member in settlement
             for row in member.observed_changes) if source not in walk.published_sources)
@@ -1374,6 +1401,33 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
     applied; `step`: the actors' change and rows): its senses, the bodies entering its view, its world update, its
     node. `folded` holds what each version the group folded so far applied."""
     observer = state.audience
+    audience_fact = None
+    granted: tuple[UUID, ...] = ()
+    if walk.audiences is not None and (after := walk.audiences[event.uuid]) is not observer:
+        removed = tuple(identity for identity in observer.observers if not after.observes(identity))
+        granted = tuple(identity for identity in after.controlled if not observer.controls(identity))
+        if observer.observers != after.observers:
+            positions = {identity: 1 << index for index, identity in enumerate(after.observers)}
+            remap = tuple((1 << index, positions.get(identity, 0))
+                for index, identity in enumerate(observer.observers))
+            for views in (state.world_stamps.views, walk.stamps.views):
+                for identity, held in views.items():
+                    if held is not None:
+                        bits = held.members if held.members is not None else 1
+                        mapped = sum(new for old, new in remap if bits & old)
+                        views[identity] = replace(held, members=None
+                            if len(after.observers) == 1 and mapped == 1 else mapped)
+        state.audience = observer = after
+        composition = state.audience_composition
+        sensory = None
+        if removed and composition.view is not None:
+            before = composition.view.visible
+            change = apply_settlement(composition, observer, state.observer_uuid, (), removed=removed)
+            assert composition.view is not None
+            sensory = _settlement_fact(change, composition.view, state, walk)
+            _publish_world(walk, group, state, world, digests, event, applied, folded, before,
+                sensed=SensedWorld(frozenset(change.objects), frozenset(change.effects)))
+        audience_fact = AudienceFact(audience=observer, sensory=sensory)
     keys, indexes, facts = group.keys, group.indexes, walk.facts
     settlement = walk.settlements.get(event.uuid, ())
     sensory_fact = None
@@ -1403,7 +1457,7 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
         _publish_world(walk, group, state, world, digests, event, applied, folded, before, settlement)
     for identity in observer.controlled:
         # A controlled body is always perceived: it enters once the session holds it.
-        if identity not in walk.known and identity in actors:
+        if (identity not in walk.known or identity in granted) and identity in actors:
             _enter_body(walk, group, state, actors, loadout_ids, event, identity, True)
     view = state.audience_composition.view
     for identity in tuple(walk.unborn):
@@ -1447,7 +1501,8 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
                 and (request.parent_lineage, event.source_condition_uuid) in walk.observed_spatial_removals):
             removed_damage_source = event.source_condition_uuid
     # A sensory event's fact is its settlement's composed change, at the settlement's first event of the seat.
-    fact = (sensory_fact if isinstance(event, SensoryUpdateEvent) else _project_fact(event, observer, actors,
+    fact = (audience_fact if isinstance(event, ControllerAssignmentChangedEvent) else
+        sensory_fact if isinstance(event, SensoryUpdateEvent) else _project_fact(event, observer, actors,
             facts.get(event.uuid), walk.events, walk.entered, known, observed_objects, view, keys,
             step, state.static_sent, walk.pending, declaration_senses, removed_damage_source))
     if (isinstance(fact, SpatialEffectStateFact) and fact.operation is SpatialEffectChangeOperation.REMOVED
@@ -1571,7 +1626,8 @@ def _end_walk(walk: SeatWalk, group: WalkGroup, state: "ProjectionState"
     # Each node's disclosed resolution, by the node's native occurrence.
     resolutions: dict[int, tuple[int, UUID | None]] = {}
     for index, (node, event) in enumerate(zip(nodes, walk.events, strict=True)):
-        attributions = _content_attributions(event, node.fact, observer, disclosed, keys,
+        attributions = _content_attributions(event, node.fact,
+            walk.audiences[event.uuid] if walk.audiences is not None else observer, disclosed, keys,
             walk.content_at_event[event.uuid])
         if attributions:
             nodes[index] = replace(node, content_attributions=attributions)
@@ -1847,7 +1903,9 @@ class ProjectionState:
     public_lineages: dict[int, int] = field(default_factory=dict)
     public_cursors: dict[int, int] = field(default_factory=dict)
     disclosed_turns: set[UUID] = field(default_factory=set)
-    owned_spatial_effects: set[UUID] = field(default_factory=set)
+    # Recorded source of each effect disclosed while controlled; current membership
+    # governs private duration updates even after a living caster is released.
+    owned_spatial_effects: dict[UUID, UUID] = field(default_factory=dict)
     # Each entity's last committed spatial transition (`commit_current`), as the client keeps it.
     spatial_commit_cursors: dict[UUID, int] = field(default_factory=dict)
     next_occurrence: int = 0
@@ -1863,7 +1921,9 @@ def _sensory_rows(nodes: tuple[PlayerNode, ...], table: SensoryTable, observers:
     """The group's sensory rows and its facts naming them: the walk's table, and the cell tables of the facts'
     cell lists, each distinct row once (`shared_cells`, `shared_values`). A seat with one observer leaves out the
     member columns."""
-    sensory = [(at, node.fact) for at, node in enumerate(nodes) if isinstance(node.fact, SensoryFact)]
+    sensory = [(at, fact) for at, node in enumerate(nodes)
+        if (fact := node.fact.sensory if isinstance(node.fact, AudienceFact) else node.fact) is not None
+        and isinstance(fact, SensoryFact)]
     if len(sensory) != len(table.cells):
         raise ValueError("Every sensory fact a walk builds is admitted, once")
     cells, cell_bits = shared_cells([mask for row in table.cells for mask in (row.visible_added, row.visible_removed)])
@@ -1872,9 +1932,12 @@ def _sensory_rows(nodes: tuple[PlayerNode, ...], table: SensoryTable, observers:
     hazards, hazard_bits = shared_values([zeros_left_out(row.hazards_changed, row.visible_added) for row in table.cells])
     result = list(nodes)
     for number, (at, fact) in enumerate(sensory):
-        result[at] = replace(nodes[at], fact=replace(fact, visible_cells_added=cell_bits[2 * number],
+        packed = replace(fact, visible_cells_added=cell_bits[2 * number],
             visible_cells_removed=cell_bits[2 * number + 1], effective_light_levels_changed=light_bits[number],
-            hazardous_cells_changed=hazard_bits[number]))
+            hazardous_cells_changed=hazard_bits[number])
+        outer = nodes[at].fact
+        result[at] = replace(nodes[at], fact=replace(outer, sensory=packed)
+            if isinstance(outer, AudienceFact) else packed)
     several = observers > 1
     contacts = table.contacts
     return tuple(result), SensoryRows(uuids=tuple(table.uuids), contact_uuid_index=tuple(table.contact_uuid_index),
@@ -2006,7 +2069,8 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
         audience = resolve_audience(initialization.observer_uuid, initialization.audience)
         state = ProjectionState(initialization.generation, initialization.observer_uuid, audience)
         # The seat's own effects, known before its walk shows them (their durations are disclosed to it).
-        state.owned_spatial_effects.update(event.spatial_effect_uuid for _, event in initialization.admitted
+        state.owned_spatial_effects.update((event.spatial_effect_uuid, event.source_entity_uuid)
+            for _, event in initialization.admitted
             if isinstance(event, SpatialEffectChangeEvent) and audience.controls(event.source_entity_uuid))
         states.append(state)
         worlds.append(world)
@@ -2038,7 +2102,7 @@ def _emit_initialization(group: WalkGroup, state: ProjectionState, initializatio
     nodes, node_lineages, bodies, updates, resolutions = _end_walk(walk, group, state)
     nodes, rows, bodies, updates, resolution_rows = _public_occurrences(state, group.keys, nodes, node_lineages,
         group.versions, bodies, updates, resolutions)
-    nodes, sensory_rows = _sensory_rows(nodes, walk.table, len(state.audience.observers))
+    nodes, sensory_rows = _sensory_rows(nodes, walk.table, walk.max_observers)
     _merge_sent(state, walk)
     return state, PlayerInitialization(generation=initialization.generation, observer_uuid=initialization.observer_uuid,
         world=world, nodes=nodes, version_rows=rows, end_cursor=state.next_occurrence,
@@ -2070,16 +2134,18 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
     if any(lineage.objective_rows is not versions and lineage.objective_rows != versions for lineage in lineages[1:]):
         raise ValueError("The seats of one root walk its one group")
     start_cursors = tuple(state.next_occurrence for state in states)
-    for state, lineage in zip(states, lineages):
-        state.owned_spatial_effects.update(event.spatial_effect_uuid for event in lineage.events
-            if isinstance(event, SpatialEffectChangeEvent) and state.audience.controls(event.source_entity_uuid))
     group = _walk_group(session, versions)
     inputs = log_inputs if log_inputs is not None else tuple(NO_LOG_INPUTS for _ in states)
     shared_logs = SharedLogEntries()
     walks = tuple(_begin_walk(group, state, upgrade_recorded_resolutions(lineage.events),
         lineage.conditions, lineage.actor_fact_changes, {}, lineage.native_logs, session.names, seat_inputs,
-        shared_logs)
+        shared_logs, lineage.observed_sources)
         for state, lineage, seat_inputs in zip(states, lineages, inputs, strict=True))
+    for state, walk in zip(states, walks):
+        state.owned_spatial_effects.update((event.spatial_effect_uuid, event.source_entity_uuid)
+            for event in walk.events if isinstance(event, SpatialEffectChangeEvent)
+            and (walk.audiences[event.uuid] if walk.audiences is not None else state.audience).controls(
+                event.source_entity_uuid))
     order = tuple(event.uuid for event in walks[0].events)
     if any(tuple(event.uuid for event in walk.events) != order for walk in walks[1:]):
         raise ValueError("The seats of one root walk its events in one order")
@@ -2092,6 +2158,8 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
         # body differs only for a sensory version, which writes no world).
         event = walks[0].events[position]
         while source is not None and group.indexes[source.uuid] < group.indexes[event.uuid]:
+            for walk, state in zip(walks, states):
+                _enter_removals(walk, state, session.world, source)
             _fold_version(session, folded, source, None)
             source = next(sources, None)
         condition = walks[0].facts.get(event.uuid)
@@ -2125,7 +2193,7 @@ def _emit_lineage(group: WalkGroup, state: ProjectionState, lineage: CompletedLi
         group.versions, bodies, updates, resolutions)
     if not nodes and not bodies and not updates:
         return None
-    nodes, sensory_rows = _sensory_rows(nodes, walk.table, len(state.audience.observers))
+    nodes, sensory_rows = _sensory_rows(nodes, walk.table, walk.max_observers)
     _merge_sent(state, walk)
     root_occurrence = state.public_cursors.get(group.keys.versions[lineage.root.uuid])
     root = next((index for index, node in enumerate(nodes) if node.occurrence == root_occurrence), None)

@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.actions_functional import free_aim_target
-from dnd.controller import HumanController
+from dnd.controller import ControllerExecutionMode
 from dnd.core.events import EventQueue
 from dnd.core.content.descriptors import ContentVisibility
 from dnd.encounter import EncounterState, TurnState
@@ -29,7 +29,7 @@ from dnd.player.session import (Session, advance_controller, close_session, crea
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_catalog import encounter_recipe
 from server.framing import MAX_PACKET_BYTES, read_packet, write_packet
-from server.protocol import (BoundaryState, ChoicesResponse, ContentResponse, InitializationResponse,
+from server.protocol import (BoundaryState, ChoicesResponse, ContentResponse, InitializationResponse, Lifecycle,
     PlayerCursor, PlayerOperation, PreviewResponse, protocol_identity)
 from server.worker_protocol import (Advance, Choices, Close, Command, EndGame, Preview, Publication, Reply,
     Request, REQUEST_CODEC, Start)
@@ -50,17 +50,22 @@ def boundary(session: Session, seat: str, revision: str) -> BoundaryState:
         return BoundaryState(lifecycle='outside_encounter', input_actor_uuid=None, state_revision=revision)
     if encounter.state is not EncounterState.ACTIVE:
         return BoundaryState(lifecycle='terminal', input_actor_uuid=None, state_revision=None)
+    controller = encounter.get_current_controller()
     waiting = (encounter.turn_state is TurnState.IN_PROGRESS and actor is not None
-        and isinstance(encounter.get_current_controller(), HumanController))
+        and controller is not None and controller.execution_mode is ControllerExecutionMode.EXTERNAL)
     input_actor = actor.uuid if waiting and actor is not None and session.seats[seat].controls(actor.uuid) else None
-    return BoundaryState(lifecycle='waiting_for_human' if input_actor is not None else 'advancing',
+    lifecycle: Lifecycle = 'advancing'
+    if input_actor is not None and controller is not None:
+        lifecycle = 'waiting_for_codex' if controller.external_boundary_status == 'waiting_for_codex' else 'waiting_for_human'
+    return BoundaryState(lifecycle=lifecycle,
         input_actor_uuid=input_actor, state_revision=revision if input_actor is not None else None)
 
 
 def needs_advance(session: Session) -> bool:
+    controller = session.encounter.get_current_controller()
     return session.encounter.state is EncounterState.ACTIVE and not (
         session.encounter.turn_state is TurnState.IN_PROGRESS
-        and isinstance(session.encounter.get_current_controller(), HumanController))
+        and controller is not None and controller.execution_mode is ControllerExecutionMode.EXTERNAL)
 
 
 def start(request: Start) -> tuple[Runtime, Reply, tuple[BaseModel, ...]]:
@@ -200,14 +205,17 @@ def dispatch(runtime: Runtime, request: Request) -> tuple[Reply, tuple[BaseModel
     for seat, update in updates.items():
         previous = runtime.publications[seat]
         next_boundary = boundary(session, seat, previous.state_revision)
+        audience = session.seats[seat]
+        if runtime.audiences[seat].projection.audience != audience:
+            raise RuntimeError('Recorded audience disagrees with committed native control')
         owns_command = isinstance(request, Command) and request.seat_id == seat
         if not (owns_command or update.lineages or update.combat_log_appends or update.content_additions
-                or update.hud is not None or next_boundary != previous.boundary):
+                or update.hud is not None or next_boundary != previous.boundary or audience != previous.audience):
             continue
         revision = str(uuid4())
         next_boundary = boundary(session, seat, revision)
         cursor = PlayerCursor(**previous.cursor.model_dump(exclude={'sequence'}), sequence=previous.cursor.sequence + 1)
-        publication = previous.model_copy(update={'cursor': cursor, 'state_revision': revision, 'boundary': next_boundary})
+        publication = previous.model_copy(update={'cursor': cursor, 'state_revision': revision, 'boundary': next_boundary, 'audience': audience})
         record = PlayerOperation(generation=update.generation, observer_uuid=update.observer_uuid, lineages=update.lineages, hud=update.hud,
             combat_log_appends=update.combat_log_appends, content_additions=update.content_additions,
             protocol=protocol_identity(), cursor=cursor,

@@ -1,14 +1,42 @@
 """Summoned creatures choose attacks through the native encounter controller."""
 
 from uuid import UUID
+from contextlib import contextmanager
+
+import pytest
 
 from dnd.actions import AttackEvent, DropConcentration, Move
+from dnd.ai.runtime.controller import NativeAIController
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventPhase, EventQueue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.spells.summoning import ConjureFey
 from tests.engine.test_summoning_lifecycle import battle, cast_one
+
+
+@contextmanager
+def native_ai_caster(battle):
+    """Give an automation scenario a real AI caster, retaining its ordinary fixture owner."""
+    _, encounter, system, caster, _ = battle
+    previous = encounter.get_controller_for(caster.uuid)
+    controller = NativeAIController.create(source_entity_uuid=caster.uuid,
+        game_id=str(system.uuid), assignment_id='autonomous-summon-caster',
+        controlled_entity_uuids=(caster.uuid,), knowledge=system.ai_knowledge)
+    try:
+        encounter.set_controller_for(caster.uuid, controller)
+        controller.start([caster])
+        yield controller
+    finally:
+        encounter.set_controller_for(caster.uuid, previous)
+        controller.close()
+        controller.remove_from_register()
+
+
+@pytest.fixture
+def autonomous_battle(battle):
+    with native_ai_caster(battle):
+        yield battle
 
 
 def autonomous_attack(encounter: Encounter, actor_uuid: UUID) -> AttackEvent:
@@ -30,7 +58,8 @@ def autonomous_attack(encounter: Encounter, actor_uuid: UUID) -> AttackEvent:
     raise AssertionError("Summon did not attack within four controller decisions")
 
 
-def test_allied_summon_autonomously_attacks_enemy_and_preserves_nearby_caster(battle):
+def test_allied_summon_autonomously_attacks_enemy_and_preserves_nearby_caster(autonomous_battle):
+    battle = autonomous_battle
     _game, encounter, _system, caster, enemy = battle
     Entity.update_entity_position(caster, (3, 2))
     Entity.update_entity_position(enemy, (5, 2))

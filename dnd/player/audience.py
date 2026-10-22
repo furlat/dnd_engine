@@ -6,7 +6,10 @@ complete recorded observations; it grants no actor additional senses or actions.
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from typing import Annotated
 from uuid import UUID
+
+from annotated_types import Ge
 
 import numpy as np
 
@@ -20,7 +23,7 @@ from dnd.types.senses import PerceivedContact, PerceivedLightSource, PerceivedSp
 class PlayerAudience:
     controlled: tuple[UUID, ...]
     observers: tuple[UUID, ...]
-    revision: int = 0
+    revision: Annotated[int, Ge(0)] = 0
     # Membership views of the two tuples: one hash per check instead of a tuple scan.
     _controlled_set: frozenset[UUID] = field(init=False, repr=False, compare=False)
     _observer_set: frozenset[UUID] = field(init=False, repr=False, compare=False)
@@ -53,6 +56,29 @@ class PlayerAudience:
 
     def granted(self, observers: Collection[str]) -> bool:
         return not self.observer_ids.isdisjoint(observers)
+
+
+def assign_control(audience: PlayerAudience, entity_uuid: UUID,
+                   previous_external_owner_uuid: UUID | None,
+                   new_external_owner_uuid: UUID | None) -> PlayerAudience:
+    """Apply a committed summon assignment to this seat, using the actual caster.
+
+    Initial party assignments carry no owner anchor. Other seats' explicit
+    observer grants do not expand or disappear with a caster's summons.
+    """
+    owned = new_external_owner_uuid is not None and audience.controls(new_external_owner_uuid)
+    formerly_owned = previous_external_owner_uuid is not None and audience.controls(entity_uuid)
+    if not owned and not formerly_owned:
+        return audience
+    controlled = tuple(identity for identity in audience.controlled if identity != entity_uuid)
+    observers = tuple(identity for identity in audience.observers if identity != entity_uuid)
+    if owned:
+        controlled = audience.controlled if audience.controls(entity_uuid) else (*controlled, entity_uuid)
+        if audience.observes(new_external_owner_uuid):
+            observers = audience.observers if audience.observes(entity_uuid) else (*observers, entity_uuid)
+    if controlled == audience.controlled and observers == audience.observers:
+        return audience
+    return PlayerAudience(controlled, observers, audience.revision + 1)
 
 
 def resolve_audience(observer_uuid: UUID, audience: PlayerAudience | None) -> PlayerAudience:
@@ -256,6 +282,12 @@ def _restack(current: "AudienceComposition") -> None:
     members = [perception.members[identity] for identity in current.order]
     current.window = union_box(*(mask_box(senses.visible) for senses in members))
     if current.window is None:
+        shape = (len(members), 0, 0)
+        current.seen = np.zeros(shape, dtype=bool)
+        current.lights, current.hazards = (np.zeros(shape, dtype=np.uint8) for _ in range(2))
+        current.shown = np.zeros((0, 0), dtype=bool)
+        current.shown_light, current.shown_hazard = (np.zeros((0, 0), dtype=np.uint8) for _ in range(2))
+        current.shown_owner = np.zeros((0, 0), dtype=np.uint16)
         return
     current.seen, current.lights, current.hazards = _stack(members, current.window)
     current.shown, current.shown_light, current.shown_hazard, current.shown_owner = _ranked(
@@ -305,6 +337,31 @@ def _fold_view_cells(current: "AudienceComposition", observer: UUID, before: Sen
     if window is None:
         current.view = replace(view, visible=EMPTY_CELLS, effective_light_levels=EMPTY_VALUES, hazardous_cells=EMPTY_VALUES)
         return
+    cells, (light, hazard) = pack_layers(window[0], window[1], current.shown, current.shown_light, current.shown_hazard)
+    current.view = replace(view, visible=cells, effective_light_levels=light, hazardous_cells=hazard)
+
+
+def _remove_member_cells(current: "AudienceComposition", observer: UUID, member: SensesSnapshot) -> None:
+    """Remove one cached layer and recompose only the cells it could contribute."""
+    if observer not in current.order:
+        return
+    index = current.order.index(observer)
+    current.order = tuple(identity for identity in current.order if identity != observer)
+    current.seen, current.lights, current.hazards = (
+        np.delete(layer, index, axis=0) for layer in (current.seen, current.lights, current.hazards))
+    current.shown_owner -= (current.shown_owner > index).astype(np.uint16)
+    box, window, view = mask_box(member.visible), current.window, current.view
+    if box is None or window is None or view is None:
+        return
+    part = (slice(box[0] - window[0], box[2] - window[0] + 1),
+            slice(box[1] - window[1], box[3] - window[1] + 1))
+    if current.order:
+        composed = _ranked(current.seen[:, part[0], part[1]], current.lights[:, part[0], part[1]],
+                           current.hazards[:, part[0], part[1]])
+        current.shown[part], current.shown_light[part], current.shown_hazard[part], current.shown_owner[part] = composed
+    else:
+        current.shown[part] = False
+        current.shown_light[part] = current.shown_hazard[part] = current.shown_owner[part] = 0
     cells, (light, hazard) = pack_layers(window[0], window[1], current.shown, current.shown_light, current.shown_hazard)
     current.view = replace(view, visible=cells, effective_light_levels=light, hazardous_cells=hazard)
 
@@ -506,7 +563,7 @@ def _cells_change(before: SensesSnapshot | None, after: SensesSnapshot
 
 
 def apply_settlement(current: AudienceComposition, audience: PlayerAudience, observer_uuid: UUID,
-                     events: Sequence[SensoryDelta]) -> ComposedChange:
+                     events: Sequence[SensoryDelta], *, removed: Sequence[UUID] = ()) -> ComposedChange:
     """Fold one settlement's member observations (`events`, in order) into an exclusively owned composition and
     return the change of the composed view (plan §3.1): one composition per settlement, never member by member.
 
@@ -522,15 +579,35 @@ def apply_settlement(current: AudienceComposition, audience: PlayerAudience, obs
     light_names: set[UUID] = set()
     retired: dict[UUID, set[Position]] = {}
     initial = any(event.initial for event in events)
+    for observer in removed:
+        member = perception.members.get(observer)
+        if member is None:
+            continue
+        for identity in member.entities.keys() - entity_names.keys():
+            entity_names[identity] = _composed_contact(perception, identity,
+                current.entity_members.get(identity, ()), objects=False)
+        for identity in member.objects.keys() - object_names.keys():
+            object_names[identity] = _composed_contact(perception, identity,
+                current.object_members.get(identity, ()), objects=True)
+        for identity in member.spatial_effects.keys() - effect_names.keys():
+            effect_names[identity] = _composed_effect(perception, identity, current.effect_members.get(identity, ()))
+        light_names.update(member.light_sources)
+        light_names.update(member.light_source_removals)
+        for identities, index in ((member.entities, current.entity_members), (member.objects, current.object_members),
+                                  (member.spatial_effects, current.effect_members)):
+            for identity in identities:
+                _membership(index, identity, observer, False)
+        del perception.members[observer]
+        _remove_member_cells(current, observer, member)
     for event in events:
         if not audience.observes(event.observer_uuid):
             raise ValueError("Sensory observation does not belong to this audience")
         observer = event.observer_uuid
         before = perception.members.get(observer)
         prepared = prepare_sensory_delta(observer, before, event)
-        added, removed = event.visible_cells_added, event.visible_cells_removed
+        added, lost = event.visible_cells_added, event.visible_cells_removed
         # The box of the cells this observation can change for its own member, and so in the view.
-        cells = union_box(mask_box(added), mask_box(removed), mask_box(event.effective_light_levels_changed.cells),
+        cells = union_box(mask_box(added), mask_box(lost), mask_box(event.effective_light_levels_changed.cells),
             mask_box(event.hazardous_cells_changed.cells),
             mask_box(before.visible) if event.initial and before is not None else None)
         entities = {*event.entity_contacts_changed, *event.entity_contacts_removed}
@@ -541,9 +618,9 @@ def apply_settlement(current: AudienceComposition, audience: PlayerAudience, obs
                 entities.update(before.entities)
                 objects.update(before.objects)
                 effects.update(before.spatial_effects)
-            elif added.width or removed.width:
+            elif added.width or lost.width:
                 # A member's changed sight changes its rows' visible parts on those cells.
-                sight = mask_union(added, removed)
+                sight = mask_union(added, lost)
                 effects.update(identity for identity, row in before.spatial_effects.items()
                                if any(cell_in(sight, position) for position in row.positions))
         # Each record's composed value before the settlement, taken when it is first named (only members naming
@@ -578,7 +655,7 @@ def apply_settlement(current: AudienceComposition, audience: PlayerAudience, obs
                 effective_light_levels=EMPTY_VALUES, hazardous_cells=EMPTY_VALUES, spatial_effects={},
                 light_sources={}, light_source_removals={})
         _fold_view_cells(current, observer, before, member, cells, hazards_only=not (event.initial or added.width
-            or removed.width or event.effective_light_levels_changed.cells.width))
+            or lost.width or event.effective_light_levels_changed.cells.width))
 
     view = current.view
     assert view is not None
@@ -613,7 +690,7 @@ def apply_settlement(current: AudienceComposition, audience: PlayerAudience, obs
                         if light_names else (view.light_sources, view.light_source_removals))
     light_changes = {identity: (held, lights.get(identity)) for identity in sorted(light_names, key=str)
                      if (held := view.light_sources.get(identity)) != lights.get(identity)}
-    anchor = perception.members.get(observer_uuid) or next(iter(perception.members.values()))
+    anchor = perception.members.get(observer_uuid) or next(iter(perception.members.values()), view)
     current.view = replace(view, entities=entities_after, objects=objects_after, spatial_effects=effects_after,
         light_sources=lights, light_source_removals=removals,
         position=anchor.position, passive_perception=anchor.passive_perception,

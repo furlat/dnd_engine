@@ -12,7 +12,7 @@ __all__ = [
     "SensoryUpdateReason", "SensoryUpdateEvent",
     "WorldTileState", "WorldObjectState", "WorldConnectorState",
     "WorldMaterializedState", "WorldInitializedEvent", "WorldModifiedEvent", "MechanismInstallEvent",
-    "EntityCreatedEvent", "EntityLevelAddedEvent",
+    "EntityCreatedEvent", "EntityLevelAddedEvent", "ControllerAssignmentChangedEvent",
     "EntityLevelRemovedEvent",
     "SpatialEffectChangeEvent", "SpatialEffectInteractionEvent", "AreaReachEvent",
     "D20Event", "SavingThrowEvent", "SkillCheckEvent",
@@ -47,6 +47,7 @@ from dnd.core.values import (AdvantageBreakdownRow, ComposedValue, ModifiableVal
 from dnd.types.actor import TemporaryHitPointsGrant, ConditionState
 from dnd.types.class_features import IndomitableReroll, RelentlessRageIntervention
 from dnd.types.summoning import SummonOrigin, SummonSelection, TerminalOwnerRelease
+from dnd.types.controller import ControllerExecutionMode
 
 from dnd.core.combat_log import DeathLogData, DeathSaveLogData, ForcedMovementLogData, SpatialChangeLogData, SpatialInteractionLogData, StepMovementLogData, TurnLogData
 from dnd.core.combat_log import CombatLogData, summarize_target_entries
@@ -995,6 +996,20 @@ class EntityFactionChangedEvent(Event):
     entity_uuid: UUID
     previous_faction: str | None
     faction_after: str | None
+
+
+class ControllerAssignmentChangedEvent(Event):
+    """One committed native assignment; controller identities remain backend-only."""
+
+    name: str = "Controller Assignment Changed"
+    event_type: EventType = Field(default=EventType.CONTROLLER_ASSIGNMENT_CHANGED, frozen=True)
+    entity_uuid: UUID
+    previous_controller_uuid: UUID | None
+    controller_uuid: UUID | None
+    previous_execution_mode: ControllerExecutionMode | None
+    execution_mode: ControllerExecutionMode | None
+    previous_external_owner_uuid: UUID | None
+    new_external_owner_uuid: UUID | None
 
 
 class SummonAdmissionEvent(Event):

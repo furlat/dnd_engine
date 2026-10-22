@@ -50,6 +50,7 @@ from dnd.core.equipment_types import WeaponProperty, WeaponSlot, WeaponUsage
 from dnd.core.events import Range, RangeType
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
+from dnd.types.summoning import DRAGON_COLOR_DAMAGE
 from dnd.monsters.spell_summon_actions import (
     SUMMON_CONDITION_IDENTITIES,
     CinderousSwipe,
@@ -860,7 +861,7 @@ def _declare(body: SpellBody):
                     DamageRollProfile(
                         dice_count=2,
                         die_size=6,
-                        damage_type=parameters.breath_type.value,
+                        damage_type=DRAGON_COLOR_DAMAGE[parameters.dragon_color].value,
                     ),
                 ),
             )
@@ -868,7 +869,7 @@ def _declare(body: SpellBody):
                 DraconicBreathCadence(
                     source_entity_uuid=entity.uuid,
                     target_entity_uuid=entity.uuid,
-                    breath_type=parameters.breath_type,
+                    breath_type=DRAGON_COLOR_DAMAGE[parameters.dragon_color],
                     save_dc=parameters.spell_dc,
                 )
             )

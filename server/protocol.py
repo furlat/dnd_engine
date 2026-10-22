@@ -20,7 +20,7 @@ MAX_SAFE_INTEGER = 9007199254740991
 Counter = Annotated[int, Field(strict=True, ge=0, le=MAX_SAFE_INTEGER)]
 PositiveCounter = Annotated[int, Field(strict=True, ge=1, le=MAX_SAFE_INTEGER)]
 Token = Annotated[str, Field(min_length=1, max_length=128)]
-Lifecycle = Literal['starting', 'waiting_for_human', 'advancing', 'outside_encounter', 'delivery_blocked', 'terminal', 'failed', 'closing', 'closed']
+Lifecycle = Literal['starting', 'waiting_for_human', 'waiting_for_codex', 'advancing', 'outside_encounter', 'delivery_blocked', 'terminal', 'failed', 'closing', 'closed']
 FailureReason = Literal['recording_capacity', 'catch_up', 'reader_backpressure', 'worker_failure',
     'capture_failure', 'contract_failure', 'recording_failure', 'host_close']
 RejectionReason = Literal['stale_state', 'stale_discovery', 'not_your_turn', 'actor_unavailable',
@@ -43,7 +43,7 @@ class PlayerCursor(Identity):
 
 class ProtocolIdentity(Wire):
     protocol_version: Literal[1] = 1
-    player_schema_version: Literal[16] = 16
+    player_schema_version: Literal[18] = 18
     schema_digest: Annotated[str, Field(pattern='^[0-9a-f]{64}$')]
 
 

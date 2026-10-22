@@ -219,6 +219,7 @@ class BoundaryState(TypedDict):
     lifecycle: Literal[
         'starting',
         'waiting_for_human',
+        'waiting_for_codex',
         'advancing',
         'outside_encounter',
         'delivery_blocked',
@@ -888,6 +889,7 @@ type EventType = Literal[
     'world_modified',
     'entity_created',
     'entity_faction_changed',
+    'controller_assignment_changed',
     'summon_admission',
     'entity_level_added',
     'entity_level_removed',
@@ -1444,7 +1446,7 @@ class PreviewRequest(TypedDict):
 
 class ProtocolIdentity(TypedDict):
     protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[16]]
+    player_schema_version: NotRequired[Literal[18]]
     schema_digest: str
 
 
@@ -1860,7 +1862,7 @@ class SubjectBinding(TypedDict):
 
 
 type SummonDepartureCause = Literal[
-    'expired', 'dismissed', 'defeated', 'sustain_lost', 'closed'
+    'expired', 'dismissed', 'defeated', 'caster_defeated', 'sustain_lost', 'closed'
 ]
 
 
@@ -3010,6 +3012,12 @@ class AttackLogData(TypedDict):
     is_threatened: NotRequired[bool]
 
 
+class AudienceFact(TypedDict):
+    kind: NotRequired[Literal['audience']]
+    audience: PlayerAudience
+    sensory: NotRequired[SensoryFact | None]
+
+
 class ColumnItemRemnantState(TypedDict):
     rows: NotRequired[RowBits | None]
     values: list[ItemRemnantState]
@@ -3787,6 +3795,7 @@ class PlayerNode(TypedDict):
         | TurnFact
         | ActionFact
         | SensoryFact
+        | AudienceFact
         | ItemChargeFact
         | SpatialEffectStateFact
         | ObjectDamageFact

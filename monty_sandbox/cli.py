@@ -76,7 +76,7 @@ async def run(args) -> None:
     console = Console()
     console.print(f'Preparing private 1v1 match in {directory}', markup=False)
     prepare = await asyncio.create_subprocess_exec(str(args.server_python), '-m',
-        'monty_sandbox.prepare_trial', '--duel', '--output', str(directory),
+        'monty_sandbox.prepare_trial', '--summoner-duel' if args.summoner_duel else '--duel', '--output', str(directory),
         '--game-port', str(args.game_port), '--seed', str(args.seed), cwd=ROOT)
     if await prepare.wait():
         raise RuntimeError('Could not prepare the private match')
@@ -93,7 +93,9 @@ async def run(args) -> None:
                 log = files.enter_context((directory / f'{name}.log').open('w'))
                 children.append(await asyncio.create_subprocess_exec(*command, cwd=ROOT, stdout=log, stderr=log))
             info = {'mcp_url': endpoint, 'game_port': args.game_port, 'mcp_port': args.mcp_port,
-                'seats': ['amber', 'blue'], 'seed': args.seed, 'pids': [child.pid for child in children]}
+                'seats': ['amber', 'blue'], 'seed': args.seed,
+                'fixture': 'summoner_duel' if args.summoner_duel else 'skeleton_duel',
+                'pids': [child.pid for child in children]}
             (directory / 'arena.json').write_text(json.dumps(info, indent=2))
             await asyncio.gather(ready(children[0], f'http://127.0.0.1:{args.game_port}/health', directory / 'game.log', stop),
                 ready(children[1], endpoint, directory / 'mcp.log', stop, 'OPTIONS'))
@@ -122,6 +124,7 @@ def main():
     start.add_argument('--mcp-port', type=int, default=18894)
     start.add_argument('--server-python', type=Path, default=ROOT / '.venv/bin/python')
     start.add_argument('--seed', type=int, default=7)
+    start.add_argument('--summoner-duel', action='store_true', help='Use identical Codex clerics with animal summons')
     start.add_argument('--plain', action='store_true', help='Append readable event lines instead of a live dashboard')
     watch = commands.add_parser('watch', help='Watch or replay an existing trace; never submits actions')
     watch.add_argument('directory', type=Path)

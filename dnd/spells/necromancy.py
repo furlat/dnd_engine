@@ -957,6 +957,8 @@ class SickenedCondition(BaseCondition):
 class EyebiteAsleepEffect(BaseCondition):
     """Apply Eyebite's asleep option and remove it when damage is taken."""
     name: str = Field(default="Eyebite Asleep", description="Condition name.")
+    denies_consciousness: bool = Field(default=True,
+        description="The asleep option makes its target unconscious.")
     description: str = Field(
         default="Magically asleep - wakes on damage",
         description="Rules-facing condition summary.",

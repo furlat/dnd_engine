@@ -129,10 +129,11 @@ def test_worker_mixed_spell_encounter_returns_to_human_with_owned_effects_cleane
     for spell in (Goodberry,SpiritualWeapon,Hex,Moonbeam,HideousLaughter,FireBolt):register_spell(actor,spell,caster_level=7)
     number=0
 
-    def submit(behavior,*,target_uuid=None,position=None,level=None,near=None,facets=()):
+    def submit(behavior,*,target_uuid=None,position=None,level=None,near=None,facets=(),acting=None):
         nonlocal number
+        acting = actor if acting is None else acting
         publication=runtime.publications[seat]
-        assert publication.boundary.input_actor_uuid==actor.uuid
+        assert publication.boundary.input_actor_uuid==acting.uuid
         choices=request_choices((runtime,seat,publication)).choices
         options=[row for row in rows(choices) if row.behavior_id==behavior and row.can_afford and (level is None or row.cast_at_level==level)
             and all(any(facet.key==key and facet.value==value for facet in row.variant_facets) for key,value in facets)]
@@ -151,11 +152,11 @@ def test_worker_mixed_spell_encounter_returns_to_human_with_owned_effects_cleane
             # A free-aim row lists no cells: aim at a seen, empty cell beside the creature.
             position=next(cell for cell in sorted((near.position[0]+dx,near.position[1]+dy)
                 for dx in (-1,0,1) for dy in (-1,0,1) if (dx,dy)!=(0,0))
-                if cell_visible(actor.senses.cells, cell) and not get_map().get_entities_at(cell))
+                if cell_visible(acting.senses.cells, cell) and not get_map().get_entities_at(cell))
         if chosen is None and position is None and near is None:
-            # Any seen, empty point two to three cells from the actor.
-            position=next(cell for cell in sorted(visible_positions(actor.senses.cells))
-                if 2<=max(abs(cell[0]-actor.position[0]),abs(cell[1]-actor.position[1]))<=3
+            # Any seen, empty point two to three cells from the acting.
+            position=next(cell for cell in sorted(visible_positions(acting.senses.cells))
+                if 2<=max(abs(cell[0]-acting.position[0]),abs(cell[1]-acting.position[1]))<=3
                 and not get_map().get_entities_at(cell))
         if chosen is None and position is not None:
             # A free-aim row lists no cells: aim at the requested point (plan §14.4).
@@ -166,16 +167,16 @@ def test_worker_mixed_spell_encounter_returns_to_human_with_owned_effects_cleane
             assert chosen is not None,(behavior,[(row.template_name,len(choices.target_sets[row.target_set])) for row in options])
             row,binding=chosen
             selection=ActionSelection(action_index=row.discovery_index,target_indices=(binding.index,))
-        _,_,preview=dispatch(runtime,Preview(seat_id=seat,request=PreviewRequest(actor_uuid=actor.uuid,
+        _,_,preview=dispatch(runtime,Preview(seat_id=seat,request=PreviewRequest(actor_uuid=acting.uuid,
             state_revision=publication.state_revision,discovery_generation=choices.discovery_generation,
             correlation_id=uuid4(),selection=selection)))
         assert preview.preview.can_confirm
         number+=1
         # Opponents pass their turns, leaving the ranged caster unthreatened.
-        faces=((15,) if behavior=='spell.fire_bolt' else ())+((2,)*100)
+        faces=((15,) if behavior in ('spell.fire_bolt', 'action.spell.spiritual_weapon.strike') else ())+((2,)*100)
         with fixed_dice_faces(*faces):
             reply,records,_=dispatch(runtime,Command(seat_id=seat,request=CommandRequest(command_number=number,
-                actor_uuid=actor.uuid,state_revision=publication.state_revision,
+                actor_uuid=acting.uuid,state_revision=publication.state_revision,
                 intent=ExecuteSelectionIntent(discovery_generation=choices.discovery_generation,selection=selection))))
         assert reply.rejection is None and records
         return records
@@ -194,6 +195,9 @@ def test_worker_mixed_spell_encounter_returns_to_human_with_owned_effects_cleane
             if runtime.publications[seat].boundary.input_actor_uuid==actor.uuid:return
             other_seat,other_publication=next((key,value) for key,value in runtime.publications.items()
                 if value.boundary.input_actor_uuid is not None)
+            if other_publication.boundary.input_actor_uuid == summon.uuid:
+                submit('action.spell.spiritual_weapon.strike', target_uuid=enemies[0].uuid, acting=summon)
+                other_publication = runtime.publications[other_seat]
             number+=1
             reply,_,_=dispatch(runtime,Command(seat_id=other_seat,request=CommandRequest(command_number=number,
                 actor_uuid=other_publication.boundary.input_actor_uuid,state_revision=other_publication.state_revision,

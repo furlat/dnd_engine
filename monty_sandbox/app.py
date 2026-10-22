@@ -24,14 +24,18 @@ All game functions require game_ref. There is no implicit current game.
   await game_list() -> {games: [{game_ref, seat, identity, mode, record_count}, ...]}
   await game_read(game_ref) -> status, cursor, audience, recording counts, recent commands, mode
   await game_events(game_ref, after=-1, limit=16) -> records, next_after, has_more
-  await game_choices(game_ref, force_attack=False) -> schema-8 ChoicesResponse
-  await game_preview(game_ref, actor_uuid, state_revision, discovery_generation, selection) -> schema-8 PreviewResponse
+  await game_choices(game_ref, force_attack=False) -> negotiated-protocol ChoicesResponse
+  await game_preview(game_ref, actor_uuid, state_revision, discovery_generation, selection) -> negotiated-protocol PreviewResponse
   await game_act(game_ref, actor_uuid, state_revision, intent) -> receipt, observation
   await game_receipt(game_ref) -> resolves that game's saved unresolved command
-  await game_wait(game_ref, timeout_seconds=20) -> observation at our input/terminal boundary or timeout
+  await game_wait(game_ref, timeout_seconds=20) -> observation at our input/encounter-end boundary or timeout
 Finished games can be archived with archive_game(session_id, game_ref). Their read/events
 remain available offline; choices/preview/act/receipt/wait reject archived references.
 Refs are local to this workspace, with native game_id + game_epoch + audience_id identity.
+game_read returns current audience membership, folded from ordered audience facts in records.
+Use the latest status.boundary.input_actor_uuid if it belongs to audience.controlled; it may
+be a newly summoned creature. Human and Codex external turns both accept ordinary commands.
+Never infer control from a creature's name, faction or creation. Revocation can leave it alive.
 Choices contain entity_actions, position_actions, self_actions, object_actions.
 Each action references choices['target_sets'][action['target_set']]. Each binding has kind
 'subject', 'position' or 'self'. Subject bindings reference choices['subjects'][binding['subject']]
@@ -42,6 +46,8 @@ Use native discovery_index, target index, state_revision and discovery_generatio
 Table offsets are lookups, never replacement target indexes. A primary's secondary_set
 overrides its secondary pool; absent inherits the action pool, an explicit empty set has none.
 Selection = {action_index: int, target_indices: [int, ...], extra_target_positions: []}.
+An available position action can have an empty target set and a position_region. Read its
+admitted region, select a coordinate through extra_target_positions and check Preview.
 Execute intent = {kind: 'execute_selection', discovery_generation: int, selection: selection}.
 End-turn intent = {kind: 'end_turn'}. Other native intents remain supported.
 Targets are ordered and may repeat. Preview reports can_confirm and next_target_set;
@@ -66,6 +72,10 @@ callbacks during import. No globals, records, receipts or connections are copied
 itself contain data literals: inspect the bundle, and select dependencies explicitly.
 Sessions outlive MCP reconnections, not service restarts. Closing a session or archiving a game
 does not release that server seat for another client. A new match has a different epoch.
+To resume your same seat in a fresh session, explicitly supply its last known
+status.attachment_epoch as open_session(seat=..., expected_attachment_epoch=...).
+The default refuses an attached seat; an explicit stale epoch also fails. Resume catches up
+the existing game records and command counter; never replay commands from the closed session.
 """
 
 
@@ -204,7 +214,8 @@ def create_mcp(seats: dict[str, dict[str, str]], observe: Observer = ignore) -> 
 
     mcp = MCPServer('D&D Monty Sandbox', instructions=GUIDE, lifespan=lifespan)
 
-    async def attach_game(sandbox: Sandbox, session_id: str, seat: str) -> dict:
+    async def attach_game(sandbox: Sandbox, session_id: str, seat: str,
+                          expected_attachment_epoch: str | None = None) -> dict:
         if seat not in seats or len(sandbox.games) >= 8:
             raise ValueError('Unknown seat or eight-game workspace capacity reached')
         game_ref = str(uuid4())
@@ -212,7 +223,8 @@ def create_mcp(seats: dict[str, dict[str, str]], observe: Observer = ignore) -> 
             observe({'agent': sandbox.label, 'seat': seat, 'session_id': session_id, 'game_ref': game_ref, **event})
         player = None
         try:
-            player = await game.open_player(seats[seat]['url'], seats[seat]['credential'], emit)
+            player = await game.open_player(seats[seat]['url'], seats[seat]['credential'], emit,
+                expected_attachment_epoch=expected_attachment_epoch)
             observation = await game.read_game(player)
             identity = {key: observation['status'][key] for key in ('game_id', 'game_epoch', 'audience_id')}
             entry = workspace.GameEntry(game_ref, seat, identity, player.packets, player)
@@ -226,8 +238,11 @@ def create_mcp(seats: dict[str, dict[str, str]], observe: Observer = ignore) -> 
             raise
 
     @mcp.tool()
-    async def open_session(seat: str | None = None, toolkit: Toolkit | None = None) -> dict[str, Any]:
+    async def open_session(seat: str | None = None, toolkit: Toolkit | None = None,
+                           expected_attachment_epoch: str | None = None) -> dict[str, Any]:
         """Create an empty agent REPL, optionally load explicit source tools, then optionally join a seat."""
+        if seat is None and expected_attachment_epoch is not None:
+            raise ValueError('Resuming an attachment requires an explicit seat')
         sources = validate_bundle(toolkit)
         session_id = str(uuid4())
         label = seat or 'agent-' + session_id[:8]
@@ -253,7 +268,8 @@ def create_mcp(seats: dict[str, dict[str, str]], observe: Observer = ignore) -> 
                     for source in sources:
                         await monty.feed_run(source['code'], external_lookup={}, print_callback=lambda stream, text: None)
                         sandbox.sources[source['name']] = source['code']
-                joined = {'game_ref': None, 'observation': None} if seat is None else await attach_game(sandbox, session_id, seat)
+                joined = {'game_ref': None, 'observation': None} if seat is None else await attach_game(
+                    sandbox, session_id, seat, expected_attachment_epoch)
                 observation = joined['observation']
                 sessions[session_id] = sandbox
                 emit({'kind': 'session_open', 'observation': observation})

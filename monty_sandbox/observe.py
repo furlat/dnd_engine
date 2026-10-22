@@ -54,6 +54,7 @@ def summary(name: str, result: dict) -> dict:
     observation = result.get('observation', result)
     if 'status' in observation:
         return {'boundary': observation['status']['boundary'], 'cursor': observation['cursor'],
+            'audience': observation['audience'],
             'receipt': result.get('receipt'), 'wait_timed_out': result.get('wait_timed_out', False),
             'game_ref': observation.get('game_ref'), 'mode': observation.get('mode')}
     return result

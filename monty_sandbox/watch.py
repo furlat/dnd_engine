@@ -54,16 +54,16 @@ def update(view: View, event: dict) -> None:
         seat['activity'].append(f'→ {label}')
     if kind == 'host_error':
         seat['activity'].append(clean(f'! {label}: {event["error"]}')[:180])
-    if kind in ('session_open', 'game_joined', 'game_archived') and event['observation'] is not None:
-        seat['controlled'] = event['observation']['audience']['controlled']
-        if seat['game_ref'] is not None:
-            seat['controlled_by_game'][seat['game_ref']] = seat['controlled']
     observation = (event.get('observation') or {}) if kind in ('session_open', 'game_joined', 'game_archived') else event if kind == 'record' else event.get('result', {})
     if kind in ('host_result', 'session_open', 'game_joined', 'game_archived', 'record'):
+        if observation.get('audience') is not None:
+            seat['controlled'] = observation['audience']['controlled']
+            if seat['game_ref'] is not None:
+                seat['controlled_by_game'][seat['game_ref']] = seat['controlled']
         boundary = observation.get('boundary', observation.get('status', {}).get('boundary'))
         if boundary:
             seat['status'] = boundary['lifecycle']
-            if seat['status'] == 'waiting_for_human':
+            if seat['status'] in ('waiting_for_human', 'waiting_for_codex'):
                 seat['status'] = 'YOUR TURN' if boundary['input_actor_uuid'] in seat['controlled'] else 'waiting for opponent'
         receipt = observation.get('receipt')
         if receipt:

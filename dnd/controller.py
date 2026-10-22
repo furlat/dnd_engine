@@ -4,7 +4,6 @@ Controllers decide whether an encounter turn should run autonomously or wait for
 external input, and may provide actions while the encounter owns turn flow.
 """
 
-from enum import Enum
 from dataclasses import dataclass
 from typing import Any, Optional, Dict, List, ClassVar
 
@@ -24,14 +23,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.base_actions import BaseAction
 from dnd.core.events import Event
 from dnd.entity import Entity
-
-
-class ControllerExecutionMode(str, Enum):
-    """Whether the encounter executes decisions or waits for external input."""
-
-    AUTONOMOUS = "autonomous"
-    DEFERRED_AUTONOMOUS = "deferred_autonomous"
-    EXTERNAL = "external"
+from dnd.types.controller import ControllerExecutionMode as ControllerExecutionMode
 
 
 class TurnContext(BaseObject):
@@ -138,6 +130,11 @@ class Controller(BaseObject):
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
         self.__class__._controller_registry[self.uuid] = self
+
+    def remove_from_register(self) -> None:
+        """Release the same identity from the object and controller registries."""
+        super().remove_from_register()
+        self._controller_registry.pop(self.uuid, None)
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['Controller']:

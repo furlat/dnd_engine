@@ -27,7 +27,7 @@ from dnd.core.dice import Dice, RollType
 from dnd.core.values import ValueRead, read_value, parts
 from dnd.types.event_facts import GroupEntryKind
 from dnd.core.events import (
-    Event, EventPhase, EventQueue,
+    Event, EventPhase, EventQueue, ControllerAssignmentChangedEvent,
     EncounterStartEvent, EncounterEndEvent, InitiativeOrderChangedEvent,
     RoundStartEvent, RoundEndEvent,
     TurnStartEvent, TurnEndEvent,
@@ -39,7 +39,7 @@ from dnd.core.navigation import NO_CELLS_LAYER, NO_SIDES_LAYER
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.subjective_combat_log import project_combat_log
 from dnd.entity import Entity
-from dnd.blocks.sensory import spatial_senses_system
+from dnd.blocks.sensory import published_senses, spatial_senses_system
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.controller import (
     Controller,
@@ -255,6 +255,7 @@ class CombatantState(BaseObject):
         entity_uuid: UUID of the entity in the encounter.
         joined_after_uuid: Existing combatant anchoring a newly joined creature, when any.
         controller_uuid: UUID of the controller assigned to the entity.
+        external_owner_uuid: Actual caster whose external controller this summon borrows, if any.
         initiative_roll: Natural d20 result used for initiative.
         initiative_bonus: Modifier added to the initiative roll.
         initiative_total: Final initiative total.
@@ -269,7 +270,9 @@ class CombatantState(BaseObject):
     entity_uuid: UUID = Field(description="UUID of the entity in the encounter.")
     joined_after_uuid: UUID | None = Field(default=None,
         description="Existing combatant anchoring this creature's insertion, when any.")
-    controller_uuid: UUID = Field(description="UUID of the controller assigned to the entity.")
+    controller_uuid: UUID | None = Field(description="UUID of the controller assigned to the entity.")
+    external_owner_uuid: UUID | None = Field(default=None,
+        description="Actual caster whose external controller this summon borrows; ordinary party assignments have none.")
     initiative_roll: int = Field(default=0, description="Natural d20 result used for initiative.")
     initiative_bonus: int = Field(default=0, description="Modifier added to the initiative roll.")
     initiative_total: int = Field(default=0, description="Final initiative total.")
@@ -293,7 +296,7 @@ class CombatantState(BaseObject):
     @property
     def controller(self) -> Optional[Controller]:
         """Get the controller for this combatant."""
-        return Controller.get(self.controller_uuid)
+        return Controller.get(self.controller_uuid) if self.controller_uuid is not None else None
 
     @computed_field
     @property
@@ -333,7 +336,11 @@ class PreparedCombatantJoin:
     controller: Controller
     combatant: CombatantState
     after_uuid: UUID | None
+    promote_companion: bool = True
+    parent_event: Event | None = None
     committed: bool = False
+    published: bool = False
+    previous_order: tuple[UUID, ...] = ()
 
 
 class Encounter(BaseObject):
@@ -504,18 +511,24 @@ class Encounter(BaseObject):
         return combatant.controller if combatant else None
 
     def prepare_combatant_join(self, entity: Entity, controller: Controller, *,
-                               after_uuid: UUID | None) -> PreparedCombatantJoin:
+                               after_uuid: UUID | None, external_owner_uuid: UUID | None = None,
+                               promote_companion: bool = True,
+                               parent_event: Event | None = None) -> PreparedCombatantJoin:
         """Admit one live join without rerolling or publishing initiative."""
         if (self.state is not EncounterState.ACTIVE or (after_uuid is not None and after_uuid not in self.combatants)
                 or after_uuid in self._pending_leaves or entity.uuid in self.combatants):
             raise ValueError("Live join requires a present anchor and a new combatant")
+        if external_owner_uuid is not None and controller.execution_mode is not ControllerExecutionMode.EXTERNAL:
+            raise ValueError("Only an external assignment may borrow a caster's control")
         anchor = self.combatants[after_uuid] if after_uuid is not None else None
         combatant = CombatantState(source_entity_uuid=entity.uuid, entity_uuid=entity.uuid,
-            controller_uuid=controller.uuid, initiative_bonus=entity.initiative.normalized_score,
+            controller_uuid=controller.uuid, external_owner_uuid=external_owner_uuid,
+            initiative_bonus=entity.initiative.normalized_score,
             initiative_total=anchor.initiative_total if anchor is not None else 0, joined_after_uuid=after_uuid)
         if anchor is None:
             self._roll_combatant_initiative(combatant)
-        return PreparedCombatantJoin(self, entity, controller, combatant, after_uuid)
+        return PreparedCombatantJoin(self, entity, controller, combatant, after_uuid,
+            promote_companion=promote_companion, parent_event=parent_event)
 
     def validate_combatant_join(self, prepared: PreparedCombatantJoin) -> None:
         if prepared.encounter is not self:
@@ -530,7 +543,7 @@ class Encounter(BaseObject):
                 or Controller.get(prepared.controller.uuid) is not prepared.controller):
             raise ValueError("Admitted combatant join is no longer available")
 
-    def commit_combatant_join(self, prepared: PreparedCombatantJoin) -> None:
+    def commit_combatant_join(self, prepared: PreparedCombatantJoin, *, publish: bool = True) -> None:
         self.validate_combatant_join(prepared)
         if prepared.committed:
             return
@@ -551,29 +564,65 @@ class Encounter(BaseObject):
                 index += 1
         self.combatants[prepared.entity.uuid] = prepared.combatant
         prepared.entity.active_encounter_uuid = self.uuid
-        if prepared.controller.execution_mode is ControllerExecutionMode.EXTERNAL:
+        if prepared.promote_companion and prepared.controller.execution_mode is ControllerExecutionMode.EXTERNAL:
             prepared.entity.is_player_companion=True
         self.initiative_order.insert(index, prepared.entity.uuid)
         if active_uuid is not None:
             self.current_turn_index = self.initiative_order.index(active_uuid)
         prepared.committed = True
-        publish_initiative_order(self, previous_order)
+        prepared.previous_order = previous_order
+        if publish:
+            self.publish_combatant_join(prepared)
+
+    def publish_combatant_join(self, prepared: PreparedCombatantJoin, *, initialize_observer: bool = False) -> None:
+        """Publish admitted authority before the new body's birth and observer evidence."""
+        if prepared.encounter is not self or not prepared.committed:
+            raise ValueError("Only a committed combatant join may be published")
+        if prepared.published:
+            return
+        prepared.published = True
+        errors: list[BaseException] = []
+        try:
+            assignment = publish_controller_assignment(prepared.entity.uuid, None, prepared.controller, None,
+                prepared.combatant.external_owner_uuid, prepared.parent_event)
+            if initialize_observer and prepared.combatant.external_owner_uuid is not None:
+                spatial_senses_system.publish_observer_refresh(prepared.entity.uuid,
+                    published_senses(prepared.entity.senses), initial=True, parent_event=assignment)
+        except BaseException as error:
+            errors.append(error)
+        try:
+            publish_initiative_order(self, prepared.previous_order)
+        except BaseException as error:
+            errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Committed combatant join publication failed", errors)
 
     def cancel_combatant_join(self, prepared: PreparedCombatantJoin) -> None:
         if prepared.encounter is not self or prepared.committed:
             raise ValueError("Only an uncommitted combatant join may be canceled")
         prepared.combatant.remove_from_register()
 
-    def release_inactive_combatant(self, entity_uuid: UUID) -> None:
+    def release_inactive_combatant(self, entity_uuid: UUID, *, parent_event: Event | None = None) -> None:
         """Release an ended encounter's reference without retiring its living actor."""
         if self.state is EncounterState.ACTIVE:
             raise ValueError("Active combatants must leave at an execution boundary")
+        errors: list[BaseException] = []
+        if entity_uuid in self.combatants:
+            try:
+                self.set_controller_for(entity_uuid, None, parent_event=parent_event)
+            except BaseException as error:
+                errors.append(error)
         combatant = self.combatants.pop(entity_uuid, None)
         if combatant is not None:
             combatant.remove_from_register()
         previous_order = tuple(self.initiative_order)
         self.initiative_order = [identity for identity in previous_order if identity != entity_uuid]
-        publish_initiative_order(self, previous_order)
+        try:
+            publish_initiative_order(self, previous_order)
+        except BaseException as error:
+            errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Committed inactive combatant release failed to publish", errors)
 
     def request_combatant_leave(self, entity_uuid: UUID, *, parent_event: Event | None = None) -> None:
         """Revoke departing agency now; edit initiative at the next native boundary."""
@@ -583,6 +632,7 @@ class Encounter(BaseObject):
         entity = Entity.get(entity_uuid)
         if entity is not None:
             entity.revoke_runtime_agency()
+        self.set_controller_for(entity_uuid, None, parent_event=parent_event)
 
     @contextmanager
     def membership_execution(self) -> Iterator[None]:
@@ -638,7 +688,10 @@ class Encounter(BaseObject):
         if errors:
             raise BaseExceptionGroup("Departed turn publication failed", errors)
 
-    def set_controller_for(self, entity_uuid: UUID, controller: Controller) -> UUID:
+    def set_controller_for(self, entity_uuid: UUID, controller: Controller | None, *,
+                           external_owner_uuid: UUID | None = None,
+                           promote_companion: bool = True,
+                           parent_event: Event | None = None) -> UUID | None:
         """Replace the controller assigned to one combatant.
 
         Args:
@@ -654,11 +707,26 @@ class Encounter(BaseObject):
         combatant = self.combatants.get(entity_uuid)
         if combatant is None:
             raise ValueError(f"Entity {entity_uuid} is not in this encounter")
+        if external_owner_uuid is not None and (controller is None
+                or controller.execution_mode is not ControllerExecutionMode.EXTERNAL):
+            raise ValueError("Only an external assignment may borrow a caster's control")
         previous_controller_uuid = combatant.controller_uuid
-        combatant.controller_uuid = controller.uuid
+        previous_controller = combatant.controller
+        previous_owner = combatant.external_owner_uuid
+        incoming_uuid = controller.uuid if controller is not None else None
+        if incoming_uuid == previous_controller_uuid and external_owner_uuid == previous_owner:
+            return previous_controller_uuid
+        combatant.controller_uuid = incoming_uuid
+        combatant.external_owner_uuid = external_owner_uuid
         entity=Entity.get(entity_uuid)
-        if entity is not None and controller.execution_mode is ControllerExecutionMode.EXTERNAL:
+        if (entity is not None and promote_companion and controller is not None
+                and controller.execution_mode is ControllerExecutionMode.EXTERNAL):
             entity.is_player_companion=True
+        assignment = publish_controller_assignment(entity_uuid, previous_controller, controller, previous_owner,
+            external_owner_uuid, parent_event)
+        if external_owner_uuid is not None and entity is not None and entity.is_deployed:
+            spatial_senses_system.publish_observer_refresh(entity_uuid,
+                published_senses(entity.senses), initial=True, parent_event=assignment)
         return previous_controller_uuid
 
     @staticmethod
@@ -1334,28 +1402,33 @@ class Encounter(BaseObject):
 
     def _check_encounter_end(self) -> bool:
         """
-        Check if the encounter should end (only one faction has survivors).
+        End when at most one faction has conscious combatants.
 
         Uses faction-based detection: entities with same faction are allies.
         Entities with faction=None are treated as their own faction (enemy to all).
+        Downed bodies retain their life state; conscious summons still count.
+        Active condition data distinguishes unconsciousness from conscious action denial.
 
         Returns:
             True if encounter ended
         """
-        factions_alive: Dict[str, int] = {}
+        factions_conscious: Dict[str, int] = {}
         for combatant in self.combatants.values():
             entity = combatant.entity
             if entity is None:
                 continue
             faction_key = entity.faction if entity.faction else str(entity.uuid)
-            if faction_key not in factions_alive:
-                factions_alive[faction_key] = 0
-            if combatant.is_alive:
-                factions_alive[faction_key] += 1
+            if faction_key not in factions_conscious:
+                factions_conscious[faction_key] = 0
+            if entity.health.life_state is LifeState.ALIVE and not any(
+                condition.denies_consciousness and condition.contributions_active()
+                for condition in entity.active_conditions_by_uuid.values()
+            ):
+                factions_conscious[faction_key] += 1
 
-        factions_with_alive = [f for f, c in factions_alive.items() if c > 0]
+        factions_with_conscious = [f for f, c in factions_conscious.items() if c > 0]
 
-        if len(factions_with_alive) <= 1:
+        if len(factions_with_conscious) <= 1:
             self.end_encounter()
             return True
 
@@ -1374,6 +1447,8 @@ class Encounter(BaseObject):
         controller_entities: Dict[UUID, List[Entity]] = {}
         for combatant in self.combatants.values():
             controller_uuid = combatant.controller_uuid
+            if controller_uuid is None:
+                continue
             if controller_uuid not in controller_entities:
                 controller_entities[controller_uuid] = []
             entity = combatant.entity
@@ -1390,6 +1465,8 @@ class Encounter(BaseObject):
         controller_entities: Dict[UUID, List[Entity]] = {}
         for combatant in self.combatants.values():
             controller_uuid = combatant.controller_uuid
+            if controller_uuid is None:
+                continue
             if controller_uuid not in controller_entities:
                 controller_entities[controller_uuid] = []
             entity = combatant.entity
@@ -1800,6 +1877,23 @@ class Encounter(BaseObject):
             _ = self.check_deaths()
 
         return event
+
+
+def publish_controller_assignment(entity_uuid: UUID, previous: Controller | None, controller: Controller | None,
+                                  previous_owner: UUID | None, owner: UUID | None,
+                                  parent_event: Event | None) -> ControllerAssignmentChangedEvent:
+    """Publish an already committed relationship, without executable controller handles."""
+    changed = ControllerAssignmentChangedEvent(
+        source_entity_uuid=entity_uuid, target_entity_uuid=entity_uuid, entity_uuid=entity_uuid,
+        previous_controller_uuid=previous.uuid if previous is not None else None,
+        controller_uuid=controller.uuid if controller is not None else None,
+        previous_execution_mode=previous.execution_mode if previous is not None else None,
+        execution_mode=controller.execution_mode if controller is not None else None,
+        previous_external_owner_uuid=previous_owner, new_external_owner_uuid=owner,
+        parent_event=parent_event.uuid if parent_event is not None else None,
+        phase=EventPhase.COMPLETION, use_register=False)
+    EventQueue.publish_completed_fact(changed)
+    return changed
 
 
 def publish_initiative_order(encounter: Encounter, previous: tuple[UUID, ...]) -> None:

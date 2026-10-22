@@ -2,13 +2,40 @@
 
 `player-api-v1.schema.json` is exported directly from existing native/player type
 owners and the finite `server/protocol.py` envelopes. It has 19 public roots,
-379 shared definitions and 1,925 field-ledger rows. `protocol-identity.json` binds
-protocol 1 and player schema 16 to the exact canonical schema digest (`2c11d7a9919c8…`).
+380 shared definitions and 1,928 field-ledger rows. `protocol-identity.json` binds
+protocol 1 and player schema 18 to the exact canonical schema digest in `protocol-identity.json`.
 
 - `openapi.json`: actual HTTP paths, request/response types, identity headers,
   finite errors and SSE record types. Also served at the running host's `/openapi.json`.
 - `field-ledger.json`: each reachable field, required/default shape and source owner.
 - The Python and TypeScript packages carry the same schema and digest.
+
+## Caster defeat (schema 18)
+
+The existing `SpatialFact.terminal_cause` enum now includes `caster_defeated`.
+All eight existing summon families depart when their original caster becomes
+DYING/STABLE at zero HP or DEAD, including a previously released hostile Fey.
+The ordinary audience, spatial and sensory facts revoke control and presence;
+clients must consume these facts rather than infer removal from caster HP.
+Existing concentration cleanup can still report `sustain_lost` when it retires
+the body first. This adds no new field, command or reducer. Protocol remains 1;
+both SDKs carry the regenerated schema and ordinary compatibility checks.
+
+## Summon control (introduced in schema 17)
+
+Human and Codex summons share their caster's current seat. Operations carry an
+ordered `AudienceFact` (`kind: "audience"`) with the new controlled actors,
+observers and membership revision. Apply it at its position in the event stream;
+never apply the final membership retrospectively to earlier facts. Observer
+removal can carry an embedded sensory delta. Losing control removes active
+private sheets and controls but does not mean the body died. Native AI and
+released hostile Fey continue through autonomous boundaries.
+
+`waiting_for_codex` is an external input boundary with the same command,
+attachment and catch-up requirements as `waiting_for_human`. Bootstrap returns
+the current audience. Historical initialization plus operations reconstructs
+membership for reconnect. Both SDKs decode and validate these values; gameplay
+state reduction belongs to the backend reference reducer and consuming client.
 
 ## Event-native publication (schema 16)
 

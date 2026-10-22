@@ -96,7 +96,7 @@ async def client(args):
                     current = await status(connection)
                     await wait_for_cursor(followers[seat], current['published_cursor'])
                     await acknowledge(connection, followers[seat].consumed)
-                    if current['boundary']['lifecycle'] == 'waiting_for_human' and current['boundary']['input_actor_uuid'] is not None:
+                    if current['boundary']['lifecycle'] in ('waiting_for_human', 'waiting_for_codex') and current['boundary']['input_actor_uuid'] is not None:
                         eligible = seat, current
                 if eligible is not None:
                     seat, current = eligible
@@ -117,7 +117,7 @@ async def client(args):
                         await acknowledge(connection, followers[seat].consumed)
                         boundary = current['boundary']
                         terminal = terminal and boundary['lifecycle'] == 'terminal'
-                        if boundary['input_actor_uuid'] is not None and boundary['lifecycle'] == 'waiting_for_human':
+                        if boundary['input_actor_uuid'] is not None and boundary['lifecycle'] in ('waiting_for_human', 'waiting_for_codex'):
                             eligible = seat, connection, current
                     if eligible is not None:
                         break

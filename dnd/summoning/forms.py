@@ -12,7 +12,7 @@ from dnd.monsters.fiends import FIEND_RECIPES_BY_ID
 from dnd.monsters.demon_variants import CORROSIVE_DEMON_RECIPE, DREAD_DEMON_RECIPE
 from dnd.monsters.srd_roster import SRD_CREATURE_DECLARATIONS_BY_ID
 from dnd.types.summoning import (
-    SummonFamily, SummonManifestation, SummonRules, SummonSelection, SummonSustain,
+    DragonColor, SummonFamily, SummonManifestation, SummonRules, SummonSelection, SummonSustain,
 )
 
 
@@ -98,7 +98,10 @@ SUMMON_FORMS += tuple(SummonForm(key,key.replace("_"," ").title(),family,minimum
         ("air_myrmidon",SummonFamily.ELEMENTAL,6),("earth_myrmidon",SummonFamily.ELEMENTAL,6),
         ("fire_myrmidon",SummonFamily.ELEMENTAL,6),("water_myrmidon",SummonFamily.ELEMENTAL,6),
         ("deva",SummonFamily.PLANAR_ALLY,6),("djinni",SummonFamily.PLANAR_ALLY,6),
-        ("cambion",SummonFamily.PLANAR_ALLY,6),("draconic_spirit",SummonFamily.DRAGON,5)))
+        ("cambion",SummonFamily.PLANAR_ALLY,6)))
+SUMMON_FORMS += tuple(SummonForm(color.value, f"{color.value.title()} Draconic Spirit",
+    SummonFamily.DRAGON, 5, HIGH_LEVEL_SPELL_SUMMON_RECIPES["draconic_spirit"],
+    SummonManifestation.NATURAL) for color in DragonColor)
 _FORMS_BY_KEY = MappingProxyType({(form.family, form.form_id): form for form in SUMMON_FORMS})
 
 

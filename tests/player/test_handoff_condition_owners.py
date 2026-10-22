@@ -1,6 +1,6 @@
 """Actual condition owners publish selected values and lifecycle transitions.
 
-Worker casts/actions and autonomous turns produce the conditions. Both serialized
+Worker casts and external summon commands produce the conditions. Both serialized
 seat operations must retain their exact identities and committed after-values.
 """
 
@@ -90,16 +90,18 @@ def test_frenzy_worker_publishes_exact_same_actor_raging_parent_in_both_streams(
             if member.state is not None and member.condition_uuid != frenzied.uuid)
 
 
-def summoned_dragon(world, breath=DamageType.COLD, shared=DamageType.POISON):
+def summoned_dragon(world, color="white"):
     runtime, seat, publication = world
     caster = runtime.session.game.entities[publication.boundary.input_actor_uuid]
     caster.action_economy.set_normal_spell_slot_capacity(uuid4(), {5: 1})
     caster.action_economy.reset_spell_slot_costs()
     register_spell(caster, SummonDragon, caster_level=9)
     discovered = request_choices(world).choices
-    action, = (row for row in rows(discovered) if row.behavior_id == 'spell.summon_dragon'
-        and any(f.key == 'damage_type' and f.value == breath.value for f in row.variant_facets)
-        and any(f.key == 'resistance' and f.value == shared.value for f in row.variant_facets))
+    dragon_rows = [row for row in rows(discovered) if row.behavior_id == 'spell.summon_dragon']
+    assert len(dragon_rows) == 5
+    assert {tuple((facet.key, facet.value) for facet in row.variant_facets) for row in dragon_rows} == {
+        (("form", value),) for value in ("black", "blue", "green", "red", "white")}
+    action, = (row for row in dragon_rows if row.variant_facets[0].value == color)
     with fixed_dice_faces(*([2] * 400)):
         records = submit(runtime, seat, caster, discovered,
             ActionSelection(action.discovery_index, (), extra_target_positions=((7, 7),)), 1)
@@ -111,32 +113,51 @@ def summoned_dragon(world, breath=DamageType.COLD, shared=DamageType.POISON):
     return caster, dragon, cadence, records
 
 
-@pytest.mark.parametrize('breath,shared', [
-    (DamageType.ACID, DamageType.COLD), (DamageType.COLD, DamageType.POISON),
-    (DamageType.FIRE, DamageType.LIGHTNING), (DamageType.LIGHTNING, DamageType.FIRE),
-    (DamageType.POISON, DamageType.ACID),
+def dragon_input(runtime, seat, dragon):
+    while needs_advance(runtime.session):
+        dispatch(runtime, Advance())
+    assert runtime.publications[seat].boundary.input_actor_uuid == dragon.uuid
+
+
+def dragon_action(runtime, seat, dragon, behavior, number):
+    discovered = request_choices((runtime, seat, runtime.publications[seat])).choices
+    action = next(row for row in rows(discovered) if row.behavior_id == behavior and row.can_afford)
+    targets = discovered.target_sets[action.target_set]
+    selection = (ActionSelection(action.discovery_index, (targets[0].index,)) if targets else
+        ActionSelection(action.discovery_index, (), extra_target_positions=((9, 7),)))
+    with fixed_dice_faces(*([2] * 400)):
+        return submit(runtime, seat, dragon, discovered, selection, number)
+
+
+@pytest.mark.parametrize('color,element', [
+    ("black", DamageType.ACID), ("white", DamageType.COLD),
+    ("red", DamageType.FIRE), ("blue", DamageType.LIGHTNING),
+    ("green", DamageType.POISON),
 ])
-def test_dragon_worker_publishes_selectors_and_actual_free_breath_readiness(world, breath, shared):
+def test_dragon_worker_publishes_one_color_matching_elements_and_free_breath_readiness(world, color, element):
     runtime, seat, _ = world
-    caster, dragon, cadence, births = summoned_dragon(world, breath, shared)
+    caster, dragon, cadence, births = summoned_dragon(world, color)
     resistance, = (condition for condition in caster.active_conditions_by_uuid.values()
         if isinstance(condition, DragonSharedResistance))
     assert len(births) == 2
     for record in births:
         cadence_states = state_changes((record,), cadence.uuid)
-        assert cadence_states and all(state.breath_type is breath and state.ready is False
+        assert cadence_states and all(state.breath_type is element and state.ready is False
             for state in cadence_states)
         resistance_states = state_changes((record,), resistance.uuid)
-        assert resistance_states and all(state.damage_type is shared for state in resistance_states)
+        assert resistance_states and all(state.damage_type is element for state in resistance_states)
+        assert any(body.actor_uuid == dragon.uuid and body.birth is not None
+            and body.birth.name == f"{color.title()} Draconic Spirit"
+            for group in record.lineages for body in group.bodies)
     reply, _, _ = dispatch(runtime, Command(seat_id=seat, request=CommandRequest(
         command_number=2, actor_uuid=caster.uuid,
         state_revision=runtime.publications[seat].state_revision, intent=EndTurnIntent())))
     assert reply.rejection is None and needs_advance(runtime.session)
-    for expected in (True, False):
+    dragon_input(runtime, seat, dragon)
+    for expected, behavior, number in ((True, 'action.monster.multiattack', 3),
+            (False, 'action.draconic_spirit.breath', 4)):
         cursor = EventQueue.event_cursor()
-        with fixed_dice_faces(*([2] * 400)):
-            _, delivered, _ = dispatch(runtime, Advance())
-        records = tuple(PlayerOperation.model_validate_json(record.model_dump_json()) for record in delivered)
+        records = dragon_action(runtime, seat, dragon, behavior, number)
         assert (cadence.free_action_uuid is not None) is expected
         assert len(records) == 2
         for record in records:
@@ -168,10 +189,9 @@ def test_dragon_unused_allowance_closes_without_resurrecting_membership(world, e
         command_number=2, actor_uuid=caster.uuid,
         state_revision=runtime.publications[seat].state_revision, intent=EndTurnIntent())))
     assert reply.rejection is None
-    with fixed_dice_faces(*([2] * 400)):
-        _, delivered, _ = dispatch(runtime, Advance())
+    dragon_input(runtime, seat, dragon)
+    records = dragon_action(runtime, seat, dragon, 'action.monster.multiattack', 3)
     if ending == 'cancel':
-        records = tuple(PlayerOperation.model_validate_json(record.model_dump_json()) for record in delivered)
         assert cadence.free_action_uuid is None and not cadence.issued
         for record in records:
             assert [state.ready for state in state_changes((record,), cadence.uuid)] == [True, False]
@@ -179,13 +199,16 @@ def test_dragon_unused_allowance_closes_without_resurrecting_membership(world, e
     assert cadence.free_action_uuid is not None
     cursor = EventQueue.event_cursor()
     if ending == 'turn_end':
-        result = runtime.session.encounter.end_turn()
-        assert result is not None and not result.canceled
+        reply, delivered, _ = dispatch(runtime, Command(seat_id=seat, request=CommandRequest(
+            command_number=4, actor_uuid=dragon.uuid,
+            state_revision=runtime.publications[seat].state_revision, intent=EndTurnIntent())))
+        assert reply.rejection is None
+        records = tuple(PlayerOperation.model_validate_json(record.model_dump_json()) for record in delivered)
     else:
         assert dragon.remove_condition_by_uuid(cadence.uuid)
-    updates = capture_application_operation(runtime.audiences,
-        operation_since(runtime.session, cursor), runtime.catalog)
-    records = tuple(PlayerUpdate.model_validate_json(update.model_dump_json()) for update in updates.values())
+        updates = capture_application_operation(runtime.audiences,
+            operation_since(runtime.session, cursor), runtime.catalog)
+        records = tuple(PlayerUpdate.model_validate_json(update.model_dump_json()) for update in updates.values())
     assert cadence.free_action_uuid is None and len(records) == 2
     events = [event for _, event in EventQueue.iter_events_since(cursor)
         if isinstance(event, ConditionStateChangedEvent)

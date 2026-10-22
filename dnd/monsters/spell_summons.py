@@ -9,7 +9,7 @@ from dnd.blocks.base_item import BaseItem
 from dnd.core.base_block import BaseBlock
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig
-from dnd.monsters.traits import NaturalAttack
+from dnd.monsters.traits import InnateFlight, NaturalAttack
 from pydantic_core import PydanticUndefined
 from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import ActionCategory, ActionOutcomeProfile, Cost, DamageRollProfile, OutcomeResolution, TargetType
@@ -17,10 +17,12 @@ from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
 from dnd.core.content.dependencies import ContentDependency, ContentDependencyPhase, ContentDependencyRelation
 from dnd.core.content.descriptors import ContentDescriptorSpec, ContentPresentation, ContentVisibility
+from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.materialization import CreatureBuildContext
 from dnd.core.content.provenance import ContentFidelity, ContentProvenance, ContentProvenanceRelation, ContentReviewStatus
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.content.registration import creature_factory, get_content_declaration
+from dnd.core.content.registration import behavior_content_ref, creature_factory, get_content_declaration
+from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.dice import AttackOutcome
 from dnd.core.effect_types import EffectOrigin
@@ -35,6 +37,7 @@ from dnd.spatial.environmental_conditions import FireSurface
 from dnd.spatial.ignition import apply_elemental_surface_contacts
 from dnd.spells.content_metadata import srd_action_identity, srd_condition_identity
 from dnd.types.discovery import ActorScan
+from dnd.types.summoning import DragonColor
 from dnd.types.spatial_effects import SpatialEffectAnchorKind, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
 from dnd.types.world import MovementMode
 
@@ -60,8 +63,7 @@ class SpellSummonParameters(BaseModel):
     slot_level: int = Field(default=2,ge=2,le=9)
     spell_dc: int = 12
     attack_bonus: int = 0
-    breath_type: DamageType = DamageType.FIRE
-    shared_resistance: DamageType = DamageType.FIRE
+    dragon_color: DragonColor = DragonColor.RED
     effect_origin: EffectOrigin | None = None
 
 
@@ -246,7 +248,8 @@ def _declare_spell_creature(key: str,name: str):
                 original_caster_uuid=parameters.caster_uuid or entity.uuid,spell_dc=parameters.spell_dc,
                 dice_count=parameters.slot_level,effect_origin=parameters.effect_origin))
         else:
-            entity.action_economy.grant_speed(entity.uuid,MovementMode.FLYING,20)
+            entity.add_condition(InnateFlight(source_entity_uuid=entity.uuid,
+                target_entity_uuid=entity.uuid,flying_speed=20))
             entity.register_action(SpiritualWeaponStrike(source_entity_uuid=entity.uuid,template=True,name="Spiritual Weapon Strike",
                 costs=[Cost(name="Spiritual Weapon Strike",cost_type="bonus_actions",cost=1,evaluator=entity_action_economy_cost_evaluator)],
                 natural_damage_dice=8,natural_dice_numbers=1+steps,natural_damage_type=DamageType.FORCE,
@@ -259,14 +262,18 @@ def _declare_spell_creature(key: str,name: str):
     dependencies=tuple(ContentDependency(relation=ContentDependencyRelation.GRANTS_ACTION,
         target_ref=get_content_declaration(action).ref,phase=ContentDependencyPhase.RUNTIME_REFERENCE)
         for action in (Move,Dash,Disengage,FlamingSphereRam if key=="flaming_sphere" else SpiritualWeaponStrike))
+    if key=="spiritual_weapon":
+        dependencies+=(ContentDependency(relation=ContentDependencyRelation.APPLIES_CONDITION,
+            target_ref=behavior_content_ref(pack_id="content.srd_5_1_cc",content_id="trait.innate_flight",version=1,
+                definition_kind=ContentDefinitionKind.TRAIT,runtime_behavior_kind=RuntimeBehaviorKind.CONDITION)),)
     decorated=creature_factory(pack_id="content.neurodragon",content_id=f"creature.spell.{key}",version=1,
         parameters=SpellSummonParameters,descriptor=ContentDescriptorSpec(display_name=name,
-            description=f"BG3-style {name} using native autonomous summon rules.",tags=("creature","spell_summon","construct"),
+            description=f"BG3-style {name} using native summon rules and its caster's controller.",tags=("creature","spell_summon","construct"),
             visibility=ContentVisibility.PUBLIC,presentation=ContentPresentation(ui_group="creatures.spell_summon")),
         provenance=ContentProvenance(primary_source_id="neurodragon.original_b2b3930",source_anchor=f"BG3-style {name}",
             relation=ContentProvenanceRelation.COMPATIBLE_ADAPTATION,adapted_from_source_id="wotc.srd_5_1_cc",
             fidelity=ContentFidelity.PARTIAL,review_status=ContentReviewStatus.REVIEWED,
-            notes="Approved native autonomous creature adaptation; no manual summon control."),dependencies=dependencies)(factory)
+            notes="Approved native creature adaptation; summons follow their caster's controller."),dependencies=dependencies)(factory)
     return get_content_declaration(decorated)
 
 

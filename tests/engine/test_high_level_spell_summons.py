@@ -54,13 +54,13 @@ from dnd.spells.summoning import ConjureElemental, PlanarAlly, SummonDragon
 from dnd.spells.transmutation import MagicWeapon
 from tests.engine.test_bg3_spell_hit_riders import equip
 from tests.engine.test_high_level_spell_controls import high_actor
-from tests.engine.test_summoning_autonomous_turns import autonomous_attack
+from tests.engine.test_summoning_autonomous_turns import autonomous_attack, autonomous_battle
 from tests.engine.test_summoning_lifecycle import battle
 from tests.manual.spell_regression_support import force_save_result
 from dnd.core.values import Channel, Kind, add_modifier
 
 
-def summon(battle, key, *, slot=None, position=(4, 2), **values):
+def summon(battle, key, *, slot=None, position=(4, 2), form_id=None, **values):
     _, _, system, caster, _ = battle
     spell = (
         SummonDragon
@@ -73,7 +73,7 @@ def summon(battle, key, *, slot=None, position=(4, 2), **values):
     Entity.update_all_entities_senses()
     result = spell(
         source_entity_uuid=caster.uuid,
-        form_id=key,
+        form_id=form_id or ("red" if key == "draconic_spirit" else key),
         cast_at_level=slot
         or (5 if key.endswith("elemental") or key == "draconic_spirit" else 6),
         end_position=position,
@@ -133,13 +133,12 @@ def test_dragon_native_rends_then_one_free_breath_and_exact_cleanup(
         battle,
         "draconic_spirit",
         slot=slot,
-        breath_type=DamageType.COLD,
-        shared_resistance=DamageType.POISON,
+        form_id="white",
     )
     dragon = member.entity
     assert (dragon.get_max_hp(), dragon.ac_bonus().normalized_score) == (hp, ac)
-    assert caster.health.preview_damage(20, DamageType.POISON).applied_damage == 10
-    assert caster.health.preview_damage(20, DamageType.COLD).applied_damage == 20
+    assert caster.health.preview_damage(20, DamageType.COLD).applied_damage == 10
+    assert caster.health.preview_damage(20, DamageType.POISON).applied_damage == 20
     Entity.update_all_entities_senses()
     multi = next(
         action
@@ -176,7 +175,7 @@ def test_dragon_native_rends_then_one_free_breath_and_exact_cleanup(
     )
     caster.remove_condition("Concentrating")
     assert game.get_entity(dragon.uuid) is None
-    assert caster.health.preview_damage(20, DamageType.POISON).applied_damage == 20
+    assert caster.health.preview_damage(20, DamageType.COLD).applied_damage == 20
 
 
 SPECIALS = (
@@ -466,7 +465,8 @@ def test_independent_summon_long_rest_ends_body(battle, key):
 
 
 @pytest.mark.parametrize("body", BODIES, ids=lambda body: body.key)
-def test_every_body_acts_through_native_autonomous_advance(battle, body):
+def test_every_body_acts_through_native_autonomous_advance(autonomous_battle, body):
+    battle = autonomous_battle
     _, encounter, _, caster, enemy = battle
     Entity.update_entity_position(enemy, (5, 2))
     add_modifier(enemy.equipment.ac_bonus, Channel.SELF_STATIC, Kind.VALUE, NumericalModifier(
@@ -504,7 +504,8 @@ def test_every_body_acts_through_native_autonomous_advance(battle, body):
     ), body.key
 
 
-def test_dragon_ai_discovers_and_uses_free_breath_after_spending_action(battle):
+def test_dragon_ai_discovers_and_uses_free_breath_after_spending_action(autonomous_battle):
+    battle = autonomous_battle
     _, encounter, _, _, enemy = battle
     Entity.update_entity_position(enemy, (5, 2))
     actor = summon(battle, "draconic_spirit").entity
@@ -723,20 +724,23 @@ def test_fire_myrmidon_rebuke_uses_own_resource_and_shared_reaction_with_oa(batt
 
 
 @pytest.mark.parametrize(
-    "element",
+    "color,element",
     [
-        DamageType.ACID,
-        DamageType.COLD,
-        DamageType.FIRE,
-        DamageType.LIGHTNING,
-        DamageType.POISON,
+        ("black", DamageType.ACID),
+        ("white", DamageType.COLD),
+        ("red", DamageType.FIRE),
+        ("blue", DamageType.LIGHTNING),
+        ("green", DamageType.POISON),
     ],
 )
-def test_dragon_five_authored_resistances_and_selected_caster_lease(battle, element):
+def test_dragon_color_keeps_innate_resistances_and_matches_breath_and_caster_lease(battle, color, element):
     _, _, _, caster, _ = battle
-    dragon = summon(
-        battle, "draconic_spirit", breath_type=element, shared_resistance=element
-    ).entity
+    member = summon(battle, "draconic_spirit", form_id=color)
+    dragon = member.entity
+    assert dragon.name == f"{color.title()} Draconic Spirit"
+    assert member.existence.origin.recipe.parameters["dragon_color"] == color
+    breath, = (action for action in dragon.registered_actions if isinstance(action, DragonBreath))
+    assert breath.packets[0].damage_type == element.value
     for kind in (
         DamageType.ACID,
         DamageType.COLD,
@@ -748,6 +752,22 @@ def test_dragon_five_authored_resistances_and_selected_caster_lease(battle, elem
         assert caster.health.preview_damage(20, kind).applied_damage == (
             10 if kind is element else 20
         )
+    caster.remove_condition("Concentrating")
+    assert caster.health.preview_damage(20, element).applied_damage == 20
+
+
+@pytest.mark.parametrize("key", ["breath_type", "shared_resistance"])
+@pytest.mark.parametrize("from_template", [False, True], ids=["constructor", "template"])
+def test_dragon_rejects_obsolete_independent_element_inputs(battle, key, from_template):
+    _, _, system, caster, _ = battle
+    values = {"source_entity_uuid": caster.uuid, "form_id": "red", "end_position": (4, 2)}
+    with pytest.raises(ValueError):
+        if from_template:
+            SummonDragon(**values).instantiate(**{key: DamageType.COLD})
+        else:
+            SummonDragon(**values, **{key: DamageType.COLD})
+    assert not system.memberships
+    assert caster.action_economy.actions.normalized_score == 1
 
 
 @pytest.mark.parametrize("enchanted,damage", [(False, 1), (True, 3)])

@@ -2088,6 +2088,37 @@
       "title": "AttributedDamageComponent",
       "type": "object"
     },
+    "AudienceFact": {
+      "description": "Ordered current control and observation membership; apply before following facts.\n\nObserver bits refer to this after-value from this occurrence onward. Removal\ncan also change the composed view, using the group's ordinary sensory rows.",
+      "properties": {
+        "kind": {
+          "const": "audience",
+          "default": "audience",
+          "title": "Kind",
+          "type": "string"
+        },
+        "audience": {
+          "$ref": "#/$defs/PlayerAudience"
+        },
+        "sensory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SensoryFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "audience"
+      ],
+      "title": "AudienceFact",
+      "type": "object",
+      "additionalProperties": false
+    },
     "AvailableHandlerInfo": {
       "description": "Player-toggleable event handler exposed with available actions.",
       "properties": {
@@ -2743,6 +2774,7 @@
           "enum": [
             "starting",
             "waiting_for_human",
+            "waiting_for_codex",
             "advancing",
             "outside_encounter",
             "delivery_blocked",
@@ -7908,6 +7940,7 @@
         "world_modified",
         "entity_created",
         "entity_faction_changed",
+        "controller_assignment_changed",
         "summon_admission",
         "entity_level_added",
         "entity_level_removed",
@@ -13826,9 +13859,9 @@
         },
         "revision": {
           "default": 0,
+          "minimum": 0,
           "title": "Revision",
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991
         }
       },
@@ -14544,6 +14577,7 @@
                   "actor_change": "#/$defs/ActorChangeFact",
                   "area_reach": "#/$defs/AreaReachFact",
                   "attack": "#/$defs/AttackFact",
+                  "audience": "#/$defs/AudienceFact",
                   "damage": {
                     "discriminator": {
                       "mapping": {
@@ -14655,6 +14689,9 @@
                 },
                 {
                   "$ref": "#/$defs/SensoryFact"
+                },
+                {
+                  "$ref": "#/$defs/AudienceFact"
                 },
                 {
                   "$ref": "#/$defs/ItemChargeFact"
@@ -15697,8 +15734,8 @@
           "maximum": 9007199254740991
         },
         "player_schema_version": {
-          "const": 16,
-          "default": 16,
+          "const": 18,
+          "default": 18,
           "title": "Player Schema Version",
           "type": "integer",
           "minimum": -9007199254740991,
@@ -20318,6 +20355,7 @@
         "expired",
         "dismissed",
         "defeated",
+        "caster_defeated",
         "sustain_lost",
         "closed"
       ],

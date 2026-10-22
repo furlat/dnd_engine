@@ -555,6 +555,8 @@ class BaseCondition(BaseObject):
     blocked_action_channels: frozenset[str] = frozenset()
     denies_dexterity_ac: bool = False
     blocks_spellcasting: bool = False
+    denies_consciousness: bool = Field(default=False,
+        description="Whether this condition makes its target unconscious while its contributions are active.")
     blocks_outward_actions: bool = False
     blocks_external_contact: bool = False
     blocks_magic_item_activation: bool = False

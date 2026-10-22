@@ -21,7 +21,7 @@ try {
   let current=await status(connection);
   if(current.published_cursor)await waitForCursor(follower,current.published_cursor);
   const actor=current.boundary.input_actor_uuid;
-  if(!actor||current.boundary.lifecycle!=='waiting_for_human'||!current.acknowledged_cursor||current.acknowledged_cursor.sequence<current.catch_up_cursor.sequence){await sleep(20);continue;}
+  if(!actor||!['waiting_for_human','waiting_for_codex'].includes(current.boundary.lifecycle)||!current.acknowledged_cursor||current.acknowledged_cursor.sequence<current.catch_up_cursor.sequence){await sleep(20);continue;}
   const revision=current.boundary.state_revision;
   const discovered=await choices(connection,{actor_uuid:actor,state_revision:revision,force_attack:false,correlation_id:randomUUID()});
   const available=discovered.choices;

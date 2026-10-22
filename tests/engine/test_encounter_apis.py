@@ -21,7 +21,7 @@ from dnd.core.combat_log import CombatLogEntryType
 from dnd.items.environment import DirectionalWall
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventQueue, EventPhase, DeathSaveEvent, TurnEndEvent
+from dnd.core.events import EventQueue, EventPhase, DeathSaveEvent, TurnEndEvent, EncounterEndEvent
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
@@ -566,7 +566,7 @@ def test_external_turn_processes_death_save_without_waiting_on_incapacitated_act
     reset_engine_runtime()
 
 
-def test_final_death_save_closes_last_party_turn_and_encounter():
+def test_last_conscious_party_member_falling_ends_without_another_death_save():
     reset_chapter_18_state()
     hero, monster = create_book_pair()
     hero.uses_death_saves = True
@@ -576,12 +576,14 @@ def test_final_death_save_closes_last_party_turn_and_encounter():
     hero.receive_damage(hero.get_normal_hp(), DamageType.SLASHING, monster.uuid)
     hero.death_save_failures = 2
     cursor = EventQueue.event_cursor()
+    encounter.check_deaths()
     with fixed_dice_faces(2):
         boundary = encounter.advance_one_controller_boundary()
     completed = [event for _, event in EventQueue.iter_events_since(cursor)
         if event.phase is EventPhase.COMPLETION]
     assert boundary.status == "encounter_ended" and encounter.state is EncounterState.ENDED
-    assert hero.health.life_state is LifeState.DEAD
-    assert sum(isinstance(event, DeathSaveEvent) for event in completed) == 1
-    assert sum(isinstance(event, TurnEndEvent) and event.entity_uuid == hero.uuid for event in completed) == 1
+    assert hero.health.life_state is LifeState.DYING
+    assert hero.death_save_failures == 2
+    assert not any(isinstance(event, DeathSaveEvent) for event in completed)
+    assert sum(isinstance(event, EncounterEndEvent) for event in completed) == 1
     reset_engine_runtime()

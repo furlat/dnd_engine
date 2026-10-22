@@ -124,7 +124,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 992
+        "line": 1005
       }
     ],
     "required": true,
@@ -145,7 +145,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 993
+        "line": 1006
       }
     ],
     "required": true,
@@ -160,7 +160,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 994
+        "line": 1007
       }
     ],
     "required": true,
@@ -3627,6 +3627,59 @@
     }
   },
   {
+    "field": "AudienceFact.kind",
+    "schema_pointer": "/$defs/AudienceFact/properties/kind",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 914
+      }
+    ],
+    "required": false,
+    "schema": {
+      "const": "audience",
+      "default": "audience",
+      "title": "Kind",
+      "type": "string"
+    }
+  },
+  {
+    "field": "AudienceFact.audience",
+    "schema_pointer": "/$defs/AudienceFact/properties/audience",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 915
+      }
+    ],
+    "required": true,
+    "schema": {
+      "$ref": "#/$defs/PlayerAudience"
+    }
+  },
+  {
+    "field": "AudienceFact.sensory",
+    "schema_pointer": "/$defs/AudienceFact/properties/sensory",
+    "owners": [
+      {
+        "file": "dnd/player/facts.py",
+        "line": 916
+      }
+    ],
+    "required": false,
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SensoryFact"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  {
     "field": "AvailableHandlerInfo.name",
     "schema_pointer": "/$defs/AvailableHandlerInfo/properties/name",
     "owners": [
@@ -3753,7 +3806,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3082
+        "line": 3086
       }
     ],
     "required": true,
@@ -3769,7 +3822,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3083
+        "line": 3087
       }
     ],
     "required": true,
@@ -3784,7 +3837,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3084
+        "line": 3088
       }
     ],
     "required": true,
@@ -3799,7 +3852,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3085
+        "line": 3089
       }
     ],
     "required": false,
@@ -3815,7 +3868,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3086
+        "line": 3090
       }
     ],
     "required": false,
@@ -3833,7 +3886,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3087
+        "line": 3091
       }
     ],
     "required": false,
@@ -3866,7 +3919,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3088
+        "line": 3092
       }
     ],
     "required": false,
@@ -3890,7 +3943,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3089
+        "line": 3093
       }
     ],
     "required": false,
@@ -3913,7 +3966,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3090
+        "line": 3094
       }
     ],
     "required": false,
@@ -3932,7 +3985,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3091
+        "line": 3095
       }
     ],
     "required": false,
@@ -4814,6 +4867,7 @@
       "enum": [
         "starting",
         "waiting_for_human",
+        "waiting_for_codex",
         "advancing",
         "outside_encounter",
         "delivery_blocked",
@@ -4997,7 +5051,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1214
+        "line": 1227
       }
     ],
     "required": true,
@@ -5012,7 +5066,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1215
+        "line": 1228
       }
     ],
     "required": true,
@@ -7947,7 +8001,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1374
+        "line": 1387
       }
     ],
     "required": true,
@@ -7963,7 +8017,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1375
+        "line": 1388
       }
     ],
     "required": true,
@@ -7977,7 +8031,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1382
+        "line": 1395
       }
     ],
     "required": true,
@@ -7993,7 +8047,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1383
+        "line": 1396
       }
     ],
     "required": false,
@@ -8012,7 +8066,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 977
+        "line": 990
       }
     ],
     "required": true,
@@ -8032,7 +8086,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 978
+        "line": 991
       }
     ],
     "required": true,
@@ -8047,7 +8101,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 979
+        "line": 992
       }
     ],
     "required": false,
@@ -8070,7 +8124,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 980
+        "line": 993
       }
     ],
     "required": false,
@@ -8093,7 +8147,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 981
+        "line": 994
       }
     ],
     "required": false,
@@ -8117,7 +8171,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 982
+        "line": 995
       }
     ],
     "required": false,
@@ -8142,7 +8196,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 983
+        "line": 996
       }
     ],
     "required": false,
@@ -8167,7 +8221,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 984
+        "line": 997
       }
     ],
     "required": false,
@@ -8188,7 +8242,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 985
+        "line": 998
       }
     ],
     "required": false,
@@ -8211,7 +8265,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 986
+        "line": 999
       }
     ],
     "required": false,
@@ -8236,7 +8290,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 987
+        "line": 1000
       }
     ],
     "required": false,
@@ -8755,7 +8809,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1390
+        "line": 1403
       }
     ],
     "required": true,
@@ -8771,7 +8825,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1391
+        "line": 1404
       }
     ],
     "required": false,
@@ -8790,7 +8844,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1392
+        "line": 1405
       }
     ],
     "required": false,
@@ -8810,7 +8864,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1156
+        "line": 1169
       }
     ],
     "required": true,
@@ -8827,7 +8881,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1157
+        "line": 1170
       }
     ],
     "required": true,
@@ -13747,7 +13801,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1045
+        "line": 1058
       }
     ],
     "required": true,
@@ -13763,7 +13817,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1046
+        "line": 1059
       }
     ],
     "required": true,
@@ -13778,7 +13832,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1047
+        "line": 1060
       }
     ],
     "required": true,
@@ -13793,7 +13847,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1048
+        "line": 1061
       }
     ],
     "required": true,
@@ -13808,7 +13862,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1049
+        "line": 1062
       }
     ],
     "required": true,
@@ -13830,7 +13884,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1050
+        "line": 1063
       }
     ],
     "required": true,
@@ -13845,7 +13899,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1051
+        "line": 1064
       }
     ],
     "required": true,
@@ -13866,7 +13920,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1052
+        "line": 1065
       }
     ],
     "required": true,
@@ -13888,7 +13942,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1053
+        "line": 1066
       }
     ],
     "required": true,
@@ -13910,7 +13964,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1054
+        "line": 1067
       }
     ],
     "required": false,
@@ -13935,7 +13989,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1055
+        "line": 1068
       }
     ],
     "required": false,
@@ -13960,7 +14014,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1056
+        "line": 1069
       }
     ],
     "required": false,
@@ -13985,7 +14039,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1057
+        "line": 1070
       }
     ],
     "required": false,
@@ -14003,7 +14057,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1058
+        "line": 1071
       }
     ],
     "required": false,
@@ -14019,7 +14073,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1059
+        "line": 1072
       }
     ],
     "required": false,
@@ -14038,7 +14092,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1060
+        "line": 1073
       }
     ],
     "required": false,
@@ -14054,7 +14108,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1061
+        "line": 1074
       }
     ],
     "required": false,
@@ -14069,7 +14123,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1062
+        "line": 1075
       }
     ],
     "required": false,
@@ -14093,7 +14147,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1063
+        "line": 1076
       }
     ],
     "required": false,
@@ -14116,7 +14170,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1064
+        "line": 1077
       }
     ],
     "required": false,
@@ -14135,7 +14189,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1065
+        "line": 1078
       }
     ],
     "required": false,
@@ -14160,7 +14214,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1066
+        "line": 1079
       }
     ],
     "required": false,
@@ -14185,7 +14239,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1067
+        "line": 1080
       }
     ],
     "required": false,
@@ -14203,7 +14257,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1068
+        "line": 1081
       }
     ],
     "required": false,
@@ -14222,7 +14276,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1069
+        "line": 1082
       }
     ],
     "required": false,
@@ -14244,7 +14298,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1070
+        "line": 1083
       }
     ],
     "required": false,
@@ -14266,7 +14320,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1071
+        "line": 1084
       }
     ],
     "required": false,
@@ -14288,7 +14342,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1072
+        "line": 1085
       }
     ],
     "required": false,
@@ -14303,7 +14357,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1073
+        "line": 1086
       }
     ],
     "required": false,
@@ -14326,7 +14380,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1074
+        "line": 1087
       }
     ],
     "required": false,
@@ -14350,7 +14404,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1075
+        "line": 1088
       }
     ],
     "required": false,
@@ -14407,7 +14461,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1076
+        "line": 1089
       }
     ],
     "required": false,
@@ -14426,7 +14480,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1077
+        "line": 1090
       }
     ],
     "required": false,
@@ -19218,7 +19272,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 927
+        "line": 940
       }
     ],
     "required": false,
@@ -19235,7 +19289,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 928
+        "line": 941
       }
     ],
     "required": true,
@@ -19258,7 +19312,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 929
+        "line": 942
       }
     ],
     "required": true,
@@ -19273,7 +19327,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 930
+        "line": 943
       }
     ],
     "required": true,
@@ -19296,7 +19350,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 931
+        "line": 944
       }
     ],
     "required": true,
@@ -19332,7 +19386,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 932
+        "line": 945
       }
     ],
     "required": true,
@@ -19361,7 +19415,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 933
+        "line": 946
       }
     ],
     "required": true,
@@ -19393,7 +19447,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 934
+        "line": 947
       }
     ],
     "required": true,
@@ -19429,7 +19483,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 935
+        "line": 948
       }
     ],
     "required": true,
@@ -20389,7 +20443,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1344
+        "line": 1357
       }
     ],
     "required": true,
@@ -20408,7 +20462,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1345
+        "line": 1358
       }
     ],
     "required": false,
@@ -20430,7 +20484,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1346
+        "line": 1359
       }
     ],
     "required": false,
@@ -20452,7 +20506,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1347
+        "line": 1360
       }
     ],
     "required": true,
@@ -20470,7 +20524,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1348
+        "line": 1361
       }
     ],
     "required": false,
@@ -20492,7 +20546,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1349
+        "line": 1362
       }
     ],
     "required": true,
@@ -20510,7 +20564,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1350
+        "line": 1363
       }
     ],
     "required": false,
@@ -20532,7 +20586,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1351
+        "line": 1364
       }
     ],
     "required": false,
@@ -20554,7 +20608,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1352
+        "line": 1365
       }
     ],
     "required": false,
@@ -20576,7 +20630,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1353
+        "line": 1366
       }
     ],
     "required": false,
@@ -20598,7 +20652,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1354
+        "line": 1367
       }
     ],
     "required": false,
@@ -20620,7 +20674,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1355
+        "line": 1368
       }
     ],
     "required": false,
@@ -20642,7 +20696,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1356
+        "line": 1369
       }
     ],
     "required": false,
@@ -20664,7 +20718,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1357
+        "line": 1370
       }
     ],
     "required": false,
@@ -20686,7 +20740,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1358
+        "line": 1371
       }
     ],
     "required": false,
@@ -20708,7 +20762,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1359
+        "line": 1372
       }
     ],
     "required": false,
@@ -20730,7 +20784,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1360
+        "line": 1373
       }
     ],
     "required": false,
@@ -20752,7 +20806,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1361
+        "line": 1374
       }
     ],
     "required": false,
@@ -20774,7 +20828,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1362
+        "line": 1375
       }
     ],
     "required": false,
@@ -20796,7 +20850,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1363
+        "line": 1376
       }
     ],
     "required": false,
@@ -20818,7 +20872,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1364
+        "line": 1377
       }
     ],
     "required": false,
@@ -20840,7 +20894,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1365
+        "line": 1378
       }
     ],
     "required": false,
@@ -20862,7 +20916,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1366
+        "line": 1379
       }
     ],
     "required": false,
@@ -20884,7 +20938,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1367
+        "line": 1380
       }
     ],
     "required": false,
@@ -20906,7 +20960,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1368
+        "line": 1381
       }
     ],
     "required": false,
@@ -20928,7 +20982,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1369
+        "line": 1382
       }
     ],
     "required": false,
@@ -20950,7 +21004,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 942
+        "line": 955
       }
     ],
     "required": false,
@@ -20967,7 +21021,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 943
+        "line": 956
       }
     ],
     "required": true,
@@ -20983,7 +21037,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 944
+        "line": 957
       }
     ],
     "required": true,
@@ -21000,7 +21054,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 945
+        "line": 958
       }
     ],
     "required": true,
@@ -21017,7 +21071,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 946
+        "line": 959
       }
     ],
     "required": true,
@@ -21038,7 +21092,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 953
+        "line": 966
       }
     ],
     "required": false,
@@ -21055,7 +21109,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 954
+        "line": 967
       }
     ],
     "required": true,
@@ -21071,7 +21125,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 955
+        "line": 968
       }
     ],
     "required": false,
@@ -21095,7 +21149,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 956
+        "line": 969
       }
     ],
     "required": true,
@@ -21109,7 +21163,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 957
+        "line": 970
       }
     ],
     "required": true,
@@ -21124,7 +21178,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 958
+        "line": 971
       }
     ],
     "required": false,
@@ -21146,7 +21200,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 959
+        "line": 972
       }
     ],
     "required": false,
@@ -21169,7 +21223,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 960
+        "line": 973
       }
     ],
     "required": false,
@@ -21184,7 +21238,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 961
+        "line": 974
       }
     ],
     "required": false,
@@ -21206,7 +21260,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 962
+        "line": 975
       }
     ],
     "required": false,
@@ -21228,7 +21282,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 963
+        "line": 976
       }
     ],
     "required": false,
@@ -21250,7 +21304,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1184
+        "line": 1197
       }
     ],
     "required": true,
@@ -21266,7 +21320,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1185
+        "line": 1198
       }
     ],
     "required": true,
@@ -21281,7 +21335,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1186
+        "line": 1199
       }
     ],
     "required": false,
@@ -21304,7 +21358,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1187
+        "line": 1200
       }
     ],
     "required": false,
@@ -21319,7 +21373,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1188
+        "line": 1201
       }
     ],
     "required": false,
@@ -21343,7 +21397,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1189
+        "line": 1202
       }
     ],
     "required": false,
@@ -21365,7 +21419,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1190
+        "line": 1203
       }
     ],
     "required": false,
@@ -21387,7 +21441,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1191
+        "line": 1204
       }
     ],
     "required": false,
@@ -21412,7 +21466,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1192
+        "line": 1205
       }
     ],
     "required": false,
@@ -21430,7 +21484,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1193
+        "line": 1206
       }
     ],
     "required": false,
@@ -21454,7 +21508,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1194
+        "line": 1207
       }
     ],
     "required": false,
@@ -21580,7 +21634,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1224
+        "line": 1237
       }
     ],
     "required": true,
@@ -21595,7 +21649,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1225
+        "line": 1238
       }
     ],
     "required": false,
@@ -21618,7 +21672,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1226
+        "line": 1239
       }
     ],
     "required": true,
@@ -21633,7 +21687,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1227
+        "line": 1240
       }
     ],
     "required": false,
@@ -21656,7 +21710,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1228
+        "line": 1241
       }
     ],
     "required": false,
@@ -21679,7 +21733,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1229
+        "line": 1242
       }
     ],
     "required": false,
@@ -21702,7 +21756,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1230
+        "line": 1243
       }
     ],
     "required": false,
@@ -21727,7 +21781,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1231
+        "line": 1244
       }
     ],
     "required": false,
@@ -21752,7 +21806,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1232
+        "line": 1245
       }
     ],
     "required": false,
@@ -21777,7 +21831,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1233
+        "line": 1246
       }
     ],
     "required": false,
@@ -21795,7 +21849,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1234
+        "line": 1247
       }
     ],
     "required": false,
@@ -21811,7 +21865,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1235
+        "line": 1248
       }
     ],
     "required": false,
@@ -21830,7 +21884,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1236
+        "line": 1249
       }
     ],
     "required": false,
@@ -21846,7 +21900,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1237
+        "line": 1250
       }
     ],
     "required": false,
@@ -21869,7 +21923,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1238
+        "line": 1251
       }
     ],
     "required": false,
@@ -21888,7 +21942,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1239
+        "line": 1252
       }
     ],
     "required": false,
@@ -21913,7 +21967,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1240
+        "line": 1253
       }
     ],
     "required": false,
@@ -21932,7 +21986,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1241
+        "line": 1254
       }
     ],
     "required": false,
@@ -21954,7 +22008,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1242
+        "line": 1255
       }
     ],
     "required": false,
@@ -21969,7 +22023,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1243
+        "line": 1256
       }
     ],
     "required": false,
@@ -21992,7 +22046,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1244
+        "line": 1257
       }
     ],
     "required": false,
@@ -22049,7 +22103,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1245
+        "line": 1258
       }
     ],
     "required": false,
@@ -22377,7 +22431,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2816
+        "line": 2820
       }
     ],
     "required": true,
@@ -22398,7 +22452,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2817
+        "line": 2821
       }
     ],
     "required": true,
@@ -22418,7 +22472,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2818
+        "line": 2822
       }
     ],
     "required": true,
@@ -22452,7 +22506,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2819
+        "line": 2823
       }
     ],
     "required": true,
@@ -22631,7 +22685,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1326
+        "line": 1339
       }
     ],
     "required": false,
@@ -22653,7 +22707,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1327
+        "line": 1340
       }
     ],
     "required": true,
@@ -22685,7 +22739,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1328
+        "line": 1341
       }
     ],
     "required": true,
@@ -22705,7 +22759,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1329
+        "line": 1342
       }
     ],
     "required": false,
@@ -22727,7 +22781,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1330
+        "line": 1343
       }
     ],
     "required": false,
@@ -22749,7 +22803,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1331
+        "line": 1344
       }
     ],
     "required": false,
@@ -22771,7 +22825,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1332
+        "line": 1345
       }
     ],
     "required": false,
@@ -22793,7 +22847,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1333
+        "line": 1346
       }
     ],
     "required": false,
@@ -22815,7 +22869,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1334
+        "line": 1347
       }
     ],
     "required": false,
@@ -22837,7 +22891,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1335
+        "line": 1348
       }
     ],
     "required": false,
@@ -24115,7 +24169,7 @@
     "owners": [
       {
         "file": "dnd/player/audience.py",
-        "line": 21
+        "line": 24
       }
     ],
     "required": true,
@@ -24134,7 +24188,7 @@
     "owners": [
       {
         "file": "dnd/player/audience.py",
-        "line": 22
+        "line": 25
       }
     ],
     "required": true,
@@ -24153,15 +24207,15 @@
     "owners": [
       {
         "file": "dnd/player/audience.py",
-        "line": 23
+        "line": 26
       }
     ],
     "required": false,
     "schema": {
       "default": 0,
+      "minimum": 0,
       "title": "Revision",
       "type": "integer",
-      "minimum": -9007199254740991,
       "maximum": 9007199254740991
     }
   },
@@ -24540,7 +24594,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1476
+        "line": 1489
       }
     ],
     "required": true,
@@ -24556,7 +24610,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1477
+        "line": 1490
       }
     ],
     "required": true,
@@ -24572,7 +24626,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1478
+        "line": 1491
       }
     ],
     "required": true,
@@ -24586,7 +24640,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1479
+        "line": 1492
       }
     ],
     "required": true,
@@ -24604,7 +24658,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1480
+        "line": 1493
       }
     ],
     "required": true,
@@ -24618,7 +24672,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1481
+        "line": 1494
       }
     ],
     "required": true,
@@ -24635,7 +24689,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1482
+        "line": 1495
       }
     ],
     "required": false,
@@ -24654,7 +24708,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1483
+        "line": 1496
       }
     ],
     "required": true,
@@ -24672,7 +24726,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1484
+        "line": 1497
       }
     ],
     "required": false,
@@ -24694,7 +24748,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1485
+        "line": 1498
       }
     ],
     "required": false,
@@ -24716,7 +24770,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1487
+        "line": 1500
       }
     ],
     "required": false,
@@ -24759,7 +24813,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1489
+        "line": 1502
       }
     ],
     "required": false,
@@ -24778,7 +24832,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1459
+        "line": 1472
       }
     ],
     "required": true,
@@ -24795,7 +24849,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1461
+        "line": 1474
       }
     ],
     "required": true,
@@ -24819,7 +24873,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1462
+        "line": 1475
       }
     ],
     "required": true,
@@ -24837,7 +24891,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1463
+        "line": 1476
       }
     ],
     "required": true,
@@ -24851,7 +24905,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1464
+        "line": 1477
       }
     ],
     "required": true,
@@ -24868,7 +24922,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1465
+        "line": 1478
       }
     ],
     "required": true,
@@ -24885,7 +24939,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1466
+        "line": 1479
       }
     ],
     "required": false,
@@ -24904,7 +24958,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1467
+        "line": 1480
       }
     ],
     "required": false,
@@ -24923,7 +24977,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1469
+        "line": 1482
       }
     ],
     "required": false,
@@ -24966,7 +25020,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1471
+        "line": 1484
       }
     ],
     "required": false,
@@ -25277,7 +25331,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1008
+        "line": 1021
       }
     ],
     "required": true,
@@ -25294,7 +25348,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1009
+        "line": 1022
       }
     ],
     "required": false,
@@ -25319,7 +25373,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1010
+        "line": 1023
       }
     ],
     "required": false,
@@ -25344,7 +25398,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1011
+        "line": 1024
       }
     ],
     "required": false,
@@ -25365,7 +25419,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1012
+        "line": 1025
       }
     ],
     "required": true,
@@ -25379,7 +25433,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1013
+        "line": 1026
       }
     ],
     "required": false,
@@ -25395,7 +25449,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1014
+        "line": 1027
       }
     ],
     "required": false,
@@ -25408,6 +25462,7 @@
               "actor_change": "#/$defs/ActorChangeFact",
               "area_reach": "#/$defs/AreaReachFact",
               "attack": "#/$defs/AttackFact",
+              "audience": "#/$defs/AudienceFact",
               "damage": {
                 "discriminator": {
                   "mapping": {
@@ -25521,6 +25576,9 @@
               "$ref": "#/$defs/SensoryFact"
             },
             {
+              "$ref": "#/$defs/AudienceFact"
+            },
+            {
               "$ref": "#/$defs/ItemChargeFact"
             },
             {
@@ -25554,7 +25612,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1016
+        "line": 1029
       }
     ],
     "required": false,
@@ -25579,7 +25637,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1017
+        "line": 1030
       }
     ],
     "required": false,
@@ -25601,7 +25659,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1018
+        "line": 1031
       }
     ],
     "required": false,
@@ -25623,7 +25681,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1019
+        "line": 1032
       }
     ],
     "required": false,
@@ -25647,7 +25705,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1020
+        "line": 1033
       }
     ],
     "required": false,
@@ -25873,7 +25931,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1027
+        "line": 1040
       }
     ],
     "required": true,
@@ -25890,7 +25948,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1028
+        "line": 1041
       }
     ],
     "required": false,
@@ -26375,7 +26433,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1446
+        "line": 1459
       }
     ],
     "required": true,
@@ -26390,7 +26448,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1447
+        "line": 1460
       }
     ],
     "required": true,
@@ -26405,7 +26463,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1448
+        "line": 1461
       }
     ],
     "required": true,
@@ -26444,7 +26502,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1449
+        "line": 1462
       }
     ],
     "required": true,
@@ -26461,7 +26519,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1450
+        "line": 1463
       }
     ],
     "required": true,
@@ -27404,8 +27462,8 @@
     ],
     "required": false,
     "schema": {
-      "const": 16,
-      "default": 16,
+      "const": 18,
+      "default": 18,
       "title": "Player Schema Version",
       "type": "integer",
       "minimum": -9007199254740991,
@@ -27775,7 +27833,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1174
+        "line": 1187
       }
     ],
     "required": true,
@@ -27804,7 +27862,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1175
+        "line": 1188
       }
     ],
     "required": true,
@@ -27819,7 +27877,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1146
+        "line": 1159
       }
     ],
     "required": true,
@@ -27834,7 +27892,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1147
+        "line": 1160
       }
     ],
     "required": true,
@@ -27849,7 +27907,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1148
+        "line": 1161
       }
     ],
     "required": true,
@@ -27864,7 +27922,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1149
+        "line": 1162
       }
     ],
     "required": true,
@@ -27881,7 +27939,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1165
+        "line": 1178
       }
     ],
     "required": true,
@@ -27910,7 +27968,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1166
+        "line": 1179
       }
     ],
     "required": true,
@@ -27925,7 +27983,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1167
+        "line": 1180
       }
     ],
     "required": false,
@@ -27949,7 +28007,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1168
+        "line": 1181
       }
     ],
     "required": false,
@@ -27974,7 +28032,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1169
+        "line": 1182
       }
     ],
     "required": false,
@@ -28545,7 +28603,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3053
+        "line": 3057
       }
     ],
     "required": true,
@@ -28578,7 +28636,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3054
+        "line": 3058
       }
     ],
     "required": true,
@@ -28593,7 +28651,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3055
+        "line": 3059
       }
     ],
     "required": true,
@@ -28622,7 +28680,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3056
+        "line": 3060
       }
     ],
     "required": true,
@@ -28641,7 +28699,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3057
+        "line": 3061
       }
     ],
     "required": true,
@@ -28659,7 +28717,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3058
+        "line": 3062
       }
     ],
     "required": true,
@@ -32259,7 +32317,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 911
+        "line": 924
       }
     ],
     "required": false,
@@ -32276,7 +32334,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 912
+        "line": 925
       }
     ],
     "required": true,
@@ -32292,7 +32350,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 913
+        "line": 926
       }
     ],
     "required": false,
@@ -32325,7 +32383,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 914
+        "line": 927
       }
     ],
     "required": true,
@@ -32346,7 +32404,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 915
+        "line": 928
       }
     ],
     "required": true,
@@ -32367,7 +32425,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 916
+        "line": 929
       }
     ],
     "required": false,
@@ -32390,7 +32448,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 917
+        "line": 930
       }
     ],
     "required": false,
@@ -32413,7 +32471,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 918
+        "line": 931
       }
     ],
     "required": false,
@@ -32428,7 +32486,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 919
+        "line": 932
       }
     ],
     "required": false,
@@ -32450,7 +32508,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 920
+        "line": 933
       }
     ],
     "required": false,
@@ -35681,7 +35739,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1114
+        "line": 1127
       }
     ],
     "required": true,
@@ -35695,7 +35753,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1115
+        "line": 1128
       }
     ],
     "required": true,
@@ -35711,7 +35769,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1116
+        "line": 1129
       }
     ],
     "required": true,
@@ -35727,7 +35785,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1117
+        "line": 1130
       }
     ],
     "required": true,
@@ -35743,7 +35801,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1118
+        "line": 1131
       }
     ],
     "required": true,
@@ -35759,7 +35817,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1119
+        "line": 1132
       }
     ],
     "required": true,
@@ -35775,7 +35833,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1120
+        "line": 1133
       }
     ],
     "required": true,
@@ -35791,7 +35849,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1121
+        "line": 1134
       }
     ],
     "required": true,
@@ -35807,7 +35865,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1122
+        "line": 1135
       }
     ],
     "required": false,
@@ -35828,7 +35886,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1138
+        "line": 1151
       }
     ],
     "required": true,
@@ -35857,7 +35915,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1139
+        "line": 1152
       }
     ],
     "required": true,
@@ -35875,7 +35933,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1130
+        "line": 1143
       }
     ],
     "required": true,
@@ -35904,7 +35962,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1131
+        "line": 1144
       }
     ],
     "required": true,
@@ -35918,7 +35976,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1092
+        "line": 1105
       }
     ],
     "required": true,
@@ -35933,7 +35991,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1093
+        "line": 1106
       }
     ],
     "required": true,
@@ -35947,7 +36005,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1094
+        "line": 1107
       }
     ],
     "required": true,
@@ -35962,7 +36020,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1102
+        "line": 1115
       }
     ],
     "required": true,
@@ -35991,7 +36049,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1103
+        "line": 1116
       }
     ],
     "required": true,
@@ -36007,7 +36065,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1104
+        "line": 1117
       }
     ],
     "required": true,
@@ -36829,7 +36887,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1035
+        "line": 1048
       }
     ],
     "required": false,
@@ -36850,7 +36908,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1036
+        "line": 1049
       }
     ],
     "required": false,
@@ -37541,7 +37599,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 305
+        "line": 306
       }
     ],
     "required": true,
@@ -37557,7 +37615,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 306
+        "line": 307
       }
     ],
     "required": true,
@@ -37572,7 +37630,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 307
+        "line": 308
       }
     ],
     "required": true,
@@ -37586,7 +37644,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 308
+        "line": 309
       }
     ],
     "required": true,
@@ -37601,7 +37659,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 309
+        "line": 310
       }
     ],
     "required": true,
@@ -37654,7 +37712,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 310
+        "line": 311
       }
     ],
     "required": true,
@@ -37681,7 +37739,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 311
+        "line": 312
       }
     ],
     "required": true,
@@ -37710,7 +37768,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 312
+        "line": 313
       }
     ],
     "required": true,
@@ -37727,7 +37785,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 313
+        "line": 314
       }
     ],
     "required": false,
@@ -37749,7 +37807,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 314
+        "line": 315
       }
     ],
     "required": false,
@@ -37767,7 +37825,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 315
+        "line": 316
       }
     ],
     "required": true,
@@ -37782,7 +37840,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 316
+        "line": 317
       }
     ],
     "required": true,
@@ -37797,7 +37855,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 317
+        "line": 318
       }
     ],
     "required": true,
@@ -38081,7 +38139,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 248
+        "line": 249
       }
     ],
     "required": false,
@@ -38096,7 +38154,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 249
+        "line": 250
       }
     ],
     "required": false,
@@ -38111,7 +38169,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 250
+        "line": 251
       }
     ],
     "required": false,
@@ -38128,7 +38186,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 251
+        "line": 252
       }
     ],
     "required": false,
@@ -38145,7 +38203,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 252
+        "line": 253
       }
     ],
     "required": false,
@@ -38162,7 +38220,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 253
+        "line": 254
       }
     ],
     "required": false,
@@ -38179,7 +38237,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 254
+        "line": 255
       }
     ],
     "required": false,
@@ -38196,7 +38254,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 255
+        "line": 256
       }
     ],
     "required": false,
@@ -38210,7 +38268,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 256
+        "line": 257
       }
     ],
     "required": false,
@@ -38231,7 +38289,7 @@
     "owners": [
       {
         "file": "dnd/types/event_facts.py",
-        "line": 257
+        "line": 258
       }
     ],
     "required": false,
@@ -38245,7 +38303,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1407
+        "line": 1420
       }
     ],
     "required": true,
@@ -38262,7 +38320,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1408
+        "line": 1421
       }
     ],
     "required": false,
@@ -38283,7 +38341,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1409
+        "line": 1422
       }
     ],
     "required": false,
@@ -38304,7 +38362,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1410
+        "line": 1423
       }
     ],
     "required": false,
@@ -38323,7 +38381,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1411
+        "line": 1424
       }
     ],
     "required": false,
@@ -38342,7 +38400,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1412
+        "line": 1425
       }
     ],
     "required": false,
@@ -38364,7 +38422,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1413
+        "line": 1426
       }
     ],
     "required": false,
@@ -38383,7 +38441,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1414
+        "line": 1427
       }
     ],
     "required": false,
@@ -38402,7 +38460,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1415
+        "line": 1428
       }
     ],
     "required": false,
@@ -38426,7 +38484,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1416
+        "line": 1429
       }
     ],
     "required": false,
@@ -38445,7 +38503,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1417
+        "line": 1430
       }
     ],
     "required": false,
@@ -38464,7 +38522,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1418
+        "line": 1431
       }
     ],
     "required": false,
@@ -38483,7 +38541,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1419
+        "line": 1432
       }
     ],
     "required": false,
@@ -38502,7 +38560,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1420
+        "line": 1433
       }
     ],
     "required": false,
@@ -38521,7 +38579,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1421
+        "line": 1434
       }
     ],
     "required": false,
@@ -38543,7 +38601,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1422
+        "line": 1435
       }
     ],
     "required": false,
@@ -38563,7 +38621,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1423
+        "line": 1436
       }
     ],
     "required": false,
@@ -38583,7 +38641,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1424
+        "line": 1437
       }
     ],
     "required": false,
@@ -38602,7 +38660,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1425
+        "line": 1438
       }
     ],
     "required": false,
@@ -38621,7 +38679,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1426
+        "line": 1439
       }
     ],
     "required": false,
@@ -38640,7 +38698,7 @@
     "owners": [
       {
         "file": "dnd/player/facts.py",
-        "line": 1427
+        "line": 1440
       }
     ],
     "required": false,

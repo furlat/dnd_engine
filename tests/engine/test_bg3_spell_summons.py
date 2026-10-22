@@ -14,8 +14,9 @@ from dnd.spells.summoning import SpiritualWeapon, FlamingSphere
 from dnd.spatial.environmental_conditions import FireSurface
 from dnd.spatial.ignition import apply_elemental_surface_contacts
 from dnd.summoning.actions import DismissSummon
+from dnd.types.world import MovementMode
 from tests.engine.test_summoning_lifecycle import battle
-from tests.engine.test_summoning_autonomous_turns import autonomous_attack
+from tests.engine.test_summoning_autonomous_turns import autonomous_attack, autonomous_battle
 from tests.manual.spell_regression_support import force_save_result
 
 
@@ -27,7 +28,8 @@ def summon(battle,spell,level=3):
     return next(member for member in system.memberships.values() if member.entity.position==(4,2))
 
 
-def test_spiritual_weapon_scaled_real_native_creature_and_autonomous_attack(battle):
+def test_spiritual_weapon_scaled_real_native_creature_and_autonomous_attack(autonomous_battle):
+    battle = autonomous_battle
     game,encounter,system,caster,enemy=battle
     Entity.update_entity_position(enemy,(5,2));Entity.update_all_entities_senses()
     member=summon(battle,SpiritualWeapon,4)
@@ -50,6 +52,28 @@ def test_spiritual_weapon_scaled_real_native_creature_and_autonomous_attack(batt
     assert result is not None and not result.canceled
     assert game.get_entity(member.entity.uuid) is None
     assert member.entity.uuid not in system.memberships
+
+
+def test_spiritual_weapon_moves_on_its_turn_and_retires_with_caster(battle):
+    game,encounter,system,caster,enemy=battle
+    weapon=summon(battle,SpiritualWeapon).entity
+    encounter.next_turn()
+    assert encounter.get_current_entity().uuid==weapon.uuid
+    assert weapon.action_economy.movement_remaining(MovementMode.FLYING)==20
+    move=next(action for action in weapon.registered_actions if isinstance(action,Move))
+    result=move.instantiate(end_position=(5,2)).apply()
+    assert result is not None and not result.canceled
+    assert weapon.position==(5,2)
+    assert weapon.action_economy.movement_remaining(MovementMode.FLYING)==15
+    for _ in range(3):
+        encounter.next_turn()
+    assert encounter.get_current_entity().uuid==weapon.uuid
+    assert weapon.action_economy.movement_remaining(MovementMode.FLYING)==20
+    caster.receive_damage(caster.get_hp(),DamageType.FORCE,enemy.uuid)
+    assert game.get_entity(weapon.uuid) is None
+    assert weapon.uuid not in system.memberships
+    assert not weapon.has_runtime_agency()
+    assert not weapon.action_economy.movement_speed_grants
 
 
 def test_flaming_sphere_ram_aura_trail_and_concentration_cleanup(battle):

@@ -2,7 +2,7 @@
 
 from typing import Optional, Tuple, cast
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from dnd.actions import (
     AllyHelp,
@@ -28,7 +28,6 @@ from dnd.actions import (
 )
 from dnd.conditions import HasAttackedTracker, HasTakenDamageTracker
 from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
-from dnd.core.creature_types import DamageType
 from dnd.core.base_actions import Cost, PositionDiscoveryContract, TargetType
 from dnd.core.events import EventPhase, EventQueue, Range, RangeType, SummonAdmissionEvent
 from dnd.summoning.forms import available_forms, selected_form
@@ -109,8 +108,6 @@ class SummonSpell(SpellAction):
 
     family: SummonFamily
     form_id: str | None = None
-    breath_type: DamageType = DamageType.FIRE
-    shared_resistance: DamageType = DamageType.FIRE
     spell_school: str = "conjuration"
     concentration: bool = True
     target_type: TargetType = TargetType.POSITION
@@ -125,7 +122,7 @@ class SummonSpell(SpellAction):
         if self.form_id is None or self.end_position is None:
             raise ValueError("Choose a creature and one destination")
         choice = SummonSelection(family=self.family, form_id=self.form_id,
-            cast_at_level=self.cast_at_level, target_position=self.end_position,breath_type=self.breath_type,shared_resistance=self.shared_resistance)
+            cast_at_level=self.cast_at_level, target_position=self.end_position)
         selected_form(choice)
         return choice
 
@@ -210,7 +207,7 @@ class ConjureFiend(SummonSpell):
 class SpiritualWeapon(SummonSpell):
     creates = (*SummonSpell.creates, *_SPELL_CONSTRUCT_FORMS)
     name: str = "Spiritual Weapon"
-    description: str = "Summon a ten-turn autonomous allied spectral weapon; bonus action, no concentration."
+    description: str = "Summon a ten-turn allied spectral weapon under your control; bonus action, no concentration."
     family: SummonFamily = SummonFamily.SPIRITUAL_WEAPON
     form_id: str | None = "spiritual_weapon"
     spell_level: int = 2
@@ -222,7 +219,7 @@ class SpiritualWeapon(SummonSpell):
 class FlamingSphere(SummonSpell):
     creates = (*SummonSpell.creates, *_SPELL_CONSTRUCT_FORMS)
     name: str = "Flaming Sphere"
-    description: str = "Summon a ten-turn autonomous allied sphere with saved Ram, enemy end-turn aura and native fire trail."
+    description: str = "Summon a ten-turn allied sphere under your control with saved Ram, enemy end-turn aura and native fire trail."
     family: SummonFamily = SummonFamily.FLAMING_SPHERE
     form_id: str | None = "flaming_sphere"
     spell_level: int = 2
@@ -246,24 +243,15 @@ class PlanarAlly(SummonSpell):
     concentration:bool=False
 
 class SummonDragon(SummonSpell):
+    model_config = ConfigDict(extra="forbid")
     creates = (*SummonSpell.creates, *_GREATER_SPIRIT_FORMS)
     name:str="Summon Dragon"
-    description:str="Summon a Draconic Spirit with independently chosen Breath and shared resistance."
+    description:str="Choose a dragon color; its Draconic Spirit's Breath and your shared resistance use that color's element."
     family:SummonFamily=SummonFamily.DRAGON
-    form_id:str|None="draconic_spirit"
+    form_id:str|None="red"
     spell_level:int=5
-    def selection(self):
-        choice=super().selection()
-        elements=(DamageType.ACID,DamageType.COLD,DamageType.FIRE,DamageType.LIGHTNING,DamageType.POISON)
-        if choice.breath_type not in elements or choice.shared_resistance not in elements:raise ValueError("Choose one of the five elemental types")
-        return choice
-    def facet_domain(self, scan: ActorScan, level: Optional[int],
-                     target: Optional[ScanRecord]) -> Tuple[Tuple[ActionVariantFacet, ...], ...]:
-        """Each form, with an independently chosen Breath and shared resistance."""
-        elements=(DamageType.ACID,DamageType.COLD,DamageType.FIRE,DamageType.LIGHTNING,DamageType.POISON)
-        return tuple((*form, ActionVariantFacet(key="damage_type", value=breath.value, label=breath.value+" Breath"),
-                      ActionVariantFacet(key="resistance", value=shared.value, label=shared.value+" shared resistance"))
-                     for form in super().facet_domain(scan, level, target) for breath in elements for shared in elements)
-    def _selection_overrides(self, selection: ActionSelection) -> dict:
-        return {**super()._selection_overrides(selection), "breath_type": DamageType(selection_facet(selection, "damage_type")),
-                "shared_resistance": DamageType(selection_facet(selection, "resistance"))}
+
+    def instantiate(self, **overrides):
+        if "breath_type" in overrides or "shared_resistance" in overrides:
+            raise ValueError("Choose one dragon color using form_id")
+        return super().instantiate(**overrides)

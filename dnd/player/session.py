@@ -5,7 +5,7 @@ operation before executing another command; the renderer never receives this
 live session or its discovery templates.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from collections import OrderedDict
 from uuid import UUID, uuid4
 
@@ -24,12 +24,12 @@ from dnd.types.character_progression import PreparedSpellSelection
 from dnd.content.characters.builds import CharacterBuild, create_character, resolve_character_build
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-from dnd.controller import HumanController
+from dnd.controller import CodexController, ControllerExecutionMode, HumanController
 from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, AvailableTarget, TargetType
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.blocks.equipment import EquippableItem
 from dnd.actor_sheets import PublishedSheets, publish_actor_sheets
-from dnd.player.audience import PlayerAudience, SeatAssignment
+from dnd.player.audience import PlayerAudience, SeatAssignment, assign_control
 from dnd.player.commands import CommandRejected
 from dnd.player.choices import PlayerChoices, PlayerSelectionPreview
 from dnd.player.choice_projection import project_choices, project_selection_preview
@@ -37,7 +37,7 @@ from dnd.core.combat_log import CombatLogEntry
 from typing import Callable
 from dnd.core.content.encounters import EncounterRecipe, RosterControllerKind
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
-from dnd.core.events import EntityCreatedEvent, Event, EventPhase, EventQueue
+from dnd.core.events import ControllerAssignmentChangedEvent, EntityCreatedEvent, Event, EventPhase, EventQueue, EventType
 from dnd.encounter import AdvanceResult, Encounter, EncounterState, TurnState
 from dnd.entity import Entity
 from dnd.game import Game
@@ -77,6 +77,7 @@ class LogCapture:
     """One original evidence buffer shared by all authorized audiences."""
 
     log_appends: list[tuple[int, CombatLogEntry]] = field(default_factory=list)
+    log_cursors: list[tuple[int, int]] = field(default_factory=list)
     log_listener: Callable[[Encounter, int, CombatLogEntry, Event], None] | None = None
 
 
@@ -87,6 +88,7 @@ class Session:
     game: Game
     encounter: Encounter
     battlefield: BuiltBattlefield
+    # Initial external party only. Current authority is held by seats.
     player_uuids: tuple[UUID, ...]
     ai_controllers: tuple[NativeAIController, ...]
     births: tuple[EntityCreatedEvent, ...]
@@ -97,6 +99,7 @@ class Session:
     discovery: DiscoveryCache = field(default_factory=DiscoveryCache)
     seats: dict[str, PlayerAudience] = field(default_factory=dict)
     logs: LogCapture = field(default_factory=LogCapture)
+    control_listener: Callable[[Event], None] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,11 +115,15 @@ class Operation:
     roots: tuple[Event, ...]
     boundary: AdvanceResult | None = None
     original_logs: tuple[tuple[int, CombatLogEntry], ...] = ()
+    # A cursor includes exactly the native events stored before the log callback.
+    original_log_cursors: tuple[tuple[int, int], ...] = ()
 
 
 def publish_sheets(session: Session) -> None:
     """The player actors' sheet publication: at the end of session composition and of every operation."""
-    publish_actor_sheets(session.sheets, session.game, session.player_uuids)
+    publish_actor_sheets(session.sheets, session.game, tuple(dict.fromkeys(
+        identity for audience in session.seats.values() for identity in audience.controlled
+        if identity in session.game.entities)))
 
 
 def _start_session(session: Session) -> Session:
@@ -125,10 +132,31 @@ def _start_session(session: Session) -> Session:
         if encounter is not session.encounter or (event.context or {}).get("combat_log_origin") != "standalone":
             return
         session.logs.log_appends.append((index, entry.model_copy(deep=True)))
+        session.logs.log_cursors.append((index, EventQueue.event_cursor()))
     session.logs.log_listener = capture
     Encounter.add_combat_log_listener(capture)
+    # Passive storage notification keeps live admission in step even if a later
+    # participant fails after the native assignment has already committed.
+    seats, discovery, sheets = session.seats, session.discovery, session.sheets
+    def control_changed(event: Event) -> None:
+        if not isinstance(event, ControllerAssignmentChangedEvent):
+            return
+        changed = False
+        for seat, audience in seats.items():
+            updated = assign_control(audience, event.entity_uuid,
+                event.previous_external_owner_uuid, event.new_external_owner_uuid)
+            if updated is not audience:
+                seats[seat] = updated
+                changed = True
+        if changed:
+            if not any(audience.controls(event.entity_uuid) for audience in seats.values()):
+                sheets.by_actor.pop(event.entity_uuid, None)
+            discovery.revision += 1
+            discovery.previews.clear()
+    EventQueue.add_on_event_callback(control_changed,
+        event_types={EventType.CONTROLLER_ASSIGNMENT_CHANGED}, phases={EventPhase.COMPLETION})
     publish_sheets(session)
-    return session
+    return replace(session, control_listener=control_changed)
 
 
 def create_session(
@@ -208,6 +236,7 @@ def create_authored_session(recipe: EncounterRecipe, *,
     # materialization can publish births, deploy objects or consume dice.
     members: set[tuple[str, str]] = set()
     external_addresses: set[tuple[str, str]] = set()
+    external_modes: dict[tuple[str, str], RosterControllerKind] = {}
     external_groups: dict[str, list[tuple[str, str]]] = {}
     ai_addresses: dict[tuple[str, str], list[tuple[str, str]]] = {}
     for slot in recipe.roster_slots:
@@ -222,6 +251,7 @@ def create_authored_session(recipe: EncounterRecipe, *,
                 ai_addresses.setdefault((slot.roster_slot_id, mode.policy_id), []).append(address)
             else:
                 external_addresses.add(address)
+                external_modes[address] = mode.controller
                 external_groups.setdefault(defaults.participant_name, []).append(address)
     assignments = seat_assignments if seat_assignments is not None else tuple(
         SeatAssignment(name, tuple(addresses)) for name, addresses in external_groups.items())
@@ -260,8 +290,11 @@ def create_authored_session(recipe: EncounterRecipe, *,
         controllers.append(controller)
         for actor in actors:
             encounter.set_controller_for(actor.uuid, controller)
-    for actor in external.values():
-        encounter.set_controller_for(actor.uuid, HumanController(source_entity_uuid=actor.uuid))
+    for address, actor in external.items():
+        external_controller = (CodexController(source_entity_uuid=actor.uuid)
+            if external_modes[address] is RosterControllerKind.CODEX
+            else HumanController(source_entity_uuid=actor.uuid))
+        encounter.set_controller_for(actor.uuid, external_controller)
     encounter.start_encounter()
     births = tuple(event for _, event in EventQueue.iter_events_since(0)
         if isinstance(event, EntityCreatedEvent) and event.entity_uuid in game.entities)
@@ -272,17 +305,20 @@ def create_authored_session(recipe: EncounterRecipe, *,
 
 def _current_player(session: Session, actor_uuid: UUID) -> Entity:
     encounter = session.encounter
-    if encounter.state is EncounterState.ENDED and actor_uuid in session.player_uuids:
+    controlled = any(audience.controls(actor_uuid) for audience in session.seats.values())
+    if encounter.state is EncounterState.ENDED and controlled:
         actor = session.game.entities.get(actor_uuid)
         if actor is not None and actor.active_encounter_uuid is None:
             return actor
     actor = encounter.get_current_entity()
+    controller = encounter.get_current_controller()
     if (encounter.state is not EncounterState.ACTIVE
             or encounter.turn_state is not TurnState.IN_PROGRESS
-            or actor_uuid not in session.player_uuids
+            or not controlled
             or actor is None or actor.uuid != actor_uuid
-            or not isinstance(encounter.get_current_controller(), HumanController)):
-        raise CommandRejected("the selected actor does not own the current human turn")
+            or controller is None
+            or controller.execution_mode is not ControllerExecutionMode.EXTERNAL):
+        raise CommandRejected("the selected actor does not own the current external turn")
     return actor
 
 
@@ -416,7 +452,7 @@ def _operation(session: Session, start_cursor: int, boundary: AdvanceResult | No
     # Outside combat there is no retained turn to spend or end. Each bounded
     # operation closes its ordinary turn budget, without a rest or effect tick.
     if session.encounter.state is EncounterState.ENDED:
-        for identity in session.player_uuids:
+        for identity in dict.fromkeys(identity for audience in session.seats.values() for identity in audience.controlled):
             actor = session.game.entities.get(identity)
             if actor is not None:
                 actor.action_economy.reset_all_costs()
@@ -429,7 +465,9 @@ def _operation(session: Session, start_cursor: int, boundary: AdvanceResult | No
                   and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
     originals = tuple(session.logs.log_appends)
     session.logs.log_appends.clear()
-    return Operation(start_cursor, end_cursor, roots, boundary, originals)
+    log_cursors = tuple(session.logs.log_cursors)
+    session.logs.log_cursors.clear()
+    return Operation(start_cursor, end_cursor, roots, boundary, originals, log_cursors)
 
 
 def execute_player_action(
@@ -443,7 +481,7 @@ def execute_player_action(
     prefer_safe: bool = True,
     cast_at_level: int | None = None,
 ) -> Operation:
-    """Submit the current human's exact discovered choice to the rules engine."""
+    """Submit the current external actor's exact discovered choice to the rules engine."""
     actor = _current_player(session, actor_uuid)
     original = _retained_row(session, action)
     retained = next((candidate for candidate in original.valid_targets if candidate.index == target.index),
@@ -477,7 +515,7 @@ def player_position_options(
     session: Session, actor_uuid: UUID, action: AvailableActionInfo,
     target: AvailableTarget, selected: tuple[tuple[int, int], ...] = (),
 ) -> tuple[tuple[int, int], ...]:
-    """Disclose the engine-admitted next vertices for one current human choice."""
+    """Disclose the engine-admitted next vertices for one current external choice."""
     actor = _current_player(session, actor_uuid)
     original = _retained_row(session, action)
     retained = next((candidate for candidate in original.valid_targets if candidate.index == target.index), None)
@@ -520,7 +558,7 @@ def unequip_player_item(session: Session, actor_uuid: UUID, slot: EquipmentSlot,
 
 def prepare_player_spells(session: Session, actor_uuid: UUID, selection: PreparedSpellSelection) -> Operation:
     actor = session.game.entities.get(actor_uuid)
-    if actor is None or actor_uuid not in session.player_uuids:
+    if actor is None or not any(audience.controls(actor_uuid) for audience in session.seats.values()):
         raise CommandRejected("This actor is not an admitted player character")
     start = EventQueue.event_cursor()
     try:
@@ -532,7 +570,7 @@ def prepare_player_spells(session: Session, actor_uuid: UUID, selection: Prepare
 
 def study_player_spell_mastery(session: Session, actor_uuid: UUID, selection: SpellMasteryStudy) -> Operation:
     actor=session.game.entities.get(actor_uuid)
-    if actor is None or actor_uuid not in session.player_uuids:
+    if actor is None or not any(audience.controls(actor_uuid) for audience in session.seats.values()):
         raise CommandRejected("This actor is not an admitted player character")
     start=EventQueue.event_cursor()
     try:
@@ -555,7 +593,7 @@ def toggle_player_handler(session: Session, actor_uuid: UUID, handler_uuid: UUID
 
 
 def end_player_turn(session: Session, actor_uuid: UUID) -> Operation:
-    """End this human turn without starting the next actor's decision."""
+    """End this external turn without starting the next actor's decision."""
     if session.encounter.state is not EncounterState.ACTIVE:
         raise CommandRejected("not_your_turn")
     _current_player(session, actor_uuid)
@@ -565,13 +603,15 @@ def end_player_turn(session: Session, actor_uuid: UUID) -> Operation:
 
 
 def advance_controller(session: Session) -> Operation:
-    """Run one engine decision or expose its existing human/end boundary."""
+    """Run one engine decision or expose its existing external/end boundary."""
     start = EventQueue.event_cursor()
     return _operation(session, start, session.encounter.advance_one_controller_action_boundary())
 
 
 def close_session(session: Session) -> None:
     """Release native controller ownership before removing world deployment."""
+    if session.control_listener is not None:
+        EventQueue.remove_on_event_callback(session.control_listener)
     if session.logs.log_listener is not None:
         Encounter.remove_combat_log_listener(session.logs.log_listener)
     for controller in session.ai_controllers:

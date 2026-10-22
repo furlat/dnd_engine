@@ -3327,6 +3327,8 @@ class PassWithoutTrace(SpellAction):
 
 class GlyphSleepEffect(BaseCondition):
     name: str = "Glyph Sleep"
+    denies_consciousness: bool = Field(default=True,
+        description="The sleep glyph makes its recipient unconscious.")
     description: str = "Two-turn magical sleep; positive damage, assistance, successful Shove or Wet wakes the recipient."
     immunity_names: tuple[str,...] = ("Sleep","Unconscious")
     agency_denial: ConditionAgencyDenial = ConditionAgencyDenial.FULL_TURN

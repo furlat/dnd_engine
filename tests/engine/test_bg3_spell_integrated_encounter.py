@@ -19,7 +19,7 @@ from dnd.summoning.actions import DismissSummon
 from dnd.ai.runtime.knowledge_system import bind_ai_knowledge
 from dnd.summoning.system import bind_summoning
 from tests.engine.test_bg3_rank_one_two_spells import combatant, game
-from tests.engine.test_summoning_autonomous_turns import autonomous_attack
+from tests.engine.test_summoning_autonomous_turns import autonomous_attack, native_ai_caster
 from tests.manual.spell_regression_support import force_save_result
 from dnd.core.values import Channel, Kind, add_modifier
 
@@ -62,7 +62,8 @@ def test_items_rider_field_control_and_autonomous_summon_share_native_turns(game
         accepted(Goodberry(source_entity_uuid=caster.uuid,target_entity_uuid=caster.uuid))
         berries=[item for item in caster.inventory.items.values() if isinstance(item,GoodberryItem)]
         assert len(berries)==4
-        accepted(SpiritualWeapon(source_entity_uuid=caster.uuid,cast_at_level=2,end_position=(4,2)))
+        with native_ai_caster((game,encounter,system,caster,enemy)):
+            accepted(SpiritualWeapon(source_entity_uuid=caster.uuid,cast_at_level=2,end_position=(4,2)))
         member=next(iter(system.memberships.values()))
         assert caster.action_economy.actions.normalized_score==0
         assert caster.action_economy.bonus_actions.normalized_score==0

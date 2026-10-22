@@ -24,9 +24,35 @@ class Player:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     commands: list[dict[str, Any]] = field(default_factory=list)
     unresolved: dict[str, Any] | None = None
+    audience: dict[str, Any] | None = None
 
 
-async def open_player(url: str, credential: str, observe: Observer = ignore) -> Player:
+def consume_record(player: Player, packet: dict, raw: bytes, observe: Observer = ignore) -> None:
+    """Retain a record and fold only its ordered current membership."""
+    if player.record_bytes + len(raw) > 64 * 1024 * 1024:
+        raise RuntimeError('Trial recording quota reached')
+    player.packets.append(packet)
+    player.record_bytes += len(raw)
+    initial = packet.get('initialization')
+    if initial is not None:
+        player.audience = initial['audience']
+        groups = (initial['nodes'],)
+    else:
+        groups = (lineage['events'] for lineage in packet.get('lineages', []))
+    for nodes in groups:
+        for node in nodes:
+            fact = node.get('fact')
+            if not node.get('canceled') and fact is not None and fact['kind'] == 'audience':
+                player.audience = fact['audience']
+    observe({'kind': 'record', 'cursor': packet['cursor'], 'boundary': packet.get('boundary'), 'bytes': len(raw),
+        'audience': player.audience,
+        'logs': [node['combat_log']['compact'] for lineage in packet.get('lineages', [])
+            for node in lineage['events'] if node.get('combat_log')] +
+            [row['entry']['compact'] for row in packet.get('combat_log_appends', [])]})
+
+
+async def open_player(url: str, credential: str, observe: Observer = ignore,
+                      *, expected_attachment_epoch: str | None = None) -> Player:
     connection = await connect(url, credential)
     player = None
     try:
@@ -35,20 +61,17 @@ async def open_player(url: str, credential: str, observe: Observer = ignore) -> 
                 await connection.http.aclose()
                 await asyncio.sleep(.1)
                 connection = await connect(url, credential)
-        if connection.bootstrap['status']['attachment_epoch'] is not None:
+        attached_epoch = connection.bootstrap['status']['attachment_epoch']
+        if expected_attachment_epoch is None and attached_epoch is not None:
             raise ValueError('Seat already attached; this client never replaces another player')
-        await attach(connection, {'acquisition_id': str(uuid4()), 'expected_attachment_epoch': None})
+        if expected_attachment_epoch != attached_epoch:
+            raise ValueError('Expected attachment epoch does not match the current seat attachment')
+        await attach(connection, {'acquisition_id': str(uuid4()),
+            'expected_attachment_epoch': expected_attachment_epoch})
         player = Player(connection)
 
         async def consume(packet, raw):
-            if player.record_bytes + len(raw) > 64 * 1024 * 1024:
-                raise RuntimeError('Trial recording quota reached')
-            player.packets.append(packet)
-            player.record_bytes += len(raw)
-            observe({'kind': 'record', 'cursor': packet['cursor'], 'boundary': packet.get('boundary'), 'bytes': len(raw),
-                'logs': [node['combat_log']['compact'] for lineage in packet.get('lineages', [])
-                    for node in lineage['events'] if node['combat_log']] +
-                    [row['entry']['compact'] for row in packet.get('combat_log_appends', [])]})
+            consume_record(player, packet, raw, observe)
 
         player.follower = Follower(connection, consume)
         player.following = asyncio.create_task(follow(player.follower), name='monty-player-stream')
@@ -77,7 +100,7 @@ async def read_game(player: Player) -> dict:
         raise RuntimeError(str(player.follower.failure))
     await acknowledge(player.connection, player.follower.consumed)
     return {'status': current, 'cursor': player.follower.consumed,
-        'audience': player.connection.bootstrap['audience'],
+        'audience': player.audience if player.audience is not None else player.connection.bootstrap['audience'],
         'record_count': len(player.packets), 'record_bytes': player.record_bytes,
         'commands': player.commands[-8:], 'unresolved_command': player.unresolved}
 
@@ -92,9 +115,10 @@ def events(records: Sequence[dict], after: int = -1, limit: int = 16) -> dict:
 
 async def discover(player: Player, force_attack: bool = False) -> dict:
     async with player.lock:
-        current = (await read_game(player))['status']
+        observation = await read_game(player)
+        current = observation['status']
         actor = current['boundary']['input_actor_uuid']
-        if actor not in player.connection.bootstrap['audience']['controlled']:
+        if actor not in observation['audience']['controlled']:
             raise ValueError('Not a controlled actor input boundary; use game_wait(game_ref)')
         return await choices(player.connection, {'actor_uuid': actor,
             'state_revision': current['boundary']['state_revision'],
@@ -174,7 +198,6 @@ async def resolve_receipt(player: Player) -> dict:
 async def wait_game(player: Player, timeout_seconds: float = 20) -> dict:
     if not 0 < timeout_seconds <= 30:
         raise ValueError('timeout_seconds must be in (0, 30]')
-    controlled = player.connection.bootstrap['audience']['controlled']
     try:
         async with asyncio.timeout(timeout_seconds):
             while True:
@@ -182,8 +205,9 @@ async def wait_game(player: Player, timeout_seconds: float = 20) -> dict:
                 previous_cursor = player.follower.consumed
                 observation = await read_game(player)
                 boundary = observation['status']['boundary']
-                if boundary['lifecycle'] in ('terminal', 'failed', 'closed') or (
-                        boundary['lifecycle'] == 'waiting_for_human' and boundary['input_actor_uuid'] in controlled):
+                if boundary['lifecycle'] in ('outside_encounter', 'terminal', 'failed', 'closed') or (
+                        boundary['lifecycle'] in ('waiting_for_human', 'waiting_for_codex') and
+                        boundary['input_actor_uuid'] in observation['audience']['controlled']):
                     return {'wait_timed_out': False, **observation}
                 # Stream status may lag a consumed operation. Recheck HTTP after progress,
                 # including progress during read_game, rather than trusting an old turn.

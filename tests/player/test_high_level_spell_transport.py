@@ -69,7 +69,7 @@ def region_aims(actor: Entity, region: PositionRegion) -> list[tuple[int, int]]:
         pytest.param(ConjureElemental, (("form", "earth_myrmidon"),), marks=pytest.mark.xfail(strict=True,
             reason="Known gap: since D17 facets are listed at the row's base level, so slot-six Myrmidon forms are not offered")),
         (PlanarAlly, (("form", "deva"),)),
-        (SummonDragon, (("damage_type", "Cold"), ("resistance", "Poison"))),
+        (SummonDragon, (("form", "white"),)),
     ],
 )
 def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
@@ -247,7 +247,7 @@ def test_high_level_shape_discover_preview_submit_without_preview_side_effects(
         dragon = next(
             entity
             for entity in runtime.session.game.entities.values()
-            if entity.name == "Draconic Spirit"
+            if entity.name == "White Draconic Spirit"
         )
         record = next(
             record

@@ -66,7 +66,7 @@ from dnd.core.content.registration import (
     behavior_identity,
     get_content_declaration,
 )
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.core.content.runtime import RuntimeBehaviorKind, bind_runtime_action_before_admission
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import AttackOutcome
 from dnd.core.effect_types import EffectOrigin, EffectOriginKind
@@ -1415,6 +1415,8 @@ class MyrmidonBurrow(ElementalWarp):
             and actor.position == self.end_position
         ):
             landing = MyrmidonLanding(source_entity_uuid=actor.uuid, end_position=actor.position, costs=[])
+            bind_runtime_action_before_admission(landing, current_binding=landing.behavior_binding,
+                runtime_owner_uuid=actor.uuid)
             actor.perform(landing, landing.current_selection(), parent_event=effect)
         return effect
 

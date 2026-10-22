@@ -1891,6 +1891,8 @@ class Unconscious(BaseCondition):
     """Severe condition owning the complete unconscious mechanical transform."""
 
     name: str = Field(default="Unconscious", description="Condition name.")
+    denies_consciousness: bool = Field(default=True,
+        description="This condition makes its target unconscious.")
     description: str = Field(
         default="An unconscious creature is incapacitated (see the condition), can't move, and can't speak. The creature automatically fails Strength and Dexterity saving throws. Attack rolls against the creature have advantage.",
         description="Condition description.",

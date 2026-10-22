@@ -7,7 +7,7 @@ def combat_summary(records):
     deaths = []
     for packet in records:
         entries = [node['combat_log'] for lineage in packet.get('lineages', [])
-            for node in lineage['events'] if node['combat_log']]
+            for node in lineage['events'] if node.get('combat_log')]
         entries += [row['entry'] for row in packet.get('combat_log_appends', [])]
         for entry in entries:
             if entry['entry_type'] == 'attack':
@@ -41,7 +41,7 @@ async def play_steps(game_ref, max_actions=12):
     for _ in range(max_actions):
         observation = await game_wait(game_ref, timeout_seconds=10)
         boundary = observation['status']['boundary']
-        if observation['wait_timed_out'] or boundary['lifecycle'] != 'waiting_for_human':
+        if observation['wait_timed_out'] or boundary['lifecycle'] not in ('waiting_for_human', 'waiting_for_codex'):
             break
         discovery = await game_choices(game_ref)
         choices = discovery['choices']
