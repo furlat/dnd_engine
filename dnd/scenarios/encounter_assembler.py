@@ -485,6 +485,8 @@ def assemble_encounter_recipe(
                 by_address[
                     (recipe_slot.roster_slot_id, member.member_id)
                 ] = entity
+                if member.uses_death_saves is not None:
+                    entity.uses_death_saves = member.uses_death_saves
                 by_role[member.deployment_role] = entity
                 for effect in member.scenario_setup_effects:
                     if isinstance(

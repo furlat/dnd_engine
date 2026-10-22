@@ -83,6 +83,7 @@ def combat_configuration(case: str, directory: Path, seed: int = 2) -> ServerCon
             grants.append(RosterSpellGrant(spell_refs=(declaration.ref,), caster_level=7))
         members = tuple(EncounterRosterMember(member_id=f'unit_{i}', display_name=f'{side.title()} combatant {i}',
             deployment_role=f'{side}_{i}', source=AuthoredCreatureRosterSource(recipe=source),
+            uses_death_saves=False if side == 'blue' else None,
             scenario_setup_effects=tuple(grants)) for i in range(1, count + 1))
         roster = EncounterRosterRecipe.create(roster_id=f'roster.combat_measurement_{side}', title=side.title(), members=members)
         slots.append(EncounterRosterSlot(roster_slot_id=side, roster=roster, faction_id=side,

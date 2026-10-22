@@ -2782,7 +2782,8 @@ def invisibility_reveal_processor(event: Event, source_entity_uuid: UUID) -> Opt
         source_entity_uuid: UUID of the invisible entity.
 
     Returns:
-        None; reveal is performed through condition removal side effects.
+        The cast version after a successful reveal, retaining its newly observed
+        identity before recipients can lose sight; otherwise None.
     """
     if not event.is_last:
         return None
@@ -2803,7 +2804,11 @@ def invisibility_reveal_processor(event: Event, source_entity_uuid: UUID) -> Opt
                 return None
             if event.event_type == EventType.BASE_ACTION and not condition.reveal_on_other_actions:
                 return None
-            entity.remove_condition("Invisible", parent_event=event)
+            removed = entity.remove_condition("Invisible", parent_event=event)
+            if removed and event.event_type == EventType.CAST_SPELL:
+                # Record post-reveal grants through the existing handler-result
+                # path, which stores a version without dispatching the hook again.
+                return event.with_updates()
     return None
 
 

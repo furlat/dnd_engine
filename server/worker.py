@@ -17,7 +17,7 @@ from dnd.actions_functional import free_aim_target
 from dnd.controller import ControllerExecutionMode
 from dnd.core.events import EventQueue
 from dnd.core.content.descriptors import ContentVisibility
-from dnd.encounter import EncounterState, TurnState
+from dnd.encounter import EncounterState, TurnState, conscious_factions
 from dnd.player.application import AudienceRuntime, capture_application_operation, initialize_audiences, seat_content
 from dnd.player.commands import ActionSelection, CommandRejected
 from dnd.player.content import UIContentManifest
@@ -47,7 +47,12 @@ def boundary(session: Session, seat: str, revision: str) -> BoundaryState:
     encounter = session.encounter
     actor = encounter.get_current_entity()
     if encounter.state is EncounterState.ENDED:
-        return BoundaryState(lifecycle='outside_encounter', input_actor_uuid=None, state_revision=revision)
+        surviving_factions = conscious_factions(encounter.combatants.values())
+        for identity in session.seats[seat].controlled:
+            entity = session.game.entities.get(identity)
+            if entity is not None and (entity.faction or str(entity.uuid)) in surviving_factions:
+                return BoundaryState(lifecycle='outside_encounter', input_actor_uuid=None, state_revision=revision)
+        return BoundaryState(lifecycle='terminal', input_actor_uuid=None, state_revision=None)
     if encounter.state is not EncounterState.ACTIVE:
         return BoundaryState(lifecycle='terminal', input_actor_uuid=None, state_revision=None)
     controller = encounter.get_current_controller()
@@ -115,11 +120,14 @@ def authorize(runtime: Runtime, seat: str, actor: UUID, revision: str, *, outsid
     publication = runtime.publications[seat]
     if publication.state_revision != revision:
         raise CommandRejected('stale_state')
+    state = boundary(runtime.session, seat, revision)
+    if state.lifecycle == 'terminal':
+        raise CommandRejected('actor_unavailable')
     if outside_encounter and runtime.session.encounter.state is EncounterState.ENDED:
         native = runtime.session.game.entities.get(actor)
         if native is not None and native.active_encounter_uuid is None:
             return
-    if boundary(runtime.session, seat, revision).input_actor_uuid != actor:
+    if state.input_actor_uuid != actor:
         raise CommandRejected('not_your_turn')
 
 

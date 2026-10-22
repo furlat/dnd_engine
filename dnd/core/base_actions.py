@@ -2736,32 +2736,33 @@ class BaseAction(BaseObject):
             if execution_event.canceled:
                 return execution_event
             if self.effective_target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
-                # Every target's effect is one simultaneous group: observers settle
-                # once when it closes, before the root completes (plan §5.1-5.4).
-                # One shared damage roll for area effects and for multi-target
-                # effects without attack rolls (PHB "same time"; human D6a).
+                # The cast's reveal/admission precedes its simultaneous target effects.
+                # Otherwise an observer downed by this batch can lose sight before
+                # ever perceiving the caster who just ended ordinary invisibility.
+                started = start_phase()
+                all_target_uuids, resolved_area_positions = self._resolve_execution_targets()
+                record_phase("resolve_convolution_targets", started)
+                started = start_phase()
+                effect_event = execution_event.phase_to(
+                    EventPhase.EFFECT,
+                    total_targets=len(all_target_uuids),
+                    total_damage=0,
+                    aoe_position=self.end_position,
+                    resolved_area_positions=resolved_area_positions,
+                    status_message=(
+                        f"Applying {self.name} to {len(all_target_uuids)} targets"
+                    ),
+                )
+                record_phase("convolution_effect_event", started)
+                if effect_event.canceled:
+                    record_total()
+                    return effect_event
+
+                # Every target's effect remains one simultaneous group, with one
+                # shared damage roll for areas and non-attack multi-target effects.
                 with EventQueue.group(GroupEntryKind.AREA_APPLICATION, root=execution_event,
                         shares_damage_rolls=(self.effective_target_type is TargetType.POSITION_AOE
                                              or not self.performs_attack)):
-                    started = start_phase()
-                    all_target_uuids, resolved_area_positions = self._resolve_execution_targets()
-                    record_phase("resolve_convolution_targets", started)
-                    started = start_phase()
-                    effect_event = execution_event.phase_to(
-                        EventPhase.EFFECT,
-                        total_targets=len(all_target_uuids),
-                        total_damage=0,
-                        aoe_position=self.end_position,
-                        resolved_area_positions=resolved_area_positions,
-                        status_message=(
-                            f"Applying {self.name} to {len(all_target_uuids)} targets"
-                        ),
-                    )
-                    record_phase("convolution_effect_event", started)
-                    if effect_event.canceled:
-                        record_total()
-                        return effect_event
-
                     targets_started = start_phase()
                     effect_event = self._apply_target_applications(
                         execution_event, effect_event, all_target_uuids)

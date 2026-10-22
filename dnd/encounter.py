@@ -18,7 +18,7 @@ from pydantic import Field, PrivateAttr, computed_field
 from enum import Enum
 from dataclasses import dataclass, field
 from contextlib import contextmanager
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 import logging
 
 from dnd.core.base_object import BaseObject
@@ -312,6 +312,19 @@ class CombatantState(BaseObject):
         if entity is None:
             return False
         return entity.is_encounter_alive
+
+
+def conscious_factions(combatants: Iterable[CombatantState]) -> set[str]:
+    """Factions still able to fight; conscious action denial does not defeat them."""
+    factions = set()
+    for combatant in combatants:
+        entity = combatant.entity
+        if entity is not None and entity.health.life_state is LifeState.ALIVE and not any(
+            condition.denies_consciousness and condition.contributions_active()
+            for condition in entity.active_conditions_by_uuid.values()
+        ):
+            factions.add(entity.faction if entity.faction else str(entity.uuid))
+    return factions
 
 
 @dataclass(frozen=True, slots=True)
@@ -1412,23 +1425,7 @@ class Encounter(BaseObject):
         Returns:
             True if encounter ended
         """
-        factions_conscious: Dict[str, int] = {}
-        for combatant in self.combatants.values():
-            entity = combatant.entity
-            if entity is None:
-                continue
-            faction_key = entity.faction if entity.faction else str(entity.uuid)
-            if faction_key not in factions_conscious:
-                factions_conscious[faction_key] = 0
-            if entity.health.life_state is LifeState.ALIVE and not any(
-                condition.denies_consciousness and condition.contributions_active()
-                for condition in entity.active_conditions_by_uuid.values()
-            ):
-                factions_conscious[faction_key] += 1
-
-        factions_with_conscious = [f for f, c in factions_conscious.items() if c > 0]
-
-        if len(factions_with_conscious) <= 1:
+        if len(conscious_factions(self.combatants.values())) <= 1:
             self.end_encounter()
             return True
 

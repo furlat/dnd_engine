@@ -437,6 +437,11 @@ class EncounterRosterMember(BaseModel):
     display_name: str
     deployment_role: str
     source: EncounterRosterMemberSource
+    uses_death_saves: bool | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        description="Override zero-HP handling: False dies, True uses death saves, None inherits the source.",
+    )
     scenario_setup_effects: tuple[EncounterSetupEffect, ...] = ()
 
     @field_validator("member_id", "deployment_role")
