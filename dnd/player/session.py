@@ -66,10 +66,11 @@ class DiscoveryCache:
     # The compact choices' wire encoding, made at most once per discovery.
     compact_json: bytes | None = None
     rich_complete: bool = False
-    # Projected previews of this discovery, by (row, target indices, positions,
+    # Projected previews by (row, selected indices/coordinates, extra positions,
     # prefer_safe, include_aoe_effects, cast_at_level); frozen and never copied.
-    previews: OrderedDict[tuple[int, tuple[int, ...], tuple[tuple[int, int], ...], bool, bool, int | None],
-                          PlayerSelectionPreview] = field(default_factory=OrderedDict)
+    previews: OrderedDict[
+        tuple[int, tuple[tuple[int, tuple[int, int] | None], ...], tuple[tuple[int, int], ...], bool, bool, int | None],
+        PlayerSelectionPreview] = field(default_factory=OrderedDict)
 
 
 @dataclass(slots=True)
@@ -419,8 +420,10 @@ def preview_player_selection(session: Session, actor_uuid: UUID, action: Availab
     """The projected preview of one ordered selection, cached per discovery as its frozen projection."""
     actor = _current_player(session, actor_uuid)
     original = _retained_row(session, action)
+    # Free aims share one synthetic index; their coordinates distinguish them.
     key = (original.discovery_index,
-           tuple(target.index for target in selected), positions, prefer_safe, include_aoe_effects, cast_at_level)
+           tuple((target.index, target.position) for target in selected), positions,
+           prefer_safe, include_aoe_effects, cast_at_level)
     cache = session.discovery.previews
     projected = cache.get(key)
     if projected is not None:
