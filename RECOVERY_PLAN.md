@@ -1,5 +1,23 @@
 We are working on NDClient.
 
+The death/invisibility repairs are implemented in the current checkout:
+per-creature zero-HP policy, terminal defeat publication, and caster reveal before
+area damage. See the [repair plan](agent_docs/plans/DEATH_INVISIBILITY_INVESTIGATION_2026-10-22.md)
+and [client handoff](agent_docs/DEATH_INVISIBILITY_CLIENT_HANDOFF_2026-10-22.md).
+The combined selected suite passed 102 tests; separate reveal checks passed 86.
+The handoff records timing limits and adoption requirements. No client files
+were changed, and the separate selected-AoE implementation remains unstarted.
+
+For the selected AoE request and agent-local stamping computation, see the
+[selected AoE plan](agent_docs/plans/SELECTED_AOE_AIMS_PLAN_2026-10-22.md).
+The human clarified that the stamp is filtered by existing open-space
+connectivity: sealed barriers block disconnected portions; gaps let it spread.
+The plan retains inverse stamping and adds a batched reachability mask whose
+parity and cost still need qualification. Implementation has not started.
+The earlier free-ground-aim Preview cache repair is committed as
+`bedc3d92dc`; its focused tests passed. The selected plan retains actual stamping
+measurements and separates them from the untimed exhaustive correctness oracle.
+
 For the three newly authorized production publication repairs (Ice destruction,
 Myrmidon Landing identity and Arcane Sword anchor), follow the
 [production fact repair plan](agent_docs/plans/PRODUCTION_FACT_REPAIRS_2026-10-22.md).
