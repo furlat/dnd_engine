@@ -173,12 +173,12 @@ All containers are breakable; destruction spills their contents.
 | Small iron box with a lock | R61 | 1×1 | locked, open, destroyed | new |
 | Long, shallow wooden box | R61 | 1×1 | closed, open, destroyed | new |
 | Small chest under a loose floorboard | R38 | under a 1×1 floorboard | closed, open | reuse `loose_floorboards` plus a small chest |
-| Keg | R2 (lighting oil, 2), R27 (sour wine) | 1×1 | intact, destroyed | variant of `oil_barrel` |
-| Barrel, painted black X | R27 | 1×1 | closed, open, destroyed | variant of barrel |
-| Barrels (salted meat, brackish water) | R31 (2) | 1×1 | intact, destroyed | reuse barrel family |
-| Casks (salted pork, pickled fish) | R60 (5), R61 | 1×1 | intact, destroyed | variant of barrel |
+| Keg of lighting oil | R2 (2) | 1×1 | intact, destroyed | variant of `oil_barrel` (it spills oil); R27's sour-wine keg is found inside the cabinets, not placed |
+| Barrel, painted black X | R27 | 1×1 | closed, open, destroyed | variant of the barrel container |
+| Barrels (salted meat; brackish water) | R31 (2) | 1×1 | intact, destroyed | barrel container; the water barrel reuses `water_barrel` (it spills water) |
+| Casks (salted pork, pickled fish) | R60 (5), R61 | 1×1 | intact, destroyed | variant of the barrel container |
 | Sack, large (spilled sugar), small salt sacks | R27 | 1×1 | intact, spilled, destroyed | reuse `sack_bundles` plus a spilled state |
-| Green drawstring sack embroidered "Old Jed" | R39 (hangs on the hat rack) | 1×1 | intact, destroyed | new |
+| Green drawstring sack embroidered "Old Jed" | R39 (hangs on the hat rack) | 1×1 | intact, destroyed | deferred with creatures: it holds Old Jed, who animates |
 | Bucket | R5 | 1×1 | intact, destroyed | new |
 | Metal vat, large | R28 (3) | 1×1 | intact, destroyed | new |
 | Glass canister, sealed | R65 (3, inside the cabinet) | item art | closed, open, broken | new |
@@ -205,7 +205,7 @@ All containers are breakable; destruction spills their contents.
 | Carpentry tools | R19 | 1×1 | — | yes | variant of `workshop_apparatus` |
 | Grindstone (sharpening) | R16 | 1×1 | — | yes | reuse `grindstone` |
 | Tool rack (wall) | R28 | wall | — | yes | new |
-| Wall fireplace (masonry hearth with lintel and mantle), one style per size | see next four rows | wall, 2 cells | cold, lit | no (part of the wall) | new |
+| Wall fireplace (masonry hearth with lintel and mantle), one style per size | see next four rows | wall, 2 cells | cold, lit | yes, like this engine's walls; a lit hearth's fire is a separate body in front of it and can be doused | new |
 | — large, unnaturally cold | R2 | | cold | | |
 | — huge | R35, R67 | | | | |
 | — ornate | R48 | | | | |
@@ -219,7 +219,7 @@ Light only where the book says it's lit.
 | Asset | Used in (count) | Size | States | Breakable | Source |
 | --- | --- | --- | --- | --- | --- |
 | Continual-light rod, wall-mounted (torch-sized metal rod) | R4 (2 lit), R37 (4 lit), R46 (4 lit) | wall | lit, plus an empty recess for missing rods | yes | new |
-| Wrought-iron cresset (torch holder) | most rooms; R7 many | wall | empty, holding a torch | no | new |
+| Wrought-iron cresset (torch holder) | most rooms; R7 many | wall | empty, holding a torch | yes | new |
 | Wall torch | R7 (3, unlit), R38 (3, burning) | wall | lit, unlit | yes | reuse `wall_torch` |
 | Large bronze chandelier | R40 | 2×2 ceiling | unlit | yes | new |
 | Red crystal chandelier | R45 (2) | 2×2 ceiling | unlit | yes | new |
@@ -255,7 +255,7 @@ Light only where the book says it's lit.
 | — Luciana (girl, ~10) and Salvatrice (girl, ~8) | R66, north wall | | | | |
 | Painting "The Hunt": Sergi on horseback charging a hydra with rooster heads | R66 | wall | hanging, slashed | yes | new |
 | Slashed, discarded paintings | R61 | 1×1 floor | — | yes | new |
-| Hanging golden figure in manacles (Armand Triskelion; creature deferred, place as inert) | R1, above the inner arch | wall | — | no | new |
+| Hanging golden figure in manacles (Armand Triskelion) | R1, above the inner arch | wall | — | no | deferred with creatures; art only, no engine body in this pass |
 
 ## 8. Statues, taxidermy, shrine
 
@@ -271,7 +271,7 @@ Light only where the book says it's lit.
 | Stuffed giant skunk | R66 | 1×1 | intact, destroyed | yes | new |
 | Stuffed eagle on a branch perch | R66 (3) | 1×1 | intact, destroyed | yes | new |
 | Small taxidermy cluster (waterfowl, weasels, cats, foxes, rabbits), many missing limbs | R66 (several) | 1×1 | intact, destroyed | yes | new |
-| Dragon skeleton, 18 ft, hung on wire from the ceiling (inert, nonblocking) | R35 | ~4×2, raised | — | yes | new |
+| Dragon skeleton, 18 ft, hung on wire from the ceiling (inert, nonblocking) | R35 | ~4×2, raised | — | yes | new; its engine body waits for a bone material in the client contract (plan §4.E schema bump) |
 
 ## 9. Remains, corpses, floor dressing (not breakable; searchable remains)
 
@@ -497,3 +497,48 @@ state.
 **Counts:** the book's counts are listed here as written, for example 36 beds in R48 and
 27 in R55. The room-composition pass decides how many fit; this list only says each asset
 must exist.
+
+## 14. Engine ids made in step 1 (for binding the art)
+
+Bodies are `environment.furniture.<id>` props unless marked. A placed prop publishes its body
+name as `visual_item_name` and, when a variant is chosen, `visual_variant_id`. A variant
+changes only the look; a different footprint, material or behaviour is a different body.
+
+- **Existing bodies, new variants:** `bed` (green_bedding, red_white_striped_bedding,
+  blue_white_diamond_bedding), `wardrobe` (knife_slashed), `bookshelf` (small, large,
+  execution_logs), `preparation_counter` (woodworking_bench), `sack_bundles` (salt_sacks,
+  spilled_sugar_sack), `tall_red_banner` (tattered_captured), `workshop_apparatus`
+  (metal_tools, carpentry_tools), `unlit_candlesticks` (large_candelabrum,
+  black_shrine_candles), `spent_ashes` (burned_furniture).
+- **Furniture:** `long_dining_table`, `long_bench`, `card_table`, `card_table_stack`,
+  `coffee_table`, `worktable`, `bar_counter` (straight, end), `large_desk`, `overturned_desk`,
+  `massive_chair`, `restraint_chair`, `padded_chair`, `couch` (black_white_striped, dark_green,
+  pink_light_blue_striped, red_gray, lounge), `cot`, `four_poster_bed` (red_neat,
+  stained_ripped, large_comfortable), `dresser`, `mirrored_dresser` (mirror_smashed), `armoire`,
+  `cabinet` (white_bath), `hat_rack`, `surplus_furniture`, `unfinished_coffin`, `dog_hutch`.
+  A broken chair or a wrecked bed is the ordinary body placed already destroyed.
+- **Fixtures:** `bucket`, `teapot`, `metal_vat`, `hand_pump`, `wall_pump`, `pump_faucet`
+  (blue_cold, red_hot), `privy_seat`, `porcelain_toilet`, `brass_bathtub` (huge),
+  `nymph_fountain`, `headsman_block`, `fireplace` (large, huge, ornate, grand; ordinary when
+  no variant).
+- **Statues and displays:** `triskelion_statue`, `shrine_platform`, `armor_stand`
+  (gilded_plate, gilded_plate_without_helm), `manikin`, `taxidermy_large` (bear,
+  bear_partly_eaten, elk, hippogriff), `taxidermy_long` (the lion), `taxidermy_small` (wolf,
+  giant_skunk, small_cluster), `eagle_perch`.
+- **Wall decor:** `wall_rack` (bardiches, polearms, swords, weapons_and_armor,
+  practice_weapons, tools), `tapestry`, `rolled_tapestry`, `curtains` (red_frayed, green,
+  red_white_striped), `tavern_sign`, `mounted_shield`, `dartboard`, `mounted_antlers`,
+  `framed_painting` (santiago, alfonsina, vittorino, sergi, luciana_and_salvatrice, the_hunt),
+  `slashed_paintings`, `cresset`.
+- **Lights:** `bronze_chandelier` and `crystal_chandelier` (unlit); `continual_light_rod`
+  (always lit, by the Continual Flame condition); `environment.hearth_fire` (a burning fire
+  placed in front of a lit fireplace; it can be doused).
+- **Containers** (`environment.container.<id>`, open/closed lid, spill on destruction):
+  `footlocker`, `iron_bound_chest`, `huge_iron_chest` (1×2), `iron_box`, `long_wooden_box`,
+  `coffin` (1×2), `barrel` (also the casks and the X barrel). The small wooden chest reuses
+  `environment.storage_chest`.
+
+Not given bodies in step 1: remains, nests, garbage and other §9 dressing (searchable remains
+come with check-gated storage, §4.F); the wardrobe and mermaid cabinet with false backs (§4.F);
+the dragon skeleton (bone material); creatures and what they carry.
+

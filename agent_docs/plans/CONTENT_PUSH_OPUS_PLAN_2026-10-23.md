@@ -2,8 +2,8 @@
 
 Status: plan, 23 October 2026, branch `content_push_opus` (from `feature/rules-checking` 1f044792b1).
 It keeps the correct parts of [the Triskelion backend content plan](TRISKELION_BACKEND_CONTENT_PLAN_2026-10-23.md)
-and applies the human's decisions of 23 October. No implementation has started.
-The thieves' tools rules wait for the human's BG3 tool handout (§4.E).
+and applies the human's decisions of 23 October. Step 1 (§4.A) is implemented; the rest
+follows §7.
 
 ## 1. Rules for this work (the human's)
 
@@ -78,6 +78,19 @@ transition to animate, is the
 - **Lights only where the source says they're lit.** Lights are the one content type that
   costs sensory work for every observer; dozens of described candles are not dozens of
   emitters.
+
+**Step 1 as built (23 October):** the prop table gained the handoff's bodies, a
+`visual_variants` list per body and an `ItemVisualVariantParameters` argument on
+`build_world_prop` (composition calls `build_world_prop`, as the battlefields do). A
+`CONTAINER_PROFILES` table gives the chest builder material, hit points and a footprint. The
+continual-light rod is a prop whose profile installs the existing Continual Flame condition.
+A lit hearth is a separate `environment.hearth_fire` fixed flame in front of the fireplace:
+breaking the masonry leaves the fire burning on the hearth, and its actions still read
+"Light/Extinguish Wall Torch" (a known stand-in; those labels key the non-revealing action
+list). The handoff's §14 lists every id and variant. Measured under load (15 interleaved
+rounds): all-actor senses 6.0 ms empty, 8.5 ms with 52 existing props, 8.5 ms with 52 new
+props, 8.6 ms with them plus the lit rods and hearth; the cost is prop count, not the new
+content.
 
 ### B. Items and magic items (old P8): **not in this pass** (human, 23 October)
 
@@ -160,7 +173,8 @@ where it fits, not all of it.
   - linked multi-trap systems beyond what the floor needs.
 - **Client contract:** one small addition for doors and containers together. Publish
   "locked" and "trap detected" to observers who know; keep key identity, trap presence for
-  others, and DCs hidden. One schema bump; both SDKs regenerated.
+  others, and DCs hidden. The same bump adds a bone material (the R35 dragon skeleton waits
+  for it). One schema bump; both SDKs regenerated.
 
 ### F. Check-gated storage (decided)
 
@@ -218,7 +232,7 @@ That's a separate task with its own plan. Until then, §4.I.
 
 | Step | Work | Exit evidence |
 | --- | --- | --- |
-| 1 | A and B on one dense representative room | Placement, pickup/equip/loot conservation, destruction, client-visible facts. Paired timing: dense room vs empty room, under load. |
+| 1 (done) | A (B is out) | Placement, loot conservation, destruction, client-visible facts. Paired timing: dense test room vs empty, under load. |
 | 2 | C and D | Correct recipients only; saves, durations and cures; one activation; no cost for distant actors (paired timing). |
 | 3 | E (after the BG3 handout) and F | Locked/unlocked/forced/picked transitions; wrong key or canceled action preserves state; secrecy of key identity; SDK reduction of the new field. |
 | 4 | G and H | Haunted fires every N rounds only for its owner; cures; shove steps can't pass walls or overlap; failed steps keep state. |
@@ -239,7 +253,6 @@ For each implementation step:
 
 ## 9. Open questions
 
-- Thieves' tools rules: from the BG3 handout.
 - Which keys exist on this floor, and which are carried by creatures.
 - Source counts against layout capacity (beds in rooms 48/53/55, the armory stacks).
 - The tunable rounds for Haunted, and its sound table.

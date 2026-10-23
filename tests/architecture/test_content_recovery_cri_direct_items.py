@@ -28,7 +28,9 @@ from dnd.content.items.roster_item_definitions import (
 )
 from dnd.content.items.window_definitions import WINDOW_DEFINITIONS
 from dnd.content.items.door_profiles import DOOR_PROFILES
-from dnd.content.items.environment_item_builders import LIQUID_BARREL_PROFILES, SOLID_WALL_MATERIALS
+from dnd.content.items.environment_item_builders import (
+    CONTAINER_PROFILES, LIQUID_BARREL_PROFILES, SOLID_WALL_MATERIALS,
+)
 from dnd.content.items.ground_hardware_builders import GROUND_HARDWARE_PROFILES
 from dnd.content.items.world_prop_builders import WORLD_PROP_PROFILES
 from dnd.content.items.trap_hardware_builders import TRAP_HARDWARE_PROFILES
@@ -77,6 +79,7 @@ _BEHAVIOR_ITEM_IDS = frozenset({
     "environment.arcane_device",
     "environment.arcane_machine_gun",
     "environment.wall_torch",
+    "environment.hearth_fire",
     "environment.trap_lever",
     "environment.storage_chest",
     "environment.chest.fantasy_a1",
@@ -233,6 +236,7 @@ def test_cri_public_item_inventory_is_complete_and_direct() -> None:
         | set(TRAP_HARDWARE_PROFILES)
         | set(GROUND_HARDWARE_PROFILES)
         | set(WORLD_PROP_PROFILES)
+        | set(CONTAINER_PROFILES)
         | set(LIQUID_BARREL_PROFILES)
         | set(POWERED_WEARABLE_DEFINITIONS)
         | set(ROSTER_WEAPON_DEFINITIONS) | set(ROSTER_EMBER_DEFINITIONS)

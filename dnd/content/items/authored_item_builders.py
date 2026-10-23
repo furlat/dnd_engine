@@ -37,16 +37,19 @@ from dnd.content.items.authored_item_definitions import (
     WearableDefinition,
 )
 from dnd.content.items.environment_item_builders import (
+    CONTAINER_PROFILES,
     LIQUID_BARREL_PROFILES,
     SOLID_WALL_MATERIALS,
     build_authored_door,
     build_arcane_device,
     build_arcane_machine_gun,
     build_campfire,
+    build_container,
     build_cliff_face,
     build_directional_door,
     build_directional_wall,
     build_fireball_cannon,
+    build_hearth_fire,
     build_liquid_barrel,
     build_storage_chest,
     build_solid_wall,
@@ -405,6 +408,10 @@ def _chest_definition_builder(definition: AuthoredItemDefinition) -> ItemBuilder
     return _single_item_builder(definition.item_id, build)
 
 
+def _container_builder(item_id: str) -> ItemBuilder:
+    return _single_item_builder(item_id, lambda source: build_container(item_id, source))
+
+
 def _trap_hardware_builder(item_id: str) -> ItemBuilder:
     return _single_item_builder(item_id, lambda source: build_trap_hardware(
         item_id, source_entity_uuid=source))
@@ -481,6 +488,7 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
     **{p.wall.item_id: _window_component_builder(family, insert=False) for family, p in WINDOW_DEFINITIONS.items()},
     **{p.insert.item_id: _window_component_builder(family, insert=True) for family, p in WINDOW_DEFINITIONS.items() if p.insert is not None},
     **{item_id: _chest_definition_builder(definition) for item_id, definition in CHEST_DEFINITIONS.items()},
+    **{item_id: _container_builder(item_id) for item_id in CONTAINER_PROFILES},
     **{item_id: _door_profile_builder(item_id) for item_id in DOOR_PROFILES},
     **{item_id: _trap_hardware_builder(item_id) for item_id in TRAP_HARDWARE_PROFILES},
     **{item_id: _ground_hardware_builder(item_id) for item_id in GROUND_HARDWARE_PROFILES},
@@ -592,6 +600,9 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
     ),
     "environment.wall_torch": _single_item_builder(
         "environment.wall_torch", _build_wall_torch,
+    ),
+    "environment.hearth_fire": _single_item_builder(
+        "environment.hearth_fire", lambda _source: build_hearth_fire(),
     ),
     "environment.trap_lever": _single_item_builder(
         "environment.trap_lever", _build_trap_lever,

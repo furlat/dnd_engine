@@ -13,6 +13,8 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import Event
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemDestructionProfile, ItemIntegrity
+from dnd.items.visual_variants import ItemVisualVariantParameters
+from dnd.spells.evocation import ContinualFlameCondition
 from dnd.spatial.area_conditions import AreaCondition
 from dnd.types.materials import Material
 from dnd.types.spatial_effects import SpatialEffectLayer, SpatialEffectOccupancyPolicy
@@ -35,6 +37,8 @@ class WorldPropProfile:
     blocks_movement: bool = True
     occupies_bands: bool = True
     armor_class: int | None = None
+    visual_variants: tuple[str, ...] = ()
+    continual_flame: bool = False
 
 
 WORLD_PROP_PROFILES = MappingProxyType({
@@ -43,6 +47,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         destroyed_name="Broken wooden bed",
         destroyed_description="Collapsed wood and bedding; passable difficult terrain.",
         footprint_offsets=((0, 0), (1, 0)), difficult_debris=True,
+        visual_variants=('green_bedding', 'red_white_striped_bedding', 'blue_white_diamond_bedding'),
     ),
     "environment.furniture.table": WorldPropProfile(
         name="Wooden table", description="A small wooden table occupying one floor space.",
@@ -57,6 +62,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         footprint_offsets=((0, 0),), material=Material.WOOD, hit_points=24,
         difficult_debris=True, vertical_extent_steps=2,
         blocks_optics=True, blocks_propagation=True,
+        visual_variants=('knife_slashed',),
     ),
     "environment.furniture.bookshelf": WorldPropProfile(
         name='Bookshelf', description='A tall wooden bookcase filled with decorative books.',
@@ -65,6 +71,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         footprint_offsets=((0, 0),), material=Material.WOOD, hit_points=22,
         difficult_debris=True, vertical_extent_steps=2,
         blocks_optics=True, blocks_propagation=True,
+        visual_variants=('small', 'large', 'execution_logs'),
     ),
     "environment.furniture.writing_desk": WorldPropProfile(
         name='Writing desk', description='A wooden writing desk with papers and an inkpot.',
@@ -113,6 +120,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         footprint_offsets=((0, 0),), material=Material.WOOD, hit_points=20,
         difficult_debris=True, vertical_extent_steps=1,
         blocks_optics=False, blocks_propagation=False,
+        visual_variants=('woodworking_bench',),
     ),
     "environment.furniture.sack_bundles": WorldPropProfile(
         name='Sack bundles', description='A group of tied cloth sacks.',
@@ -121,6 +129,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         footprint_offsets=((0, 0),), material=Material.FABRIC, hit_points=8,
         difficult_debris=False, vertical_extent_steps=1,
         blocks_optics=False, blocks_propagation=False,
+        visual_variants=('salt_sacks', 'spilled_sugar_sack'),
     ),
     "environment.furniture.wooden_chair": WorldPropProfile(
         name='Wooden chair', description='A wooden chair with an open back.',
@@ -443,6 +452,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         difficult_debris=False, vertical_extent_steps=2,
         blocks_optics=False, blocks_propagation=True,
         blocks_movement=True, occupies_bands=True,
+        visual_variants=('tattered_captured',),
     ),
     'environment.furniture.wooden_signpost': WorldPropProfile(
         name='Wooden signpost', description='Wooden signpost.',
@@ -488,6 +498,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         difficult_debris=True, vertical_extent_steps=2,
         blocks_optics=False, blocks_propagation=True,
         blocks_movement=True, occupies_bands=True,
+        visual_variants=('metal_tools', 'carpentry_tools'),
     ),
     'environment.furniture.alchemy_bench': WorldPropProfile(
         name='Alchemy bench', description='Alchemy bench.',
@@ -587,6 +598,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         difficult_debris=False, vertical_extent_steps=1,
         blocks_optics=False, blocks_propagation=True,
         blocks_movement=True, occupies_bands=True,
+        visual_variants=('large_candelabrum', 'black_shrine_candles'),
     ),
     'environment.furniture.spent_ashes': WorldPropProfile(
         name='Spent fire remains', description='Spent fire remains. A flat floor covering.',
@@ -596,6 +608,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         difficult_debris=False, vertical_extent_steps=1,
         blocks_optics=False, blocks_propagation=False,
         blocks_movement=False, occupies_bands=False,
+        visual_variants=('burned_furniture',),
     ),
     'environment.furniture.red_rug': WorldPropProfile(
         name='Red rug', description='Red rug. A flat floor covering.',
@@ -692,6 +705,327 @@ WORLD_PROP_PROFILES = MappingProxyType({
         footprint_offsets=((0, 0),), material=Material.WOOD, hit_points=8,
         blocks_movement=False, occupies_bands=False,
     ),
+    # Triskelion Outer Ward bodies (content push plan §4.A). Hit points use the DMG object table's
+    # resilient values (small 10, medium 18, large 27); cloth, paper, glass and stuffed bodies get less,
+    # and carved stone more, as the file's earlier statues do. Wall-side decor is nonblocking and
+    # stands in the cell beside its wall, as the wall torch does. Colour, bedding and subject
+    # differences are visual variants of one body. The vocabulary has no ceramic or hide: porcelain
+    # uses GLASS and taxidermy FABRIC, the closest object defences.
+    "environment.furniture.long_dining_table": WorldPropProfile(
+        name="Long dining table", description="A long, firm wooden table for a crowded hall.",
+        destroyed_name="Broken long table", destroyed_description="Split boards and trestles; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0), (2, 0)), hit_points=27, difficult_debris=True,
+    ),
+    "environment.furniture.long_bench": WorldPropProfile(
+        name="Long bench", description="A long wooden bench beside a dining table.",
+        destroyed_name="Broken long bench", destroyed_description="Split bench planks; the space is passable.",
+        footprint_offsets=((0, 0), (1, 0), (2, 0)),
+    ),
+    "environment.furniture.card_table": WorldPropProfile(
+        name="Card table", description="A small green-felt card table.",
+        destroyed_name="Broken card table", destroyed_description="Torn felt and splinters; the space is passable.",
+        footprint_offsets=((0, 0),), hit_points=10,
+    ),
+    "environment.furniture.card_table_stack": WorldPropProfile(
+        name="Stack of card tables", description="Green-felt card tables piled on top of each other.",
+        destroyed_name="Collapsed card tables", destroyed_description="Fallen tables and felt; difficult terrain.",
+        footprint_offsets=((0, 0),), hit_points=27, difficult_debris=True, vertical_extent_steps=2,
+    ),
+    "environment.furniture.coffee_table": WorldPropProfile(
+        name="Coffee table", description="A short, low table.",
+        destroyed_name="Broken coffee table", destroyed_description="Splintered wood; the space is passable.",
+        footprint_offsets=((0, 0),), hit_points=10,
+    ),
+    "environment.furniture.worktable": WorldPropProfile(
+        name="Worktable", description="A heavy work surface for tools and oils.",
+        destroyed_name="Broken worktable", destroyed_description="Split planks and scattered tools; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0)), hit_points=27, difficult_debris=True,
+    ),
+    "environment.furniture.bar_counter": WorldPropProfile(
+        name="Bar counter", description="A section of a heavy wooden tavern bar.",
+        destroyed_name="Smashed bar counter", destroyed_description="Splintered counter; difficult terrain.",
+        footprint_offsets=((0, 0),), hit_points=27, difficult_debris=True,
+        visual_variants=("straight", "end"),
+    ),
+    "environment.furniture.large_desk": WorldPropProfile(
+        name="Large desk", description="A huge wooden desk.",
+        destroyed_name="Broken large desk", destroyed_description="Split desk and drawers; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0)), hit_points=27, difficult_debris=True,
+    ),
+    "environment.furniture.overturned_desk": WorldPropProfile(
+        name="Overturned desk", description="A desk turned on its side, one leg torn off.",
+        destroyed_name="Broken desk", destroyed_description="Splintered desk; difficult terrain.",
+        footprint_offsets=((0, 0),), hit_points=10, difficult_debris=True,
+    ),
+    "environment.furniture.massive_chair": WorldPropProfile(
+        name="Massive wooden chair", description="A heavy, high-backed wooden chair.",
+        destroyed_name="Broken massive chair", destroyed_description="Split wood; the space is passable.",
+        footprint_offsets=((0, 0),),
+    ),
+    "environment.furniture.restraint_chair": WorldPropProfile(
+        name="Restraint chair", description="A sturdy wooden chair with guards for the neck and wrists.",
+        destroyed_name="Broken restraint chair", destroyed_description="Split wood and bent guards; passable.",
+        footprint_offsets=((0, 0),),
+    ),
+    "environment.furniture.padded_chair": WorldPropProfile(
+        name="Padded chair", description="An upholstered chair.",
+        destroyed_name="Broken padded chair", destroyed_description="Torn padding and wood; passable.",
+        footprint_offsets=((0, 0),), hit_points=10,
+    ),
+    "environment.furniture.couch": WorldPropProfile(
+        name="Couch", description="An upholstered couch.",
+        destroyed_name="Broken couch", destroyed_description="Torn upholstery and frame; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0)), difficult_debris=True,
+        visual_variants=("black_white_striped", "dark_green", "pink_light_blue_striped", "red_gray", "lounge"),
+    ),
+    "environment.furniture.cot": WorldPropProfile(
+        name="Cot", description="A narrow, foul cot.",
+        destroyed_name="Broken cot", destroyed_description="Torn canvas and sticks; passable.",
+        footprint_offsets=((0, 0), (1, 0)), hit_points=5,
+    ),
+    "environment.furniture.four_poster_bed": WorldPropProfile(
+        name="Four-poster bed", description="A large bed with tall corner posts.",
+        destroyed_name="Collapsed four-poster bed", destroyed_description="Fallen posts and bedding; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0), (0, 1), (1, 1)), hit_points=27, difficult_debris=True,
+        vertical_extent_steps=2, visual_variants=("red_neat", "stained_ripped", "large_comfortable"),
+    ),
+    "environment.furniture.dresser": WorldPropProfile(
+        name="Dresser", description="A wooden chest of drawers.",
+        destroyed_name="Broken dresser", destroyed_description="Split drawers; difficult terrain.",
+        footprint_offsets=((0, 0),), difficult_debris=True,
+    ),
+    "environment.furniture.mirrored_dresser": WorldPropProfile(
+        name="Dresser with mirror", description="A dresser with an attached mirror.",
+        destroyed_name="Broken mirrored dresser", destroyed_description="Split wood and mirror shards; difficult terrain.",
+        footprint_offsets=((0, 0),), difficult_debris=True, vertical_extent_steps=2,
+        visual_variants=("mirror_smashed",),
+    ),
+    "environment.furniture.armoire": WorldPropProfile(
+        name="Armoire", description="A tall closed armoire with a solid back.",
+        destroyed_name="Broken armoire", destroyed_description="Broken armoire; the remains leave difficult terrain.",
+        footprint_offsets=((0, 0),), hit_points=24, difficult_debris=True, vertical_extent_steps=2,
+        blocks_optics=True, blocks_propagation=True,
+    ),
+    "environment.furniture.cabinet": WorldPropProfile(
+        name="Cabinet", description="A closed wooden cabinet with shelves.",
+        destroyed_name="Broken cabinet", destroyed_description="Split shelves; difficult terrain.",
+        footprint_offsets=((0, 0),), difficult_debris=True, vertical_extent_steps=2,
+        visual_variants=("white_bath",),
+    ),
+    "environment.furniture.hat_rack": WorldPropProfile(
+        name="Hat rack", description="An ornate standing hat rack.",
+        destroyed_name="Broken hat rack", destroyed_description="Snapped pole; passable.",
+        footprint_offsets=((0, 0),), hit_points=5, blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.surplus_furniture": WorldPropProfile(
+        name="Surplus furniture", description="Musty odd pieces of furniture piled together.",
+        destroyed_name="Broken surplus furniture", destroyed_description="Splintered junk; difficult terrain.",
+        footprint_offsets=((0, 0),), difficult_debris=True,
+    ),
+    "environment.furniture.unfinished_coffin": WorldPropProfile(
+        name="Unfinished coffin", description="A partly assembled pine coffin frame.",
+        destroyed_name="Broken coffin frame", destroyed_description="Loose pine boards; passable.",
+        footprint_offsets=((0, 0), (1, 0)), hit_points=5,
+    ),
+    "environment.furniture.dog_hutch": WorldPropProfile(
+        name="Dog hutch", description="A wooden kennel hutch.",
+        destroyed_name="Broken dog hutch", destroyed_description="Splintered planks; passable.",
+        footprint_offsets=((0, 0),), hit_points=10,
+    ),
+    "environment.furniture.bucket": WorldPropProfile(
+        name="Bucket", description="A wooden bucket.",
+        destroyed_name="Broken bucket", destroyed_description="Split staves; passable.",
+        footprint_offsets=((0, 0),), hit_points=3, blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.teapot": WorldPropProfile(
+        name="Teapot", description="A porcelain teapot catching drips.",
+        destroyed_name="Shattered teapot", destroyed_description="Porcelain shards; passable.",
+        footprint_offsets=((0, 0),), material=Material.GLASS, hit_points=2,
+        blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.metal_vat": WorldPropProfile(
+        name="Metal vat", description="A large metal vat once used to hold water.",
+        destroyed_name="Crumpled vat", destroyed_description="Bent metal; difficult terrain.",
+        footprint_offsets=((0, 0),), material=Material.METAL, hit_points=27, difficult_debris=True,
+    ),
+    "environment.furniture.hand_pump": WorldPropProfile(
+        name="Hand pump", description="A free-standing iron hand pump.",
+        destroyed_name="Broken hand pump", destroyed_description="Bent iron; passable.",
+        footprint_offsets=((0, 0),), material=Material.METAL,
+    ),
+    "environment.furniture.wall_pump": WorldPropProfile(
+        name="Wall pump", description="A broken iron pump on the wall, still dripping.",
+        destroyed_name="Broken wall pump", destroyed_description="Bent pipe against the wall.",
+        footprint_offsets=((0, 0),), material=Material.METAL, hit_points=10,
+        blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.pump_faucet": WorldPropProfile(
+        name="Pump faucet", description="A painted pump faucet on the wall.",
+        destroyed_name="Broken faucet", destroyed_description="A twisted faucet against the wall.",
+        footprint_offsets=((0, 0),), material=Material.METAL, hit_points=5,
+        blocks_movement=False, occupies_bands=False, visual_variants=("blue_cold", "red_hot"),
+    ),
+    "environment.furniture.privy_seat": WorldPropProfile(
+        name="Privy seat", description="An alcove with a board with a hole.",
+        destroyed_name="Broken privy seat", destroyed_description="Split board; passable.",
+        footprint_offsets=((0, 0),), hit_points=5,
+    ),
+    "environment.furniture.porcelain_toilet": WorldPropProfile(
+        name="Porcelain toilet", description="A white and blue porcelain toilet.",
+        destroyed_name="Shattered toilet", destroyed_description="Porcelain shards; passable.",
+        footprint_offsets=((0, 0),), material=Material.GLASS, hit_points=5,
+    ),
+    "environment.furniture.brass_bathtub": WorldPropProfile(
+        name="Brass bathtub", description="A large ornamental brass bathtub.",
+        destroyed_name="Dented bathtub", destroyed_description="Crumpled brass; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0)), material=Material.METAL, hit_points=27, difficult_debris=True,
+        visual_variants=("huge",),
+    ),
+    "environment.furniture.nymph_fountain": WorldPropProfile(
+        name="Nymph fountain", description="A black marble nymph pouring a foul trickle into a blood-red stone basin.",
+        destroyed_name="Shattered fountain", destroyed_description="Broken marble and basin; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0), (0, 1), (1, 1)), material=Material.STONE, hit_points=54,
+        difficult_debris=True, vertical_extent_steps=2,
+    ),
+    "environment.furniture.headsman_block": WorldPropProfile(
+        name="Headsman's block", description="A gore-besmirched wooden block.",
+        destroyed_name="Split block", destroyed_description="Split wood; passable.",
+        footprint_offsets=((0, 0),),
+    ),
+    "environment.furniture.triskelion_statue": WorldPropProfile(
+        name="Triskelion statue",
+        description="A three-faced, three-armed marble statue holding a staff, a sword and a whip.",
+        destroyed_name="Shattered statue", destroyed_description="Marble rubble; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0), (0, 1), (1, 1)), material=Material.STONE, hit_points=54,
+        difficult_debris=True, vertical_extent_steps=2,
+    ),
+    "environment.furniture.shrine_platform": WorldPropProfile(
+        name="Shrine platform", description="A marble platform crowded with black candles.",
+        destroyed_name="Broken shrine", destroyed_description="Cracked marble; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0)), material=Material.STONE, hit_points=27, difficult_debris=True,
+    ),
+    "environment.furniture.armor_stand": WorldPropProfile(
+        name="Armor stand", description="A stand for a full suit of armor.",
+        destroyed_name="Toppled armor stand", destroyed_description="Bent frame; passable.",
+        footprint_offsets=((0, 0),), material=Material.METAL,
+        visual_variants=("gilded_plate", "gilded_plate_without_helm"),
+    ),
+    "environment.furniture.manikin": WorldPropProfile(
+        name="Wooden manikin", description="A featureless wooden manikin for hanging clothes.",
+        destroyed_name="Broken manikin", destroyed_description="Split wood; passable.",
+        footprint_offsets=((0, 0),), hit_points=10,
+    ),
+    "environment.furniture.taxidermy_large": WorldPropProfile(
+        name="Stuffed animal", description="A large mounted animal.",
+        destroyed_name="Torn taxidermy", destroyed_description="Hide, stuffing and frame; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0), (0, 1), (1, 1)), material=Material.FABRIC, hit_points=10,
+        difficult_debris=True, vertical_extent_steps=2,
+        visual_variants=("bear", "bear_partly_eaten", "elk", "hippogriff"),
+    ),
+    "environment.furniture.taxidermy_long": WorldPropProfile(
+        name="Stuffed lion", description="A mounted lion.",
+        destroyed_name="Torn taxidermy", destroyed_description="Hide and stuffing; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0)), material=Material.FABRIC, hit_points=10, difficult_debris=True,
+    ),
+    "environment.furniture.taxidermy_small": WorldPropProfile(
+        name="Stuffed animal", description="A small mounted animal.",
+        destroyed_name="Torn taxidermy", destroyed_description="Hide and stuffing; passable.",
+        footprint_offsets=((0, 0),), material=Material.FABRIC, hit_points=5,
+        visual_variants=("wolf", "giant_skunk", "small_cluster"),
+    ),
+    "environment.furniture.eagle_perch": WorldPropProfile(
+        name="Mounted eagle", description="A stuffed eagle on a wooden perch shaped like a tree limb.",
+        destroyed_name="Broken perch", destroyed_description="Snapped perch and feathers; passable.",
+        footprint_offsets=((0, 0),), hit_points=5,
+    ),
+    "environment.furniture.bronze_chandelier": WorldPropProfile(
+        name="Bronze chandelier", description="A large unlit bronze chandelier hanging from the ceiling.",
+        destroyed_name="Fallen chandelier", destroyed_description="Bent bronze; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0), (0, 1), (1, 1)), material=Material.METAL, hit_points=18,
+        difficult_debris=True, blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.crystal_chandelier": WorldPropProfile(
+        name="Red crystal chandelier", description="An unlit red crystal chandelier hanging from the ceiling.",
+        destroyed_name="Fallen chandelier", destroyed_description="Red crystal shards; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0), (0, 1), (1, 1)), material=Material.GLASS, hit_points=4,
+        difficult_debris=True, blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.wall_rack": WorldPropProfile(
+        name="Wall rack", description="A rack against the wall.",
+        destroyed_name="Broken wall rack", destroyed_description="Splintered rack against the wall.",
+        footprint_offsets=((0, 0),), hit_points=10, blocks_movement=False, occupies_bands=False,
+        visual_variants=("bardiches", "polearms", "swords", "weapons_and_armor", "practice_weapons", "tools"),
+    ),
+    "environment.furniture.tapestry": WorldPropProfile(
+        name="Hanging tapestry", description="A large hunting-scene tapestry hanging on the wall.",
+        destroyed_name="Shredded tapestry", destroyed_description="Torn cloth against the wall.",
+        footprint_offsets=((0, 0),), material=Material.FABRIC, hit_points=5,
+        blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.rolled_tapestry": WorldPropProfile(
+        name="Rolled tapestry", description="A bulky, moldy rolled tapestry.",
+        destroyed_name="Shredded tapestry", destroyed_description="Torn cloth; passable.",
+        footprint_offsets=((0, 0),), material=Material.FABRIC, hit_points=5,
+        blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.curtains": WorldPropProfile(
+        name="Curtains", description="Curtains hanging along the wall.",
+        destroyed_name="Torn curtains", destroyed_description="Shredded cloth against the wall.",
+        footprint_offsets=((0, 0),), material=Material.FABRIC, hit_points=3,
+        blocks_movement=False, occupies_bands=False, visual_variants=("red_frayed", "green", "red_white_striped"),
+    ),
+    "environment.furniture.tavern_sign": WorldPropProfile(
+        name="Tavern sign", description="A sign showing a pale yellow bear skull on blue.",
+        destroyed_name="Broken sign", destroyed_description="Splintered sign against the wall.",
+        footprint_offsets=((0, 0),), hit_points=5, blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.mounted_shield": WorldPropProfile(
+        name="Mounted kite shield", description="A kite shield bearing the Triskelion insignia, hung on the wall.",
+        destroyed_name="Broken shield", destroyed_description="A split shield against the wall.",
+        footprint_offsets=((0, 0),), hit_points=10, blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.dartboard": WorldPropProfile(
+        name="Dartboard", description="A dartboard on the wall.",
+        destroyed_name="Broken dartboard", destroyed_description="Split cork and wood against the wall.",
+        footprint_offsets=((0, 0),), hit_points=3, blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.mounted_antlers": WorldPropProfile(
+        name="Mounted antlers", description="Antlers and deer heads lining the wall.",
+        destroyed_name="Broken trophies", destroyed_description="Fallen antlers against the wall.",
+        footprint_offsets=((0, 0),), material=Material.FABRIC, hit_points=5,
+        blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.framed_painting": WorldPropProfile(
+        name="Framed painting", description="A framed painting on the wall.",
+        destroyed_name="Slashed painting", destroyed_description="A slashed canvas in its frame.",
+        footprint_offsets=((0, 0),), material=Material.FABRIC, hit_points=3,
+        blocks_movement=False, occupies_bands=False,
+        visual_variants=("santiago", "alfonsina", "vittorino", "sergi", "luciana_and_salvatrice", "the_hunt"),
+    ),
+    "environment.furniture.slashed_paintings": WorldPropProfile(
+        name="Slashed paintings", description="Slashed and discarded paintings on the floor.",
+        destroyed_name="Shredded canvas", destroyed_description="Scraps of canvas; passable.",
+        footprint_offsets=((0, 0),), material=Material.FABRIC, hit_points=3,
+        blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.cresset": WorldPropProfile(
+        name="Iron cresset", description="An empty wrought-iron holder for a torch.",
+        destroyed_name="Bent cresset", destroyed_description="Bent iron against the wall.",
+        footprint_offsets=((0, 0),), material=Material.METAL, hit_points=10,
+        blocks_movement=False, occupies_bands=False,
+    ),
+    "environment.furniture.continual_light_rod": WorldPropProfile(
+        name="Continual-light rod", description="A torch-sized metal rod set in the wall, shining with a heatless flame.",
+        destroyed_name="Bent wall rod", destroyed_description="A bent, dark rod against the wall.",
+        footprint_offsets=((0, 0),), material=Material.METAL, hit_points=5,
+        blocks_movement=False, occupies_bands=False, continual_flame=True,
+    ),
+    "environment.furniture.fireplace": WorldPropProfile(
+        name="Fireplace", description="A masonry fireplace with a lintel and mantle.",
+        destroyed_name="Collapsed fireplace", destroyed_description="Fallen masonry; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0)), material=Material.STONE, hit_points=27,
+        difficult_debris=True, vertical_extent_steps=2, visual_variants=("large", "huge", "ornate", "grand"),
+    ),
 })
 
 # Existing passive spatial-condition wire contract; no source or asset audit.
@@ -753,9 +1087,16 @@ class DestructionDebris(BaseCondition):
 def settle_world_prop(item: BaseItem, parent_event: Event | None = None) -> None:
     """Install authored behavior and settle its actual committed placement."""
     profile = WORLD_PROP_PROFILES.get(item.item_id)
-    if profile is None or not profile.difficult_debris:
+    if profile is None:
         return
-    if any(isinstance(condition, DestructionDebris) for condition in item.active_conditions.values()):
+    if profile.continual_flame and not any(
+            isinstance(condition, ContinualFlameCondition) for condition in item.active_conditions.values()):
+        flame = ContinualFlameCondition(source_entity_uuid=item.uuid, target_entity_uuid=item.uuid)
+        lit = item.add_condition(flame, parent_event=parent_event)
+        if lit is None or lit.canceled or not flame.applied:
+            raise RuntimeError(f"{item.item_id} could not carry its authored Continual Flame")
+    if not profile.difficult_debris or any(
+            isinstance(condition, DestructionDebris) for condition in item.active_conditions.values()):
         return
     condition = DestructionDebris(
         source_entity_uuid=item.uuid, target_entity_uuid=item.uuid,
@@ -772,20 +1113,24 @@ def settle_world_prop(item: BaseItem, parent_event: Event | None = None) -> None
 def build_world_prop(
     item_id: str, *, source_entity_uuid: UUID | None = None,
     hit_points: int | None = None, integrity: ItemIntegrity = ItemIntegrity.INTACT,
-    defer_behaviors: bool = False,
+    defer_behaviors: bool = False, variant: ItemVisualVariantParameters | None = None,
 ) -> WorldItem:
     """Compose one selected physical profile, without placing or breaking it."""
     profile = WORLD_PROP_PROFILES[item_id]
     hp = profile.hit_points if hit_points is None else hit_points
     if hp < 1:
         raise ValueError("Furniture hit points must be positive")
+    variant = variant or ItemVisualVariantParameters()
+    if variant.visual_variant_id is not None and variant.visual_variant_id not in profile.visual_variants:
+        raise ValueError(f"{item_id} has no visual variant {variant.visual_variant_id!r}")
     source = source_entity_uuid or uuid4()
     placement = WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=profile.occupies_bands,
         vertical_extent_steps=profile.vertical_extent_steps, footprint_offsets=profile.footprint_offsets)
     aftermath = WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=False,
         vertical_extent_steps=1, footprint_offsets=profile.footprint_offsets)
     item = WorldItem(
-        source_entity_uuid=source, item_id=item_id, name=profile.name,
+        source_entity_uuid=source, item_id=item_id, name=variant.display_name or profile.name,
+        visual_item_name=profile.name, visual_variant_id=variant.visual_variant_id,
         description=profile.description, tags=["furniture", profile.material.value],
         is_pickable=False, is_targetable=True, blocks_movement=profile.blocks_movement,
         blocks_optics_field=profile.blocks_optics, blocks_propagation_field=profile.blocks_propagation,

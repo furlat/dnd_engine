@@ -250,6 +250,14 @@ def build_standing_torch() -> StandingTorch:
     return item
 
 
+def build_hearth_fire() -> WallTorch:
+    """Construct one fire burning in a fireplace, as an exposed fixed flame."""
+    return WallTorch(
+        source_entity_uuid=uuid4(), item_id="environment.hearth_fire", name="Hearth fire",
+        bright_radius_feet=20, dim_radius_feet=20, is_targetable=False,
+    )
+
+
 def build_campfire(source_entity_uuid: UUID) -> UsableItem:
     """Construct one fixed campfire with direct rest/cook behaviors."""
     item_id = "environment.campfire"
@@ -432,6 +440,34 @@ def build_control_lever(link: LeverLink, *, is_engaged: bool = False) -> Control
     return item
 
 
+@dataclass(frozen=True, slots=True)
+class ContainerProfile:
+    name: str
+    description: str
+    material: Material
+    hit_points: int
+    footprint_offsets: tuple[tuple[int, int], ...] = ((0, 0),)
+
+
+# Triskelion Outer Ward containers (content push plan §4.A); locks arrive with §4.E.
+CONTAINER_PROFILES = MappingProxyType({
+    "environment.container.footlocker": ContainerProfile(
+        "Footlocker", "A sturdy wooden footlocker.", Material.WOOD, 18),
+    "environment.container.iron_bound_chest": ContainerProfile(
+        "Iron-bound chest", "A heavy wooden chest bound with iron bands.", Material.WOOD, 27),
+    "environment.container.huge_iron_chest": ContainerProfile(
+        "Huge iron chest", "A huge iron chest.", Material.METAL, 27, ((0, 0), (1, 0))),
+    "environment.container.iron_box": ContainerProfile(
+        "Small iron box", "A small iron box.", Material.METAL, 10),
+    "environment.container.long_wooden_box": ContainerProfile(
+        "Long wooden box", "A long, shallow wooden box.", Material.WOOD, 10),
+    "environment.container.coffin": ContainerProfile(
+        "Pine coffin", "A cheap pine coffin with its lid.", Material.WOOD, 10, ((0, 0), (1, 0))),
+    "environment.container.barrel": ContainerProfile(
+        "Barrel", "A closed wooden barrel or cask.", Material.WOOD, 18),
+})
+
+
 def build_storage_chest(
     display_name: str,
     *,
@@ -439,17 +475,27 @@ def build_storage_chest(
     is_open: bool = False,
     item_id: str = "environment.storage_chest",
     source_entity_uuid: UUID | None = None,
+    material: Material = Material.WOOD,
+    hit_points: int = 18,
+    footprint_offsets: tuple[tuple[int, int], ...] = ((0, 0),),
+    description: str = "",
+    tags: Sequence[str] = (),
 ) -> StorageChest:
     """Construct one fixed container; callers own its exact contents."""
+    placement = WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=False,
+        vertical_extent_steps=1, footprint_offsets=footprint_offsets)
     chest = StorageChest(
         source_entity_uuid=source_entity_uuid or uuid4(),
         item_id=item_id,
         name=display_name,
+        description=description,
+        tags=list(tags),
         is_targetable=True,
-        destruction_profile=ItemDestructionProfile(name=f"Broken {display_name}"),
-        armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[Material.WOOD],
+        destruction_profile=ItemDestructionProfile(name=f"Broken {display_name}", placement_spec=placement),
+        armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[material],
         is_open=is_open,
         use_action_templates=[],
+        world_placement_spec=placement,
     )
     if include_loot_all_action:
         action = LootAllAction(
@@ -459,8 +505,17 @@ def build_storage_chest(
             semantic_key="action.environment.storage_chest.loot_all",
         )
         chest.use_action_templates.append(action)
-    chest.health = chest.create_item_health(chest.uuid, 18)
+    chest.health = chest.create_item_health(chest.uuid, hit_points)
     return chest
+
+
+def build_container(item_id: str, source_entity_uuid: UUID) -> StorageChest:
+    """Compose one profiled container with a loot-all action and no contents."""
+    profile = CONTAINER_PROFILES[item_id]
+    return build_storage_chest(profile.name, include_loot_all_action=True, item_id=item_id,
+        source_entity_uuid=source_entity_uuid, material=profile.material,
+        hit_points=profile.hit_points, footprint_offsets=profile.footprint_offsets,
+        description=profile.description, tags=("environment", "container", "breakable", profile.material.value))
 
 
 def build_fireball_cannon(

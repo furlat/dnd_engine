@@ -20,7 +20,7 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import Event, EventPhase
 from dnd.types.abilities import SkillName
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import ItemDestructionProfile, ItemLocation, ItemPresentationState
+from dnd.core.item_types import ItemDestructionProfile, ItemIntegrity, ItemLocation, ItemPresentationState
 from dnd.blocks.base_item import UsableItem
 from dnd.blocks.inventory import Inventory
 from dnd.entity import Entity
@@ -35,6 +35,7 @@ from dnd.spatial.jaws import JawTrap
 from dnd.spatial.gas_traps import GasVent
 from dnd.types.traps import TrapState
 from dnd.types.discovery import ActorScan
+from dnd.types.world_placement import WorldPlacementSpec
 from dnd.core.base_object import empty_list
 
 
@@ -557,6 +558,16 @@ class StorageChest(UsableItem):
         default_factory=lambda: Inventory(source_entity_uuid=uuid4(), name="Chest Storage"),
         description="Inventory block containing nested chest contents.",
     )
+    world_placement_spec: WorldPlacementSpec | None = Field(
+        default=None, frozen=True,
+        description="Authored container footprint; None keeps the neutral one-cell placement.",
+    )
+
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        if self.world_placement_spec is None or (
+                self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None):
+            return super().get_world_placement_spec()
+        return self.world_placement_spec.model_copy(update={"removed_local_bands": self.removed_local_bands})
 
     def get_spatial_open_state(self) -> bool:
         return self.is_open
