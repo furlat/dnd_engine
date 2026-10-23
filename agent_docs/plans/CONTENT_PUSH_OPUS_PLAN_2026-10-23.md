@@ -26,7 +26,7 @@ follows §7.
 | Topic | Decision |
 | --- | --- |
 | Hidden storage | Contents gated by a check or condition: a Search use-action on the container with a skill check against an authored DC. The container stays visible; only its contents are gated. Sensory is unaffected. |
-| Hallucinations (R65 fungus) | A **Haunted** condition. Every N rounds (tunable, any number) at the owner's turn start, one authored "sound" with a mechanical effect. Turn-based, not minutes; no clock. |
+| Hallucinations (R65 fungus) | **Deleted at the human's request (24 October)**: not needed for a while. It was a **Haunted** condition, built in step 4 and then removed. |
 | Moving furniture (R63 barricade) | Handle it: a Shove Object action moving a prop one cell per step through the normal crossing rules, reusing forced-movement ideas and pick/drop. |
 | Locks, keys, thieves' tools | In. Core D&D, and they need no new system. Rules details follow the BG3 tool handout. |
 | Floors with no enemies | Avoid them for now: keep one hostile alive, for example a goblin in a cage behind a real locked door. Exploration vs combat is a later design task (§6). |
@@ -252,7 +252,7 @@ inventories.
   inside.
 - A success frees the contents for everyone.
 
-### G. Haunted (R65 fungus; decided)
+### G. Haunted (R65 fungus): deleted at the human's request, 24 October
 
 - Exposure: the fungus's trigger, then a DC 13 Constitution save. On failure, the actor
   gains **Haunted** for a tunable number of rounds.
@@ -264,19 +264,9 @@ inventories.
   sees each sound as its effect and combat-log entry.
 - No timer service, no fake creature or sound source, no new fact type.
 
-**Step 4 as built (23 October):** `dnd/spatial/spore_fungus.py`.
-- `SporeFungus` asks one Constitution save (DC 13, poison) at a creature's third turn end in
-  its cells. One save per stay; leaving resets it.
-- Failing gives `Haunted` for `haunt_rounds`, with a sound every `cue_interval_rounds`. Both
-  are authored per fungus (defaults 100 and 3).
-- Haunted is poison-family (`immunity_names=("Poisoned",)` plus the poison tag), so poison
-  immunity prevents it and Lesser Restoration cures it.
-- The book's d12 sounds, four each, act through existing owners:
-  - **drawn:** a forced step toward the sound;
-  - **startled:** `NoReactions` until the next turn;
-  - **distracted:** −5 Perception, passive included, until the next turn.
-- **Frightened is left out (a choice for the human):** with no frightener to sense, it does
-  nothing in this engine. Each sound goes to the owner's log only.
+**Step 4 as built, then deleted (24 October):** `dnd/spatial/spore_fungus.py`, with its catalog rows and tests,
+was removed at the human's request: it will not be used for a while. The Shove Object tests
+moved to `tests/engine/test_triskelion_shoving.py`. The design above is kept as a record.
 
 ### H. Shove Object (R63 barricade; decided)
 
@@ -371,7 +361,7 @@ That's a separate task with its own plan. Until then, §4.I.
 | 1 (done) | A (B is out) | Placement, loot conservation, destruction, client-visible facts. Paired timing: dense test room vs empty, under load. |
 | 2 (done but darts) | C and D | Correct recipients only; saves, durations and cures; one activation; no cost for distant actors (paired timing). |
 | 3 (done) | E (after the BG3 handout) and F | Locked/unlocked/forced/picked transitions; wrong key or canceled action preserves state; secrecy of key identity; SDK reduction of the new field. |
-| 4 (done) | G and H | Haunted fires every N rounds only for its owner; cures; shove steps can't pass walls or overlap; failed steps keep state. |
+| 4 (done; G deleted 24 October) | G and H | Shove steps can't pass walls or overlap; failed steps keep state. |
 | later (separate pass) | Room composition and floor assembly, with I | Not in this push. Placements, per-room counts, reachability, real HTTP commands, authoring export. |
 
 Tests follow [HOW_TO_TEST.md](../../HOW_TO_TEST.MD): player-visible behavior through
@@ -391,8 +381,6 @@ For each implementation step:
 
 - Which keys exist on this floor, and which are carried by creatures.
 - Source counts against layout capacity (beds in rooms 48/53/55, the armory stacks).
-- Haunted's defaults (100 rounds, a sound every 3) and the sound-to-effect table (§4.G), and
-  whether Frightened should be one of the effects.
 - The R49 darts: trap attack rolls (a new attack source in the contract) or Dexterity saves.
 - Coughing's effect: disadvantage on Stealth only (§4.C).
 - Putting pieces back on racks and walls (taking them is built, step 5).
