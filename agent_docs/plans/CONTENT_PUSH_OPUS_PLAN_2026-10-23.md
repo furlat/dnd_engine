@@ -53,6 +53,12 @@ for §4.H.
 
 ## 4. Packages
 
+**What this pass works on (human, 23 October):** tiles and surfaces, walls, doors,
+items, conditions, interactions, traps and props. **No monsters or creatures**: no
+rosters, no new creatures, no creature fixes. **Items: only what exploring the environment needs**
+(keys, Thieves' Tools, Trap Disarm Toolkit, light sources, containers and their contents).
+No weapons, armour or magic gear in this pass (§4.B waits).
+
 **Scope of this pass: build the parts, not the rooms.** This push creates every content
 definition (props, items, conditions, actions, spatial effects) and the matching art the
 floor needs. Composing rooms (placements, layouts, per-room counts) is a separate later
@@ -73,7 +79,7 @@ transition to animate, is the
   costs sensory work for every observer; dozens of described candles are not dozens of
   emitters.
 
-### B. Items and magic items (old P8)
+### B. Items and magic items (old P8): **not in this pass** (human, 23 October)
 
 Follow the 5e pass: historical weapon profiles, Potion of Heroism (temporary HP plus
 Bless), the Light/Daylight wand, the protection cloak and boots, three separately
@@ -105,9 +111,17 @@ One activation each. A canceled open spends nothing, destruction disarms, closin
 rearms.
 
 **Detect and disarm (BG3 model, adapted):**
-- **Detect:** the existing hazard perception rule (the trap's stealth DC against the
-  observer's passive Perception). Each character perceives for itself. BG3 rolls
-  automatically; we keep our passive score, so there's no new roll loop.
+- **Detect, passively:** the existing hazard perception rule (the trap's stealth DC against
+  the observer's passive Perception). Each character perceives for itself.
+- **Detect, actively (human, 23 October):** a fixed passive score alone makes every trap
+  either always or never found for a given party. So add a **Search for Traps** action:
+  - a Wisdom (Perception) check, rolled, against each nearby hidden trap's detection DC;
+  - a hidden mechanism counts too, e.g. Investigation for a false back;
+  - success reveals that trap to the searching character through the same disclosure the
+    passive rule uses.
+
+  It's an explicit action over the objects near the actor (a bounded query), not a sweep
+  on movement, so nothing runs per step.
 - **Disarm:** a Disarm action, a Dexterity (Sleight of Hand) check against the trap's own
   disarm DC, which needs a **Trap Disarm Toolkit**.
   - Success: the trap is spent and the kit is kept.

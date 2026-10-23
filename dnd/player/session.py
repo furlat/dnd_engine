@@ -28,7 +28,7 @@ from dnd.controller import CodexController, ControllerExecutionMode, HumanContro
 from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, AvailableTarget, TargetType
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.blocks.equipment import EquippableItem
-from dnd.actor_sheets import PublishedSheets, publish_actor_sheets
+from dnd.actor_sheets import PublishedSheets, forget_actor_sheet, publish_actor_sheets
 from dnd.player.audience import PlayerAudience, SeatAssignment, assign_control
 from dnd.player.commands import CommandRejected
 from dnd.player.choices import PlayerChoices, PlayerSelectionPreview
@@ -151,7 +151,7 @@ def _start_session(session: Session) -> Session:
                 changed = True
         if changed:
             if not any(audience.controls(event.entity_uuid) for audience in seats.values()):
-                sheets.by_actor.pop(event.entity_uuid, None)
+                forget_actor_sheet(sheets, event.entity_uuid)
             discovery.revision += 1
             discovery.previews.clear()
     EventQueue.add_on_event_callback(control_changed,

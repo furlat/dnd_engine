@@ -102,3 +102,8 @@ def publish_actor_sheets(published: PublishedSheets, game: Game, actor_uuids: tu
             continue
         event = ActorSheetEvent(source_entity_uuid=identity, change=change, phase=EventPhase.COMPLETION)
         published.by_actor[identity] = PublishedSheet(event.uuid, sheet)
+
+
+def forget_actor_sheet(published: PublishedSheets, actor_uuid: UUID) -> None:
+    """Drop one actor's kept publication: once no seat controls it, its next publication is whole again."""
+    published.by_actor.pop(actor_uuid, None)

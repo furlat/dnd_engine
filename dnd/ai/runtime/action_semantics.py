@@ -527,6 +527,98 @@ def _drop_concentration_semantics() -> ActionSemantics:
     )
 
 
+def _ally_help_semantics() -> ActionSemantics:
+    """Return semantics for removing eligible spell effects from a nearby ally (Help)."""
+    return ActionSemantics(
+        semantic_id="support.help_ally",
+        tags=frozenset({ActionTag.SUPPORT_BUFF}),
+        planning_preconditions=_all(
+            _predicate("actor.within_help_reach_of_target", True),
+            _predicate("selected_target.has_help_removable_effect", True),
+        ),
+        guaranteed_effects=(
+            LogicalEffect(
+                fact_id="selected_target.condition.help_removable",
+                operation=EffectOperation.REMOVE,
+            ),
+        ),
+        targeting=TargetingSemantics(
+            allocation=TargetAllocation.SINGLE_ENTITY,
+            minimum_targets=1,
+            maximum_targets=1,
+            affected_relationships=frozenset({AffectedRelationship.ANY_ENTITY}),
+        ),
+    )
+
+
+def _help_attack_semantics() -> ActionSemantics:
+    """Return semantics for helping an ally's next attack against an adjacent enemy."""
+    return ActionSemantics(
+        semantic_id="support.help_attack",
+        tags=frozenset({ActionTag.SUPPORT_BUFF, ActionTag.TARGET_MULTI}),
+        planning_preconditions=_predicate("actor.adjacent_to_target", True),
+        guaranteed_effects=(
+            LogicalEffect(
+                fact_id="selected_ally.next_attack_advantage_against_target",
+                operation=EffectOperation.ADD,
+                value=True,
+            ),
+        ),
+        targeting=TargetingSemantics(
+            allocation=TargetAllocation.MULTI_ENTITY,
+            minimum_targets=2,
+            maximum_targets=2,
+            affected_relationships=frozenset({AffectedRelationship.HOSTILE, AffectedRelationship.ANY_ENTITY}),
+        ),
+    )
+
+
+def _drop_item_semantics() -> ActionSemantics:
+    """Return semantics for placing one carried item on the ground."""
+    return ActionSemantics(
+        semantic_id="interaction.object.drop",
+        tags=frozenset({ActionTag.INTERACTION_OBJECT}),
+        planning_preconditions=_predicate("actor.inventory.selected_object", True),
+        guaranteed_effects=(
+            LogicalEffect(
+                fact_id="actor.inventory.selected_object",
+                operation=EffectOperation.REMOVE,
+            ),
+            LogicalEffect(
+                fact_id="world.floor.selected_object",
+                operation=EffectOperation.ADD,
+                value=True,
+            ),
+        ),
+        targeting=TargetingSemantics(
+            allocation=TargetAllocation.POSITION,
+            minimum_targets=1,
+            maximum_targets=1,
+        ),
+    )
+
+
+def _dismiss_summon_semantics() -> ActionSemantics:
+    """Return semantics for dismissing a temporary creature the actor still controls."""
+    return ActionSemantics(
+        semantic_id="summon.dismiss",
+        tags=frozenset({ActionTag.SUMMON}),
+        planning_preconditions=_predicate("selected_target.controlled_temporary_creature", True),
+        guaranteed_effects=(
+            LogicalEffect(
+                fact_id="world.entity.selected_target",
+                operation=EffectOperation.REMOVE,
+            ),
+        ),
+        targeting=TargetingSemantics(
+            allocation=TargetAllocation.SINGLE_ENTITY,
+            minimum_targets=1,
+            maximum_targets=1,
+            affected_relationships=frozenset({AffectedRelationship.CONTROLLED_ALLY}),
+        ),
+    )
+
+
 def _shake_awake_semantics() -> ActionSemantics:
     """Return semantics for removing magical sleep from an adjacent creature."""
     return ActionSemantics(
@@ -1109,6 +1201,10 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
     "dnd.actions.DropConcentration": _drop_concentration_semantics,
     "dnd.actions.PickUp": _pick_up_semantics,
     "dnd.actions.ShakeAwake": _shake_awake_semantics,
+    "dnd.actions.AllyHelp": _ally_help_semantics,
+    "dnd.actions.HelpAttack": _help_attack_semantics,
+    "dnd.actions.Drop": _drop_item_semantics,
+    "dnd.summoning.actions.DismissSummon": _dismiss_summon_semantics,
     "dnd.actions.Hide": _hide_semantics,
     "dnd.actions.Jump": _jump_semantics,
     "dnd.actions.Move": _move_semantics,

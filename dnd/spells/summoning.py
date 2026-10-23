@@ -91,7 +91,7 @@ _CREATURE_CORE = (AllyHelp, HelpAttack, Attack, Dash, Disengage, Dodge, Drop, Dr
 _BEAST_FORMS = (*_CREATURE_CORE, HitSaveRiderFeature, KeenHearingAndSmellFeature, KeenPerceptionFeature,
     MultiattackAction, PackTacticsFeature, WolfBiteProneRiderFeature)
 _FIEND_FORMS = (*_CREATURE_CORE, InnateFlight, MagicResistance, MultiattackAction)
-_SPELL_CONSTRUCT_FORMS = (Dash, Disengage, Move, FlamingSphereRam, SpiritualWeaponStrike)
+_SPELL_CONSTRUCT_FORMS = (Dash, Disengage, Move, FlamingSphereRam, SpiritualWeaponStrike, InnateFlight)
 # Elementals, Myrmidons, Planar Allies and the Draconic Spirit share one builder.
 _GREATER_SPIRIT_FORMS = (AllyHelp, Attack, Dash, Disengage, Dodge, Move, StandUp, Swim, CinderousSwipe,
     ConcussiveSmash, DraconicBreathCadence, DragonBreath, DrainingKiss, ElectrifiedFlail, ElementalMultiattackBonus,

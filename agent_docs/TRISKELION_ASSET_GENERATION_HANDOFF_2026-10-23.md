@@ -313,7 +313,11 @@ wall, corpse of a small creature or goblin.
 | Dripping water and puddles | R5, R62 | dripping | Decal |
 | Foul green water in the fountain basin | R24 | trickle | Part of the fountain |
 
-## 11. Items needing ground/inventory art (new kinds only)
+## 11. Items needing ground/inventory art (new kinds only): **deferred**
+
+Not in this pass: weapons, armour and magic gear come later. Items for exploring the
+environment are in now: **keys, Thieves' Tools, Trap Disarm Toolkit**, light sources and
+ordinary container contents.
 
 Weapons and armour:
 - bardiche (rusted), spear, awl pike, guisarme (each functional and ruined);
