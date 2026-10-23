@@ -354,7 +354,8 @@ Magic and special items:
 - gray Cloak of Protection with fish and bird embroidery;
 - Boots of Elvenkind;
 - the green-metal idol;
-- thieves' tools.
+- thieves' tools (intact; broken on a failed pick);
+- Trap Disarm Toolkit (consumed when a disarm fails).
 
 Wealth and gaming:
 - coin stacks (copper, silver spanners, gold crescents, dwarven mabans);
@@ -374,7 +375,7 @@ state.
 | --- | --- | --- | --- |
 | Standard, double, skull, burned, chewed doors | Open / Close | closed ↔ open | Door leaf swings on its hinges; double doors swing both leaves |
 | Any lockable door | Unlock or lock with a key | locked ↔ closed | Small lock action at the keyhole (click); leaf doesn't move |
-| Any lockable door | Pick lock (success / failure) | locked → closed / stays locked | Lock jiggles; on success a click and slight give; on failure nothing moves |
+| Any lockable door | Pick lock (success / failure) | locked → closed / stays locked | Lock jiggles; on success a click and slight give; on failure the thieves' tools snap (item-level) and nothing moves |
 | Any lockable door | Force (Strength) | locked → open | Door slams open with a burst at the lock and latch |
 | Barred door | Lift the bar off / put it back | barred ↔ unbarred | Wooden bar lifted out of its iron brackets and set aside, or placed back; only from the bar side |
 | Wardrobe false back (R52) | Twist the interior hook | closed → secret open | Hook turns; the wardrobe's back panel swings away, revealing a passage |
@@ -390,7 +391,7 @@ state.
 | Lockable containers | Unlock with a key / pick lock / force | locked → closed or open | As for doors; a **padlock** (R52 iron chest, R61 box) drops open |
 | Small chest R49 (dart trap) | Open while trapped | closed → open + trap spent | Four darts shoot **inward** from the chest's sides; afterwards empty dart slots show |
 | Footlocker R53 (needle trap) | Open while trapped | closed → open + trap spent | A needle flicks out of the lock plate, then retracts; trap now spent |
-| Trapped container | Disarm (thieves' tools) | trapped → safe | Small jam/pin action at the mechanism; no lid movement |
+| Trapped container | Disarm with a Trap Disarm Toolkit (success / failure) | trapped → spent / triggered | Success: small jam or pin action at the mechanism. Failure: the toolkit snaps and the trap fires as if opened |
 | Loose floorboard R38 | Lift / Replace | in place ↔ lifted | Board pried up and laid aside, showing the small chest below |
 | Dresser, cabinet, wardrobe, armoire | Open / Search | closed ↔ open | Doors or drawers open; after a search, contents look disturbed |
 | Barrel with X, sacks, kegs | Search / Open | closed → open | Lid off or sack mouth opened, rummaged contents (cotton wads for the X barrel) |
@@ -465,7 +466,8 @@ state.
 ### 12.10 Actor animations needed (character rig, not props)
 
 - **Search / rummage:** kneeling or standing hands-in.
-- **Pick lock:** kneel with tools, small hand motions; success and failure endings.
+- **Pick lock:** kneel with tools, small hand motions; success ending and a failure ending where the tools snap.
+- **Disarm a trap:** careful two-hand work at the mechanism; success ending, and a failure ending that flinches as the trap fires.
 - **Lift or place a bar.**
 - **Pry up a floorboard.**
 - **Twist a hidden mechanism** (hook, jug).

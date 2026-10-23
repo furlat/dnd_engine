@@ -102,26 +102,51 @@ A trap condition on the container reacting to its own committed open:
   end.
 
 One activation each. A canceled open spends nothing, destruction disarms, closing never
-rearms. Detection and disarm use the same check machinery as §4.E and §4.F.
+rearms.
 
-### E. Locks, keys and thieves' tools (decided in; rules pending the BG3 handout)
+**Detect and disarm (BG3 model, adapted):**
+- **Detect:** the existing hazard perception rule (the trap's stealth DC against the
+  observer's passive Perception). Each character perceives for itself. BG3 rolls
+  automatically; we keep our passive score, so there's no new roll loop.
+- **Disarm:** a Disarm action, a Dexterity (Sleight of Hand) check against the trap's own
+  disarm DC, which needs a **Trap Disarm Toolkit**.
+  - Success: the trap is spent and the kit is kept.
+  - Failure: the kit is consumed **and the trap triggers**.
+- **Separate DCs:** detect, disarm, lock and the trap's saving throw are four different
+  numbers on one object.
 
-- **Lock state on doors and containers:** locked, DC, and key identity (an exact key item
-  or authored key id). Bars are one-sided: the access side comes from the existing
+### E. Locks, keys and thieves' tools (decided; BG3 model, adapted)
+
+Following the [BG3 research](../BG3_LOCKPICKING_AND_TRAP_DISARMING_RESEARCH_2026-10-23.md)
+where it fits, not all of it.
+
+- **Lock state on doors and containers:** locked, lock DC, and key identity (an exact key
+  item or authored key id). Bars are one-sided: the access side comes from the existing
   boundary sides.
-- **Actions:**
-  - Unlock / Lock with the matching key;
-  - Pick Lock: a Dexterity check with thieves' tools in inventory, adding proficiency if
-    the character has it;
-  - Force: a Strength check, or ordinary destruction, which already works.
-- **Thieves' tools:** a new item. **Tool proficiency doesn't exist yet**: add it as a
-  character grant, the same way `skill_proficiency_sources` works, and grant it from a
-  background. Only Acolyte and Adventurer exist today and there's no Rogue class, so a
-  Criminal background is the likely source. The BG3 handout decides the exact rules
-  (check, retries, tool breakage, trap disarm).
+- **Pick Lock:** a **Dexterity (Sleight of Hand)** check against the lock DC, which needs
+  **Thieves' Tools** in inventory.
+  - Proficiency or expertise in Sleight of Hand adds as usual; anyone with the tools may try.
+  - Success: the lock opens and the tools are kept.
+  - Failure: one set of tools breaks, and another set may retry.
+  - Because BG3 uses the existing skill instead of tool proficiency, **no tool-proficiency
+    system is needed**.
+- **Unlock / Lock** with the matching key: no roll. A key does not disarm a trap; opening a
+  trapped container by key still triggers it, unless an object is authored otherwise.
+- **Force:** a Strength (Athletics) check, or destroying the object, which already works
+  and spills contents.
+- **Knock (optional):** a new level-2 spell opening mundane locks. Ordinary spell content.
+- **Who's good at it:** add an **Urchin** background (BG3's) with fixed skills Sleight of
+  Hand and Stealth; backgrounds already grant fixed skills, so this is content. There's no
+  Rogue class; expertise and Reliable Talent come with a Rogue later.
+- **New items:** Thieves' Tools and Trap Disarm Toolkit (consumable on failure); keys.
+- **Not adopted from BG3:**
+  - party Inspiration rerolls;
+  - BG3's natural-1/20 rule for ability checks (we keep the engine's existing check rules);
+  - crime and ownership reactions to Knock;
+  - linked multi-trap systems beyond what the floor needs.
 - **Client contract:** one small addition for doors and containers together. Publish
-  "locked"; keep the key's identity and DCs hidden. One schema bump; both SDKs
-  regenerated.
+  "locked" and "trap detected" to observers who know; keep key identity, trap presence for
+  others, and DCs hidden. One schema bump; both SDKs regenerated.
 
 ### F. Check-gated storage (decided)
 
