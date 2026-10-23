@@ -53,6 +53,13 @@ for §4.H.
 
 ## 4. Packages
 
+**Scope of this pass: build the parts, not the rooms.** This push creates every content
+definition (props, items, conditions, actions, spatial effects) and the matching art the
+floor needs. Composing rooms (placements, layouts, per-room counts) is a separate later
+pass. The full list of distinct assets, with states, breakability and every interaction
+transition to animate, is the
+[asset generation handoff](../TRISKELION_ASSET_GENERATION_HANDOFF_2026-10-23.md).
+
 ### A. Props, variants, stock and lights (old P1)
 
 - Distinct content definitions for distinct bodies: corpses and bones, taxidermy, the
@@ -176,7 +183,7 @@ That's a separate task with its own plan. Until then, §4.I.
 | 2 | C and D | Correct recipients only; saves, durations and cures; one activation; no cost for distant actors (paired timing). |
 | 3 | E (after the BG3 handout) and F | Locked/unlocked/forced/picked transitions; wrong key or canceled action preserves state; secrecy of key identity; SDK reduction of the new field. |
 | 4 | G and H | Haunted fires every N rounds only for its owner; cures; shove steps can't pass walls or overlap; failed steps keep state. |
-| 5 | Floor assembly with I | Source coverage ledger, reachability, a few real HTTP commands, ordinary authoring export. |
+| later (separate pass) | Room composition and floor assembly, with I | Not in this push. Placements, per-room counts, reachability, real HTTP commands, authoring export. |
 
 Tests follow [HOW_TO_TEST.md](../../HOW_TO_TEST.MD): player-visible behavior through
 public boundaries, with fixtures from ordinary character creation. Timing under load,
