@@ -522,10 +522,11 @@ def _disarm_trap_semantics() -> ActionSemantics:
     )
 
 
-def _lock_semantics(semantic_id: str, *, rolled: bool) -> Callable[[], ActionSemantics]:
-    """Return semantics for working a lock or bar, or searching, on an adjacent door or container."""
+def _object_interaction_semantics(semantic_id: str, *, rolled: bool,
+                                  fact_id: str = "selected_object.lock_changed") -> Callable[[], ActionSemantics]:
+    """Return semantics for working a lock or bar, searching or shoving, on one adjacent object."""
     def build() -> ActionSemantics:
-        effect = LogicalEffect(fact_id="selected_object.lock_changed", operation=EffectOperation.ADD, value=True)
+        effect = LogicalEffect(fact_id=fact_id, operation=EffectOperation.ADD, value=True)
         return ActionSemantics(
             semantic_id=semantic_id,
             tags=frozenset({ActionTag.INTERACTION_OBJECT}),
@@ -1269,12 +1270,15 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
     "dnd.summoning.actions.DismissSummon": _dismiss_summon_semantics,
     "dnd.actions.Hide": _hide_semantics,
     "dnd.actions.SearchForTraps": _search_for_traps_semantics,
-    "dnd.items.searchables.SearchBody": _lock_semantics("interaction.object.search", rolled=True),
+    "dnd.items.searchables.SearchBody": _object_interaction_semantics(
+        "interaction.object.search", rolled=True, fact_id="selected_object.contents_found"),
+    "dnd.items.shoving.ShoveObject": _object_interaction_semantics(
+        "interaction.object.shove", rolled=True, fact_id="selected_object.moved"),
     "dnd.items.container_traps.DisarmTrap": _disarm_trap_semantics,
-    "dnd.items.locks.Unlock": _lock_semantics("interaction.object.unlock", rolled=False),
-    "dnd.items.locks.LockShut": _lock_semantics("interaction.object.lock", rolled=False),
-    "dnd.items.locks.PickLock": _lock_semantics("interaction.object.pick_lock", rolled=True),
-    "dnd.items.locks.ForceLock": _lock_semantics("interaction.object.force_lock", rolled=True),
+    "dnd.items.locks.Unlock": _object_interaction_semantics("interaction.object.unlock", rolled=False),
+    "dnd.items.locks.LockShut": _object_interaction_semantics("interaction.object.lock", rolled=False),
+    "dnd.items.locks.PickLock": _object_interaction_semantics("interaction.object.pick_lock", rolled=True),
+    "dnd.items.locks.ForceLock": _object_interaction_semantics("interaction.object.force_lock", rolled=True),
     "dnd.actions.Jump": _jump_semantics,
     "dnd.actions.Move": _move_semantics,
     "dnd.actions.Shove": _shove_semantics,

@@ -16,6 +16,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemDestructionProfile, ItemIntegrity
 from dnd.items.environment_interactables import LootAllAction, StorageChest
 from dnd.items.searchables import install_search_gate
+from dnd.items.shoving import SHOVEABLE_TAG
 from dnd.items.visual_variants import ItemVisualVariantParameters
 from dnd.spells.evocation import ContinualFlameCondition
 from dnd.spatial.area_conditions import AreaCondition
@@ -42,6 +43,7 @@ class WorldPropProfile:
     armor_class: int | None = None
     visual_variants: tuple[str, ...] = ()
     continual_flame: bool = False
+    shoveable: bool = True
 
 
 WORLD_PROP_PROFILES = MappingProxyType({
@@ -708,7 +710,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         footprint_offsets=((0, 0),), material=Material.WOOD, hit_points=8,
         blocks_movement=False, occupies_bands=False,
     ),
-    # Triskelion Outer Ward bodies (content push plan §4.A). Hit points use the DMG object table's
+    # Triskelion Outer Ward bodies (content push plan §4.A); fixtures built in place are not shoveable. Hit points use the DMG object table's
     # resilient values (small 10, medium 18, large 27); cloth, paper, glass and stuffed bodies get less,
     # and carved stone more, as the file's earlier statues do. Wall-side decor is nonblocking and
     # stands in the cell beside its wall, as the wall torch does. Colour, bedding and subject
@@ -749,6 +751,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         destroyed_name="Smashed bar counter", destroyed_description="Splintered counter; difficult terrain.",
         footprint_offsets=((0, 0),), hit_points=27, difficult_debris=True,
         visual_variants=("straight", "end"),
+        shoveable=False,
     ),
     "environment.furniture.large_desk": WorldPropProfile(
         name="Large desk", description="A huge wooden desk.",
@@ -855,6 +858,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         name="Hand pump", description="A free-standing iron hand pump.",
         destroyed_name="Broken hand pump", destroyed_description="Bent iron; passable.",
         footprint_offsets=((0, 0),), material=Material.METAL,
+        shoveable=False,
     ),
     "environment.furniture.wall_pump": WorldPropProfile(
         name="Wall pump", description="A broken iron pump on the wall, still dripping.",
@@ -872,23 +876,27 @@ WORLD_PROP_PROFILES = MappingProxyType({
         name="Privy seat", description="An alcove with a board with a hole.",
         destroyed_name="Broken privy seat", destroyed_description="Split board; passable.",
         footprint_offsets=((0, 0),), hit_points=5,
+        shoveable=False,
     ),
     "environment.furniture.porcelain_toilet": WorldPropProfile(
         name="Porcelain toilet", description="A white and blue porcelain toilet.",
         destroyed_name="Shattered toilet", destroyed_description="Porcelain shards; passable.",
         footprint_offsets=((0, 0),), material=Material.GLASS, hit_points=5,
+        shoveable=False,
     ),
     "environment.furniture.brass_bathtub": WorldPropProfile(
         name="Brass bathtub", description="A large ornamental brass bathtub.",
         destroyed_name="Dented bathtub", destroyed_description="Crumpled brass; difficult terrain.",
         footprint_offsets=((0, 0), (1, 0)), material=Material.METAL, hit_points=27, difficult_debris=True,
         visual_variants=("huge",),
+        shoveable=False,
     ),
     "environment.furniture.nymph_fountain": WorldPropProfile(
         name="Nymph fountain", description="A black marble nymph pouring a foul trickle into a blood-red stone basin.",
         destroyed_name="Shattered fountain", destroyed_description="Broken marble and basin; difficult terrain.",
         footprint_offsets=((0, 0), (1, 0), (0, 1), (1, 1)), material=Material.STONE, hit_points=54,
         difficult_debris=True, vertical_extent_steps=2,
+        shoveable=False,
     ),
     "environment.furniture.headsman_block": WorldPropProfile(
         name="Headsman's block", description="A gore-besmirched wooden block.",
@@ -901,11 +909,13 @@ WORLD_PROP_PROFILES = MappingProxyType({
         destroyed_name="Shattered statue", destroyed_description="Marble rubble; difficult terrain.",
         footprint_offsets=((0, 0), (1, 0), (0, 1), (1, 1)), material=Material.STONE, hit_points=54,
         difficult_debris=True, vertical_extent_steps=2,
+        shoveable=False,
     ),
     "environment.furniture.shrine_platform": WorldPropProfile(
         name="Shrine platform", description="A marble platform crowded with black candles.",
         destroyed_name="Broken shrine", destroyed_description="Cracked marble; difficult terrain.",
         footprint_offsets=((0, 0), (1, 0)), material=Material.STONE, hit_points=27, difficult_debris=True,
+        shoveable=False,
     ),
     "environment.furniture.armor_stand": WorldPropProfile(
         name="Armor stand", description="A stand for a full suit of armor.",
@@ -1034,6 +1044,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         destroyed_name="Collapsed fireplace", destroyed_description="Fallen masonry; difficult terrain.",
         footprint_offsets=((0, 0), (1, 0)), material=Material.STONE, hit_points=27,
         difficult_debris=True, vertical_extent_steps=2, visual_variants=("large", "huge", "ornate", "grand"),
+        shoveable=False,
     ),
 })
 
@@ -1119,6 +1130,10 @@ def settle_world_prop(item: BaseItem, parent_event: Event | None = None) -> None
         condition.on_owner_placement_committed(result)
 
 
+def _profile_tags(profile: WorldPropProfile) -> list[str]:
+    return ["furniture", profile.material.value, *((SHOVEABLE_TAG,) if profile.shoveable else ())]
+
+
 def _checked_variant(item_id: str, profile: WorldPropProfile,
                      variant: ItemVisualVariantParameters | None) -> ItemVisualVariantParameters:
     variant = variant or ItemVisualVariantParameters()
@@ -1145,7 +1160,7 @@ def build_searchable_prop(item_id: str, *, dc: int = 13,
     body = StorageChest(source_entity_uuid=source_entity_uuid or uuid4(), item_id=item_id,
         name=variant.display_name or profile.name, description=profile.description,
         visual_item_name=profile.name, visual_variant_id=variant.visual_variant_id,
-        tags=["furniture", "container", profile.material.value], is_targetable=True,
+        tags=[*_profile_tags(profile), "container"], is_targetable=True,
         blocks_movement=profile.blocks_movement, blocks_optics_field=profile.blocks_optics,
         blocks_propagation_field=profile.blocks_propagation,
         armor_class=(profile.armor_class if profile.armor_class is not None
@@ -1180,7 +1195,7 @@ def build_world_prop(
     item = WorldItem(
         source_entity_uuid=source, item_id=item_id, name=variant.display_name or profile.name,
         visual_item_name=profile.name, visual_variant_id=variant.visual_variant_id,
-        description=profile.description, tags=["furniture", profile.material.value],
+        description=profile.description, tags=_profile_tags(profile),
         is_pickable=False, is_targetable=True, blocks_movement=profile.blocks_movement,
         blocks_optics_field=profile.blocks_optics, blocks_propagation_field=profile.blocks_propagation,
         health=BaseItem.create_item_health(source, hp), integrity=integrity,

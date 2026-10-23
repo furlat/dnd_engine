@@ -28,6 +28,7 @@ import dnd.items.consumables as consumables
 import dnd.items.container_traps as container_traps
 import dnd.items.locks as locks
 import dnd.items.searchables as searchables
+import dnd.items.shoving as shoving
 import dnd.items.environment as environment
 import dnd.items.environment_interactables as environment_interactables
 import dnd.items.torches as torches
@@ -265,6 +266,7 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _original(locks.PickLock, "action.environment.lock.pick", "Pick Lock", "Pick a lock with Thieves' Tools and Sleight of Hand."),
     _original(locks.ForceLock, "action.environment.lock.force", "Force Lock", "Force a lock or bar open with Athletics."),
     _original(searchables.SearchBody, "action.environment.search", "Search", "Search one desk, cabinet, board or body for anything tucked away."),
+    _original(shoving.ShoveObject, "action.environment.shove_object", "Shove Object", "Push a piece of furniture one square straight away."),
     _original(jaws.SlipFreeOfJaw, "action.environment.escape_jaw.acrobatics", "Slip free of jaws", "Use an action and Acrobatics to escape one jaw."),
     _srd(conjuration.EscapeWebAction, "action.spell.web.escape", "Escape Web", "Attempt to escape the restraint imposed by Web."),
     _original(

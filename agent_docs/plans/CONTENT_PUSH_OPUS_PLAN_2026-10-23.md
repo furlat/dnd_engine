@@ -262,6 +262,20 @@ inventories.
   sees each sound as its effect and combat-log entry.
 - No timer service, no fake creature or sound source, no new fact type.
 
+**Step 4 as built (23 October):** `dnd/spatial/spore_fungus.py`.
+- `SporeFungus` asks one Constitution save (DC 13, poison) at a creature's third turn end in
+  its cells. One save per stay; leaving resets it.
+- Failing gives `Haunted` for `haunt_rounds`, with a sound every `cue_interval_rounds`. Both
+  are authored per fungus (defaults 100 and 3).
+- Haunted is poison-family (`immunity_names=("Poisoned",)` plus the poison tag), so poison
+  immunity prevents it and Lesser Restoration cures it.
+- The book's d12 sounds, four each, act through existing owners:
+  - **drawn:** a forced step toward the sound;
+  - **startled:** `NoReactions` until the next turn;
+  - **distracted:** −5 Perception, passive included, until the next turn.
+- **Frightened is left out (a choice for the human):** with no frightener to sense, it does
+  nothing in this engine. Each sound goes to the owner's log only.
+
 ### H. Shove Object (R63 barricade; decided)
 
 An action moving a prop **one cell per step**, each step admitted through the existing
@@ -269,6 +283,25 @@ crossing rules (`can_transition` and the footprint at the new cells), the way fo
 movement steps a creature. Multi-cell props check the whole footprint per step. A failed
 step leaves the prop where it is and the route closed. The action has a cost, and a
 Strength check for heavy props. No autonomous furniture planner.
+
+**Step 4 as built (23 October):** `ShoveObject` (`dnd/items/shoving.py`) is a standard object
+action.
+- It pushes a blocking floor body one square straight away from an actor standing square
+  against it.
+- Only bodies authored as shoveable move. A `shoveable` profile flag, true by default, is
+  false for fixtures built in place: the fireplace, pumps, fountain, statue, shrine, privy,
+  toilet, bathtub and bar. **The default is a choice for the human.**
+- Every step into a cell outside the body's own uses `can_transition` (terrain, walls, doors,
+  height). The new cell must also be walkable, with no creature in it, and the map must admit
+  the footprint.
+- Heavy bodies (over one cell, or stone or metal) need Strength (Athletics) DC 15.
+- A stopped or failed shove leaves the body where it was.
+- Measured under load, garbage collected before each sample, with all eight new standard
+  actions:
+  - nothing in reach: the action listing went from 6.18 to 6.57 ms;
+  - eight lockable, trapped or searchable objects in reach: from 7.10 to 7.93 ms.
+- A move with R14's magical darkness in sight costs about 4 ms more: the existing
+  DarknessZone cost, the same as a cast Darkness.
 
 ### I. Keep the session alive (decided workaround)
 
@@ -301,7 +334,7 @@ That's a separate task with its own plan. Until then, §4.I.
 | 1 (done) | A (B is out) | Placement, loot conservation, destruction, client-visible facts. Paired timing: dense test room vs empty, under load. |
 | 2 (done but darts) | C and D | Correct recipients only; saves, durations and cures; one activation; no cost for distant actors (paired timing). |
 | 3 (done; SDK reduction unverified) | E (after the BG3 handout) and F | Locked/unlocked/forced/picked transitions; wrong key or canceled action preserves state; secrecy of key identity; SDK reduction of the new field. |
-| 4 | G and H | Haunted fires every N rounds only for its owner; cures; shove steps can't pass walls or overlap; failed steps keep state. |
+| 4 (done) | G and H | Haunted fires every N rounds only for its owner; cures; shove steps can't pass walls or overlap; failed steps keep state. |
 | later (separate pass) | Room composition and floor assembly, with I | Not in this push. Placements, per-room counts, reachability, real HTTP commands, authoring export. |
 
 Tests follow [HOW_TO_TEST.md](../../HOW_TO_TEST.MD): player-visible behavior through
@@ -321,4 +354,7 @@ For each implementation step:
 
 - Which keys exist on this floor, and which are carried by creatures.
 - Source counts against layout capacity (beds in rooms 48/53/55, the armory stacks).
-- The tunable rounds for Haunted, and its sound table.
+- Haunted's defaults (100 rounds, a sound every 3) and the sound-to-effect table (§4.G), and
+  whether Frightened should be one of the effects.
+- The R49 darts: trap attack rolls (a new attack source in the contract) or Dexterity saves.
+- Coughing's effect: disadvantage on Stealth only (§4.C).

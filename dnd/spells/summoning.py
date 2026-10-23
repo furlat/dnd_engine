@@ -30,6 +30,7 @@ from dnd.actions import (
 from dnd.items.container_traps import DisarmTrap
 from dnd.items.locks import ForceLock, LockShut, PickLock, Unlock
 from dnd.items.searchables import SearchBody
+from dnd.items.shoving import ShoveObject
 from dnd.conditions import HasAttackedTracker, HasTakenDamageTracker
 from dnd.core.action_types import ActionSelection, ActionVariantFacet, selection_facet
 from dnd.core.base_actions import Cost, PositionDiscoveryContract, TargetType
@@ -91,7 +92,7 @@ from dnd.spells.necromancy import Revivify
 # What a summoned creature is composed with (its form's factory and the creature composer). The
 # creature is created in the cast, so its content is built with the spell, at the caster's creation.
 _CREATURE_CORE = (AllyHelp, HelpAttack, Attack, Dash, Disengage, Dodge, Drop, DropConcentration, Hide, Jump, Move, PickUp,
-    SearchForTraps, SearchBody, DisarmTrap, Unlock, LockShut, PickLock, ForceLock, ShakeAwake, Shove, Swim, TraverseConnector, HasAttackedTracker, HasTakenDamageTracker,
+    SearchForTraps, SearchBody, ShoveObject, DisarmTrap, Unlock, LockShut, PickLock, ForceLock, ShakeAwake, Shove, Swim, TraverseConnector, HasAttackedTracker, HasTakenDamageTracker,
     DismissSummon)
 _BEAST_FORMS = (*_CREATURE_CORE, HitSaveRiderFeature, KeenHearingAndSmellFeature, KeenPerceptionFeature,
     MultiattackAction, PackTacticsFeature, WolfBiteProneRiderFeature)

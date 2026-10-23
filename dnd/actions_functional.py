@@ -32,6 +32,7 @@ from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, S
 from dnd.items.container_traps import DisarmTrap
 from dnd.items.locks import ForceLock, LockShut, PickLock, Unlock
 from dnd.items.searchables import SearchBody
+from dnd.items.shoving import ShoveObject
 from dnd.summoning.actions import DismissSummon
 from dnd.conditions import (
     create_has_attacked_handler,
@@ -108,6 +109,7 @@ def setup_standard_actions(entity: Entity) -> None:
         (Hide(source_entity_uuid=entity.uuid, template=True), "action.hide"),
         (SearchForTraps(source_entity_uuid=entity.uuid, template=True), "action.search_for_traps"),
         (SearchBody(source_entity_uuid=entity.uuid, template=True), "action.environment.search"),
+        (ShoveObject(source_entity_uuid=entity.uuid, template=True), "action.environment.shove_object"),
         (DisarmTrap(source_entity_uuid=entity.uuid, template=True), "action.environment.trap.disarm"),
         (Unlock(source_entity_uuid=entity.uuid, template=True), "action.environment.lock.unlock"),
         (LockShut(source_entity_uuid=entity.uuid, template=True), "action.environment.lock.lock"),
