@@ -8,7 +8,7 @@ from dnd.conditions import Restrained
 from dnd.spells.hit_effects import AttackBackedSpell
 from dnd.types.physical_access import PhysicalAccess
 from typing import Any, ClassVar, Iterable, Literal, Optional, List, Set, Tuple, cast as type_cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
@@ -115,6 +115,7 @@ from dnd.types.event_facts import GroupEntryKind
 from dnd.spatial.environmental_conditions import (
     BURNING_WEB_RECIPE,
     build_environmental_replacement,
+    install_authored_area_condition,
 )
 from dnd.spatial.restraints import (
     EscapeSpatialRestraintAction,
@@ -138,7 +139,7 @@ from dnd.types.spatial_effects import (
     SpatialEffectTransitionAction,
     SpatialEffectTriggerKind,
 )
-from dnd.core.effect_types import EffectOrigin
+from dnd.core.effect_types import EffectOrigin, EffectOriginKind
 from dnd.core.elevation import support_distance_feet
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 from dnd.core.events import DamageAppliedEvent, TakeDamageEvent, SavingThrowEvent, PortalTransferEvent
@@ -2647,6 +2648,19 @@ class DarknessZone(AreaCondition):
         default=OpticalObscurement.MAGICAL_DARKNESS,
         description="Magical darkness blocks routes unless an exact sense bypasses it.",
     )
+
+
+def materialize_authored_darkness(positions: Set[Tuple[int, int]], *,
+                                  parent_event: Optional[Event] = None) -> DarknessZone:
+    """Permanent magical darkness over authored cells, removed as second-level Darkness would be."""
+    identity = uuid4()
+    zone = DarknessZone(uuid=identity, source_entity_uuid=identity, position=min(positions),
+        affected_positions=set(positions),
+        duration=Duration(duration=None, duration_type=DurationType.PERMANENT),
+        effect_origin=EffectOrigin(kind=EffectOriginKind.ENVIRONMENT, source_id="environment.authored_darkness",
+                                   base_spell_level=2, effective_spell_level=2, magical=True))
+    install_authored_area_condition(zone, parent_event=parent_event)
+    return zone
 
 
 class Darkness(SpellAction):

@@ -36,6 +36,7 @@ from dnd.content.items.authored_item_definitions import (
     WeaponDefinition,
     WearableDefinition,
 )
+from dnd.items.container_traps import TRAP_DISARM_TOOLKIT_ID, build_trap_disarm_toolkit
 from dnd.content.items.environment_item_builders import (
     CONTAINER_PROFILES,
     LIQUID_BARREL_PROFILES,
@@ -604,6 +605,7 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
     "environment.hearth_fire": _single_item_builder(
         "environment.hearth_fire", lambda _source: build_hearth_fire(),
     ),
+    TRAP_DISARM_TOOLKIT_ID: build_trap_disarm_toolkit,
     "environment.trap_lever": _single_item_builder(
         "environment.trap_lever", _build_trap_lever,
     ),

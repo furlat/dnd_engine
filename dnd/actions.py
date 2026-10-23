@@ -99,7 +99,7 @@ from dnd.core.traversal_connectors import (
     TraversalConnectorKind,
 )
 from dnd.core.creature_types import DamageType
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import SpatialConditionOwner, get_map
 from dnd.core.view import cell_visible, visible_positions
 from dnd.core.geometry import grid_distance_feet, position_in_sector
 from dnd.core.presentation_geometry import AoEPresentationGeometry
@@ -111,7 +111,7 @@ from dnd.core.base_block import LightLevel
 from dnd.action_timing import record_action_elapsed, record_action_timing
 from dnd.core.combat_log import JumpMovementLogData, ConnectorMovementLogData, EmptyLogData, ShoveLogData, SpellDamageLogData
 from dnd.core.combat_log import (
-    CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
+    CombatLogEntry, CombatLogEntryType, HazardDetectedLogData, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
     format_attack_compact, format_attack_verbose, format_attack_detailed,
     md_color
@@ -3083,6 +3083,90 @@ class HelpAttack(BaseAction):
 
 
 @_core_action_identity(
+    content_id="action.search_for_traps",
+    display_name="Search for Traps",
+    description="Make a Wisdom (Perception) check to find hidden traps within 10 feet.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Search; BG3 adapted trap search",
+    sort_order=92,
+)
+class SearchForTraps(BaseAction):
+    """Search for hidden traps: one rolled Wisdom (Perception) check.
+
+    The total is compared with the detection DC of each concealed hazard within 10 feet,
+    in a visible cell or on an object the searcher senses. Each one beaten is known to the
+    searcher from then on, exactly as a high enough passive Perception would make it. The
+    check reveals no DC, so a failed search does not tell whether anything was there.
+    """
+    name: str = Field(default="Search for Traps", description="Human-readable search action name.")
+    description: str = Field(default="Search within 10 feet for hidden traps (Perception check)",
+                             description="Player-facing search action summary.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Search targets self")
+    search_feet: ClassVar[int] = 10
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Search Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ], description="Action economy costs paid when searching.")
+
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        source_entity = Entity.get(self.source_entity_uuid)
+        return ActionEvent(
+            name=self.name or "Search for Traps", description=self.description,
+            parent_event=parent_event.uuid if parent_event else None, phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.source_entity_uuid,
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
+            use_register=use_register, source_entity_name=source_entity.name if source_entity else None,
+        )
+
+    def _concealed_nearby(self, entity: Entity) -> List[Tuple[BaseCondition | SpatialConditionOwner, Tuple[int, int]]]:
+        """Concealed hazards this searcher does not yet perceive, in seen cells within reach of the search."""
+        grid = get_map()
+        passive = entity.get_passive_perception()
+        reach = self.search_feet // 5
+        x, y = entity.position
+        near: dict[UUID, Tuple[BaseCondition | SpatialConditionOwner, Tuple[int, int]]] = {}
+        for position in ((x + dx, y + dy) for dx in range(-reach, reach + 1) for dy in range(-reach, reach + 1)):
+            if not cell_visible(entity.senses.cells, position) or entity.senses.get_feet_distance(position) > self.search_feet:
+                continue
+            for spatial in grid.get_spatial_conditions_at(position):
+                if spatial.condition_stealth_dc is not None and not spatial.is_hazard_perceived_by(entity.uuid):
+                    near[spatial.uuid] = (spatial, position)
+            for identity in grid.get_objects_at(position):
+                item = BaseBlock.get(identity) if identity in entity.senses.objects else None
+                for condition in item.active_conditions.values() if item is not None else ():
+                    if condition.is_concealed_from(entity.uuid, passive):
+                        near[condition.uuid] = (condition, position)
+        return [near[identity] for identity in sorted(near, key=str)]
+
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not isinstance(entity, Entity):
+            return execution_event.cancel(status_message="Entity not found")
+        effect = execution_event.phase_to(EventPhase.EFFECT)
+        roll = entity.roll_d20(entity.skill_bonus(target_entity_uuid=None, skill_name="perception"),
+                               RollType.CHECK, skill_name="perception", parent_event=effect.uuid)
+        found = [(condition, position) for condition, position in self._concealed_nearby(entity)
+                 if condition.condition_stealth_dc is not None and roll.total >= condition.condition_stealth_dc]
+        for condition, _ in found:
+            condition.mark_detected_by(entity.uuid)
+        if found:
+            entity.update_entity_senses()
+        for condition, position in found:
+            # The passive-detection log row, shown to the finder only; its Perception field stays the
+            # finder's passive score and the text names the search check that found it.
+            summary = f"{md_color('cyan', entity.name)} finds {condition.name}"
+            EventQueue.push_combat_log(CombatLogEntry(
+                entry_type=CombatLogEntryType.HAZARD_DETECTED, source_name=entity.name, source_uuid=str(entity.uuid),
+                compact=summary, verbose=f"{summary} (search check {roll.total})",
+                detailed=f"{summary} (search check {roll.total} vs DC {condition.condition_stealth_dc})",
+                data=HazardDetectedLogData(observer_name=entity.name, observer_uuid=str(entity.uuid),
+                    hazard_name=condition.name, position=position, passive_perception=entity.get_passive_perception(),
+                    stealth_dc=condition.condition_stealth_dc or 0),
+                perceiver_uuids=[str(entity.uuid)]), entity.uuid)
+        return effect.with_updates(status_message=(
+            f"{entity.name} finds {len(found)} trap{'s' if len(found) != 1 else ''}" if found
+            else f"{entity.name} finds nothing"))
+
+
+@_core_action_identity(
     content_id="action.hide",
     display_name="Hide",
     description="Attempt a Dexterity (Stealth) check to become hidden.",
@@ -5762,6 +5846,7 @@ _CORE_STANDARD_ACTION_TYPES = (
         AllyHelp,
         HelpAttack,
         Hide,
+        SearchForTraps,
         Jump,
         Shove,
         PickUp,

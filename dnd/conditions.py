@@ -1731,6 +1731,27 @@ class Poisoned(BaseCondition):
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
+class Coughing(BaseCondition):
+    """A loud fit of hacking and choking, as the gray mold's spores cause."""
+
+    name: str = Field(default="Coughing", description="Condition name.")
+    description: str = Field(
+        default="A fit of loud hacking and choking: disadvantage on Dexterity (Stealth) checks.",
+        description="Condition description.")
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not isinstance(target, Entity):
+            return [], [], [], [], declaration_event.cancel(status_message="Coughing needs a creature")
+        stealth = target.skill_set.get_skill("stealth").skill_bonus
+        modifier_uuid = add_modifier(stealth, Channel.SELF_STATIC, Kind.ADVANTAGE, AdvantageModifier(
+            name="Coughing", value=AdvantageStatus.DISADVANTAGE,
+            source_entity_uuid=self.target_entity_uuid, target_entity_uuid=self.source_entity_uuid))
+        effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self},
+                                                  status_message=f"{target.name} is coughing")
+        return [(stealth.uuid, modifier_uuid)], [], [], [], effect_event
+
+
 @_core_condition_identity(
     content_id="condition.prone",
     display_name="Prone",

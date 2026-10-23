@@ -475,6 +475,53 @@ def _hide_semantics() -> ActionSemantics:
     )
 
 
+def _search_for_traps_semantics() -> ActionSemantics:
+    """Return semantics for a rolled search that may reveal nearby hidden traps."""
+    return ActionSemantics(
+        semantic_id="information.search_for_traps",
+        # Not an information action for the policies yet: when AI searches is exploration-mode work.
+        tags=frozenset({ActionTag.SETUP_SELF}),
+        stochastic_effects=(
+            StochasticEffect(
+                outcome_kind=OutcomeKind.UNKNOWN,
+                effects=(
+                    LogicalEffect(
+                        fact_id="actor.known_traps_nearby",
+                        operation=EffectOperation.ADD,
+                        value=True,
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+def _disarm_trap_semantics() -> ActionSemantics:
+    """Return semantics for disarming a found trap on an adjacent object."""
+    return ActionSemantics(
+        semantic_id="interaction.object.disarm_trap",
+        tags=frozenset({ActionTag.INTERACTION_OBJECT}),
+        planning_preconditions=_predicate("actor.adjacent_to_target", True),
+        stochastic_effects=(
+            StochasticEffect(
+                outcome_kind=OutcomeKind.UNKNOWN,
+                effects=(
+                    LogicalEffect(
+                        fact_id="selected_object.trap_disarmed",
+                        operation=EffectOperation.ADD,
+                        value=True,
+                    ),
+                ),
+            ),
+        ),
+        targeting=TargetingSemantics(
+            allocation=TargetAllocation.OBJECT,
+            minimum_targets=1,
+            maximum_targets=1,
+        ),
+    )
+
+
 def _aggressive_movement_semantics() -> ActionSemantics:
     """Return semantics for bonus-action movement toward a visible hostile."""
     return ActionSemantics(
@@ -1206,6 +1253,8 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
     "dnd.actions.Drop": _drop_item_semantics,
     "dnd.summoning.actions.DismissSummon": _dismiss_summon_semantics,
     "dnd.actions.Hide": _hide_semantics,
+    "dnd.actions.SearchForTraps": _search_for_traps_semantics,
+    "dnd.items.container_traps.DisarmTrap": _disarm_trap_semantics,
     "dnd.actions.Jump": _jump_semantics,
     "dnd.actions.Move": _move_semantics,
     "dnd.actions.Shove": _shove_semantics,

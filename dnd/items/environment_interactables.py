@@ -577,6 +577,9 @@ class StorageChest(UsableItem):
             return
         self.is_open = is_open
         self.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
+        if is_open:
+            for condition in tuple(self.active_conditions.values()):
+                condition.on_owner_opened(parent_event)
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         if not self.is_active:

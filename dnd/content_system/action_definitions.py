@@ -25,6 +25,7 @@ import dnd.classes.rage as rage
 import dnd.extensions.aegis_spark as aegis_spark
 import dnd.extensions.field_focus as field_focus
 import dnd.items.consumables as consumables
+import dnd.items.container_traps as container_traps
 import dnd.items.environment as environment
 import dnd.items.environment_interactables as environment_interactables
 import dnd.items.torches as torches
@@ -256,6 +257,7 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _srd(conjuration.CallLightningStrike, "action.spell.call_lightning.strike", "Call Lightning Strike", "Call another bolt from an active Call Lightning spell."),
     _srd(conjuration.EatFromFeast, "action.environment.heroes_feast.eat", "Eat from Feast", "Consume one serving from a Heroes' Feast."),
     _original(jaws.ForceJawOpen, "action.environment.escape_jaw.athletics", "Force jaws open", "Use an action and Athletics to escape one jaw."),
+    _original(container_traps.DisarmTrap, "action.environment.trap.disarm", "Disarm Trap", "Use a Trap Disarm Toolkit and Sleight of Hand on a trap you have found."),
     _original(jaws.SlipFreeOfJaw, "action.environment.escape_jaw.acrobatics", "Slip free of jaws", "Use an action and Acrobatics to escape one jaw."),
     _srd(conjuration.EscapeWebAction, "action.spell.web.escape", "Escape Web", "Attempt to escape the restraint imposed by Web."),
     _original(

@@ -3,7 +3,7 @@
 from typing import ClassVar, NotRequired, Optional, Set, Tuple, TypedDict
 from uuid import UUID, uuid4
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, Duration
@@ -22,7 +22,7 @@ from dnd.core.content.identities import (
     ContentRef,
 )
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.dice import AttackOutcome
+from dnd.core.dice import AttackOutcome, roll_die_face
 from dnd.core.events import (
     Damage,
     Event,
@@ -35,9 +35,9 @@ from dnd.core.events import (
     Trigger,
 )
 from dnd.core.gridmap import CrossingChannel, get_map
-from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
-from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts
-from dnd.conditions import Poisoned, Prone
+from dnd.core.modifiers import NumericalModifier, ResistanceModifier, ResistanceStatus
+from dnd.core.values import ModifiableValue, Channel, Kind, add_modifier, parts, remove_modifier
+from dnd.conditions import Coughing, Poisoned, Prone
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
@@ -61,6 +61,8 @@ from dnd.types.spatial_effects import (
     SpatialEffectTransitionAction,
 )
 from dnd.core.creature_types import DamageType
+from dnd.core.equipment_types import BodyPart
+from dnd.types.materials import Material
 
 
 SPIKE_TRAP_CONTENT_REF = ContentRef(
@@ -1326,19 +1328,182 @@ def extend_spike_trap_condition(
     return condition.extend_footprint(positions, parent_event=parent_event)
 
 
+ELECTRIC_FLOOR_CONTENT_REF = SPIKE_TRAP_CONTENT_REF.model_copy(update={
+    "content_id": "spatial_effect.environment.electric_floor",
+})
+GRAY_MOLD_CONTENT_REF = SPIKE_TRAP_CONTENT_REF.model_copy(update={
+    "content_id": "spatial_effect.environment.gray_mold",
+})
+
+
+class ElectricFloor(AreaCondition):
+    """Charged floor plates: every entered plate asks a Dexterity save against lightning."""
+
+    name: str = Field(default="Electric floor")
+    description: str = Field(default="Entering a charged plate requires a Dexterity save or deals 1d4 lightning.")
+    has_visible_presence: bool = True
+    content_ref: ContentRef = Field(default=ELECTRIC_FLOOR_CONTENT_REF)
+    layer: SpatialEffectLayer = SpatialEffectLayer.GROUND_SURFACE
+    occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.ENTER})
+    hazard_filter: HazardFilter = HazardFilter.ALL
+    duration: Duration = Field(default_factory=lambda: Duration(duration=None, duration_type=DurationType.PERMANENT))
+    save_dc: int = Field(default=13, ge=0)
+
+    def equipment_modifiers(self, entity: Entity) -> tuple[tuple[str, int], ...]:
+        """Metal armor is -4 on the save; anything worn on the feet (boots or equivalent) is +2."""
+        armor = entity.equipment.get_item_by_slot(BodyPart.BODY)
+        footwear = entity.equipment.get_item_by_slot(BodyPart.FEET)
+        return ((("Metal armor on charged plates", -4),) if armor is not None and Material.METAL.value in armor.tags
+                else ()) + ((("Footwear on charged plates", 2),) if footwear is not None else ())
+
+    def _shock(self, entity: Entity, *, parent_event: Event) -> None:
+        save = entity.saving_throws.get_saving_throw("dexterity").bonus
+        modifiers = tuple(NumericalModifier(name=name, value=value, source_entity_uuid=self.uuid,
+                                            target_entity_uuid=entity.uuid)
+                          for name, value in self.equipment_modifiers(entity))
+        for modifier in modifiers:
+            add_modifier(save, Channel.SELF_STATIC, Kind.VALUE, modifier)
+        try:
+            request = entity.create_saving_throw_request(target_entity_uuid=entity.uuid,
+                ability_name="dexterity", dc=self.save_dc, parent_event=parent_event.uuid,
+                saving_throw_context=SavingThrowContext(cause_id=self.content_ref.content_id,
+                    effect_id=f"{self.content_ref.content_id}.entry", is_magical=False))
+            _, _, saved = entity.saving_throw(request)
+        finally:
+            for modifier in modifiers:
+                remove_modifier(save, modifier.uuid)
+                modifier.remove_from_register()
+        if saved:
+            return
+        damage = Damage(name=self.name, source_entity_uuid=self.uuid, target_entity_uuid=entity.uuid,
+            damage_dice=4, dice_numbers=1, damage_type=DamageType.LIGHTNING,
+            damage_bonus=parts(ModifiableValue(source_entity_uuid=self.uuid, base=0, name="Electric floor damage")))
+        roll = damage.get_dice(AttackOutcome.HIT).roll
+        entity.receive_damage(roll.total, DamageType.LIGHTNING, self.uuid, damage_rolls=[roll], damages=[damage],
+            parent_event=parent_event.uuid, effect_id=self.content_ref.identity_key, independent_resolution=True)
+
+    def _create_zone_entry_handler(self) -> EventHandler:
+        def shock(event: Event, _source_entity_uuid: UUID) -> None:
+            entity = Entity.get(event.entity_uuid) if isinstance(event, SpatialChangeEvent) and event.entity_uuid else None
+            if isinstance(entity, Entity):
+                self._shock(entity, parent_event=event)
+
+        return EventHandler(name="Electric floor entry", source_entity_uuid=self.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.SPATIAL_ENTITY_ENTERED, event_phase=EventPhase.EFFECT)],
+            event_processor=shock)
+
+
+class GrayMold(AreaCondition):
+    """A moldy floor whose spores erupt when someone steps in, once per continuous stay."""
+    creates = (Coughing,)
+
+    name: str = Field(default="Gray mold")
+    description: str = Field(default="Stepping in makes the spores erupt: a Constitution save or 1d6 rounds of coughing.")
+    has_visible_presence: bool = True
+    content_ref: ContentRef = Field(default=GRAY_MOLD_CONTENT_REF)
+    layer: SpatialEffectLayer = SpatialEffectLayer.GROUND_SURFACE
+    occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
+        SpatialEffectTriggerKind.ENTER, SpatialEffectTriggerKind.LEAVE})
+    hazard_filter: HazardFilter = HazardFilter.ALL
+    duration: Duration = Field(default_factory=lambda: Duration(duration=None, duration_type=DurationType.PERMANENT))
+    save_dc: int = Field(default=13, ge=0)
+    _exposed_occupants: Set[UUID] = PrivateAttr(default_factory=set)  # rolled during their current stay
+
+    def _erupt(self, *, parent_event: Event) -> None:
+        for entity in self._occupants_at(set(self.affected_positions)):
+            if entity.uuid in self._exposed_occupants:
+                continue
+            self._exposed_occupants.add(entity.uuid)
+            request = entity.create_saving_throw_request(target_entity_uuid=entity.uuid,
+                ability_name="constitution", dc=self.save_dc, parent_event=parent_event.uuid,
+                saving_throw_context=SavingThrowContext(cause_id=self.content_ref.content_id,
+                    effect_id=f"{self.content_ref.content_id}.spores", is_magical=False,
+                    effect_tags=(SavingThrowEffectTag.POISON,)))
+            _, _, saved = entity.saving_throw(request)
+            if not saved:
+                entity.add_condition(Coughing(source_entity_uuid=self.uuid, target_entity_uuid=entity.uuid,
+                    duration=Duration(duration=roll_die_face(6), duration_type=DurationType.ROUNDS,
+                                      source_entity_uuid=self.uuid, target_entity_uuid=entity.uuid)),
+                    parent_event=parent_event)
+
+    def _create_zone_entry_handler(self) -> EventHandler:
+        def erupt(event: Event, _source_entity_uuid: UUID) -> None:
+            if isinstance(event, SpatialChangeEvent) and event.entity_uuid is not None:
+                self._erupt(parent_event=event)
+
+        return EventHandler(name="Gray mold spores", source_entity_uuid=self.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.SPATIAL_ENTITY_ENTERED, event_phase=EventPhase.EFFECT)],
+            event_processor=erupt)
+
+    def _create_zone_exit_handler(self) -> EventHandler:
+        def leave(event: Event, _source_entity_uuid: UUID) -> None:
+            entity = Entity.get(event.entity_uuid) if isinstance(event, SpatialChangeEvent) and event.entity_uuid else None
+            if isinstance(entity, Entity) and entity.position not in self.affected_positions:
+                self._exposed_occupants.discard(entity.uuid)
+
+        return EventHandler(name="Gray mold exit", source_entity_uuid=self.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.SPATIAL_ENTITY_LEFT, event_phase=EventPhase.EFFECT)],
+            event_processor=leave)
+
+
+def install_authored_area_condition(condition: AreaCondition, *, parent_event: Optional[Event] = None) -> None:
+    """Activate one authored environmental area, under its own root cause when none is given."""
+    cause = parent_event
+    if cause is None:
+        cause = EventQueue.publish_declaration(Event(name=f"Install {condition.name}",
+            source_entity_uuid=condition.source_entity_uuid, source_entity_name="Environment",
+            event_type=EventType.BASE_ACTION, phase=EventPhase.DECLARATION, use_register=False))
+        for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
+            if cause.canceled:
+                raise RuntimeError(f"{condition.name} installation was canceled")
+            cause = cause.phase_to(phase)
+        if cause.canceled:
+            raise RuntimeError(f"{condition.name} installation was canceled")
+    result = condition.activate(parent_event=cause)
+    if result is None or result.canceled or not condition.applied:
+        raise RuntimeError(f"{condition.name} activation failed")
+    if parent_event is None:
+        cause.phase_to(EventPhase.COMPLETION)
+
+
+def materialize_electric_floor(positions: Set[Tuple[int, int]], *,
+                               parent_event: Optional[Event] = None) -> ElectricFloor:
+    """The charged plates of an authored floor; safe cells such as carpet are simply left out."""
+    identity = uuid4()
+    floor = ElectricFloor(uuid=identity, source_entity_uuid=identity, position=min(positions),
+                          affected_positions=set(positions))
+    install_authored_area_condition(floor, parent_event=parent_event)
+    return floor
+
+
+def materialize_gray_mold(positions: Set[Tuple[int, int]], *, parent_event: Optional[Event] = None) -> GrayMold:
+    """One authored moldy floor."""
+    identity = uuid4()
+    mold = GrayMold(uuid=identity, source_entity_uuid=identity, position=min(positions),
+                    affected_positions=set(positions))
+    install_authored_area_condition(mold, parent_event=parent_event)
+    return mold
+
+
 __all__ = [
     "BURNING_WEB_CONTENT_REF",
     "BURNING_WEB_RECIPE",
     "BURNING_WEB_TRANSITIONS",
     "BurningWeb",
+    "ELECTRIC_FLOOR_CONTENT_REF",
     "ELECTRIFIED_WATER_CONTENT_REF",
     "ELECTRIFIED_WATER_RECIPE",
     "ELECTRIFIED_WATER_TRANSITIONS",
+    "ElectricFloor",
     "ElectrifiedWater",
     "FIRE_SURFACE_CONTENT_REF",
     "FIRE_SURFACE_RECIPE",
     "FIRE_SURFACE_TRANSITIONS",
     "FireSurface",
+    "GRAY_MOLD_CONTENT_REF",
+    "GrayMold",
     "ICE_SURFACE_CONTENT_REF",
     "ICE_SURFACE_RECIPE",
     "ICE_SURFACE_TRANSITIONS",
@@ -1362,5 +1527,9 @@ __all__ = [
     "WetSurfaceMembership",
     "build_environmental_replacement",
     "extend_spike_trap_condition",
+    "install_authored_area_condition",
+    "materialize_electric_floor",
+    "materialize_gray_mold",
     "materialize_spike_trap_condition",
 ]
+

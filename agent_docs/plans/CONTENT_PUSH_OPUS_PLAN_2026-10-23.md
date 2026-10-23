@@ -111,6 +111,16 @@ attunement stay listed gaps, not part of this push.
 
 Each uses position-indexed entry handlers: no cost for anyone elsewhere on the map.
 
+**Step 2 as built (23 October):**
+- R14: `materialize_authored_darkness` installs a permanent `DarknessZone` whose origin says
+  environment, magical, second level.
+- R15: `ElectricFloor` asks a save on every plate entered. Metal armor (a `metal` tag on
+  the eight metal armors) and footwear (anything worn on the feet) are named −4 and +2
+  modifiers on that save.
+- R26: `GrayMold`. **Coughing's effect is a choice for the human:** the book says only
+  "loud hacking and choking", so Coughing gives disadvantage on Dexterity (Stealth) checks
+  and nothing else.
+
 ### D. Container traps (old P7)
 
 A trap condition on the container reacting to its own committed open:
@@ -141,6 +151,26 @@ rearms.
   - Failure: the kit is consumed **and the trap triggers**.
 - **Separate DCs:** detect, disarm, lock and the trap's saving throw are four different
   numbers on one object.
+
+**Step 2 as built (23 October):**
+- A container's committed open calls a new `on_owner_opened` condition hook.
+- `ContainerTrap` is the R53 needle. Failing the save gives `NeedleParalysis`: Paralyzed,
+  with a repeat save at turn end, for up to 10 rounds. Lesser Restoration ends it whole.
+- Conditions gained a `detected_by` set, honoured by the one concealment rule
+  (`is_concealed_from`).
+- Search for Traps and Disarm Trap are standard actions.
+  - Search makes one Perception roll with no DC in the event. It covers seen cells within
+    10 ft and the objects the searcher senses.
+  - Finds are logged to the finder only, on the existing passive-detection row; its
+    Perception field still holds the passive score.
+- The AI policies don't value Search yet; when an AI searches is exploration-mode work (§6).
+- Not yet built:
+  - "Hidden mechanism by Investigation" waits for the false backs (§4.F).
+  - **The R49 darts wait for the human.** A trap attack roll needs a new attack source kind
+    in the player facts and an attacker that isn't a creature. The alternative is Dexterity
+    saves through the existing `TrapSave`/`TrapPayload` data.
+- Measured under load: the action listing rose from 6.15 to 6.35 ms with three trapped
+  containers in reach. A move far from the hazards showed no difference beyond noise.
 
 ### E. Locks, keys and thieves' tools (decided; BG3 model, adapted)
 
@@ -233,7 +263,7 @@ That's a separate task with its own plan. Until then, §4.I.
 | Step | Work | Exit evidence |
 | --- | --- | --- |
 | 1 (done) | A (B is out) | Placement, loot conservation, destruction, client-visible facts. Paired timing: dense test room vs empty, under load. |
-| 2 | C and D | Correct recipients only; saves, durations and cures; one activation; no cost for distant actors (paired timing). |
+| 2 (done but darts) | C and D | Correct recipients only; saves, durations and cures; one activation; no cost for distant actors (paired timing). |
 | 3 | E (after the BG3 handout) and F | Locked/unlocked/forced/picked transitions; wrong key or canceled action preserves state; secrecy of key identity; SDK reduction of the new field. |
 | 4 | G and H | Haunted fires every N rounds only for its owner; cures; shove steps can't pass walls or overlap; failed steps keep state. |
 | later (separate pass) | Room composition and floor assembly, with I | Not in this push. Placements, per-room counts, reachability, real HTTP commands, authoring export. |

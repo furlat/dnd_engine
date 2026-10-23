@@ -226,7 +226,7 @@ def test_first_action_example_prints_visible_turn_menu(capsys) -> None:
     expected_lines = [
         "actor: Scout",
         "movement left: 30",
-        "groups: entity=7, position=4, self=7, object=0",
+        "groups: entity=7, position=4, self=8, object=0",
         "dash row: target=self, cost=1 actions, afford=True",
         "move row: target 0 -> (5, 6), distance=5, path=[(5, 5), (5, 6)]",
         "attack row: Scimitar -> Skeleton, distance=5",
@@ -377,7 +377,7 @@ def test_standard_action_discovery_groups_choices_for_clients(capsys) -> None:
     expected_discovery_lines = [
         "entity uuid matches actor: True",
         "remaining movement: 30",
-        "groups: entity=7, position=4, self=7, object=0",
+        "groups: entity=7, position=4, self=8, object=0",
         "self actions include: ['Dash', 'Disengage', 'Dodge']",
         "dash row: target=self, index=0, cost=1 actions, afford=True",
         "move row: category=movement, target=(5, 6), path=[(5, 5), (5, 6)]",
