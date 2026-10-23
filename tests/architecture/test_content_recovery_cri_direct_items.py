@@ -81,6 +81,8 @@ _BEHAVIOR_ITEM_IDS = frozenset({
     "environment.wall_torch",
     "environment.hearth_fire",
     "tool.trap_disarm_toolkit",
+    "tool.thieves_tools",
+    "tool.key",
     "environment.trap_lever",
     "environment.storage_chest",
     "environment.chest.fantasy_a1",

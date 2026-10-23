@@ -1,6 +1,6 @@
 """Traps on containers: sprung by the container's own committed open, disarmed with a toolkit."""
 
-from typing import List, Optional, Tuple
+from typing import ClassVar, List, Optional, Tuple
 from uuid import UUID
 
 from pydantic import Field
@@ -12,13 +12,22 @@ from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
-from dnd.core.condition_types import ConditionCategory, DurationType
+from dnd.core.condition_types import DurationType
+from dnd.core.content.identities import ContentRef
 from dnd.core.dice import RollType
 from dnd.core.events import Event, EventHandler, EventPhase, EventType, Trigger
+from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.entity import Entity
 from dnd.items.environment_interactables import StorageChest
+from dnd.spatial.area_conditions import SpatialCondition
+from dnd.spatial.environmental_conditions import SPIKE_TRAP_CONTENT_REF, install_authored_area_condition
 from dnd.types.discovery import ActorScan
+from dnd.types.senses import PerceivedSpatialEffect
+from dnd.types.spatial_effects import (
+    SpatialEffectAnchorKind, SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy,
+)
+from dnd.types.world import OccupancyLayer
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.traps import TrapState
 
@@ -63,80 +72,111 @@ class NeedleParalysis(BaseCondition):
         return event
 
 
-class ContainerTrap(BaseCondition):
-    """A poison needle in a container's lock, sprung once by its first committed open.
+CONTAINER_NEEDLE_CONTENT_REF = SPIKE_TRAP_CONTENT_REF.model_copy(update={
+    "content_id": "spatial_effect.environment.container_needle",
+})
 
-    Detection uses the inherited condition DC; destroying the container removes the trap.
+
+class ContainerTrap(SpatialCondition):
+    """A poison needle in a container's lock, anchored to it and sprung once by its first committed open.
+
+    It is perceived as floor traps are: passive Perception above its DC, a search that found it, or an
+    earlier observation. It follows the container across the map; breaking or picking it up ends it.
     """
     creates = (NeedleParalysis,)
+    crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
 
-    name: str = Field(default="Poison needle", description="Condition name.")
-    description: str = Field(default="A hidden needle pricks whoever opens this container.",
-                             description="Rules summary.")
-    condition_category: ConditionCategory = ConditionCategory.INTERNAL
+    name: str = "Poison needle"
+    description: str = "A hidden needle pricks whoever opens this container."
+    content_ref: ContentRef = CONTAINER_NEEDLE_CONTENT_REF
+    layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
+    occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
+    affected_occupancy_layers: frozenset[OccupancyLayer] = frozenset({OccupancyLayer.GROUND})
     duration: Duration = Field(default_factory=lambda: Duration(duration=None, duration_type=DurationType.PERMANENT))
     trap_state: TrapState = TrapState.READY
     disarm_dc: int = Field(default=13, ge=0)
     save_dc: int = Field(default=13, ge=0)
     paralysis_rounds: int = Field(default=10, ge=1)
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        if not isinstance(BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None, StorageChest):
-            return [], [], [], [], declaration_event.cancel(status_message="A container trap needs a container")
-        return [], [], [], [], declaration_event.phase_to(EventPhase.EFFECT)
+    def is_hazard_perceived_by(self, requesting_entity_uuid: UUID | None = None) -> bool:
+        observer = BaseBlock.get(requesting_entity_uuid) if requesting_entity_uuid is not None else None
+        senses = observer.get_senses() if observer is not None else None
+        return (senses is not None and self.uuid in senses.spatial_effects
+                or super().is_hazard_perceived_by(requesting_entity_uuid))
 
-    def is_hazard_perceived_by(self, observer_uuid: UUID) -> bool:
-        """The concealment rule floor traps use: passive Perception, or a search that found it."""
-        observer = Entity.get(observer_uuid)
-        return isinstance(observer, Entity) and not self.is_concealed_from(
-            observer_uuid, observer.get_passive_perception())
+    def get_spatial_observation(self, positions: set[tuple[int, int]], *,
+                               observer_uuid: UUID, discovered: bool = False) -> PerceivedSpatialEffect | None:
+        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
+            return None
+        state = {TrapState.READY: "Armed.", TrapState.ACTIVATED: "Sprung.", TrapState.DEACTIVATED: "Disarmed."}
+        observer = BaseBlock.get(observer_uuid)
+        senses = observer.get_senses() if observer is not None else None
+        return PerceivedSpatialEffect(content_ref=self.content_ref, name=self.name,
+            description=state[self.trap_state], positions=tuple(sorted(positions)), trap_state=self.trap_state,
+            anchor_item_uuid=self.anchor_uuid if senses is not None and self.anchor_uuid in senses.objects else None)
 
-    def disarm(self) -> None:
-        """Make the armed needle safe; a disarmed needle is plain to see."""
-        if self.trap_state is TrapState.READY:
-            self.trap_state = TrapState.DEACTIVATED
-            self.condition_stealth_dc = None
+    def snapshot_mechanism_state(self) -> TrapState:
+        return self.trap_state
+
+    def _set_state(self, state: TrapState, *, parent_event: Event) -> bool:
+        """Leave the armed state once; a sprung or disarmed needle is plain to see."""
+        if not self.is_active_spatial_condition() or self.trap_state is not TrapState.READY:
+            return False
+        positions = set(self.affected_positions)
+        change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED, previous_positions=positions,
+            affected_positions=positions, parent_event=parent_event,
+            previous_trap_state=self.trap_state, trap_state=state)
+        self.trap_state = state
+        self.condition_stealth_dc = None
+        self.observation_revision += 1
+        self._complete_change(change)
+        return True
 
     def on_owner_opened(self, event: Event) -> None:
         self.spring(event.source_entity_uuid, parent_event=event)
 
     def spring(self, victim_uuid: UUID, *, parent_event: Event) -> None:
-        """Fire once at the creature handling the container; the spent needle is plain to see."""
-        if self.trap_state is not TrapState.READY:
+        """Fire once at the creature handling the container."""
+        if not self._set_state(TrapState.ACTIVATED, parent_event=parent_event):
             return
-        self.trap_state = TrapState.ACTIVATED
-        self.condition_stealth_dc = None
         victim = Entity.get(victim_uuid)
         if not isinstance(victim, Entity):
             return
         request = victim.create_saving_throw_request(victim.uuid, "constitution", self.save_dc,
             parent_event=parent_event.uuid, saving_throw_context=SavingThrowContext(
-                cause_id="trap.container.poison_needle", effect_id="trap.container.poison_needle.prick",
+                cause_id=self.content_ref.content_id, effect_id=f"{self.content_ref.content_id}.prick",
                 condition_id="condition.paralyzed", is_magical=False, effect_tags=(SavingThrowEffectTag.POISON,)))
         _, _, saved = victim.saving_throw(request)
         if not saved:
-            victim.add_condition(NeedleParalysis(source_entity_uuid=self.target_entity_uuid or victim.uuid,
+            victim.add_condition(NeedleParalysis(source_entity_uuid=self.anchor_uuid or victim.uuid,
                 target_entity_uuid=victim.uuid, save_dc=self.save_dc,
                 duration=Duration(duration=self.paralysis_rounds, duration_type=DurationType.ROUNDS,
                                   source_entity_uuid=victim.uuid, target_entity_uuid=victim.uuid)),
                 parent_event=parent_event)
 
+    def disarm(self, *, parent_event: Event) -> None:
+        self._set_state(TrapState.DEACTIVATED, parent_event=parent_event)
+
 
 def ready_trap_known_to(item: BaseItem, observer_uuid: UUID) -> ContainerTrap | None:
-    """The item's armed trap when this observer perceives it."""
-    return next((condition for condition in item.active_conditions.values()
-                 if isinstance(condition, ContainerTrap) and condition.trap_state is TrapState.READY
-                 and condition.is_hazard_perceived_by(observer_uuid)), None)
+    """The armed trap anchored to this item, when this observer perceives it."""
+    position = get_map().get_object_position(item.uuid)
+    return next((condition for condition in (get_map().get_spatial_conditions_at(position) if position else ())
+                 if isinstance(condition, ContainerTrap) and condition.anchor_uuid == item.uuid
+                 and condition.trap_state is TrapState.READY and condition.is_hazard_perceived_by(observer_uuid)),
+                None)
 
 
 def install_container_trap(container: StorageChest, *, detect_dc: int = 13, disarm_dc: int = 13,
-                           save_dc: int = 13) -> ContainerTrap:
-    """Arm one container with a hidden poison needle."""
-    trap = ContainerTrap(source_entity_uuid=container.uuid, target_entity_uuid=container.uuid,
-                         condition_stealth_dc=detect_dc, disarm_dc=disarm_dc, save_dc=save_dc)
-    result = container.add_condition(trap)
-    if result is None or result.canceled or not trap.applied:
-        raise RuntimeError(f"{container.name} could not be trapped")
+                           save_dc: int = 13, parent_event: Event | None = None) -> ContainerTrap:
+    """Arm one placed container with a hidden poison needle."""
+    position = get_map().get_object_position(container.uuid)
+    if position is None:
+        raise ValueError(f"{container.name} must be placed before it is trapped")
+    trap = ContainerTrap(source_entity_uuid=container.uuid, position=position, affected_positions={position},
+        anchor_kind=SpatialEffectAnchorKind.WORLD_OBJECT, anchor_uuid=container.uuid,
+        condition_stealth_dc=detect_dc, disarm_dc=disarm_dc, save_dc=save_dc)
+    install_authored_area_condition(trap, parent_event=parent_event)
     return trap
 
 
@@ -166,10 +206,10 @@ class DisarmTrap(BaseAction):
         item = BaseBlock.get(selection.target_uuids[0]) if selection.target_uuids else None
         if not isinstance(entity, Entity) or not isinstance(item, BaseItem):
             return "Nothing to disarm"
+        if self._toolkit(entity) is None:  # the cheap check first: most creatures carry no kit
+            return "Needs a Trap Disarm Toolkit"
         if ready_trap_known_to(item, entity.uuid) is None:
             return "No trap found here"
-        if self._toolkit(entity) is None:
-            return "Needs a Trap Disarm Toolkit"
         return None
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
@@ -185,7 +225,7 @@ class DisarmTrap(BaseAction):
         roll = entity.roll_d20(entity.skill_bonus(target_entity_uuid=None, skill_name="sleight_of_hand"),
                                RollType.CHECK, skill_name="sleight_of_hand", parent_event=effect.uuid)
         if roll.total >= trap.disarm_dc:
-            trap.disarm()
+            trap.disarm(parent_event=effect)
             return effect.with_updates(status_message=f"{entity.name} disarms the {trap.name.lower()}")
         toolkit.consume_charge_with_event(1, entity.uuid, effect)
         trap.spring(entity.uuid, parent_event=effect)

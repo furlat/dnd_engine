@@ -522,6 +522,21 @@ def _disarm_trap_semantics() -> ActionSemantics:
     )
 
 
+def _lock_semantics(semantic_id: str, *, rolled: bool) -> Callable[[], ActionSemantics]:
+    """Return semantics for working a lock or bar, or searching, on an adjacent door or container."""
+    def build() -> ActionSemantics:
+        effect = LogicalEffect(fact_id="selected_object.lock_changed", operation=EffectOperation.ADD, value=True)
+        return ActionSemantics(
+            semantic_id=semantic_id,
+            tags=frozenset({ActionTag.INTERACTION_OBJECT}),
+            planning_preconditions=_predicate("actor.adjacent_to_target", True),
+            guaranteed_effects=() if rolled else (effect,),
+            stochastic_effects=(StochasticEffect(outcome_kind=OutcomeKind.UNKNOWN, effects=(effect,)),) if rolled else (),
+            targeting=TargetingSemantics(allocation=TargetAllocation.OBJECT, minimum_targets=1, maximum_targets=1),
+        )
+    return build
+
+
 def _aggressive_movement_semantics() -> ActionSemantics:
     """Return semantics for bonus-action movement toward a visible hostile."""
     return ActionSemantics(
@@ -1254,7 +1269,12 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
     "dnd.summoning.actions.DismissSummon": _dismiss_summon_semantics,
     "dnd.actions.Hide": _hide_semantics,
     "dnd.actions.SearchForTraps": _search_for_traps_semantics,
+    "dnd.items.searchables.SearchBody": _lock_semantics("interaction.object.search", rolled=True),
     "dnd.items.container_traps.DisarmTrap": _disarm_trap_semantics,
+    "dnd.items.locks.Unlock": _lock_semantics("interaction.object.unlock", rolled=False),
+    "dnd.items.locks.LockShut": _lock_semantics("interaction.object.lock", rolled=False),
+    "dnd.items.locks.PickLock": _lock_semantics("interaction.object.pick_lock", rolled=True),
+    "dnd.items.locks.ForceLock": _lock_semantics("interaction.object.force_lock", rolled=True),
     "dnd.actions.Jump": _jump_semantics,
     "dnd.actions.Move": _move_semantics,
     "dnd.actions.Shove": _shove_semantics,

@@ -29,7 +29,7 @@ export type Kind = "health";
 export type Status = "ok";
 export type Kind1 = "bootstrap";
 export type ProtocolVersion = 1;
-export type PlayerSchemaVersion = 18;
+export type PlayerSchemaVersion = 19;
 export type SchemaDigest = string;
 export type GameId = string;
 export type GameEpoch = string;
@@ -809,7 +809,7 @@ export type BoundaryStructureKind = "cliff" | "embankment" | "retaining_wall" | 
  * Authored materials used by world builders and physical content.
  */
 export type Material =
-  "earth" | "sand" | "stone" | "wood" | "metal" | "fabric" | "glass" | "water" | "ice" | "vegetation";
+  "earth" | "sand" | "stone" | "wood" | "metal" | "fabric" | "glass" | "water" | "ice" | "vegetation" | "bone";
 /**
  * Objective structural channel blocked by one contribution.
  */
@@ -2362,7 +2362,7 @@ export type SpeciesVariant =
   | "species_variant.elf.high"
   | "species_variant.gnome.rock"
   | "species_variant.halfling.lightfoot";
-export type Background = "background.acolyte" | "background.adventurer";
+export type Background = "background.acolyte" | "background.adventurer" | "background.urchin";
 export type BaseAbilityScores = [
   "strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma",
   number

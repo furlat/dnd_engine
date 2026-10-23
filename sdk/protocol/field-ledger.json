@@ -2358,7 +2358,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 140
+        "line": 141
       }
     ],
     "required": true,
@@ -2373,7 +2373,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 141
+        "line": 142
       }
     ],
     "required": true,
@@ -2390,7 +2390,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 142
+        "line": 143
       }
     ],
     "required": true,
@@ -2404,7 +2404,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 143
+        "line": 144
       }
     ],
     "required": true,
@@ -2421,7 +2421,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 144
+        "line": 145
       }
     ],
     "required": false,
@@ -2443,7 +2443,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 145
+        "line": 146
       }
     ],
     "required": false,
@@ -2462,7 +2462,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 120
+        "line": 121
       }
     ],
     "required": false,
@@ -2501,7 +2501,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 121
+        "line": 122
       }
     ],
     "required": false,
@@ -2540,7 +2540,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 122
+        "line": 123
       }
     ],
     "required": false,
@@ -3806,7 +3806,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3086
+        "line": 3087
       }
     ],
     "required": true,
@@ -3822,7 +3822,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3087
+        "line": 3088
       }
     ],
     "required": true,
@@ -3837,7 +3837,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3088
+        "line": 3089
       }
     ],
     "required": true,
@@ -3852,7 +3852,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3089
+        "line": 3090
       }
     ],
     "required": false,
@@ -3868,7 +3868,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3090
+        "line": 3091
       }
     ],
     "required": false,
@@ -3886,7 +3886,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3091
+        "line": 3092
       }
     ],
     "required": false,
@@ -3919,7 +3919,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3092
+        "line": 3093
       }
     ],
     "required": false,
@@ -3943,7 +3943,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3093
+        "line": 3094
       }
     ],
     "required": false,
@@ -3966,7 +3966,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3094
+        "line": 3095
       }
     ],
     "required": false,
@@ -3985,7 +3985,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3095
+        "line": 3096
       }
     ],
     "required": false,
@@ -5509,7 +5509,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 105
+        "line": 106
       }
     ],
     "required": true,
@@ -5524,7 +5524,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 106
+        "line": 107
       }
     ],
     "required": true,
@@ -22431,7 +22431,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2820
+        "line": 2821
       }
     ],
     "required": true,
@@ -22452,7 +22452,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2821
+        "line": 2822
       }
     ],
     "required": true,
@@ -22472,7 +22472,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2822
+        "line": 2823
       }
     ],
     "required": true,
@@ -22506,7 +22506,7 @@
       },
       {
         "file": "dnd/core/base_actions.py",
-        "line": 2823
+        "line": 2824
       }
     ],
     "required": true,
@@ -22536,7 +22536,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 90
+        "line": 91
       }
     ],
     "required": true,
@@ -22551,7 +22551,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 91
+        "line": 92
       }
     ],
     "required": true,
@@ -27214,7 +27214,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 160
+        "line": 161
       }
     ],
     "required": true,
@@ -27229,7 +27229,7 @@
     "owners": [
       {
         "file": "dnd/types/character_progression.py",
-        "line": 161
+        "line": 162
       }
     ],
     "required": true,
@@ -27462,8 +27462,8 @@
     ],
     "required": false,
     "schema": {
-      "const": 18,
-      "default": 18,
+      "const": 19,
+      "default": 19,
       "title": "Player Schema Version",
       "type": "integer",
       "minimum": -9007199254740991,
@@ -28603,7 +28603,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3057
+        "line": 3058
       }
     ],
     "required": true,
@@ -28636,7 +28636,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3058
+        "line": 3059
       }
     ],
     "required": true,
@@ -28651,7 +28651,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3059
+        "line": 3060
       }
     ],
     "required": true,
@@ -28680,7 +28680,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3060
+        "line": 3061
       }
     ],
     "required": true,
@@ -28699,7 +28699,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3061
+        "line": 3062
       }
     ],
     "required": true,
@@ -28717,7 +28717,7 @@
     "owners": [
       {
         "file": "dnd/core/base_actions.py",
-        "line": 3062
+        "line": 3063
       }
     ],
     "required": true,
@@ -35598,7 +35598,7 @@
     "owners": [
       {
         "file": "dnd/types/materials.py",
-        "line": 28
+        "line": 29
       }
     ],
     "required": true,
@@ -35612,7 +35612,7 @@
     "owners": [
       {
         "file": "dnd/types/materials.py",
-        "line": 29
+        "line": 30
       }
     ],
     "required": false,
@@ -36080,7 +36080,7 @@
     "owners": [
       {
         "file": "dnd/types/materials.py",
-        "line": 37
+        "line": 38
       }
     ],
     "required": true,
@@ -36094,7 +36094,7 @@
     "owners": [
       {
         "file": "dnd/types/materials.py",
-        "line": 38
+        "line": 39
       }
     ],
     "required": false,
@@ -36113,7 +36113,7 @@
     "owners": [
       {
         "file": "dnd/types/materials.py",
-        "line": 39
+        "line": 40
       }
     ],
     "required": false,

@@ -330,6 +330,8 @@ BACKGROUND_DEFINITIONS: Mapping[Background, BackgroundDefinition] = MappingProxy
         ),),
     ),
     Background.ADVENTURER: BackgroundDefinition(Background.ADVENTURER),
+    # BG3's Urchin: the skills that open locks and pass unseen (content push plan §4.E).
+    Background.URCHIN: BackgroundDefinition(Background.URCHIN, fixed_skills=("sleight_of_hand", "stealth")),
 })
 
 

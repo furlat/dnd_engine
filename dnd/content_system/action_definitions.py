@@ -26,6 +26,8 @@ import dnd.extensions.aegis_spark as aegis_spark
 import dnd.extensions.field_focus as field_focus
 import dnd.items.consumables as consumables
 import dnd.items.container_traps as container_traps
+import dnd.items.locks as locks
+import dnd.items.searchables as searchables
 import dnd.items.environment as environment
 import dnd.items.environment_interactables as environment_interactables
 import dnd.items.torches as torches
@@ -258,6 +260,11 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _srd(conjuration.EatFromFeast, "action.environment.heroes_feast.eat", "Eat from Feast", "Consume one serving from a Heroes' Feast."),
     _original(jaws.ForceJawOpen, "action.environment.escape_jaw.athletics", "Force jaws open", "Use an action and Athletics to escape one jaw."),
     _original(container_traps.DisarmTrap, "action.environment.trap.disarm", "Disarm Trap", "Use a Trap Disarm Toolkit and Sleight of Hand on a trap you have found."),
+    _original(locks.Unlock, "action.environment.lock.unlock", "Unlock", "Unlock with the right key, or lift a bar from its side."),
+    _original(locks.LockShut, "action.environment.lock.lock", "Lock", "Lock with the right key, or set a bar from its side."),
+    _original(locks.PickLock, "action.environment.lock.pick", "Pick Lock", "Pick a lock with Thieves' Tools and Sleight of Hand."),
+    _original(locks.ForceLock, "action.environment.lock.force", "Force Lock", "Force a lock or bar open with Athletics."),
+    _original(searchables.SearchBody, "action.environment.search", "Search", "Search one desk, cabinet, board or body for anything tucked away."),
     _original(jaws.SlipFreeOfJaw, "action.environment.escape_jaw.acrobatics", "Slip free of jaws", "Use an action and Acrobatics to escape one jaw."),
     _srd(conjuration.EscapeWebAction, "action.spell.web.escape", "Escape Web", "Attempt to escape the restraint imposed by Web."),
     _original(

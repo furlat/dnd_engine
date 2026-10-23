@@ -370,6 +370,14 @@ class BaseCondition(BaseObject):
     def on_owner_opened(self, event: Event) -> None:
         """React after the owning container's committed open; the event's source opened it."""
 
+    def holds_owner_shut(self) -> bool:
+        """Whether this condition (a lock, a bar) keeps its owning door or container from opening."""
+        return False
+
+    def gates_owner_contents(self) -> bool:
+        """Whether this condition keeps its owning container's contents out of reach (unsearched)."""
+        return False
+
     def is_concealed_from(self, observer_uuid: UUID, passive_perception: int) -> bool:
         """Whether this condition's DC still hides it from one observer with this passive Perception."""
         return (self.condition_stealth_dc is not None and observer_uuid not in self.detected_by

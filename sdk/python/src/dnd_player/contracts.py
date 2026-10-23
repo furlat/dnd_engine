@@ -176,7 +176,9 @@ class AvailableWorldInteraction(TypedDict):
     reason: NotRequired[str | None]
 
 
-type Background = Literal['background.acolyte', 'background.adventurer']
+type Background = Literal[
+    'background.acolyte', 'background.adventurer', 'background.urchin'
+]
 
 
 class BaseCost(TypedDict):
@@ -1161,6 +1163,7 @@ type Material = Literal[
     'water',
     'ice',
     'vegetation',
+    'bone',
 ]
 
 
@@ -1446,7 +1449,7 @@ class PreviewRequest(TypedDict):
 
 class ProtocolIdentity(TypedDict):
     protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[18]]
+    player_schema_version: NotRequired[Literal[19]]
     schema_digest: str
 
 

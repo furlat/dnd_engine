@@ -434,6 +434,7 @@ def test_cold_variant_and_background_tables_are_exact() -> None:
             (("background.acolyte.languages", 2, ALL_LANGUAGES),),
         ),
         Background.ADVENTURER: ((), (), (), ()),
+        Background.URCHIN: (("sleight_of_hand", "stealth"), (), (), ()),
     }
 
 

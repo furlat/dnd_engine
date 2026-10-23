@@ -1,6 +1,7 @@
 """Selected furniture profiles composed from ordinary item and terrain owners."""
 
 from dataclasses import dataclass
+from typing import Literal
 from types import MappingProxyType
 from uuid import UUID, uuid4
 
@@ -13,6 +14,8 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import Event
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemDestructionProfile, ItemIntegrity
+from dnd.items.environment_interactables import LootAllAction, StorageChest
+from dnd.items.searchables import install_search_gate
 from dnd.items.visual_variants import ItemVisualVariantParameters
 from dnd.spells.evocation import ContinualFlameCondition
 from dnd.spatial.area_conditions import AreaCondition
@@ -810,7 +813,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         name="Cabinet", description="A closed wooden cabinet with shelves.",
         destroyed_name="Broken cabinet", destroyed_description="Split shelves; difficult terrain.",
         footprint_offsets=((0, 0),), difficult_debris=True, vertical_extent_steps=2,
-        visual_variants=("white_bath",),
+        visual_variants=("white_mermaid", "white_bath"),
     ),
     "environment.furniture.hat_rack": WorldPropProfile(
         name="Hat rack", description="An ornate standing hat rack.",
@@ -937,6 +940,12 @@ WORLD_PROP_PROFILES = MappingProxyType({
         name="Mounted eagle", description="A stuffed eagle on a wooden perch shaped like a tree limb.",
         destroyed_name="Broken perch", destroyed_description="Snapped perch and feathers; passable.",
         footprint_offsets=((0, 0),), hit_points=5,
+    ),
+    "environment.furniture.dragon_skeleton": WorldPropProfile(
+        name="Dragon skeleton", description="An eighteen-foot dragon skeleton hung on wires from the ceiling.",
+        destroyed_name="Fallen dragon bones", destroyed_description="Scattered bones; difficult terrain.",
+        footprint_offsets=((0, 0), (1, 0), (2, 0), (3, 0), (0, 1), (1, 1), (2, 1), (3, 1)),
+        material=Material.BONE, hit_points=27, difficult_debris=True, blocks_movement=False, occupies_bands=False,
     ),
     "environment.furniture.bronze_chandelier": WorldPropProfile(
         name="Bronze chandelier", description="A large unlit bronze chandelier hanging from the ceiling.",
@@ -1110,6 +1119,48 @@ def settle_world_prop(item: BaseItem, parent_event: Event | None = None) -> None
         condition.on_owner_placement_committed(result)
 
 
+def _checked_variant(item_id: str, profile: WorldPropProfile,
+                     variant: ItemVisualVariantParameters | None) -> ItemVisualVariantParameters:
+    variant = variant or ItemVisualVariantParameters()
+    if variant.visual_variant_id is not None and variant.visual_variant_id not in profile.visual_variants:
+        raise ValueError(f"{item_id} has no visual variant {variant.visual_variant_id!r}")
+    return variant
+
+
+def build_searchable_prop(item_id: str, *, dc: int = 13,
+                          skill: Literal["perception", "investigation"] = "perception",
+                          source_entity_uuid: UUID | None = None,
+                          variant: ItemVisualVariantParameters | None = None) -> StorageChest:
+    """One profiled body (a desk, a false-backed wardrobe, loose boards) holding contents a Search frees.
+
+    It keeps the prop's name, footprint, blocking, material and debris, plus a lid; the caller
+    puts the contents in its inventory. Its art is the prop's.
+    """
+    profile = WORLD_PROP_PROFILES[item_id]
+    variant = _checked_variant(item_id, profile, variant)
+    placement = WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=profile.occupies_bands,
+        vertical_extent_steps=profile.vertical_extent_steps, footprint_offsets=profile.footprint_offsets)
+    aftermath = WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=False,
+        vertical_extent_steps=1, footprint_offsets=profile.footprint_offsets)
+    body = StorageChest(source_entity_uuid=source_entity_uuid or uuid4(), item_id=item_id,
+        name=variant.display_name or profile.name, description=profile.description,
+        visual_item_name=profile.name, visual_variant_id=variant.visual_variant_id,
+        tags=["furniture", "container", profile.material.value], is_targetable=True,
+        blocks_movement=profile.blocks_movement, blocks_optics_field=profile.blocks_optics,
+        blocks_propagation_field=profile.blocks_propagation,
+        armor_class=(profile.armor_class if profile.armor_class is not None
+                     else OBJECT_ARMOR_CLASS_BY_MATERIAL[profile.material]),
+        world_placement_spec=placement, use_action_templates=[],
+        destruction_profile=ItemDestructionProfile(name=profile.destroyed_name,
+            description=profile.destroyed_description, placement_spec=aftermath))
+    body.use_action_templates.append(LootAllAction(source_entity_uuid=body.uuid, source_item_uuid=body.uuid,
+        template=True, semantic_key="action.environment.storage_chest.loot_all"))
+    body.health = body.create_item_health(body.uuid, profile.hit_points)
+    install_search_gate(body, dc=dc, skill=skill)
+    settle_world_prop(body)
+    return body
+
+
 def build_world_prop(
     item_id: str, *, source_entity_uuid: UUID | None = None,
     hit_points: int | None = None, integrity: ItemIntegrity = ItemIntegrity.INTACT,
@@ -1120,9 +1171,7 @@ def build_world_prop(
     hp = profile.hit_points if hit_points is None else hit_points
     if hp < 1:
         raise ValueError("Furniture hit points must be positive")
-    variant = variant or ItemVisualVariantParameters()
-    if variant.visual_variant_id is not None and variant.visual_variant_id not in profile.visual_variants:
-        raise ValueError(f"{item_id} has no visual variant {variant.visual_variant_id!r}")
+    variant = _checked_variant(item_id, profile, variant)
     source = source_entity_uuid or uuid4()
     placement = WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=profile.occupies_bands,
         vertical_extent_steps=profile.vertical_extent_steps, footprint_offsets=profile.footprint_offsets)

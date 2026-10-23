@@ -4029,7 +4029,8 @@
       "Background": {
         "enum": [
           "background.acolyte",
-          "background.adventurer"
+          "background.adventurer",
+          "background.urchin"
         ],
         "title": "Background",
         "type": "string"
@@ -12813,7 +12814,8 @@
           "glass",
           "water",
           "ice",
-          "vegetation"
+          "vegetation",
+          "bone"
         ],
         "title": "Material",
         "type": "string"
@@ -17476,8 +17478,8 @@
             "maximum": 9007199254740991
           },
           "player_schema_version": {
-            "const": 18,
-            "default": 18,
+            "const": 19,
+            "default": 19,
             "title": "Player Schema Version",
             "type": "integer",
             "minimum": -9007199254740991,

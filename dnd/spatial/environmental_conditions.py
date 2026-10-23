@@ -1448,8 +1448,8 @@ class GrayMold(AreaCondition):
             event_processor=leave)
 
 
-def install_authored_area_condition(condition: AreaCondition, *, parent_event: Optional[Event] = None) -> None:
-    """Activate one authored environmental area, under its own root cause when none is given."""
+def install_authored_area_condition(condition: SpatialCondition, *, parent_event: Optional[Event] = None) -> None:
+    """Activate one authored environmental condition, under its own root cause when none is given."""
     cause = parent_event
     if cause is None:
         cause = EventQueue.publish_declaration(Event(name=f"Install {condition.name}",

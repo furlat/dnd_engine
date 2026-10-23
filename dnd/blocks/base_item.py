@@ -557,6 +557,10 @@ class BaseItem(BaseBlock):
         """Return whether this item currently presents an exposed flame."""
         return False
 
+    def is_held_shut(self) -> bool:
+        """Whether a condition on this item, such as a lock or a bar, keeps it from opening."""
+        return any(condition.holds_owner_shut() for condition in self.active_conditions.values())
+
     def douse_exposed_flame(self, parent_event: Optional[UUID] = None) -> bool:
         """Douse this item's exposed flame, if any.
 

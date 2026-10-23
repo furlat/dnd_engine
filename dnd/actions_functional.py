@@ -30,6 +30,8 @@ from dnd.core.content.runtime import BehaviorBinding
 from dnd.entity import Entity
 from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, AllyHelp, HelpAttack, Hide, SearchForTraps, Attack, Jump, Shove, PickUp, Drop, SpellAction, TraverseConnector
 from dnd.items.container_traps import DisarmTrap
+from dnd.items.locks import ForceLock, LockShut, PickLock, Unlock
+from dnd.items.searchables import SearchBody
 from dnd.summoning.actions import DismissSummon
 from dnd.conditions import (
     create_has_attacked_handler,
@@ -105,7 +107,12 @@ def setup_standard_actions(entity: Entity) -> None:
         ),
         (Hide(source_entity_uuid=entity.uuid, template=True), "action.hide"),
         (SearchForTraps(source_entity_uuid=entity.uuid, template=True), "action.search_for_traps"),
+        (SearchBody(source_entity_uuid=entity.uuid, template=True), "action.environment.search"),
         (DisarmTrap(source_entity_uuid=entity.uuid, template=True), "action.environment.trap.disarm"),
+        (Unlock(source_entity_uuid=entity.uuid, template=True), "action.environment.lock.unlock"),
+        (LockShut(source_entity_uuid=entity.uuid, template=True), "action.environment.lock.lock"),
+        (PickLock(source_entity_uuid=entity.uuid, template=True), "action.environment.lock.pick"),
+        (ForceLock(source_entity_uuid=entity.uuid, template=True), "action.environment.lock.force"),
         (
             DropConcentration(source_entity_uuid=entity.uuid, template=True),
             "action.drop_concentration",

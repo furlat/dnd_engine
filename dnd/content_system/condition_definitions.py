@@ -19,6 +19,7 @@ import dnd.classes.fighter as fighter
 import dnd.classes.divine as divine
 import dnd.classes.divine_intervention as intervention
 import dnd.items.container_traps as container_traps
+import dnd.items.locks as locks
 import dnd.items.divine_rewards as divine_rewards
 import dnd.classes.paladin as paladin
 import dnd.classes.wizard as wizard
@@ -374,6 +375,7 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _original(jaws.JawRestrained, ContentDefinitionKind.CONDITION, "condition.environment.jaw_restrained"),
     _original(container_traps.NeedleParalysis, ContentDefinitionKind.CONDITION, "condition.environment.needle_paralysis"),
     _original(conditions.Coughing, ContentDefinitionKind.CONDITION, "condition.environment.coughing"),
+    _original(locks.Lock, ContentDefinitionKind.CONDITION, "condition.environment.lock"),
     _srd(conjuration.WebRestrained, ContentDefinitionKind.CONDITION, "condition.spell.web.restrained"),
     _srd(conjuration.WebZone, ContentDefinitionKind.CONDITION, "condition.spell.web.zone"),
     _srd(divination.GuidanceEffect, ContentDefinitionKind.CONDITION, "condition.spell.guidance"),

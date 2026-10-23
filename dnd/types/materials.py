@@ -18,6 +18,7 @@ class Material(StrEnum):
     WATER = "water"
     ICE = "ice"
     VEGETATION = "vegetation"
+    BONE = "bone"
 
 
 class SurfaceLayer(BaseModel):

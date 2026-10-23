@@ -14,6 +14,7 @@ OBJECT_ARMOR_CLASS_BY_MATERIAL = MappingProxyType({
     Material.GLASS: 13,
     Material.ICE: 13,
     Material.WOOD: 15,
+    Material.BONE: 15,
     Material.STONE: 17,
     Material.METAL: 19,
 })

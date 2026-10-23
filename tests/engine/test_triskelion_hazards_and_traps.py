@@ -94,9 +94,9 @@ def test_an_electric_plate_shocks_on_a_failed_save_with_metal_armor_and_boots_co
 
 
 def test_gray_mold_spores_ask_one_save_per_stay_and_leave_the_failed_coughing(arena):
-    materialize_gray_mold({(3, 2), (4, 2), (5, 2)})
-    bystander = creature("Bystander", (5, 2), constitution=1)
+    bystander = creature("Bystander", (5, 2), constitution=1)  # already in the room: installing asks no save
     frail = creature("Frail", (2, 2), constitution=1)
+    materialize_gray_mold({(3, 2), (4, 2), (5, 2)})
     walk(frail, (3, 2), faces=(4,) * 4)  # everyone present saves: 4 - 5 fails twice; each d6 shows 4
     assert "Coughing" in frail.active_conditions and "Coughing" in bystander.active_conditions
     assert frail.active_conditions["Coughing"].duration.duration == 4
@@ -213,8 +213,20 @@ def test_a_failed_disarm_uses_up_one_kit_and_springs_the_needle_on_the_disarmer(
 
 def test_breaking_a_trapped_container_disarms_it(arena):
     footlocker = trapped_footlocker((3, 2))
+    assert get_map().get_spatial_conditions_at((3, 2))
     footlocker.receive_damage(footlocker.get_hp(), DamageType.BLUDGEONING, footlocker.uuid)
-    assert not any(condition.name == "Poison needle" for condition in footlocker.active_conditions.values())
+    assert not get_map().get_spatial_conditions_at((3, 2))
+
+
+def test_only_those_who_perceive_a_needle_see_it_on_its_container(arena):
+    footlocker = trapped_footlocker((3, 2))
+    sharp = creature("Sharp", (2, 2), wisdom=20)  # passive Perception 15 beats DC 13
+    dull = creature("Dull", (2, 3), wisdom=8)
+    sharp.update_entity_senses()
+    dull.update_entity_senses()
+    seen = [effect for effect in sharp.senses.spatial_effects.values() if effect.anchor_item_uuid == footlocker.uuid]
+    assert [effect.name for effect in seen] == ["Poison needle"]
+    assert not any(effect.anchor_item_uuid == footlocker.uuid for effect in dull.senses.spatial_effects.values())
 
 
 def test_search_reveals_a_hidden_floor_trap_to_the_searcher_alone(arena):

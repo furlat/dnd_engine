@@ -159,13 +159,11 @@ rearms.
 - Conditions gained a `detected_by` set, honoured by the one concealment rule
   (`is_concealed_from`).
 - Search for Traps and Disarm Trap are standard actions.
-  - Search makes one Perception roll with no DC in the event. It covers seen cells within
-    10 ft and the objects the searcher senses.
-  - Finds are logged to the finder only, on the existing passive-detection row; its
-    Perception field still holds the passive score.
+  - Search makes one Perception roll with no DC in the event, over seen cells within 10 ft.
+  - Step 3 removed the find log (see §4.E).
 - The AI policies don't value Search yet; when an AI searches is exploration-mode work (§6).
 - Not yet built:
-  - "Hidden mechanism by Investigation" waits for the false backs (§4.F).
+  - The hidden mechanism found by Investigation is the false back's searchable body (§4.F).
   - **The R49 darts wait for the human.** A trap attack roll needs a new attack source kind
     in the player facts and an attacker that isn't a creature. The alternative is Dexterity
     saves through the existing `TrapSave`/`TrapPayload` data.
@@ -206,6 +204,34 @@ where it fits, not all of it.
   others, and DCs hidden. The same bump adds a bone material (the R35 dragon skeleton waits
   for it). One schema bump; both SDKs regenerated.
 
+**Step 3 as built (23 October):**
+- **Locks.** A `Lock` item condition holds passive data: locked, a pick DC (none for a bar),
+  a force DC, the exact key item, and for a bar the side of the door's boundary it is
+  worked from.
+  - While locked it publishes one "Locked" or "Barred" row in the existing object
+    `item_effects`, with no DC and no key.
+  - Open actions and the door and chest open paths refuse while `is_held_shut`.
+  - Unlock and Lock (key or bar side, no roll), Pick Lock (Sleight of Hand with Thieves'
+    Tools, a failure breaks one set) and Force Lock (Athletics, breaks the lock for good) are
+    standard object actions.
+  - A key opens a trapped chest but the needle still springs; a key-safe trap ("unless an
+    object is authored otherwise") is not built.
+  - A bar sits on one side of a door's boundary (the owner tile or the tile across) and is
+    worked only from there. Forcing a lock bursts its door or chest open.
+- **Trap detected.** The container needle is now a spatial condition anchored to its chest,
+  like trap hardware. Each observer who perceives it gets it through the existing per-observer
+  spatial-effect facts.
+- **Schema.** So the bump (player schema 19) only extends two enums: `bone` (the dragon
+  skeleton is back, made of bone) and `background.urchin` (fixed skills Sleight of Hand and
+  Stealth).
+- **Not built:** Knock (optional).
+- **Search for Traps** keeps its name and its one Perception roll, over seen cells within 10 ft.
+  It writes no log row: what it finds reaches the finder through their own spatial-effect
+  facts, so no DC is shown.
+- Measured under load: the action listing rose from 5.34 to 5.85 ms with all seven new
+  standard actions and seven lockable, trapped or searchable objects in reach. A move far from
+  the hazards was unchanged.
+
 ### F. Check-gated storage (decided)
 
 A Search use-action on desks, remains, racks, floorboards and caches. It's a skill check
@@ -213,6 +239,16 @@ A Search use-action on desks, remains, racks, floorboards and caches. It's a ski
 lootable, on failure nothing moves. Searchable furniture keeps its own footprint; it does
 not become a chest-shaped obstacle. Nested canisters and under-bed boxes keep separate
 inventories.
+
+**Step 3 as built (23 October), following the decision in §2:**
+- `build_searchable_prop` makes a profiled body (a desk, a false-backed wardrobe, loose boards)
+  into a container that keeps the prop's name, footprint, blocking, material and debris.
+- Its `SearchGate` keeps the contents out of reach (no loot rows) until a **Search** of that
+  body beats its DC in its own skill: Perception, or Investigation for a false back.
+- The body stays in plain view and senses are unaffected.
+- Every searchable body carries a gate, so the Search action tells nothing about what is
+  inside.
+- A success frees the contents for everyone.
 
 ### G. Haunted (R65 fungus; decided)
 
@@ -264,7 +300,7 @@ That's a separate task with its own plan. Until then, §4.I.
 | --- | --- | --- |
 | 1 (done) | A (B is out) | Placement, loot conservation, destruction, client-visible facts. Paired timing: dense test room vs empty, under load. |
 | 2 (done but darts) | C and D | Correct recipients only; saves, durations and cures; one activation; no cost for distant actors (paired timing). |
-| 3 | E (after the BG3 handout) and F | Locked/unlocked/forced/picked transitions; wrong key or canceled action preserves state; secrecy of key identity; SDK reduction of the new field. |
+| 3 (done; SDK reduction unverified) | E (after the BG3 handout) and F | Locked/unlocked/forced/picked transitions; wrong key or canceled action preserves state; secrecy of key identity; SDK reduction of the new field. |
 | 4 | G and H | Haunted fires every N rounds only for its owner; cures; shove steps can't pass walls or overlap; failed steps keep state. |
 | later (separate pass) | Room composition and floor assembly, with I | Not in this push. Placements, per-room counts, reachability, real HTTP commands, authoring export. |
 

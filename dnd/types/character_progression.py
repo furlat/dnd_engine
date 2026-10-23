@@ -28,6 +28,7 @@ class SpeciesVariant(StrEnum):
 class Background(StrEnum):
     ACOLYTE = "background.acolyte"
     ADVENTURER = "background.adventurer"
+    URCHIN = "background.urchin"
 
 
 class CharacterClass(StrEnum):

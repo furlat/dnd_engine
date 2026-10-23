@@ -64,6 +64,8 @@ class OpenDoorAction(BaseAction):
             return "Door not found"
         if door.is_open:
             return "Door already open"
+        if door.is_held_shut():
+            return "Locked"
         return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
@@ -410,6 +412,8 @@ class OpenChestAction(BaseAction):
         chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
         if not isinstance(chest, StorageChest) or not chest.is_active or chest.is_open:
             return "Chest cannot open"
+        if chest.is_held_shut():
+            return "Locked"
         return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
@@ -573,13 +577,15 @@ class StorageChest(UsableItem):
         return self.is_open
 
     def set_open(self, is_open: bool, *, parent_event: Event) -> None:
-        if not self.is_active or self.is_open == is_open:
+        if not self.is_active or self.is_open == is_open or (is_open and self.is_held_shut()):
             return
         self.is_open = is_open
         self.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
         if is_open:
-            for condition in tuple(self.active_conditions.values()):
-                condition.on_owner_opened(parent_event)
+            position = get_map().get_object_position(self.uuid)
+            for condition in (get_map().get_spatial_conditions_at(position) if position else ()):
+                if condition.anchor_uuid == self.uuid:
+                    condition.on_owner_opened(parent_event)
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         if not self.is_active:
@@ -597,7 +603,7 @@ class StorageChest(UsableItem):
                 source_item_uuid=self.uuid,
                 template=True,
             ))]
-            if self.is_open and self.chest_inventory.items:
+            if self.is_open and self.chest_inventory.items and not self.contents_gated():
                 actions.extend(super().get_use_actions(user_entity_uuid))
         if self.has_accessible_contents() and self.contents_visible_to(user_entity_uuid):
             actions.extend(self.bind_dynamic_use_action(LootItemAction(
@@ -612,7 +618,11 @@ class StorageChest(UsableItem):
         return contact is not None and contact.visual
 
     def has_accessible_contents(self) -> bool:
-        return bool(self.chest_inventory.items) and (not self.is_active or self.is_open)
+        return bool(self.chest_inventory.items) and (not self.is_active or self.is_open) and not self.contents_gated()
+
+    def contents_gated(self) -> bool:
+        """Whether a condition, such as an unsearched hiding place, keeps the contents out of reach."""
+        return self.is_active and any(condition.gates_owner_contents() for condition in self.active_conditions.values())
 
     def should_include_in_available_object_actions(self) -> bool:
         return super().should_include_in_available_object_actions() or self.has_accessible_contents()

@@ -271,7 +271,7 @@ Light only where the book says it's lit.
 | Stuffed giant skunk | R66 | 1×1 | intact, destroyed | yes | new |
 | Stuffed eagle on a branch perch | R66 (3) | 1×1 | intact, destroyed | yes | new |
 | Small taxidermy cluster (waterfowl, weasels, cats, foxes, rabbits), many missing limbs | R66 (several) | 1×1 | intact, destroyed | yes | new |
-| Dragon skeleton, 18 ft, hung on wire from the ceiling (inert, nonblocking) | R35 | ~4×2, raised | — | yes | new; its engine body waits for a bone material in the client contract (plan §4.E schema bump) |
+| Dragon skeleton, 18 ft, hung on wire from the ceiling (inert, nonblocking) | R35 | ~4×2, raised | — | yes | new (`dragon_skeleton`, bone) |
 
 ## 9. Remains, corpses, floor dressing (not breakable; searchable remains)
 
@@ -515,7 +515,7 @@ changes only the look; a different footprint, material or behaviour is a differe
   `massive_chair`, `restraint_chair`, `padded_chair`, `couch` (black_white_striped, dark_green,
   pink_light_blue_striped, red_gray, lounge), `cot`, `four_poster_bed` (red_neat,
   stained_ripped, large_comfortable), `dresser`, `mirrored_dresser` (mirror_smashed), `armoire`,
-  `cabinet` (white_bath), `hat_rack`, `surplus_furniture`, `unfinished_coffin`, `dog_hutch`.
+  `cabinet` (white_mermaid, white_bath), `hat_rack`, `surplus_furniture`, `unfinished_coffin`, `dog_hutch`.
   A broken chair or a wrecked bed is the ordinary body placed already destroyed.
 - **Fixtures:** `bucket`, `teapot`, `metal_vat`, `hand_pump`, `wall_pump`, `pump_faucet`
   (blue_cold, red_hot), `privy_seat`, `porcelain_toilet`, `brass_bathtub` (huge),
@@ -538,7 +538,11 @@ changes only the look; a different footprint, material or behaviour is a differe
   `coffin` (1×2), `barrel` (also the casks and the X barrel). The small wooden chest reuses
   `environment.storage_chest`.
 
-Not given bodies in step 1: remains, nests, garbage and other §9 dressing (searchable remains
-come with check-gated storage, §4.F); the wardrobe and mermaid cabinet with false backs (§4.F);
-the dragon skeleton (bone material); creatures and what they carry.
+Any of these bodies can also be built **searchable** (step 3, `build_searchable_prop`). It is
+then the same body and art, with a lid and contents a Search frees. The R52 wardrobe and the R62
+mermaid cabinet are searchable `wardrobe` and `cabinet` (white_mermaid) with an Investigation
+search for the false back.
+
+Not given bodies yet: remains, nests, garbage and other §9 dressing; creatures and what they
+carry. The dragon skeleton came in step 3 as `dragon_skeleton`, made of bone.
 

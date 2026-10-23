@@ -152,6 +152,8 @@ class OpenDirectionalDoorAction(BaseAction):
             return "Door not found"
         if door.is_open:
             return "Door already open"
+        if door.is_held_shut():
+            return "Locked"
         return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
@@ -394,6 +396,8 @@ class DirectionalDoor(UsableItem):
         self._clear_pending_close()
         if self.is_open == value:
             return True
+        if value and self.is_held_shut():
+            return False
         position = get_map().get_object_position(self.uuid)
         if not value and self._doorway_occupied():
             if defer_close and position is not None:
