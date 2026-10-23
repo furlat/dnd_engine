@@ -373,6 +373,10 @@ into the destroyed state, splinters, glass or stone by material, and contents sp
 containers. That isn't repeated per row below. "Loop" means an idle animation while in the
 state.
 
+**Status after the engine pass (23 October):** sections and rows marked **later** have no game
+action yet. Don't animate them until the plan builds them (plan §9). The idle loops and break
+transitions still apply.
+
 ### 12.1 Doors and openings
 
 | Asset | Interaction | From → to | What visibly happens |
@@ -412,7 +416,10 @@ state.
 | Inspector desk R11 | Search under the desk | hidden → revealed | Lump of red wax with coins pried off the underside |
 | Card-table pile R45 | Search | — | Tables shift (spider lair; creature deferred) |
 
-### 12.4 Things that can be taken off walls, racks and stands
+### 12.4 Things that can be taken off walls, racks and stands: **later**
+
+No take or put-back action exists yet. Racks, shields, stands, tapestries and rods are plain
+bodies, and a rack has no full or empty state.
 
 | Asset | Interaction | From → to | What visibly happens |
 | --- | --- | --- | --- |
@@ -425,7 +432,9 @@ state.
 | Continual-light rods | Take a rod | in socket (lit) → empty recess | Rod pulled from its socket; the light goes with the rod |
 | Wall torch | Take from cresset / place | in cresset ↔ empty cresset | Torch lifted; cresset empty |
 
-### 12.5 Curtains, coverings and reveals
+### 12.5 Curtains, coverings and reveals: **later**
+
+No pull-aside action exists yet; curtains are plain bodies.
 
 | Asset | Interaction | From → to | What visibly happens |
 | --- | --- | --- | --- |
@@ -436,16 +445,16 @@ state.
 
 | Asset | Interaction | From → to | What visibly happens |
 | --- | --- | --- | --- |
-| Couches, chairs, tables, chests, barrels (anything shoveable) | Shove one cell | cell A → adjacent cell B | Object slides/drags one cell with a scrape; heavy pieces tilt and scrape slowly. A blocked shove shows a short push that doesn't move |
+| Couches, chairs, tables, beds and other furniture authored shoveable; **not** chests, barrels or fixtures built in place (fireplace, pumps, fountain, statue, shrine, privy, toilet, bathtub, bar) | Shove one cell | cell A → adjacent cell B | Object slides/drags one cell with a scrape; heavy pieces tilt and scrape slowly. A blocked shove shows a short push that doesn't move |
 | Barricade R63 (2 couches, 3 chairs) | Shove pieces away | barricaded → clear | Same as above, piece by piece |
 
 ### 12.7 Water and plumbing
 
 | Asset | Interaction | From → to | What visibly happens |
 | --- | --- | --- | --- |
-| Hand pump R28 | Pump / fill a container | idle → pumping → idle | Handle cycles; clean water gushes from the spout |
+| Hand pump R28 | Pump / fill a container (**later**: no action yet) | idle → pumping → idle | Handle cycles; clean water gushes from the spout |
 | Broken wall pumps R5, dripping taps R62 | — | dripping (loop) | Drip loop; puddle decal below |
-| Dry faucets R27, R65 | Turn | — | Handle turns, nothing comes out |
+| Dry faucets R27, R65 | Turn (**later**: no action yet) | — | Handle turns, nothing comes out |
 | Fountain R24 | — | trickle (loop) | Thin foul green trickle from the vase |
 | River R68 | — | flowing (loop) | Rushing current, north to south |
 
@@ -473,14 +482,15 @@ state.
 - **Pick lock:** kneel with tools, small hand motions; success ending and a failure ending where the tools snap.
 - **Disarm a trap:** careful two-hand work at the mechanism; success ending, and a failure ending that flinches as the trap fires.
 - **Lift or place a bar.**
-- **Pry up a floorboard.**
-- **Twist a hidden mechanism** (hook, jug).
-- **Take an item off a wall or rack, or put one back.**
+- **Pry up a floorboard** and **twist a hidden mechanism** (hook, jug): optional variants of
+  Search. A false back or a loose board is found by the one targeted Search action.
+- **Take an item off a wall or rack, or put one back:** **later**.
 - **Shove a heavy object:** lean and push, with a blocked-push variant.
-- **Pump water and fill a container.**
-- **Pull a curtain aside.**
+- **Pump water and fill a container:** **later**.
+- **Pull a curtain aside:** **later**.
 - **Coughing fit:** loop while Coughing (R26 mould condition).
-- **Startled / frightened reaction:** for Haunted "sounds", turning toward a random direction.
+- **Haunted reactions:** a startled flinch, and a step toward a sound from a random direction.
+  There is no frightened reaction: the engine's Haunted has no fear effect (plan §4.G).
 
 ## 13. Not made in this pass
 

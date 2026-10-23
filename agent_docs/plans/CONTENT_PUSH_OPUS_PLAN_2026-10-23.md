@@ -358,3 +358,6 @@ For each implementation step:
   whether Frightened should be one of the effects.
 - The R49 darts: trap attack rolls (a new attack source in the contract) or Dexterity saves.
 - Coughing's effect: disadvantage on Stealth only (§4.C).
+- Whether to build the handoff's "later" interactions: taking things off walls, racks and
+  stands (with rack full/empty states), pulling curtains aside (the R49 manikin reveal), and
+  pumping water. They have no game action today; handoff §12.4, §12.5 and §12.7 mark them.
