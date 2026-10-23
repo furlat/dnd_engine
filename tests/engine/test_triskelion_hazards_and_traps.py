@@ -57,7 +57,7 @@ def row(entity: Entity, name: str) -> AvailableActionInfo | None:
     entity.action_economy.reset_all_costs()
     entity.update_entity_senses()
     return next((info for info in entity.get_available_actions().all_actions
-                 if info.template_name == name or info.template_name.startswith(f"{name}__item_")), None)
+                 if info.template_name.split("__")[0] == name), None)
 
 
 def act(entity: Entity, name: str, *, target: BaseItem | None = None, faces: tuple[int, ...] = ()) -> None:

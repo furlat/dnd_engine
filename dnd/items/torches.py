@@ -525,9 +525,42 @@ class ExtinguishWallTorchAction(BaseAction):
         )
 
 
+class TakeWallTorchAction(BaseAction):
+    """Lift a removable torch out of its holder: it becomes a carried torch, still burning if it was."""
+    creates = (Torch,)
+
+    name: str = Field(default="Take Torch", description="Action name for taking a torch from its holder.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Wall torch actions target the user.")
+    costs: List[Cost] = Field(default_factory=empty_list, description="Taking a torch costs nothing.")
+    source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the wall torch being taken.")
+
+    def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
+        torch = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
+        if not isinstance(torch, WallTorch) or not torch.is_active or not torch.removable:
+            return "Cannot take"
+        return None
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        entity = Entity.get(self.source_entity_uuid)
+        fixture = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
+        if not isinstance(entity, Entity) or not isinstance(fixture, WallTorch) or not fixture.removable:
+            return execution_event.cancel(status_message="Wall torch not found")
+        effect = execution_event.phase_to(EventPhase.EFFECT)
+        burning = fixture.is_lit
+        carried = build_torch(entity.uuid)
+        if not entity.loot_item(carried, parent_event=effect):
+            carried.remove_from_register()
+            return effect.cancel(status_message="No room to carry the torch")
+        fixture.put_out(parent_event=effect.uuid)
+        fixture.retire(parent_event=effect)
+        if burning:
+            carried.ignite(entity.uuid, parent_event=effect.uuid)
+        return effect.with_updates(status_message=f"{entity.name} takes the torch")
+
+
 class WallTorch(UsableItem):
-    """A fixed wall-mounted torch."""
-    creates = (IgniteWallTorchAction, ExtinguishWallTorchAction)
+    """A fixed wall-mounted torch; an authored removable one can be taken as a carried torch."""
+    creates = (IgniteWallTorchAction, ExtinguishWallTorchAction, TakeWallTorchAction, Torch)
 
     name: str = Field(
         default="Wall Torch",
@@ -562,6 +595,7 @@ class WallTorch(UsableItem):
         default=False,
         description="Whether the wall torch currently has a light source.",
     )
+    removable: bool = Field(default=False, description="Whether a creature can lift it out as a carried torch.")
     _light_source_uuid: Optional[UUID] = None
 
     def to_item_presentation_state(
@@ -583,25 +617,13 @@ class WallTorch(UsableItem):
         """Return the light or extinguish action according to lit state."""
         if not self.is_active:
             return []
-        if not self.is_lit:
-            return [
-                self.bind_dynamic_use_action(
-                    IgniteWallTorchAction(
-                        source_entity_uuid=user_entity_uuid,
-                        source_item_uuid=self.uuid,
-                        use_register=False,
-                    ),
-                )
-            ]
-        return [
-            self.bind_dynamic_use_action(
-                ExtinguishWallTorchAction(
-                    source_entity_uuid=user_entity_uuid,
-                    source_item_uuid=self.uuid,
-                    use_register=False,
-                ),
-            )
-        ]
+        light_action = IgniteWallTorchAction if not self.is_lit else ExtinguishWallTorchAction
+        actions = [self.bind_dynamic_use_action(light_action(
+            source_entity_uuid=user_entity_uuid, source_item_uuid=self.uuid, use_register=False))]
+        if self.removable:
+            actions.append(self.bind_dynamic_use_action(TakeWallTorchAction(
+                source_entity_uuid=user_entity_uuid, source_item_uuid=self.uuid, use_register=False)))
+        return actions
 
     def light(
         self,
@@ -709,6 +731,7 @@ class StandingTorch(WallTorch):
 
 
 __all__ = [
+    "TakeWallTorchAction",
     "ExtinguishTorchAction",
     "ExtinguishWallTorchAction",
     "IgniteTorchAction",

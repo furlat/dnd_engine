@@ -378,15 +378,6 @@ class BaseCondition(BaseObject):
         """Whether this condition keeps its owning container's contents out of reach (unsearched)."""
         return False
 
-    def is_concealed_from(self, observer_uuid: UUID, passive_perception: int) -> bool:
-        """Whether this condition's DC still hides it from one observer with this passive Perception."""
-        return (self.condition_stealth_dc is not None and observer_uuid not in self.detected_by
-                and self.condition_stealth_dc >= passive_perception)
-
-    def mark_detected_by(self, observer_uuid: UUID) -> None:
-        """Record that a rolled search found this concealed condition for one observer."""
-        self.detected_by.add(observer_uuid)
-
     def snapshot_concentration_slots(self) -> tuple[ItemConcentrationSlot, ...]:
         """Return public capacity use for a condition that sustains spells."""
         return ()
@@ -662,10 +653,6 @@ class BaseCondition(BaseObject):
     condition_stealth_dc: Optional[int] = Field(
         default=None,
         description="Perception DC to detect this condition on a tile. None = always visible."
-    )
-    detected_by: Set[UUID] = Field(
-        default_factory=empty_set,
-        description="Observers whose rolled search found this concealed condition despite its DC.",
     )
     tags: Set[ConditionTag] = Field(
         default_factory=empty_set,

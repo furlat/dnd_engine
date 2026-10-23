@@ -38,6 +38,7 @@ from dnd.content.items.authored_item_definitions import (
 )
 from dnd.items.container_traps import TRAP_DISARM_TOOLKIT_ID, build_trap_disarm_toolkit
 from dnd.items.locks import KEY_ID, THIEVES_TOOLS_ID, build_key, build_thieves_tools
+from dnd.items.water_fixtures import EMPTY_WATERSKIN_ID, FULL_WATERSKIN_ID, build_waterskin
 from dnd.content.items.environment_item_builders import (
     CONTAINER_PROFILES,
     LIQUID_BARREL_PROFILES,
@@ -47,11 +48,13 @@ from dnd.content.items.environment_item_builders import (
     build_arcane_machine_gun,
     build_campfire,
     build_container,
+    build_continual_light_rod,
     build_cliff_face,
     build_directional_door,
     build_directional_wall,
     build_fireball_cannon,
     build_hearth_fire,
+    build_hunting_tapestry,
     build_liquid_barrel,
     build_storage_chest,
     build_solid_wall,
@@ -606,6 +609,10 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
     "environment.hearth_fire": _single_item_builder(
         "environment.hearth_fire", lambda _source: build_hearth_fire(),
     ),
+    "gear.continual_light_rod": _single_item_builder("gear.continual_light_rod", build_continual_light_rod),
+    "treasure.hunting_tapestry": _single_item_builder("treasure.hunting_tapestry", build_hunting_tapestry),
+    EMPTY_WATERSKIN_ID: _single_item_builder(EMPTY_WATERSKIN_ID, lambda source: build_waterskin(source)),
+    FULL_WATERSKIN_ID: _single_item_builder(FULL_WATERSKIN_ID, lambda source: build_waterskin(source, full=True)),
     TRAP_DISARM_TOOLKIT_ID: build_trap_disarm_toolkit,
     THIEVES_TOOLS_ID: build_thieves_tools,
     KEY_ID: _single_item_builder(KEY_ID, build_key),

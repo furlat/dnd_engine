@@ -74,6 +74,8 @@ class SpatialCondition(BaseCondition):
     )
     affected_positions: Set[Tuple[int, int]] = Field(default_factory=empty_set)
     observation_revision: int = Field(default=0, ge=0, exclude=True)
+    detected_by: Set[UUID] = Field(default_factory=empty_set,
+        description="Observers whose rolled search found this concealed effect despite its DC.")
     layer: SpatialEffectLayer
     occupancy_policy: SpatialEffectOccupancyPolicy
     anchor_kind: SpatialEffectAnchorKind = SpatialEffectAnchorKind.FIXED_POSITION
@@ -248,15 +250,18 @@ class SpatialCondition(BaseCondition):
         requesting_entity_uuid: Optional[UUID] = None,
     ) -> bool:
         """Resolve a concealed hazard against passive perception."""
-        if requesting_entity_uuid is None:
+        if (requesting_entity_uuid is None or self.condition_stealth_dc is None
+                or requesting_entity_uuid in self.detected_by):
             return True
         observer = BaseBlock.get(requesting_entity_uuid)
-        return observer is None or not self.is_concealed_from(
-            requesting_entity_uuid, observer.get_passive_perception())
+        return (
+            observer is None
+            or self.condition_stealth_dc < observer.get_passive_perception()
+        )
 
     def mark_detected_by(self, observer_uuid: UUID) -> None:
-        """A found hazard is re-observed by its finder's next senses refresh."""
-        super().mark_detected_by(observer_uuid)
+        """Record that a rolled search found it; its finder's next senses refresh re-observes it."""
+        self.detected_by.add(observer_uuid)
         self.observation_revision += 1
 
     def is_hazardous_for(

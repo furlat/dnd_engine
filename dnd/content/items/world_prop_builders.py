@@ -17,8 +17,8 @@ from dnd.core.item_types import ItemDestructionProfile, ItemIntegrity
 from dnd.items.environment_interactables import LootAllAction, StorageChest
 from dnd.items.searchables import install_search_gate
 from dnd.items.shoving import SHOVEABLE_TAG
+from dnd.items.water_fixtures import DRY_TAP_TAG, WATER_PUMP_TAG
 from dnd.items.visual_variants import ItemVisualVariantParameters
-from dnd.spells.evocation import ContinualFlameCondition
 from dnd.spatial.area_conditions import AreaCondition
 from dnd.types.materials import Material
 from dnd.types.spatial_effects import SpatialEffectLayer, SpatialEffectOccupancyPolicy
@@ -42,8 +42,8 @@ class WorldPropProfile:
     occupies_bands: bool = True
     armor_class: int | None = None
     visual_variants: tuple[str, ...] = ()
-    continual_flame: bool = False
     shoveable: bool = True
+    water: Literal["pump", "dry"] | None = None
 
 
 WORLD_PROP_PROFILES = MappingProxyType({
@@ -859,18 +859,21 @@ WORLD_PROP_PROFILES = MappingProxyType({
         destroyed_name="Broken hand pump", destroyed_description="Bent iron; passable.",
         footprint_offsets=((0, 0),), material=Material.METAL,
         shoveable=False,
+        water="pump",
     ),
     "environment.furniture.wall_pump": WorldPropProfile(
         name="Wall pump", description="A broken iron pump on the wall, still dripping.",
         destroyed_name="Broken wall pump", destroyed_description="Bent pipe against the wall.",
         footprint_offsets=((0, 0),), material=Material.METAL, hit_points=10,
         blocks_movement=False, occupies_bands=False,
+        water="dry",
     ),
     "environment.furniture.pump_faucet": WorldPropProfile(
         name="Pump faucet", description="A painted pump faucet on the wall.",
         destroyed_name="Broken faucet", destroyed_description="A twisted faucet against the wall.",
         footprint_offsets=((0, 0),), material=Material.METAL, hit_points=5,
         blocks_movement=False, occupies_bands=False, visual_variants=("blue_cold", "red_hot"),
+        water="dry",
     ),
     "environment.furniture.privy_seat": WorldPropProfile(
         name="Privy seat", description="An alcove with a board with a hole.",
@@ -921,7 +924,7 @@ WORLD_PROP_PROFILES = MappingProxyType({
         name="Armor stand", description="A stand for a full suit of armor.",
         destroyed_name="Toppled armor stand", destroyed_description="Bent frame; passable.",
         footprint_offsets=((0, 0),), material=Material.METAL,
-        visual_variants=("gilded_plate", "gilded_plate_without_helm"),
+        visual_variants=("gilded_plate",),
     ),
     "environment.furniture.manikin": WorldPropProfile(
         name="Wooden manikin", description="A featureless wooden manikin for hanging clothes.",
@@ -1033,12 +1036,6 @@ WORLD_PROP_PROFILES = MappingProxyType({
         footprint_offsets=((0, 0),), material=Material.METAL, hit_points=10,
         blocks_movement=False, occupies_bands=False,
     ),
-    "environment.furniture.continual_light_rod": WorldPropProfile(
-        name="Continual-light rod", description="A torch-sized metal rod set in the wall, shining with a heatless flame.",
-        destroyed_name="Bent wall rod", destroyed_description="A bent, dark rod against the wall.",
-        footprint_offsets=((0, 0),), material=Material.METAL, hit_points=5,
-        blocks_movement=False, occupies_bands=False, continual_flame=True,
-    ),
     "environment.furniture.fireplace": WorldPropProfile(
         name="Fireplace", description="A masonry fireplace with a lintel and mantle.",
         destroyed_name="Collapsed fireplace", destroyed_description="Fallen masonry; difficult terrain.",
@@ -1109,12 +1106,6 @@ def settle_world_prop(item: BaseItem, parent_event: Event | None = None) -> None
     profile = WORLD_PROP_PROFILES.get(item.item_id)
     if profile is None:
         return
-    if profile.continual_flame and not any(
-            isinstance(condition, ContinualFlameCondition) for condition in item.active_conditions.values()):
-        flame = ContinualFlameCondition(source_entity_uuid=item.uuid, target_entity_uuid=item.uuid)
-        lit = item.add_condition(flame, parent_event=parent_event)
-        if lit is None or lit.canceled or not flame.applied:
-            raise RuntimeError(f"{item.item_id} could not carry its authored Continual Flame")
     if not profile.difficult_debris or any(
             isinstance(condition, DestructionDebris) for condition in item.active_conditions.values()):
         return
@@ -1131,7 +1122,8 @@ def settle_world_prop(item: BaseItem, parent_event: Event | None = None) -> None
 
 
 def _profile_tags(profile: WorldPropProfile) -> list[str]:
-    return ["furniture", profile.material.value, *((SHOVEABLE_TAG,) if profile.shoveable else ())]
+    return ["furniture", profile.material.value, *((SHOVEABLE_TAG,) if profile.shoveable else ()),
+            *((WATER_PUMP_TAG if profile.water == "pump" else DRY_TAP_TAG,) if profile.water else ())]
 
 
 def _checked_variant(item_id: str, profile: WorldPropProfile,
@@ -1142,17 +1134,10 @@ def _checked_variant(item_id: str, profile: WorldPropProfile,
     return variant
 
 
-def build_searchable_prop(item_id: str, *, dc: int = 13,
-                          skill: Literal["perception", "investigation"] = "perception",
-                          source_entity_uuid: UUID | None = None,
-                          variant: ItemVisualVariantParameters | None = None) -> StorageChest:
-    """One profiled body (a desk, a false-backed wardrobe, loose boards) holding contents a Search frees.
-
-    It keeps the prop's name, footprint, blocking, material and debris, plus a lid; the caller
-    puts the contents in its inventory. Its art is the prop's.
-    """
-    profile = WORLD_PROP_PROFILES[item_id]
-    variant = _checked_variant(item_id, profile, variant)
+def _container_body(item_id: str, profile: WorldPropProfile, variant: ItemVisualVariantParameters, *,
+                    source_entity_uuid: UUID | None, is_open: bool,
+                    fill_looks: tuple[str, str, str] | None = None, display_capacity: int = 1) -> StorageChest:
+    """One profiled body that holds contents: the prop's name, footprint, blocking, material and debris."""
     placement = WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=profile.occupies_bands,
         vertical_extent_steps=profile.vertical_extent_steps, footprint_offsets=profile.footprint_offsets)
     aftermath = WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=False,
@@ -1160,20 +1145,50 @@ def build_searchable_prop(item_id: str, *, dc: int = 13,
     body = StorageChest(source_entity_uuid=source_entity_uuid or uuid4(), item_id=item_id,
         name=variant.display_name or profile.name, description=profile.description,
         visual_item_name=profile.name, visual_variant_id=variant.visual_variant_id,
-        tags=[*_profile_tags(profile), "container"], is_targetable=True,
+        tags=[*_profile_tags(profile), "container"], is_targetable=True, is_open=is_open,
         blocks_movement=profile.blocks_movement, blocks_optics_field=profile.blocks_optics,
         blocks_propagation_field=profile.blocks_propagation,
         armor_class=(profile.armor_class if profile.armor_class is not None
                      else OBJECT_ARMOR_CLASS_BY_MATERIAL[profile.material]),
-        world_placement_spec=placement, use_action_templates=[],
+        world_placement_spec=placement, use_action_templates=[], fill_looks=fill_looks,
+        display_capacity=display_capacity,
         destruction_profile=ItemDestructionProfile(name=profile.destroyed_name,
             description=profile.destroyed_description, placement_spec=aftermath))
     body.use_action_templates.append(LootAllAction(source_entity_uuid=body.uuid, source_item_uuid=body.uuid,
         template=True, semantic_key="action.environment.storage_chest.loot_all"))
     body.health = body.create_item_health(body.uuid, profile.hit_points)
-    install_search_gate(body, dc=dc, skill=skill)
     settle_world_prop(body)
     return body
+
+
+def build_searchable_prop(item_id: str, *, dc: int = 13,
+                          skill: Literal["perception", "investigation"] = "perception",
+                          source_entity_uuid: UUID | None = None,
+                          variant: ItemVisualVariantParameters | None = None) -> StorageChest:
+    """One profiled body (a desk, a false-backed wardrobe, loose boards) holding contents a Search frees.
+
+    It keeps the prop's body and art, plus a lid; the caller puts the contents in its inventory.
+    """
+    profile = WORLD_PROP_PROFILES[item_id]
+    body = _container_body(item_id, profile, _checked_variant(item_id, profile, variant),
+                           source_entity_uuid=source_entity_uuid, is_open=False)
+    install_search_gate(body, dc=dc, skill=skill)
+    return body
+
+
+def build_display_prop(item_id: str, *, look: str | None = None, capacity: int = 1,
+                       source_entity_uuid: UUID | None = None) -> StorageChest:
+    """One rack, stand or wall mount whose pieces are taken with the ordinary loot actions.
+
+    Its art follows what is left: `<look>_full`, `<look>_partly_empty` and `<look>_empty` (or
+    plain `full`, `partly_empty`, `empty` without a look). The caller puts the pieces in it.
+    """
+    profile = WORLD_PROP_PROFILES[item_id]
+    _checked_variant(item_id, profile, ItemVisualVariantParameters(visual_variant_id=look) if look else None)
+    prefix = f"{look}_" if look else ""
+    return _container_body(item_id, profile, ItemVisualVariantParameters(), source_entity_uuid=source_entity_uuid,
+        is_open=True, fill_looks=(f"{prefix}full", f"{prefix}partly_empty", f"{prefix}empty"),
+        display_capacity=capacity)
 
 
 def build_world_prop(

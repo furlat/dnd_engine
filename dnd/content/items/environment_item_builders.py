@@ -45,7 +45,7 @@ from dnd.spatial.environmental_conditions import OilSurface, WetSurface
 from dnd.spatial.ignition import resolve_interaction
 from dnd.core.ground import ground_footprint
 from dnd.spells.conjuration import GreaseZone
-from dnd.spells.evocation import Fireball
+from dnd.spells.evocation import ContinualFlameCondition, Fireball
 from dnd.spells.enchantment import Sleep
 from dnd.types.materials import Material
 from dnd.types.material_deposits import MaterialDepositSource
@@ -256,6 +256,26 @@ def build_hearth_fire() -> WallTorch:
         source_entity_uuid=uuid4(), item_id="environment.hearth_fire", name="Hearth fire",
         bright_radius_feet=20, dim_radius_feet=20, is_targetable=False,
     )
+
+
+def build_continual_light_rod(source_entity_uuid: UUID) -> BaseItem:
+    """A torch-sized metal rod shining with Continual Flame; placed by a wall it lights the room, and it
+    can be picked up, its light covered while carried."""
+    rod = BaseItem(source_entity_uuid=source_entity_uuid, item_id="gear.continual_light_rod",
+        name="Continual-light rod", description="A torch-sized metal rod shining with a heatless flame.",
+        tags=["light", Material.METAL.value], weight=2)
+    flame = ContinualFlameCondition(source_entity_uuid=rod.uuid, target_entity_uuid=rod.uuid)
+    result = rod.add_condition(flame)
+    if result is None or result.canceled or not flame.applied:
+        raise RuntimeError("Continual Flame could not be installed on the rod")
+    return rod
+
+
+def build_hunting_tapestry(source_entity_uuid: UUID) -> BaseItem:
+    """One of R23's valuable hunting-scene tapestries, taken down off its wall hooks."""
+    return BaseItem(source_entity_uuid=source_entity_uuid, item_id="treasure.hunting_tapestry",
+        name="Hunting tapestry", description="A large, finely woven hunting-scene tapestry.",
+        tags=["treasure", Material.FABRIC.value], weight=20)
 
 
 def build_campfire(source_entity_uuid: UUID) -> UsableItem:

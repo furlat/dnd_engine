@@ -280,7 +280,7 @@ class CommittedObjectRemovals:
 
 
 class SpatialConditionOwner(Protocol):
-    """Existing spatial-owner surface consumed by the map, perception, searches and anchoring objects."""
+    """Existing spatial-owner surface consumed by the map, perception and searches."""
 
     @property
     def uuid(self) -> UUID: ...
@@ -314,8 +314,6 @@ class SpatialConditionOwner(Protocol):
     def is_hazard_perceived_by(self, requesting_entity_uuid: Optional[UUID] = None) -> bool: ...
 
     def mark_detected_by(self, observer_uuid: UUID) -> None: ...
-
-    def on_owner_opened(self, event: Event) -> None: ...
 
     def is_hazardous_for(
         self, entity_uuid: Optional[UUID] = None, *,

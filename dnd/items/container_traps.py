@@ -12,7 +12,7 @@ from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
-from dnd.core.condition_types import DurationType
+from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.content.identities import ContentRef
 from dnd.core.dice import RollType
 from dnd.core.events import Event, EventHandler, EventPhase, EventType, Trigger
@@ -24,9 +24,7 @@ from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spatial.environmental_conditions import SPIKE_TRAP_CONTENT_REF, install_authored_area_condition
 from dnd.types.discovery import ActorScan
 from dnd.types.senses import PerceivedSpatialEffect
-from dnd.types.spatial_effects import (
-    SpatialEffectAnchorKind, SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy,
-)
+from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from dnd.types.world import OccupancyLayer
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.traps import TrapState
@@ -78,10 +76,11 @@ CONTAINER_NEEDLE_CONTENT_REF = SPIKE_TRAP_CONTENT_REF.model_copy(update={
 
 
 class ContainerTrap(SpatialCondition):
-    """A poison needle in a container's lock, anchored to it and sprung once by its first committed open.
+    """A poison needle in a container's lock: a fixed cell effect naming its container, sprung once.
 
     It is perceived as floor traps are: passive Perception above its DC, a search that found it, or an
-    earlier observation. It follows the container across the map; breaking or picking it up ends it.
+    earlier observation. Its container's `TrapMount` owns it: the container's committed open springs it
+    and breaking the container ends it. Containers never move, so it needs no anchor that follows one.
     """
     creates = (NeedleParalysis,)
     crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
@@ -93,6 +92,7 @@ class ContainerTrap(SpatialCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
     affected_occupancy_layers: frozenset[OccupancyLayer] = frozenset({OccupancyLayer.GROUND})
     duration: Duration = Field(default_factory=lambda: Duration(duration=None, duration_type=DurationType.PERMANENT))
+    container_uuid: UUID
     trap_state: TrapState = TrapState.READY
     disarm_dc: int = Field(default=13, ge=0)
     save_dc: int = Field(default=13, ge=0)
@@ -113,7 +113,7 @@ class ContainerTrap(SpatialCondition):
         senses = observer.get_senses() if observer is not None else None
         return PerceivedSpatialEffect(content_ref=self.content_ref, name=self.name,
             description=state[self.trap_state], positions=tuple(sorted(positions)), trap_state=self.trap_state,
-            anchor_item_uuid=self.anchor_uuid if senses is not None and self.anchor_uuid in senses.objects else None)
+            anchor_item_uuid=self.container_uuid if senses is not None and self.container_uuid in senses.objects else None)
 
     def snapshot_mechanism_state(self) -> TrapState:
         return self.trap_state
@@ -132,9 +132,6 @@ class ContainerTrap(SpatialCondition):
         self._complete_change(change)
         return True
 
-    def on_owner_opened(self, event: Event) -> None:
-        self.spring(event.source_entity_uuid, parent_event=event)
-
     def spring(self, victim_uuid: UUID, *, parent_event: Event) -> None:
         """Fire once at the creature handling the container."""
         if not self._set_state(TrapState.ACTIVATED, parent_event=parent_event):
@@ -148,7 +145,7 @@ class ContainerTrap(SpatialCondition):
                 condition_id="condition.paralyzed", is_magical=False, effect_tags=(SavingThrowEffectTag.POISON,)))
         _, _, saved = victim.saving_throw(request)
         if not saved:
-            victim.add_condition(NeedleParalysis(source_entity_uuid=self.anchor_uuid or victim.uuid,
+            victim.add_condition(NeedleParalysis(source_entity_uuid=self.container_uuid,
                 target_entity_uuid=victim.uuid, save_dc=self.save_dc,
                 duration=Duration(duration=self.paralysis_rounds, duration_type=DurationType.ROUNDS,
                                   source_entity_uuid=victim.uuid, target_entity_uuid=victim.uuid)),
@@ -158,11 +155,31 @@ class ContainerTrap(SpatialCondition):
         self._set_state(TrapState.DEACTIVATED, parent_event=parent_event)
 
 
+class TrapMount(BaseCondition):
+    """The container's own link to its needle: its committed open springs it, its breaking ends it."""
+    creates = (ContainerTrap,)
+
+    name: str = Field(default="Trap mount", description="Condition name.")
+    condition_category: ConditionCategory = ConditionCategory.INTERNAL
+    duration: Duration = Field(default_factory=lambda: Duration(duration=None, duration_type=DurationType.PERMANENT))
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        if not isinstance(BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None, StorageChest):
+            return [], [], [], [], declaration_event.cancel(status_message="A container trap needs a container")
+        return [], [], [], [], declaration_event.phase_to(EventPhase.EFFECT)
+
+    def on_owner_opened(self, event: Event) -> None:
+        for _, identity in self.linked_conditions:
+            trap = BaseCondition.get(identity)
+            if isinstance(trap, ContainerTrap):
+                trap.spring(event.source_entity_uuid, parent_event=event)
+
+
 def ready_trap_known_to(item: BaseItem, observer_uuid: UUID) -> ContainerTrap | None:
-    """The armed trap anchored to this item, when this observer perceives it."""
+    """The armed trap of this container, when this observer perceives it."""
     position = get_map().get_object_position(item.uuid)
     return next((condition for condition in (get_map().get_spatial_conditions_at(position) if position else ())
-                 if isinstance(condition, ContainerTrap) and condition.anchor_uuid == item.uuid
+                 if isinstance(condition, ContainerTrap) and condition.container_uuid == item.uuid
                  and condition.trap_state is TrapState.READY and condition.is_hazard_perceived_by(observer_uuid)),
                 None)
 
@@ -174,9 +191,13 @@ def install_container_trap(container: StorageChest, *, detect_dc: int = 13, disa
     if position is None:
         raise ValueError(f"{container.name} must be placed before it is trapped")
     trap = ContainerTrap(source_entity_uuid=container.uuid, position=position, affected_positions={position},
-        anchor_kind=SpatialEffectAnchorKind.WORLD_OBJECT, anchor_uuid=container.uuid,
-        condition_stealth_dc=detect_dc, disarm_dc=disarm_dc, save_dc=save_dc)
+        container_uuid=container.uuid, condition_stealth_dc=detect_dc, disarm_dc=disarm_dc, save_dc=save_dc)
     install_authored_area_condition(trap, parent_event=parent_event)
+    mount = TrapMount(source_entity_uuid=container.uuid, target_entity_uuid=container.uuid)
+    result = container.add_condition(mount, parent_event=parent_event)
+    if result is None or result.canceled or not mount.applied:
+        raise RuntimeError(f"{container.name} could not hold its trap")
+    mount.add_linked_condition(trap.uuid, trap.uuid)
     return trap
 
 

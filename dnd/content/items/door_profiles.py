@@ -36,4 +36,8 @@ DOOR_PROFILES = MappingProxyType({
         DoorMechanism.SINGLE_HINGED, 18, supports_jammed_remnant=False)
         for style in ("shabby", "shabby_plain", "shabby_battens", "shabby_patched",
                       "elegant", "elegant_three_panel")},
+    # A curtain across an alcove (R49's hides a manikin): it hides what is behind and lets anyone
+    # through; it draws aside with no swing.
+    "environment.door.alcove_curtain": DoorProfile("Curtain", Material.FABRIC, DoorMechanism.LIFT, 3,
+        supports_jammed_remnant=False, closed_channels=(WorldEdgeChannel.OPTICAL,)),
 })

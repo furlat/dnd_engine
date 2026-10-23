@@ -156,8 +156,8 @@ rearms.
 - A container's committed open calls a new `on_owner_opened` condition hook.
 - `ContainerTrap` is the R53 needle. Failing the save gives `NeedleParalysis`: Paralyzed,
   with a repeat save at turn end, for up to 10 rounds. Lesser Restoration ends it whole.
-- Conditions gained a `detected_by` set, honoured by the one concealment rule
-  (`is_concealed_from`).
+- Spatial conditions gained a `detected_by` set, honoured by their perception rule. It lives in
+  `SpatialCondition`, not the shared base condition (human, 23 October: keep core lean).
 - Search for Traps and Disarm Trap are standard actions.
   - Search makes one Perception roll with no DC in the event, over seen cells within 10 ft.
   - Step 3 removed the find log (see §4.E).
@@ -218,9 +218,11 @@ where it fits, not all of it.
     object is authored otherwise") is not built.
   - A bar sits on one side of a door's boundary (the owner tile or the tile across) and is
     worked only from there. Forcing a lock bursts its door or chest open.
-- **Trap detected.** The container needle is now a spatial condition anchored to its chest,
-  like trap hardware. Each observer who perceives it gets it through the existing per-observer
-  spatial-effect facts.
+- **Trap detected.** The container needle is a fixed spatial effect in its chest's cell, so
+  each observer who perceives it gets it through the existing per-observer spatial-effect facts.
+  Its chest's internal `TrapMount` owns it as a linked child: the chest's committed open springs
+  it and breaking the chest ends it. A chest-anchored version cost about 3 ms per destroyed
+  object in a dense Fireball, through global anchor handlers, so it was dropped.
 - **Schema.** So the bump (player schema 19) only extends two enums: `bone` (the dragon
   skeleton is back, made of bone) and `background.urchin` (fixed skills Sleight of Hand and
   Stealth).
@@ -309,6 +311,41 @@ Each playable floor keeps one hostile in the encounter, for example a goblin in 
 behind a locked door (§4.E). It costs one AI turn per round, measured. No dummy-enemy
 mechanism and no change to the combat-end rule.
 
+### Step 5 (23 October, human: "why not work on" the handoff's later interactions)
+
+- **Displays.** `build_display_prop` makes a rack, armour stand, shield mount or tapestry
+  hook a lidless container. Its pieces are taken with the ordinary loot actions, and its art
+  variant follows what is left (full, partly empty, empty).
+- **Continual-light rods** are pickable items carrying Continual Flame.
+- **Torches.** A wall torch authored `removable` offers Take Torch: it becomes a carried torch,
+  burning if it was.
+- **Curtains.** `environment.door.alcove_curtain` is a fabric door that blocks only sight.
+- **Pumps.** Work Pump fills a carried empty waterskin at a working pump; a dry tap gives
+  nothing.
+- Each is content on existing owners; nothing new runs except on use.
+
+**Many at once (human: "ensure that interacting/destroying with many of these together does not
+fuck up times"), measured under load:**
+- **Fireball through 64 packed cells:** existing content 79 ms, new content 83 ms. Per
+  destroyed object that's 1.66 against 1.99 ms; the gap is the extra contents spilling.
+- **Senses refresh afterwards:** equal, 27 ms.
+- **Action listing with 64 containers in view:** existing chests 7.4 ms, new containers
+  7.1 ms. The new actions add nothing measurable.
+- **Two fixes found by this check:**
+  - the needle's global anchor handlers (1,632 calls per blast) were replaced by the chest's
+    own trap mount;
+  - displays offered a lid they don't have.
+
+**Core footprint (human: "isn't this heavy"):** the shared base code keeps only three
+default-off owner hooks (`on_owner_opened`, `holds_owner_shut`, `gates_owner_contents`, built
+like `on_owner_placement_committed`), `BaseItem.is_held_shut`, and three typing-only members
+on the grid's spatial-owner protocol.
+
+**SDK:**
+- The stale build of the old AoE attempt is removed, and the TypeScript SDK passes 83 of 83.
+- The Python SDK passes 113 of 113 in its own pinned environment. Its new test reads a Locked
+  object row and a found container trap's sighting, and refuses a DC on a lock row.
+
 ## 5. Out of this push
 
 Multi-Z and the R07 hatch, fluid and currents, the full idol curse and its weight/Strength
@@ -333,7 +370,7 @@ That's a separate task with its own plan. Until then, §4.I.
 | --- | --- | --- |
 | 1 (done) | A (B is out) | Placement, loot conservation, destruction, client-visible facts. Paired timing: dense test room vs empty, under load. |
 | 2 (done but darts) | C and D | Correct recipients only; saves, durations and cures; one activation; no cost for distant actors (paired timing). |
-| 3 (done; SDK reduction unverified) | E (after the BG3 handout) and F | Locked/unlocked/forced/picked transitions; wrong key or canceled action preserves state; secrecy of key identity; SDK reduction of the new field. |
+| 3 (done) | E (after the BG3 handout) and F | Locked/unlocked/forced/picked transitions; wrong key or canceled action preserves state; secrecy of key identity; SDK reduction of the new field. |
 | 4 (done) | G and H | Haunted fires every N rounds only for its owner; cures; shove steps can't pass walls or overlap; failed steps keep state. |
 | later (separate pass) | Room composition and floor assembly, with I | Not in this push. Placements, per-room counts, reachability, real HTTP commands, authoring export. |
 
@@ -358,6 +395,4 @@ For each implementation step:
   whether Frightened should be one of the effects.
 - The R49 darts: trap attack rolls (a new attack source in the contract) or Dexterity saves.
 - Coughing's effect: disadvantage on Stealth only (§4.C).
-- Whether to build the handoff's "later" interactions: taking things off walls, racks and
-  stands (with rack full/empty states), pulling curtains aside (the R49 manikin reveal), and
-  pumping water. They have no game action today; handoff §12.4, §12.5 and §12.7 mark them.
+- Putting pieces back on racks and walls (taking them is built, step 5).

@@ -749,10 +749,10 @@ class BaseBlock(BaseModel):
             if cond.hazard_filter is None or not cond.affects_occupancy_layer(occupancy_layer):
                 continue
 
-            observer = BaseBlock.get(entity_uuid) if entity_uuid is not None else None
-            if (entity_uuid is not None and observer is not None
-                    and cond.is_concealed_from(entity_uuid, observer.get_passive_perception())):
-                continue
+            if cond.condition_stealth_dc is not None and entity_uuid is not None:
+                observer = BaseBlock.get(entity_uuid)
+                if observer is not None and cond.condition_stealth_dc >= observer.get_passive_perception():
+                    continue
 
             if cond.hazard_filter == HazardFilter.ALL:
                 return True

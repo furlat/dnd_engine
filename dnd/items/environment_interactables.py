@@ -2,7 +2,7 @@
 
 import random
 from dataclasses import replace
-from typing import Optional, List, cast as type_cast
+from typing import Optional, List, Tuple, cast as type_cast
 from uuid import UUID, uuid4
 from pydantic import Field
 
@@ -491,6 +491,8 @@ class LootAllAction(BaseAction):
         for item in list(chest.chest_inventory.items.values()):
             if entity.loot_item(item, parent_event=execution_event):
                 looted += 1
+        if looted:
+            chest.contents_taken(parent_event=execution_event)
         effect = execution_event.phase_to(
             EventPhase.EFFECT, status_message=f"Looted {looted} items")
         return effect.with_updates(
@@ -541,6 +543,7 @@ class LootItemAction(BaseAction):
         name = child.name
         if not entity.loot_item(child, parent_event=execution_event):
             return execution_event.cancel(status_message="Item transfer was rejected")
+        chest.contents_taken(parent_event=execution_event)
         return execution_event.phase_to(EventPhase.EFFECT, status_message=f"Looted {name}")
 
 
@@ -566,6 +569,25 @@ class StorageChest(UsableItem):
         default=None, frozen=True,
         description="Authored container footprint; None keeps the neutral one-cell placement.",
     )
+    fill_looks: Tuple[str, str, str] | None = Field(
+        default=None, frozen=True,
+        description="For a display (a rack, a stand, a wall mount): its art when full, partly emptied and empty.",
+    )
+    display_capacity: int = Field(default=1, ge=1, description="How many pieces a full display holds.")
+
+    def to_item_presentation_state(self, *, stack_count: Optional[int] = None) -> ItemPresentationState:
+        state = super().to_item_presentation_state(stack_count=stack_count)
+        if self.fill_looks is None:
+            return state
+        held = len(self.chest_inventory.items)
+        full, partly, empty = self.fill_looks
+        look = full if held >= self.display_capacity else empty if held == 0 else partly
+        return state.model_copy(update={"visual_variant_id": look})
+
+    def contents_taken(self, *, parent_event: Event) -> None:
+        """A display shows what is left: republish its look once its contents change."""
+        if self.fill_looks is not None:
+            self.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
 
     def get_world_placement_spec(self) -> WorldPlacementSpec:
         if self.world_placement_spec is None or (
@@ -582,10 +604,8 @@ class StorageChest(UsableItem):
         self.is_open = is_open
         self.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
         if is_open:
-            position = get_map().get_object_position(self.uuid)
-            for condition in (get_map().get_spatial_conditions_at(position) if position else ()):
-                if condition.anchor_uuid == self.uuid:
-                    condition.on_owner_opened(parent_event)
+            for condition in tuple(self.active_conditions.values()):
+                condition.on_owner_opened(parent_event)
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         if not self.is_active:
@@ -602,7 +622,7 @@ class StorageChest(UsableItem):
                 source_entity_uuid=user_entity_uuid,
                 source_item_uuid=self.uuid,
                 template=True,
-            ))]
+            ))] if self.fill_looks is None else []  # a display has no lid
             if self.is_open and self.chest_inventory.items and not self.contents_gated():
                 actions.extend(super().get_use_actions(user_entity_uuid))
         if self.has_accessible_contents() and self.contents_visible_to(user_entity_uuid):

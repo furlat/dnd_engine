@@ -10,6 +10,7 @@ from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import build_hearth_fire
 from dnd.content.items.world_prop_builders import build_world_prop
 from dnd.core.creature_types import DamageType
+from dnd.entity import Entity, EntityConfig
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemIntegrity
 from dnd.game import Game
@@ -77,14 +78,17 @@ def test_a_container_covers_its_cells_and_spills_exactly_its_contents_when_broke
     assert get_map().get_object_position(coins.uuid) == (3, 3) and coins.owner_uuid is None
 
 
-def test_an_authored_continual_flame_rod_lights_its_wall_until_it_is_broken(game: Game):
-    rod = build_authored_item("environment.furniture.continual_light_rod", uuid4())
+def test_a_continual_light_rod_lights_its_wall_until_someone_takes_it(game: Game):
+    rod = build_authored_item("gear.continual_light_rod", uuid4())
     rod.place_on_grid((3, 2))
     assert level((3, 2)) is LightLevel.BRIGHT_LIGHT and level((7, 2)) is LightLevel.BRIGHT_LIGHT
     assert level((8, 2)) is LightLevel.DIM_LIGHT and level((12, 2)) is LightLevel.DARKNESS
     assert rod.douse_exposed_flame() is False and level((3, 2)) is LightLevel.BRIGHT_LIGHT
-    rod.receive_damage(rod.get_hp(), DamageType.BLUDGEONING, rod.uuid)
-    assert level((3, 2)) is LightLevel.DARKNESS
+    taker = Entity.create(uuid4(), "Taker", config=EntityConfig(position=(2, 2)))
+    taker.compose_entity()
+    game.deploy_entity(taker, (2, 2))
+    assert taker.loot_item(rod)
+    assert level((3, 2)) is LightLevel.DARKNESS  # the light went with the rod, covered in a pack
 
 
 def test_a_hearth_fire_lights_the_room_until_it_is_doused(game: Game):

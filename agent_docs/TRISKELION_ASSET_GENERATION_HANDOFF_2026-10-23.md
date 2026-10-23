@@ -373,9 +373,9 @@ into the destroyed state, splinters, glass or stone by material, and contents sp
 containers. That isn't repeated per row below. "Loop" means an idle animation while in the
 state.
 
-**Status after the engine pass (23 October):** sections and rows marked **later** have no game
-action yet. Don't animate them until the plan builds them (plan §9). The idle loops and break
-transitions still apply.
+**Status after the engine pass (23 October):** rows marked **later** have no game action yet,
+so don't animate them; the idle loops and break transitions still apply. Only prop and effect
+art is made: creature and character animations are not part of this handoff.
 
 ### 12.1 Doors and openings
 
@@ -416,10 +416,15 @@ transitions still apply.
 | Inspector desk R11 | Search under the desk | hidden → revealed | Lump of red wax with coins pried off the underside |
 | Card-table pile R45 | Search | — | Tables shift (spider lair; creature deferred) |
 
-### 12.4 Things that can be taken off walls, racks and stands: **later**
+### 12.4 Things that can be taken off walls, racks and stands
 
-No take or put-back action exists yet. Racks, shields, stands, tapestries and rods are plain
-bodies, and a rack has no full or empty state.
+Built as **displays**: racks, stands, shield mounts and tapestry hooks hold their pieces, and
+taking one uses the ordinary loot actions. The body's art variant follows what is left. With a
+rack type the ids are `<type>_full`, `<type>_partly_empty` and `<type>_empty`, e.g.
+`swords_partly_empty` and `gilded_plate_empty`; without one they are plain `full` and `empty`
+(shield mounts, tapestry hooks). Continual-light rods are pickable items (picking one up takes
+its light). A removable wall torch is taken as a carried torch, leaving its holder empty. Putting
+pieces back is not built. The Old Jed sack and the shrine idol wait with creatures and the curse.
 
 | Asset | Interaction | From → to | What visibly happens |
 | --- | --- | --- | --- |
@@ -432,9 +437,11 @@ bodies, and a rack has no full or empty state.
 | Continual-light rods | Take a rod | in socket (lit) → empty recess | Rod pulled from its socket; the light goes with the rod |
 | Wall torch | Take from cresset / place | in cresset ↔ empty cresset | Torch lifted; cresset empty |
 
-### 12.5 Curtains, coverings and reveals: **later**
+### 12.5 Curtains, coverings and reveals
 
-No pull-aside action exists yet; curtains are plain bodies.
+Built: a curtain across an alcove is `environment.door.alcove_curtain`. It is drawn aside or
+closed like a door, hides what is behind it while closed, and never blocks passage. Curtains that
+only line a wall stay decor.
 
 | Asset | Interaction | From → to | What visibly happens |
 | --- | --- | --- | --- |
@@ -452,9 +459,9 @@ No pull-aside action exists yet; curtains are plain bodies.
 
 | Asset | Interaction | From → to | What visibly happens |
 | --- | --- | --- | --- |
-| Hand pump R28 | Pump / fill a container (**later**: no action yet) | idle → pumping → idle | Handle cycles; clean water gushes from the spout |
+| Hand pump R28 | Work Pump: fills a carried empty waterskin | idle → pumping → idle | Handle cycles; clean water gushes from the spout |
 | Broken wall pumps R5, dripping taps R62 | — | dripping (loop) | Drip loop; puddle decal below |
-| Dry faucets R27, R65 | Turn (**later**: no action yet) | — | Handle turns, nothing comes out |
+| Dry faucets R27, R65 (and the broken wall pump) | Work Pump: nothing comes out | — | Handle turns, nothing comes out |
 | Fountain R24 | — | trickle (loop) | Thin foul green trickle from the vase |
 | River R68 | — | flowing (loop) | Rushing current, north to south |
 
@@ -475,22 +482,6 @@ No pull-aside action exists yet; curtains are plain bodies.
 | Wall torch | Light / extinguish | unlit ↔ lit | Flame loop when lit |
 | Chandeliers | Break | hanging → fallen | Chandelier drops and crashes, glass/bronze debris |
 | Dragon skeleton R35 | Break | hanging → collapsed | Wires snap and the skeleton falls into a bone heap |
-
-### 12.10 Actor animations needed (character rig, not props)
-
-- **Search / rummage:** kneeling or standing hands-in.
-- **Pick lock:** kneel with tools, small hand motions; success ending and a failure ending where the tools snap.
-- **Disarm a trap:** careful two-hand work at the mechanism; success ending, and a failure ending that flinches as the trap fires.
-- **Lift or place a bar.**
-- **Pry up a floorboard** and **twist a hidden mechanism** (hook, jug): optional variants of
-  Search. A false back or a loose board is found by the one targeted Search action.
-- **Take an item off a wall or rack, or put one back:** **later**.
-- **Shove a heavy object:** lean and push, with a blocked-push variant.
-- **Pump water and fill a container:** **later**.
-- **Pull a curtain aside:** **later**.
-- **Coughing fit:** loop while Coughing (R26 mould condition).
-- **Haunted reactions:** a startled flinch, and a step toward a sound from a random direction.
-  There is no frightened reaction: the engine's Haunted has no fear effect (plan §4.G).
 
 ## 13. Not made in this pass
 
@@ -540,9 +531,14 @@ changes only the look; a different footprint, material or behaviour is a differe
   red_white_striped), `tavern_sign`, `mounted_shield`, `dartboard`, `mounted_antlers`,
   `framed_painting` (santiago, alfonsina, vittorino, sergi, luciana_and_salvatrice, the_hunt),
   `slashed_paintings`, `cresset`.
-- **Lights:** `bronze_chandelier` and `crystal_chandelier` (unlit); `continual_light_rod`
-  (always lit, by the Continual Flame condition); `environment.hearth_fire` (a burning fire
-  placed in front of a lit fireplace; it can be doused).
+- **Lights:** `bronze_chandelier` and `crystal_chandelier` (unlit); `environment.hearth_fire`
+  (a burning fire placed in front of a lit fireplace; it can be doused). The continual-light rod
+  is now the pickable item `gear.continual_light_rod`, which needs ground art in its wall socket
+  and inventory art.
+- **Displays** (any prop built with `build_display_prop`): fill variants as in §12.4.
+- **Interaction items:** `gear.waterskin.empty` and `gear.waterskin.full`,
+  `treasure.hunting_tapestry` (taken off R23's hooks), the curtain door above, and keys, Thieves'
+  Tools and the Trap Disarm Toolkit (§11).
 - **Containers** (`environment.container.<id>`, open/closed lid, spill on destruction):
   `footlocker`, `iron_bound_chest`, `huge_iron_chest` (1×2), `iron_box`, `long_wooden_box`,
   `coffin` (1×2), `barrel` (also the casks and the X barrel). The small wooden chest reuses

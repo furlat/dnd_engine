@@ -25,7 +25,7 @@ from dnd.core.events import (
     SensoryUpdateEvent, SpatialChangeEvent, TakeDamageEvent, Trigger,
 )
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import DoorMechanism, DoorSwing, ItemIntegrity, ItemLocation
+from dnd.core.item_types import DoorSwing, ItemIntegrity, ItemLocation
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.items.environment import DirectionalDoor
@@ -34,9 +34,8 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.spatial.mechanisms import AreaGeometry, TrapSave, materialize_finite_trap
 from dnd.spatial.triggers import materialize_pressure_plate
 from dnd.types.controls import ActivationLink, ControlLink
-from dnd.types.materials import Material
 from dnd.types.traps import TrapState
-from dnd.types.world import CardinalDirection, WorldEdgeChannel
+from dnd.types.world import CardinalDirection
 
 
 @pytest.fixture
@@ -94,12 +93,11 @@ def test_registered_door_profiles_have_native_material_channels_and_independent_
     profile = DOOR_PROFILES[item_id]
     assert first.uuid != second.uuid and first.health is not second.health
     assert state.item_id == item_id and state.boundary_structure.material == profile.material
-    assert state.maximum_hit_points == (27 if profile.material is Material.METAL else 18)
+    assert state.maximum_hit_points == profile.hit_points
     assert state.door_mechanism is profile.mechanism and state.door_swing is DoorSwing.OUTWARD
     placement = get_map().get_object_placement(first.uuid)
     assert (placement.base_height_steps, placement.top_height_steps) == (2, 4)
-    expected = (WorldEdgeChannel.MOVEMENT,) if profile.mechanism is DoorMechanism.LIFT else tuple(WorldEdgeChannel)
-    assert state.boundary_structure.blocked_channels == expected
+    assert state.boundary_structure.blocked_channels == profile.closed_channels
 
 
 @pytest.mark.parametrize("swing", tuple(DoorSwing))

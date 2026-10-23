@@ -1274,6 +1274,8 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
         "interaction.object.search", rolled=True, fact_id="selected_object.contents_found"),
     "dnd.items.shoving.ShoveObject": _object_interaction_semantics(
         "interaction.object.shove", rolled=True, fact_id="selected_object.moved"),
+    "dnd.items.water_fixtures.WorkPump": _object_interaction_semantics(
+        "interaction.object.work_pump", rolled=False, fact_id="actor.waterskin_filled"),
     "dnd.items.container_traps.DisarmTrap": _disarm_trap_semantics,
     "dnd.items.locks.Unlock": _object_interaction_semantics("interaction.object.unlock", rolled=False),
     "dnd.items.locks.LockShut": _object_interaction_semantics("interaction.object.lock", rolled=False),
