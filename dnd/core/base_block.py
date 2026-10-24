@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_fi
 from dnd.core.values import ModifiableValue, retire_value
 from dnd.core.base_object import BaseObject, CreatesModels, build_creatable_models, read_private_attribute
 from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent
+from dnd.core.concealment_types import knows
 from dnd.core.condition_types import (
     HazardFilter, InvoluntarySustainLoss, SustainLossPolicy,
 )
@@ -208,6 +209,7 @@ class BaseBlock(BaseModel):
         self.intrinsic_invisibility = value
 
     _attached_light_sources: Set[UUID] = PrivateAttr(default=set())
+    _concealment_holders: Tuple[BaseCondition, ...] = PrivateAttr(default=())
 
     active_conditions: Dict[str, BaseCondition] = Field(
         default_factory=dict,
@@ -638,10 +640,10 @@ class BaseBlock(BaseModel):
     def traversal_rule_inputs(self) -> Tuple[Hashable, ...]:
         """This block's own values that path rules read when it requests a path.
 
-        Allegiance decides who it may pass and which hazards threaten it;
-        passive perception decides which concealed hazards it knows.
+        Allegiance decides who it may pass and which hazards threaten it. Which concealed hazards it
+        knows is a fact of their cells (`GridMap.record_concealment` invalidates the paths reading them).
         """
-        return (self.faction, self.get_passive_perception())
+        return (self.faction,)
 
     def has_ordinary_visual_sight(self) -> bool:
         """Return whether this block has ordinary visual sight."""
@@ -749,9 +751,9 @@ class BaseBlock(BaseModel):
             if cond.hazard_filter is None or not cond.affects_occupancy_layer(occupancy_layer):
                 continue
 
-            if cond.condition_stealth_dc is not None and entity_uuid is not None:
+            if cond.concealment is not None and entity_uuid is not None:
                 observer = BaseBlock.get(entity_uuid)
-                if observer is not None and cond.condition_stealth_dc >= observer.get_passive_perception():
+                if observer is not None and not knows(cond.concealment, observer.faction, observer.uuid):
                     continue
 
             if cond.hazard_filter == HazardFilter.ALL:
@@ -1134,10 +1136,17 @@ class BaseBlock(BaseModel):
             )
             if source_rows is not None and condition_name in source_rows:
                 source_rows.remove(condition_name)
-        self._write_ground_hazard_holder()
+        self._write_condition_indexes()
 
-    def _write_ground_hazard_holder(self) -> None:
-        """Keep this block's entry in `ground_hazard_holders` after a membership change."""
+    def concealment_holders(self) -> Tuple[BaseCondition, ...]:
+        """This block's conditions that hide something, written at every condition membership commit."""
+        return self._concealment_holders
+
+    def _write_condition_indexes(self) -> None:
+        """After a membership change: this block's concealing conditions, and its entry in
+        `ground_hazard_holders`."""
+        self._concealment_holders = tuple(condition for condition in self.active_conditions.values()
+                                          if condition.concealment is not None)
         if any(condition.hazard_filter is not None and condition.affects_occupancy_layer(OccupancyLayer.GROUND)
                for condition in self.active_conditions.values()):
             BaseBlock.ground_hazard_holders[self.uuid] = None
@@ -1882,7 +1891,7 @@ class BaseBlock(BaseModel):
         self.active_conditions[name] = prepared.condition
         self.active_conditions_by_uuid[prepared.condition.uuid] = prepared.condition
         self.active_conditions_by_source.setdefault(prepared.condition.source_entity_uuid, []).append(name)
-        self._write_ground_hazard_holder()
+        self._write_condition_indexes()
         prepared.publication = ConditionPublication(
             prepared.condition, prepared.effect, prepared.condition.snapshot_state(),
             self.snapshot_entity_stats(), self.snapshot_world_tile(), self.snapshot_item_state(), {},

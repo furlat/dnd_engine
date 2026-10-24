@@ -650,9 +650,9 @@ class DraconicPresenceAura(AreaCondition):
     has_visible_presence: bool = True
 
     def get_spatial_observation(self, positions: set[Tuple[int, int]], *,
-        observer_uuid: UUID, discovered: bool = False) -> Optional[PerceivedSpatialEffect]:
+        observer_uuid: UUID) -> Optional[PerceivedSpatialEffect]:
         observation = super().get_spatial_observation(positions,
-            observer_uuid=observer_uuid, discovered=discovered)
+            observer_uuid=observer_uuid)
         return (observation.model_copy(update={"presence_mode": self.mode})
             if observation is not None else None)
 

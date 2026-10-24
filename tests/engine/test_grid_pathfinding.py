@@ -11,6 +11,7 @@ from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.aoe import AoEShape, Cone, Cylinder, Line, Sphere, objective_footprint
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.base_conditions import BaseCondition
+from dnd.core.concealment_types import concealment
 from dnd.core.condition_types import ConditionCategory, HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.base_object import BaseObject
@@ -654,7 +655,7 @@ def test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths() -> No
         target_entity_uuid=trap_tile.uuid,
         condition_category=ConditionCategory.CONDITION,
         hazard_filter=HazardFilter.ALL,
-        condition_stealth_dc=base_perception + 5,
+        concealment=concealment(base_perception + 5),
     )
     trap_tile.add_condition(hidden_trap)
     Entity.update_all_entities_senses(max_distance=20)
@@ -674,8 +675,8 @@ def test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths() -> No
         )
     )
 
-    assert hidden_trap.condition_stealth_dc is not None
-    assert observer.get_passive_perception() > hidden_trap.condition_stealth_dc
+    assert hidden_trap.concealment is not None
+    assert observer.get_passive_perception() > hidden_trap.concealment.dc
     assert grid.is_position_hazardous_for(2, 1, observer.uuid)
     assert observer.senses._paths_dirty is True
     assert route_count(observer.senses.safe_paths) == 0

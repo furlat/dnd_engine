@@ -19,7 +19,7 @@ Background: [the study](../HIDDEN_THINGS_AND_KNOWLEDGE_STUDY_2026-10-23.md).
 | Search | **One area Search:** a single Perception roll for every hidden thing within reach. A search of one piece of furniture stays the targeted check for its contents. |
 | Retry | One search per creature per hidden thing. |
 | Found contents | Finding them opens the compartment, a physical change, so they are then visible to everyone. |
-| Fired trap | Known to whoever perceived it firing, the plate or tripwire included. It stays hidden from everyone else after it re-arms. Re-arming never clears knowledge. |
+| Fired trap | Known to whoever perceived it firing, the plate or tripwire included. It stays hidden from everyone else after it re-arms. Re-arming never clears knowledge. **Built 24 October, to be confirmed:** raised spikes and an open hatch are noticed by anyone who sees them while they stay so (the record's `in_plain_view`, set by the spike trap and the portal as they rise or open; the old code's rule for those two). An existing test pins authored raised spikes as perceptible, and creatures walking unseen into raised spikes would be absurd. Every other trap is learned only by those who watch it fire. |
 | A creature's own hidden thing | Spike Growth, for example, starts known to its maker's party. |
 | Notice | It rides on the observer's existing sensory event, rooted in its cause. No new event and no second settlement. |
 | Hidden creatures | Part of this plan, as its last step, once the objects and traps path is validated. The creature check today is batched and fast; it moves for one shared path and the decided rules: noticed stays noticed until the creature hides again, and hiding does not fool blindsight or tremorsense within range. |
@@ -102,7 +102,7 @@ Background: [the study](../HIDDEN_THINGS_AND_KNOWLEDGE_STUDY_2026-10-23.md).
   - `GridMap.record_concealment(writes)` is the only writer. It takes (holder, new record) pairs, sets each record, then bumps MOVEMENT only, once, over the union of the holders' cells. It finds those cells the way `hazard_owners` does (gridmap.py:5476-5520): the spatial footprint, otherwise the tile's or object's placement.
   - A batch avoids one `drop_reading_entries` walk per thing (gridmap.py:236), and MOVEMENT alone avoids the optical and obscurement work that `spatial_condition_changed` does mid-settlement.
   - Callers: the settlement (one call per settlement), the area Search and the targeted Search.
-- **The Protocol.** `concealment` replaces `condition_stealth_dc`. Nothing else is added.
+- **The Protocol.** `concealment` replaces `condition_stealth_dc`. `SpatialConditionOwner` also gains `target_entity_uuid`, which makes a spatial condition a `ConcealmentHolder`, the small protocol `record_concealment` takes. `hazard_owners` also returns, per owner, its concealing holders and whether it hides itself (data that stands in for a type check).
 
 ### 3.3 Notice inside the settlement
 
@@ -139,7 +139,10 @@ All paths decide first, write through one `record_concealment` call, and only th
 ### 3.5 Exposure: a fact on the firing's event
 
 - **The flag lives on the event.** `SpatialEffectChangeEvent` gains `exposes: bool`, set through a parameter of the shared `_open_change` (area_conditions.py:751). It is listed in `ADDITIVE_FIELDS`.
-- **Where it is set.** At the sites that cleared the DC on firing: mechanisms.py:130, portals.py:109, gas_traps.py:191, jaws.py:162, container_traps.py:130 and the spike network's `reveal` (environmental_conditions.py:1254). Also at a pressure plate's or tripwire's trigger change when it fires.
+- **Where it is set.** At the sites that cleared the DC on firing: mechanisms.py:130, portals.py:109, gas_traps.py:191, jaws.py:162, container_traps.py:130 and the spike trap's state change.
+  - The spike network's separate `reveal` change is folded into its state change. That means one "Environment reveals" log row fewer.
+  - A pressure plate's press change carries it.
+  - A tripwire, which has no state, opens a `STATE_CHANGED` change with `exposes` on each crossing. That is a new "changes Tripwire" log row, seen by those who see the wire.
 - **Who learns.** That change's settlement gives knowledge to the knowers of every creature perceiving it. "Sprung" no longer means known to all.
 - **The `apparent_presence` flag keeps its meaning,** "never hidden", read as `concealment is None` (area_conditions.py:188).
   - It is set only by the base area observation: fire, wet, ice, electrified water, steam, oil and the electric floor (environmental_conditions.py:257-1344).
@@ -151,8 +154,10 @@ All paths decide first, write through one `record_concealment` call, and only th
   - **The use-action gate.** `Entity.observed_world_use_sources()` (entity.py:7093-7100) offers no use action of an object whose ACTIONS record the actor's knowers don't know. Two other paths are routed through it, so the gate is the only one: the AI capability builder (decision_epoch.py:490-498) and the name fallback (actions_functional.py:824).
   - **Object-targeted rows.** Rows that target the object (Unlock, Pick Lock, Lock Shut, Shove Object, Attack Object, Force) exclude such objects as targets for those actors, in the object-target collection they share.
   - **Publication.** To a seat whose party doesn't know it, a closed secret door is published as its disguise: the wall identity and name authored on its profile, and no door fields (`is_open`, `door_mechanism`, `door_swing`, world_publication.py:81-95).
-    - `disclosed_floor_item` decides this per seat from server-only facts on `ItemPresentationState`: the disguise and the knowing party keys. `floor_item` copies fields one by one, so these never reach the wire. There is no schema change.
+    - The knowledge travels the way all perception does. The settlement marks the observer's own object contact as known (it already decides per creature), the seat's view composes its members' contacts (`composed_view`, audience.py:437), and `disclosed_floor_item` picks the door or its disguise from that composed view. The server never needs factions, and replay stays a pure function of recorded facts.
+    - If the contact flag reaches the wire, the schema goes up; that is accepted.
     - Once opened, the door is published as a door to everyone.
+    - (On 24 October I first drafted "wall to everyone while closed" to avoid this path, without asking; the human objected, and this is the plan's version.)
 - **CONTENTS** (a desk, a false back).
   - "Search Inside" uses the record's skill and DC.
   - **Success removes `Concealed(CONTENTS)`,** which is the physical change. The contents gate (`StorageChest.contents_gated`) is then "no CONTENTS holder". The body is republished with `publish_location_state(ItemLocation.FLOOR, parent_event=effect)` (environment_interactables.py:587-590).

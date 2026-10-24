@@ -13,6 +13,7 @@ from dnd.blocks.base_item import BaseItem
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_conditions import ConditionApplicationEvent
+from dnd.core.concealment_types import concealment
 from dnd.core.condition_types import ConditionTag
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import fixed_dice_faces
@@ -352,7 +353,7 @@ def test_visible_material_publishes_only_its_observed_cells(world: Game, content
     assert observed.name == material.name
     assert observed.anchor_position == (1, 1)
     hidden = WetSurface(source_entity_uuid=attacker.uuid, position=(4, 1),
-                        affected_positions={(4, 1)}, condition_stealth_dc=999)
+                        affected_positions={(4, 1)}, concealment=concealment(999))
     cause = completed(0)[-1]
     hidden.activate(parent_event=cause)
     observer.update_entity_senses()

@@ -74,8 +74,6 @@ class SpatialCondition(BaseCondition):
     )
     affected_positions: Set[Tuple[int, int]] = Field(default_factory=empty_set)
     observation_revision: int = Field(default=0, ge=0, exclude=True)
-    detected_by: Set[UUID] = Field(default_factory=empty_set,
-        description="Observers whose rolled search found this concealed effect despite its DC.")
     layer: SpatialEffectLayer
     occupancy_policy: SpatialEffectOccupancyPolicy
     anchor_kind: SpatialEffectAnchorKind = SpatialEffectAnchorKind.FIXED_POSITION
@@ -173,19 +171,16 @@ class SpatialCondition(BaseCondition):
 
     def get_spatial_observation(
         self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
-        discovered: bool = False,
     ) -> Optional[PerceivedSpatialEffect]:
         """Expose an authored visible presence only in already observed cells."""
         if not self.has_visible_presence:
-            return None
-        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
             return None
         observer = Entity.get(observer_uuid)
         contact = observer.senses.entities.get(self.anchor_uuid) if observer is not None and self.anchor_uuid is not None else None
         return PerceivedSpatialEffect(
             content_ref=self.content_ref, name=self.name, description=self.description,
             positions=tuple(sorted(positions)),
-            apparent_presence=self.condition_stealth_dc is None,
+            apparent_presence=self.concealment is None,
             anchor_position=self.position if self.position in positions else None,
             anchor_elevation_steps=get_map().get_support_elevation_feet(self.position)//5 if self.position in positions else None,
             anchor_item_uuid=(self.anchor_uuid if self.anchor_kind is SpatialEffectAnchorKind.WORLD_OBJECT
@@ -245,33 +240,13 @@ class SpatialCondition(BaseCondition):
             return position == self.position
         return position in self.affected_positions
 
-    def is_hazard_perceived_by(
-        self,
-        requesting_entity_uuid: Optional[UUID] = None,
-    ) -> bool:
-        """Resolve a concealed hazard against passive perception."""
-        if (requesting_entity_uuid is None or self.condition_stealth_dc is None
-                or requesting_entity_uuid in self.detected_by):
-            return True
-        observer = BaseBlock.get(requesting_entity_uuid)
-        return (
-            observer is None
-            or self.condition_stealth_dc < observer.get_passive_perception()
-        )
-
-    def mark_detected_by(self, observer_uuid: UUID) -> None:
-        """Record that a rolled search found it; its finder's next senses refresh re-observes it."""
-        self.detected_by.add(observer_uuid)
-        self.observation_revision += 1
-
     def is_hazardous_for(
         self, entity_uuid: Optional[UUID] = None, *,
         occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND,
     ) -> bool:
-        """Resolve the inherited hazard filter for one entity."""
+        """Resolve the inherited hazard filter for one entity (objective: who knows a hidden hazard is
+        the readers' question, `GridMap.is_position_hazardous_for`)."""
         if self.hazard_filter is None or not self.affects_occupancy_layer(occupancy_layer):
-            return False
-        if not self.is_hazard_perceived_by(entity_uuid):
             return False
         if self.hazard_filter is HazardFilter.ALL:
             return True
@@ -760,8 +735,10 @@ class SpatialCondition(BaseCondition):
         pressed: Optional[bool] = None,
         previous_pressed: Optional[bool] = None,
         publish: bool = True,
+        exposes: bool = False,
     ) -> SpatialEffectChangeEvent:
-        """Publish the non-vetoable phases that directly cause a spatial change."""
+        """Publish the non-vetoable phases that directly cause a spatial change; `exposes` when the change
+        gives a hidden thing away (a trap firing), to every creature perceiving it."""
         if operation is not SpatialEffectChangeOperation.FOOTPRINT_CHANGED:
             self.observation_revision += 1
         declaration = SpatialEffectChangeEvent(
@@ -778,7 +755,7 @@ class SpatialCondition(BaseCondition):
             spatial_effect_name=self.name,
             trap_state=trap_state,
             previous_trap_state=previous_trap_state,
-            pressed=pressed, previous_pressed=previous_pressed,
+            pressed=pressed, previous_pressed=previous_pressed, exposes=exposes,
             layer=self.layer,
             anchor_position=self.position,
             affected_positions=tuple(sorted(affected_positions)),
@@ -1095,11 +1072,10 @@ class AreaCondition(SpatialCondition):
 
     def get_spatial_observation(
         self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
-        discovered: bool = False,
     ) -> Optional[PerceivedSpatialEffect]:
-        """Retain disclosed geometry with the same visibility and discovery gate."""
+        """Retain disclosed geometry with the same visibility as the base observation."""
         observed = super().get_spatial_observation(
-            positions, observer_uuid=observer_uuid, discovered=discovered,
+            positions, observer_uuid=observer_uuid,
         )
         if observed is None:
             return None

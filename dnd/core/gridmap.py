@@ -29,6 +29,7 @@ from dnd.core.navigation import (CARDINAL_COUNT, DIAGONAL_EPSILON, NO_CELLS_LAYE
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_object import BaseObject
 from dnd.core.condition_types import HazardFilter
+from dnd.core.concealment_types import ConcealedAspect, Concealment, knows
 from dnd.core.creature_types import Size
 from dnd.core.item_types import ItemPresentationProvider, ItemPresentationState
 from dnd.core.positioning import PositionCommitError
@@ -279,6 +280,19 @@ class CommittedObjectRemovals:
     published: bool = False
 
 
+class ConcealmentHolder(Protocol):
+    """A condition that hides something: its record, and the block it is held on (a spatial condition
+    is its own owner)."""
+
+    concealment: Optional[Concealment]
+
+    @property
+    def uuid(self) -> UUID: ...
+
+    @property
+    def target_entity_uuid(self) -> Optional[UUID]: ...
+
+
 class SpatialConditionOwner(Protocol):
     """Existing spatial-owner surface consumed by the map, perception and searches."""
 
@@ -306,14 +320,12 @@ class SpatialConditionOwner(Protocol):
     @property
     def observation_revision(self) -> int: ...
 
+    concealment: Optional[Concealment]
+
     @property
-    def condition_stealth_dc(self) -> Optional[int]: ...
+    def target_entity_uuid(self) -> Optional[UUID]: ...
 
     def snapshot_duration(self) -> ConditionDurationSummary: ...
-
-    def is_hazard_perceived_by(self, requesting_entity_uuid: Optional[UUID] = None) -> bool: ...
-
-    def mark_detected_by(self, observer_uuid: UUID) -> None: ...
 
     def is_hazardous_for(
         self, entity_uuid: Optional[UUID] = None, *,
@@ -334,7 +346,6 @@ class SpatialConditionOwner(Protocol):
 
     def get_spatial_observation(
         self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
-        discovered: bool = False,
     ) -> Optional[PerceivedSpatialEffect]: ...
 
     def movement_extra_cost_at(self, position: Tuple[int, int], mode: MovementMode) -> float: ...
@@ -843,6 +854,30 @@ class GridMap:
         for chunk in {self._spatial_chunk(position) for position in positions}:
             self._traversal_chunk_revisions[chunk] += 1
 
+    def record_concealment(self, writes: Sequence[Tuple[ConcealmentHolder, Concealment]]) -> None:
+        """Replace concealing conditions' records (who knows them) and invalidate, once, the paths reading
+        their cells: a known hazard changes which routes avoid it. The one writer of `concealment`."""
+        cells: Set[Tuple[int, int]] = set()
+        for holder, record in writes:
+            learned = holder.concealment is None or record.known_by != holder.concealment.known_by
+            holder.concealment = record
+            if not learned:
+                continue  # a missed search or a change of plain view moves no route
+            footprint = self._spatial_condition_positions.get(holder.uuid)
+            if footprint is not None:
+                cells |= footprint
+                continue
+            block_uuid = holder.target_entity_uuid
+            position = self._tiles_by_uuid.get(block_uuid) if block_uuid is not None else None
+            placement = self._object_placements.get(block_uuid) if block_uuid is not None else None
+            if position is not None:
+                cells.add(position)
+            elif placement is not None:
+                cells.update(placement.positions)
+        if cells:
+            self._advance_traversal(cells)
+            drop_reading_entries(self._path_cache, cells, "cache.drop.path")
+
     def invalidate_occupancy_paths(self, positions: Collection[Tuple[int, int]]) -> None:
         """Invalidate the paths and observers reading cells whose entity blocking changed."""
         if not positions:
@@ -998,7 +1033,7 @@ class GridMap:
     ) -> Tuple[Any, ...]:
         """Every requester input a path search reads, so a kept search never outlives one.
 
-        The requester's own traversal rules (allegiance, hazard perception, size
+        The requester's own traversal rules (allegiance, size
         and origin traversal, crossing rules) and, for a subjective search, the
         blockers and crossings it perceives.
         """
@@ -2156,8 +2191,11 @@ class GridMap:
             if obj is not None and obj.is_hazardous_for(entity_uuid, occupancy_layer=occupancy_layer):
                 return True
 
+        # A spatial condition's hazard rule is objective; a hidden one threatens only those who know it.
+        requester = BaseBlock.get(entity_uuid) if entity_uuid is not None else None
         for condition in self.get_spatial_conditions_at((x, y)):
-            if condition.is_hazardous_for(entity_uuid, occupancy_layer=occupancy_layer):
+            if condition.is_hazardous_for(entity_uuid, occupancy_layer=occupancy_layer) and (
+                    requester is None or knows(condition.concealment, requester.faction, requester.uuid)):
                 return True
 
         return False
@@ -5273,7 +5311,7 @@ class GridMap:
 
     def _hazard_cells_in_box(self, box: CellBox) -> Set[Tuple[int, int]]:
         """The cells of a box some hazard owner covers."""
-        _, xs, ys, _ = self.hazard_owners()
+        _, xs, ys, _, _, _ = self.hazard_owners()
         inside = (xs >= box[0]) & (xs <= box[2]) & (ys >= box[1]) & (ys <= box[3])
         return set(zip(xs[inside].tolist(), ys[inside].tolist()))
 
@@ -5473,20 +5511,27 @@ class GridMap:
         """A spatial condition's committed footprint as a bool layer."""
         return self._condition_footprints.get(condition_uuid)
 
-    def hazard_owners(self) -> Tuple[Tuple[SpatialConditionOwner | BaseBlock, ...], np.ndarray, np.ndarray, np.ndarray]:
+    def hazard_owners(self) -> Tuple[Tuple[SpatialConditionOwner | BaseBlock, ...], np.ndarray, np.ndarray, np.ndarray,
+                                     Tuple[Tuple[ConcealmentHolder, ...], ...], np.ndarray]:
         """Every owner whose hazard rule `is_position_hazardous_for` reads, with the cells it covers.
 
-        Returns the owners and, concatenated, their cells' x, y and owner index.
+        Returns the owners and, concatenated, their cells' x, y and owner index; then, per owner, the
+        conditions hiding a hazard there (a hidden spatial condition is its own; a block's are its
+        hidden hazard conditions), which perception notices, and whether the owner hides itself (a
+        hidden spatial condition, whose own rule then holds only for those who know it).
         Spatial conditions are owners over their footprints (each states its own
         rule); a Tile or placed object is one only while it holds a condition
         with a hazard filter on the ground layer, or a Tile a hazardous residue:
         the inputs of `BaseBlock.is_hazardous_for` and `Tile.is_hazardous_for`.
         """
         owners: List[SpatialConditionOwner | BaseBlock] = []
+        hidden: List[Tuple[ConcealmentHolder, ...]] = []
         xs: List[np.ndarray] = []
         ys: List[np.ndarray] = []
         for identity, (cell_xs, cell_ys) in self._condition_footprint_cells.items():
-            owners.append(self._spatial_conditions[identity])
+            condition = self._spatial_conditions[identity]
+            owners.append(condition)
+            hidden.append((condition,) if condition.concealment is not None else ())
             xs.append(cell_xs)
             ys.append(cell_ys)
         # Tiles and placed objects: those under a hazardous residue (the field's cells) and the
@@ -5512,13 +5557,19 @@ class GridMap:
                                     else (placement.position,))
         for block, cells in blocks.values():
             owners.append(block)
+            hidden.append(tuple(condition for condition in block.concealment_holders()
+                                if condition.concealment is not None
+                                and condition.concealment.aspect is ConcealedAspect.HAZARD))
             xs.append(np.array([cell[0] for cell in cells], dtype=np.int64))
             ys.append(np.array([cell[1] for cell in cells], dtype=np.int64))
         if not owners:
             empty = np.zeros(0, dtype=np.int64)
-            return (), empty, empty, empty
+            return (), empty, empty, empty, (), np.zeros(0, dtype=bool)
         owner_of = np.repeat(np.arange(len(owners), dtype=np.int64), [len(cell_xs) for cell_xs in xs])
-        return (tuple(owners), np.concatenate(xs).astype(np.int64), np.concatenate(ys).astype(np.int64), owner_of)
+        spatial = len(self._condition_footprint_cells)
+        self_hidden = np.array([index < spatial and bool(rows) for index, rows in enumerate(hidden)], dtype=bool)
+        return (tuple(owners), np.concatenate(xs).astype(np.int64), np.concatenate(ys).astype(np.int64), owner_of,
+                tuple(hidden), self_hidden)
 
     def optical_obscurement_bits_at(self, position: Tuple[int, int]) -> int:
         """The OBSCUREMENT_BITS covering one cell, from every contributing owner."""

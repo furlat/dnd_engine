@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from dnd.blocks.base_item import BaseItem
 from dnd.content.items.object_defenses import OBJECT_ARMOR_CLASS_BY_MATERIAL
+from dnd.core.concealment_types import concealment
 from dnd.core.creature_types import DamageType
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.core.item_types import ItemDestructionProfile
@@ -68,7 +69,7 @@ def materialize_trap_hardware(position: tuple[int, int], *,
         affected_positions={position}, anchor_kind=SpatialEffectAnchorKind.WORLD_OBJECT,
         anchor_uuid=item.uuid, content_ref=SWINGING_BLADE_CONTENT_REF if blade else CRUSHER_CONTENT_REF,
         name=item.name, geometry=AreaGeometry(), direction=direction, trap_state=trap_state,
-        rearm_after_activation=rearm_after_activation, condition_stealth_dc=stealth_dc,
+        rearm_after_activation=rearm_after_activation, concealment=concealment(stealth_dc),
         avoidance=avoidance or TrapSave(retreat_on_success=True),
         payload=payload or TrapPayload(damages=(TrapDamage(dice_count=1, dice_sides=6,
             damage_type=DamageType.SLASHING if blade else DamageType.BLUDGEONING),)))

@@ -15,6 +15,7 @@ from dnd.content.items.ground_hardware_builders import (
     GROUND_HARDWARE_PROFILES, materialize_ground_hardware,
 )
 from dnd.core.base_block import BaseBlock
+from dnd.core.concealment_types import concealment
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
@@ -216,7 +217,7 @@ def test_spike_body_preserves_authored_poison_and_discovery(game: Game):
     attacker = actor(game, (2, 3))
     victim = actor(game, (3, 2))
     spikes = SpikeTrap(source_entity_uuid=uuid4(), position=(3, 3), affected_positions={(3, 3)},
-        condition_stealth_dc=40, content_ref=POISON_DAMAGE_SPIKE_CONTENT_REF,
+        concealment=concealment(40), content_ref=POISON_DAMAGE_SPIKE_CONTENT_REF,
         payload=POISON_DAMAGE_SPIKE_PAYLOAD)
     body = materialize_ground_hardware(spikes, item_id="environment.trap.spikes", hit_points=8)
     Entity.update_all_entities_senses()

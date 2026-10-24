@@ -1,5 +1,6 @@
 from uuid import UUID, uuid4
 from dnd.core.condition_types import ConditionDurationSummary
+from dnd.core.concealment_types import Concealment
 
 from pydantic import (
     BaseModel,
@@ -399,9 +400,9 @@ class BaseCondition(BaseObject):
 
     def get_spatial_observation(
         self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
-        discovered: bool = False,
     ) -> Optional[PerceivedSpatialEffect]:
-        """Return an observable fixture value for conditions that own one."""
+        """Return an observable fixture value for conditions that own one; the settlement asks only
+        an observer that knows the condition (`concealment`)."""
         return None
 
     description: str = Field(
@@ -650,9 +651,9 @@ class BaseCondition(BaseObject):
         default_factory=lambda: frozenset(OccupancyLayer),
         description="Creature layers reached by this condition's spatial effects.",
     )
-    condition_stealth_dc: Optional[int] = Field(
+    concealment: Optional[Concealment] = Field(
         default=None,
-        description="Perception DC to detect this condition on a tile. None = always visible."
+        description="What this condition hides, its DC and who knows it (`concealment_types`). None = nothing hidden.",
     )
     tags: Set[ConditionTag] = Field(
         default_factory=empty_set,

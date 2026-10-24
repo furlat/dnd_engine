@@ -99,7 +99,8 @@ from dnd.core.traversal_connectors import (
     TraversalConnectorKind,
 )
 from dnd.core.creature_types import DamageType
-from dnd.core.gridmap import SpatialConditionOwner, get_map
+from dnd.core.gridmap import ConcealmentHolder, get_map
+from dnd.core.concealment_types import ConcealedAspect, Concealment, knower_key, knows, with_failure, with_knowers
 from dnd.core.view import cell_visible, visible_positions
 from dnd.core.geometry import grid_distance_feet, position_in_sector
 from dnd.core.presentation_geometry import AoEPresentationGeometry
@@ -3083,25 +3084,26 @@ class HelpAttack(BaseAction):
 
 
 @_core_action_identity(
-    content_id="action.search_for_traps",
-    display_name="Search for Traps",
-    description="Make a Wisdom (Perception) check to find hidden traps within 10 feet.",
+    content_id="action.search",
+    display_name="Search",
+    description="Make a Wisdom (Perception) check to find hidden things within 10 feet.",
     source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Search; BG3 adapted trap search",
     sort_order=92,
 )
-class SearchForTraps(BaseAction):
-    """Search for hidden traps: one rolled Wisdom (Perception) check.
+class Search(BaseAction):
+    """Search: one rolled Wisdom (Perception) check against every hidden thing within 10 feet.
 
-    The total is compared with the detection DC of each concealed trap within 10 feet, in a cell
-    the searcher sees: floor traps and traps anchored to objects (a container's needle) alike.
-    Each one beaten stays known to the searcher, exactly as a high enough passive Perception
-    would keep it known. The check publishes no DC, so a failed search tells nothing.
+    It looks, in the cells the searcher sees, for every hidden thing its party doesn't know and it has
+    not searched for already: traps and hazards on the floor, on a tile or anchored to an object. A total
+    that meets a DC makes the searcher's party know that thing; a miss is the searcher's for good, one
+    try per hidden thing. The check publishes no DC, so a failed search tells nothing.
     """
-    name: str = Field(default="Search for Traps", description="Human-readable search action name.")
-    description: str = Field(default="Search within 10 feet for hidden traps (Perception check)",
+    name: str = Field(default="Search", description="Human-readable search action name.")
+    description: str = Field(default="Search within 10 feet for anything hidden (Perception check)",
                              description="Player-facing search action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Search targets self")
     search_feet: ClassVar[int] = 10
+    searched_aspects: ClassVar[frozenset[ConcealedAspect]] = frozenset({ConcealedAspect.HAZARD})
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Search Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid when searching.")
@@ -3109,25 +3111,32 @@ class SearchForTraps(BaseAction):
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         source_entity = Entity.get(self.source_entity_uuid)
         return ActionEvent(
-            name=self.name or "Search for Traps", description=self.description,
+            name=self.name or "Search", description=self.description,
             parent_event=parent_event.uuid if parent_event else None, phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.source_entity_uuid,
             costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register, source_entity_name=source_entity.name if source_entity else None,
         )
 
-    def _concealed_nearby(self, entity: Entity) -> List[SpatialConditionOwner]:
-        """Concealed traps this searcher does not yet perceive, in seen cells within reach of the search."""
+    def _hidden_nearby(self, entity: Entity) -> List[ConcealmentHolder]:
+        """Hidden things this searcher may still find, in seen cells within reach of the search."""
         grid = get_map()
         reach = self.search_feet // 5
         x, y = entity.position
-        near: dict[UUID, SpatialConditionOwner] = {}
+        near: dict[UUID, ConcealmentHolder] = {}
         for position in ((x + dx, y + dy) for dx in range(-reach, reach + 1) for dy in range(-reach, reach + 1)):
             if not cell_visible(entity.senses.cells, position) or entity.senses.get_feet_distance(position) > self.search_feet:
                 continue
-            for spatial in grid.get_spatial_conditions_at(position):
-                if spatial.condition_stealth_dc is not None and not spatial.is_hazard_perceived_by(entity.uuid):
-                    near[spatial.uuid] = spatial
+            tile = grid.get_tile(*position)
+            blocks = [block for block in [tile, *(BaseBlock.get(identity) for identity in grid.get_objects_at(position))]
+                      if block is not None]
+            holders: List[ConcealmentHolder] = [*grid.get_spatial_conditions_at(position),
+                                                *(holder for block in blocks for holder in block.concealment_holders())]
+            for holder in holders:
+                record = holder.concealment
+                if (record is not None and record.aspect in self.searched_aspects
+                        and not knows(record, entity.faction, entity.uuid) and entity.uuid not in record.failed_by):
+                    near[holder.uuid] = holder
         return [near[identity] for identity in sorted(near, key=str)]
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
@@ -3137,14 +3146,22 @@ class SearchForTraps(BaseAction):
         effect = execution_event.phase_to(EventPhase.EFFECT)
         roll = entity.roll_d20(entity.skill_bonus(target_entity_uuid=None, skill_name="perception"),
                                RollType.CHECK, skill_name="perception", parent_event=effect.uuid)
-        found = [condition for condition in self._concealed_nearby(entity)
-                 if condition.condition_stealth_dc is not None and roll.total >= condition.condition_stealth_dc]
-        for condition in found:
-            condition.mark_detected_by(entity.uuid)
+        writes: List[Tuple[ConcealmentHolder, Concealment]] = []
+        found = 0
+        for holder in self._hidden_nearby(entity):
+            record = holder.concealment
+            assert record is not None
+            if roll.total >= record.dc:
+                writes.append((holder, with_knowers(record, (knower_key(record, entity.faction, entity.uuid),))))
+                found += 1
+            else:
+                writes.append((holder, with_failure(record, entity.uuid)))
+        if writes:
+            get_map().record_concealment(writes)
         if found:
-            entity.update_entity_senses()  # the finder's own spatial-effect facts now carry each trap
+            entity.update_entity_senses(parent_event=effect)  # the searcher's own view now shows each find
         return effect.with_updates(status_message=(
-            f"{entity.name} finds {len(found)} trap{'s' if len(found) != 1 else ''}" if found
+            f"{entity.name} finds {found} hidden thing{'s' if found != 1 else ''}" if found
             else f"{entity.name} finds nothing"))
 
 
@@ -5828,7 +5845,7 @@ _CORE_STANDARD_ACTION_TYPES = (
         AllyHelp,
         HelpAttack,
         Hide,
-        SearchForTraps,
+        Search,
         Jump,
         Shove,
         PickUp,

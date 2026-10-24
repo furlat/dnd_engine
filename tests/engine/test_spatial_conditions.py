@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from dnd.core.concealment_types import concealment
 from dnd.core.condition_types import DurationType
 from dnd.core.base_block import BaseBlock, LightLevel, MovementMode
 from dnd.core.base_conditions import BaseCondition
@@ -1150,7 +1151,7 @@ def test_multi_slot_concentration_veto_preserves_slot_and_spatial_children() -> 
     assert all(child.applied for child in children)
 
 
-def test_spike_trap_uses_one_handler_reveals_once_and_extends_by_identity() -> None:
+def test_spike_trap_uses_one_handler_exposes_once_and_extends_by_identity() -> None:
     """SpikeTrap is one persistent owner, not one marker per covered Tile."""
     reset_engine_runtime(grid_size=(4, 1))
     source_uuid = uuid4()
@@ -1159,7 +1160,7 @@ def test_spike_trap_uses_one_handler_reveals_once_and_extends_by_identity() -> N
         source_entity_uuid=source_uuid,
         position=(1, 0),
         affected_positions={(1, 0), (2, 0)},
-        condition_stealth_dc=15,
+        concealment=concealment(15),
     )
 
     activation = trap.activate(parent_event=cause)
@@ -1185,16 +1186,15 @@ def test_spike_trap_uses_one_handler_reveals_once_and_extends_by_identity() -> N
         )
 
     assert mover.get_hp() == hp_before - 2
-    assert trap.condition_stealth_dc is None
-    reveals = [
+    assert trap.concealment is not None and trap.concealment.dc == 15  # firing exposes it; the DC stays
+    exposures = [
         event
         for _, event in EventQueue.iter_events_since(cursor)
-        if event.event_type is EventType.SPATIAL_EFFECT_CHANGED
-        and event.operation is SpatialEffectChangeOperation.REVEALED
+        if isinstance(event, SpatialEffectChangeEvent) and event.exposes
         and event.spatial_effect_uuid == trap.uuid
         and event.phase is EventPhase.COMPLETION
     ]
-    assert len(reveals) == 1
+    assert len(exposures) == 1
 
     with fixed_dice_faces(1, 1):
         Entity.update_entity_position(
@@ -1206,8 +1206,7 @@ def test_spike_trap_uses_one_handler_reveals_once_and_extends_by_identity() -> N
     assert len([
         event
         for _, event in EventQueue.iter_events_since(cursor)
-        if event.event_type is EventType.SPATIAL_EFFECT_CHANGED
-        and event.operation is SpatialEffectChangeOperation.REVEALED
+        if isinstance(event, SpatialEffectChangeEvent) and event.exposes
         and event.spatial_effect_uuid == trap.uuid
         and event.phase is EventPhase.COMPLETION
     ]) == 1

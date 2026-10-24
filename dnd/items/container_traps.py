@@ -12,6 +12,7 @@ from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.concealment_types import concealment, knows
 from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.content.identities import ContentRef
 from dnd.core.dice import RollType
@@ -98,16 +99,8 @@ class ContainerTrap(SpatialCondition):
     save_dc: int = Field(default=13, ge=0)
     paralysis_rounds: int = Field(default=10, ge=1)
 
-    def is_hazard_perceived_by(self, requesting_entity_uuid: UUID | None = None) -> bool:
-        observer = BaseBlock.get(requesting_entity_uuid) if requesting_entity_uuid is not None else None
-        senses = observer.get_senses() if observer is not None else None
-        return (senses is not None and self.uuid in senses.spatial_effects
-                or super().is_hazard_perceived_by(requesting_entity_uuid))
-
     def get_spatial_observation(self, positions: set[tuple[int, int]], *,
-                               observer_uuid: UUID, discovered: bool = False) -> PerceivedSpatialEffect | None:
-        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
-            return None
+                               observer_uuid: UUID) -> PerceivedSpatialEffect | None:
         state = {TrapState.READY: "Armed.", TrapState.ACTIVATED: "Sprung.", TrapState.DEACTIVATED: "Disarmed."}
         observer = BaseBlock.get(observer_uuid)
         senses = observer.get_senses() if observer is not None else None
@@ -119,15 +112,14 @@ class ContainerTrap(SpatialCondition):
         return self.trap_state
 
     def _set_state(self, state: TrapState, *, parent_event: Event) -> bool:
-        """Leave the armed state once; a sprung or disarmed needle is plain to see."""
+        """Leave the armed state once; whoever sees the needle sprung or disarmed learns it (`exposes`)."""
         if not self.is_active_spatial_condition() or self.trap_state is not TrapState.READY:
             return False
         positions = set(self.affected_positions)
         change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED, previous_positions=positions,
             affected_positions=positions, parent_event=parent_event,
-            previous_trap_state=self.trap_state, trap_state=state)
+            previous_trap_state=self.trap_state, trap_state=state, exposes=True)
         self.trap_state = state
-        self.condition_stealth_dc = None
         self.observation_revision += 1
         self._complete_change(change)
         return True
@@ -176,11 +168,13 @@ class TrapMount(BaseCondition):
 
 
 def ready_trap_known_to(item: BaseItem, observer_uuid: UUID) -> ContainerTrap | None:
-    """The armed trap of this container, when this observer perceives it."""
+    """The armed trap of this container, when this observer knows it."""
     position = get_map().get_object_position(item.uuid)
+    observer = BaseBlock.get(observer_uuid)
     return next((condition for condition in (get_map().get_spatial_conditions_at(position) if position else ())
                  if isinstance(condition, ContainerTrap) and condition.container_uuid == item.uuid
-                 and condition.trap_state is TrapState.READY and condition.is_hazard_perceived_by(observer_uuid)),
+                 and condition.trap_state is TrapState.READY and observer is not None
+                 and knows(condition.concealment, observer.faction, observer.uuid)),
                 None)
 
 
@@ -191,7 +185,7 @@ def install_container_trap(container: StorageChest, *, detect_dc: int = 13, disa
     if position is None:
         raise ValueError(f"{container.name} must be placed before it is trapped")
     trap = ContainerTrap(source_entity_uuid=container.uuid, position=position, affected_positions={position},
-        container_uuid=container.uuid, condition_stealth_dc=detect_dc, disarm_dc=disarm_dc, save_dc=save_dc)
+        container_uuid=container.uuid, concealment=concealment(detect_dc), disarm_dc=disarm_dc, save_dc=save_dc)
     install_authored_area_condition(trap, parent_event=parent_event)
     mount = TrapMount(source_entity_uuid=container.uuid, target_entity_uuid=container.uuid)
     result = container.add_condition(mount, parent_event=parent_event)

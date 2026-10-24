@@ -1237,11 +1237,8 @@ class SilenceZone(MembershipAreaCondition):
 
     def get_spatial_observation(
         self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
-        discovered: bool = False,
     ) -> Optional[PerceivedSpatialEffect]:
         """Retain observed Silence cells and its established fixed origin."""
-        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
-            return None
         observer = Entity.get(observer_uuid)
         previous = observer.senses.spatial_effects.get(self.uuid) if observer is not None else None
         anchor = (self.position if self.position in positions

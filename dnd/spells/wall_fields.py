@@ -86,10 +86,9 @@ class WallFieldZone(AreaCondition):
     def resolve_condition_footprint(self) -> set[tuple[int, int]]:
         return self._apply_spell_protection({p for p in wall_shell_cells(self.geometry) if get_map().has_tile(*p)})
 
-    def get_spatial_observation(self, positions: set[tuple[int, int]], *, observer_uuid,
-                                discovered=False) -> PerceivedSpatialEffect | None:
+    def get_spatial_observation(self, positions: set[tuple[int, int]], *, observer_uuid) -> PerceivedSpatialEffect | None:
         observed = SpatialCondition.get_spatial_observation(self, positions,
-            observer_uuid=observer_uuid, discovered=discovered)
+            observer_uuid=observer_uuid)
         return observed.model_copy(update={"area_geometry": self.geometry,
             "anchor_elevation_steps": self.geometry.base_height_steps}) if observed is not None else None
 

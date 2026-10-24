@@ -922,11 +922,8 @@ class WebZone(RestrainingAreaCondition):
 
     def get_spatial_observation(
         self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
-        discovered: bool = False,
     ) -> Optional[PerceivedSpatialEffect]:
         """Disclose this web through the existing observed-cell sensory delta."""
-        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
-            return None
         sustainer_item_uuid = None
         concentration_slot_uuid = None
         observer = Entity.get(observer_uuid)
@@ -2137,9 +2134,8 @@ class SpiritGuardiansZone(MembershipAreaCondition):
     damage_type: DamageType = Field(default=DamageType.RADIANT, description="Damage type dealt by spirit guardians zone.")
     upcast_dice: int = Field(default=0, description="Additional damage dice contributed by upcasting spirit guardians zone.")
 
-    def get_spatial_observation(self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
-                                discovered: bool = False) -> PerceivedSpatialEffect | None:
-        observed = super().get_spatial_observation(positions, observer_uuid=observer_uuid, discovered=discovered)
+    def get_spatial_observation(self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID) -> PerceivedSpatialEffect | None:
+        observed = super().get_spatial_observation(positions, observer_uuid=observer_uuid)
         return observed.model_copy(update={"energy_type": self.damage_type}) if observed is not None else None
 
     def membership_source_class(

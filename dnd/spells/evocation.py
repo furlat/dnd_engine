@@ -2668,11 +2668,8 @@ class GustOfWindZone(AreaCondition):
 
     def get_spatial_observation(
         self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
-        discovered: bool = False,
     ) -> Optional[PerceivedSpatialEffect]:
         """Retain observed wind cells and its origin only when established."""
-        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
-            return None
         observer = Entity.get(observer_uuid)
         previous = observer.senses.spatial_effects.get(self.uuid) if observer is not None else None
         origin_known = (self.position in positions or
@@ -6082,9 +6079,8 @@ class ArcaneSwordAnchor(SpatialCondition):
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
 
-    def get_spatial_observation(self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
-                                discovered: bool = False) -> Optional[PerceivedSpatialEffect]:
-        observed = super().get_spatial_observation(positions, observer_uuid=observer_uuid, discovered=discovered)
+    def get_spatial_observation(self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID) -> Optional[PerceivedSpatialEffect]:
+        observed = super().get_spatial_observation(positions, observer_uuid=observer_uuid)
         # The observed blade owns this stable reference. It identifies a caster
         # only through independently disclosed concentration-slot state.
         return observed.model_copy(update={"concentration_slot_uuid": self.concentration_slot_uuid}) if observed is not None else None

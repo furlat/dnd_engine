@@ -19,6 +19,7 @@ from dnd.items.property_composition import ItemPropertyContribution, install_ite
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import DiceRoll
 from dnd.core.gridmap import CommittedObjectRemovals, PreparedObjectPlacement, get_map
+from dnd.core.concealment_types import knows
 from dnd.core.events import (
     Damage,
     Event,
@@ -525,11 +526,14 @@ class BaseItem(BaseBlock):
         return self.include_in_senses_objects
 
     def is_observable_to(self, observer_uuid: UUID) -> bool:
+        """A trap's hidden hardware is seen by those who know its mechanism."""
         if self.perception_condition_uuid is None:
             return True
         condition = get_map().get_spatial_condition(self.perception_condition_uuid)
-        return condition is not None and condition.get_spatial_observation(
-            {self.position}, observer_uuid=observer_uuid) is not None
+        observer = BaseBlock.get(observer_uuid)
+        return (condition is not None and observer is not None
+                and knows(condition.concealment, observer.faction, observer.uuid)
+                and condition.get_spatial_observation({self.position}, observer_uuid=observer_uuid) is not None)
 
     def observability_reads_the_world(self) -> bool:
         """A perception condition's observation decides this item's observability."""

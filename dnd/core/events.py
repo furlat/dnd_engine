@@ -3431,6 +3431,10 @@ class SensoryUpdateEvent(Event):
         default_factory=set,
         description="Previously discovered fixtures now observed to be absent.",
     )
+    concealed_noticed: FrozenSet[UUID] = Field(
+        default_factory=frozenset,
+        description="Concealing conditions this observer noticed in this settlement (a fact; not on the player wire).",
+    )
     cause_event_uuid: Optional[UUID] = Field(
         default=None,
         description="Actual causal event, or None for an independent explicit refresh.",
@@ -3620,6 +3624,7 @@ class SpatialEffectChangeEvent(Event):
     previous_trap_state: Optional[TrapState] = None
     pressed: Optional[bool] = None
     previous_pressed: Optional[bool] = None
+    exposes: bool = Field(default=False, description="The change gives a hidden thing away to every creature perceiving it.")
     layer: SpatialEffectLayer
     anchor_position: Tuple[int, int]
     affected_positions: Tuple[Tuple[int, int], ...] = ()

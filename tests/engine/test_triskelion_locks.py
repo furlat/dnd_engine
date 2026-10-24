@@ -145,9 +145,9 @@ def test_a_false_back_frees_its_contents_only_to_an_investigation_that_beats_it(
     assert wardrobe.uuid in sharp.senses.objects  # the wardrobe itself is in plain view
     act(sharp, "Open Chest")
     assert row(sharp, "Loot All") is None and row(sharp, "Loot Gold ring") is None
-    act(sharp, "Search", target=wardrobe, faces=(8,))  # Investigation 8 + 4 misses DC 13
+    act(sharp, "Search Inside", target=wardrobe, faces=(8,))  # Investigation 8 + 4 misses DC 13
     assert row(sharp, "Loot All") is None
-    act(sharp, "Search", target=wardrobe, faces=(12,))  # 12 + 4 beats it
+    act(sharp, "Search Inside", target=wardrobe, faces=(12,))  # 12 + 4 beats it
     act(sharp, "Loot All")
     assert ring.uuid in sharp.inventory.items
 
@@ -157,6 +157,6 @@ def test_every_searchable_body_offers_a_search_whether_or_not_it_hides_anything(
     empty = build_searchable_prop("environment.furniture.writing_desk", skill="perception")
     empty.place_on_grid((3, 2))
     full, _ = searchable("environment.furniture.dresser", (2, 3), skill="perception", holder=looker)
-    info = row(looker, "Search")
+    info = row(looker, "Search Inside")
     assert info is not None and {option.target_uuid for option in info.valid_targets} >= {empty.uuid, full.uuid}
 

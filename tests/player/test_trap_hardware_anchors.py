@@ -13,6 +13,7 @@ import pytest
 from dnd.conditions import Blinded
 from dnd.content.items.environment_item_builders import build_authored_door
 from dnd.content.items.ground_hardware_builders import materialize_ground_hardware
+from dnd.core.concealment_types import concealment
 from dnd.core.creature_types import DamageType
 from dnd.core.events import EventPhase, EventQueue, MechanismInstallEvent
 from dnd.player.application import initialize_audiences, seat_content
@@ -52,9 +53,9 @@ def mechanism(kind, position, *, stealth_dc=None):
         content, payload = ((SICKENING_SPIKE_CONTENT_REF, SICKENING_SPIKE_PAYLOAD)
             if kind == "spikes_poisoned" else (POISON_DAMAGE_SPIKE_CONTENT_REF, POISON_DAMAGE_SPIKE_PAYLOAD))
         return SpikeTrap(source_entity_uuid=uuid4(), position=position, affected_positions={position},
-            content_ref=content, payload=payload, condition_stealth_dc=stealth_dc)
+            content_ref=content, payload=payload, concealment=concealment(stealth_dc))
     result = owner(kind, position, uuid4())
-    result.condition_stealth_dc = stealth_dc
+    result.concealment = concealment(stealth_dc)
     return result
 
 

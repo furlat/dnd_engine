@@ -112,12 +112,12 @@ class WallOfFireZone(AreaCondition):
     def blocks_physical_optics_at(self, position: tuple[int, int]) -> bool:
         return position in self.flame_positions and position in self.affected_positions
 
-    def get_spatial_observation(self, positions, *, observer_uuid, discovered=False) -> PerceivedSpatialEffect | None:
+    def get_spatial_observation(self, positions, *, observer_uuid) -> PerceivedSpatialEffect | None:
         flames = positions & self.flame_positions
         if not flames:
             return None
         observed = SpatialCondition.get_spatial_observation(
-            self, flames, observer_uuid=observer_uuid, discovered=discovered,
+            self, flames, observer_uuid=observer_uuid,
         )
         return observed.model_copy(update={"area_geometry": self.geometry,
             "anchor_elevation_steps": self.geometry.base_height_steps}) if observed is not None else None

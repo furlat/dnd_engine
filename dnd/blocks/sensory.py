@@ -23,7 +23,8 @@ from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.base_tiles import Tile
-from dnd.core.gridmap import CellBox, GridMap, SpatialConditionOwner, get_map
+from dnd.core.gridmap import CellBox, ConcealmentHolder, GridMap, SpatialConditionOwner, get_map
+from dnd.core.concealment_types import Concealment, knower_key, knows, notices, with_knowers
 from dnd.core.navigation import NO_CELLS_LAYER, NO_ROUTES, NO_SIDES_LAYER, Routes, has_route
 from dnd.core.geometry import ROUTE_STEP_SHIFT, supercover_line, supercover_route_table
 from dnd.core.presentation_geometry import SpherePresentationGeometry
@@ -390,8 +391,9 @@ class CellChange:
 
 NO_CELL_CHANGE = CellChange(EMPTY_CELLS, EMPTY_CELLS, EMPTY_CELLS, EMPTY_VALUES, EMPTY_VALUES, False, False, False)
 # One observer's settlement as emission reads it (`SpatialSensesSystem._settle`): its published perception before,
-# the prior values of the fixtures it re-observed, and the box its published cells changed in (None: anywhere).
-ObserverSettled = Tuple[PublishedSenses, Dict[UUID, Optional[PerceivedSpatialEffect]], Optional[Box]]
+# the prior values of the fixtures it re-observed, the box its published cells changed in (None: anywhere), and
+# the hidden things it noticed.
+ObserverSettled = Tuple[PublishedSenses, Dict[UUID, Optional[PerceivedSpatialEffect]], Optional[Box], FrozenSet[UUID]]
 
 
 def _clipped(box: Box, within: Optional[Box]) -> Optional[Box]:
@@ -496,6 +498,7 @@ def emit_sensory_update_delta(
     shared: Optional[SharedValues] = None,
     contact_deltas: Optional[Tuple[Tuple[Dict[UUID, PerceivedContact], Set[UUID]],
                                    Tuple[Dict[UUID, PerceivedContact], Set[UUID]]]] = None,
+    concealed_noticed: FrozenSet[UUID] = frozenset(),
 ) -> Optional[SensoryUpdateEvent]:
     """Emit a completed sensory event for one observer transition.
 
@@ -569,6 +572,7 @@ def emit_sensory_update_delta(
         effects_removed,
         sources_changed,
         sources_removed,
+        concealed_noticed,
     ))
     if not has_delta:
         if timing:
@@ -618,6 +622,7 @@ def emit_sensory_update_delta(
         hazardous_cells_changed=hazards_changed,
         spatial_effects_changed=effects_changed,
         spatial_effects_removed=effects_removed,
+        concealed_noticed=concealed_noticed,
         cause_event_uuid=cause_event.uuid if cause_event is not None else None,
         update_reason=reason,
         settlement=settlement,
@@ -729,6 +734,7 @@ class ObserverField:
     volumes: Dict[UUID, FrozenSet[Position]]          # the seen volumes the published fixtures were observed with
     upper: Dict[UUID, Tuple[VolumeSurfaceSight, ...]]  # and their upper surfaces
     volume_grants: FrozenSet[Position]                 # the cells those volumes' routes tested
+    known_concealed: FrozenSet[UUID]                   # the hidden things in view it knew when last settled
 
 
 def _changed_light_rows(previous: Optional[ObserverField], inputs: SightInputs,
@@ -922,10 +928,24 @@ class SettlementWorld:
     hazard_x: np.ndarray             # the owners' cells, concatenated, with each cell's owner index
     hazard_y: np.ndarray
     hazard_owner: np.ndarray
+    hazard_concealments: Tuple[Tuple[ConcealmentHolder, ...], ...]  # per owner, the conditions hiding a hazard there
+    hazard_self_hidden: np.ndarray   # per owner: a hidden spatial condition (its own rule holds only for knowers)
     light_sources: LightSourceTable
     optical_revision: int
     propagation_revision: int
     sight_version: int               # GridMap's Tile and obscurement grid revision (advanced by their writers)
+
+
+@dataclass(frozen=True)
+class ViewConcealment:
+    """What one view knows of the hidden things it reaches, decided before any stage publishes."""
+
+    cell_rows: np.ndarray        # the hazard owners' cells as this view's frame rows (OFF outside it)
+    reaching: np.ndarray         # the hazard owners with a cell it sees
+    owner_known: np.ndarray      # per reaching owner: False for a hidden spatial condition it doesn't know
+    known: FrozenSet[UUID]       # the hidden things in view it knows
+    marks: FrozenSet[Position]   # the cells of those it came to know since it last settled
+    noticed: FrozenSet[UUID]     # those it noticed in this settlement
 
 
 STEALTH_NONE = np.iinfo(np.int64).min
@@ -1521,7 +1541,8 @@ class SpatialSensesSystem:
                 shared: SharedValues,
                 ) -> Dict[UUID, ObserverSettled]:
         """Recompute every observer of one settlement; returns each one's prior published state,
-        the prior values of the fixtures it re-observed and the box its cells changed in."""
+        the prior values of the fixtures it re-observed, the box its cells changed in and the hidden
+        things it noticed."""
         befores = {identity: published_senses(self.senses_by_observer[identity]) for identity in observers}
         affected = {identity: self._affected_cells(events[identity]) for identity in observers}
         # The target table re-reads the cells the facts name (the same cells as the fixtures).
@@ -1532,7 +1553,11 @@ class SpatialSensesSystem:
                 table_cells = None
                 break
             table_cells |= cells
-        touched = self._recompute(observers, affected, shared, table_cells)
+        # A fact that gives a hidden thing away exposes it to the observers it reaches.
+        exposed = {identity: frozenset(event.spatial_effect_uuid for event in events[identity]
+                                       if isinstance(event, SpatialEffectChangeEvent) and event.exposes)
+                   for identity in observers}
+        touched = self._recompute(observers, affected, shared, table_cells, exposed)
         return {identity: (befores[identity], *touched[identity]) for identity in observers}
 
     def _emit_settlement(self, observers: Sequence[UUID],
@@ -1568,7 +1593,7 @@ class SpatialSensesSystem:
                       shared: SharedValues, settlement: int) -> Optional[SensoryUpdateEvent]:
         """Emit the difference of one observer's published perception."""
         senses = self.senses_by_observer[observer_uuid]
-        before, effect_before, _ = settled
+        before, effect_before, _, noticed = settled
         contact_changes = self.fields[observer_uuid].contact_changes
         entity_delta = _contact_delta(before.entities, after.entities, initial,
                                       contact_changes[0] if contact_changes is not None else None)
@@ -1607,13 +1632,14 @@ class SpatialSensesSystem:
             settlement=settlement,
             shared=shared,
             contact_deltas=(entity_delta, object_delta),
+            concealed_noticed=noticed,
         )
 
-    def recompute_observer(self, observer_uuid: UUID, *, max_distance: Optional[int] = None) -> None:
+    def recompute_observer(self, observer_uuid: UUID, *, max_distance: Optional[int] = None) -> FrozenSet[UUID]:
         """Replace one observer's published cells and contacts from the current world."""
         senses = self.senses_by_observer.get(observer_uuid)
         if senses is None or BaseBlock.get(observer_uuid) is None:
-            return
+            return frozenset()
         if self._recording():
             # Inside a simultaneous group perception reads see pre-group
             # perception; the observer settles once when the group closes.
@@ -1621,14 +1647,14 @@ class SpatialSensesSystem:
             settlement.full = True
             if max_distance is not None:
                 settlement.max_distance = max_distance
-            return
+            return frozenset()
         if max_distance is not None:
             senses._perception_max_distance = max_distance
-        self._recompute([observer_uuid], {observer_uuid: None}, {}, None)
+        return self._recompute([observer_uuid], {observer_uuid: None}, {}, None)[observer_uuid][2]
 
     def publish_observer_refresh(
         self, observer_uuid: UUID, before: PublishedSenses, *,
-        initial: bool = False, parent_event: Event | None = None,
+        initial: bool = False, parent_event: Event | None = None, concealed_noticed: FrozenSet[UUID] = frozenset(),
     ) -> Optional[SensoryUpdateEvent]:
         """Record existing perception; a re-admitted observer can publish an initial under its assignment cause."""
         senses = self.senses_by_observer.get(observer_uuid)
@@ -1640,14 +1666,17 @@ class SpatialSensesSystem:
         change = _cell_change(before, after, initial)
         if action_timing_enabled():
             record_action_timing("sensory.settlement.cell_changes_ms", started)
-        return self._emit_refresh(observer_uuid, before, after, initial, change, parent_event=parent_event)
+        return self._emit_refresh(observer_uuid, before, after, initial, change, parent_event=parent_event,
+                                  concealed_noticed=concealed_noticed)
 
     def _emit_refresh(self, observer_uuid: UUID, before: PublishedSenses, after: PublishedSenses, initial: bool,
-                      change: CellChange, *, parent_event: Event | None = None) -> Optional[SensoryUpdateEvent]:
+                      change: CellChange, *, parent_event: Event | None = None,
+                      concealed_noticed: FrozenSet[UUID] = frozenset()) -> Optional[SensoryUpdateEvent]:
         """Publish a refresh in its own settlement. Ordinary refreshes remain independent roots;
         re-admission supplies the exact committed assignment as its causal parent."""
         event = emit_sensory_update_delta(observer_uuid, parent_event, before, after, SensoryUpdateReason.UNKNOWN,
-                                          initial=initial, cells=change, settlement=self._settlement())
+                                          initial=initial, cells=change, settlement=self._settlement(),
+                                          concealed_noticed=concealed_noticed)
         if event is not None:
             self.published_observers.add(observer_uuid)
         return event
@@ -1678,7 +1707,7 @@ class SpatialSensesSystem:
             self._map = grid
         exists = grid.cell_exists
         grid.settle_obscurement_activity()
-        hazard_owners, hazard_x, hazard_y, hazard_owner = grid.hazard_owners()
+        hazard_owners, hazard_x, hazard_y, hazard_owner, hazard_concealments, hazard_self_hidden = grid.hazard_owners()
         light_rows = tuple(grid.light_source_rows())
         # A table whose every row held is the same table: an observer's emitters then compare by identity.
         lights = self._light_table
@@ -1699,15 +1728,17 @@ class SpatialSensesSystem:
             light = self._light = LightSnapshot(grid.light_grid_revision,
                                                 CellLayer(grid.cell_light.x0, grid.cell_light.y0, values))
         return SettlementWorld(exists, light, grid.obscurement_layers(), grid.cell_obscurement,
-                               hazard_owners, hazard_x, hazard_y, hazard_owner, lights,
+                               hazard_owners, hazard_x, hazard_y, hazard_owner, hazard_concealments,
+                               hazard_self_hidden, lights,
                                grid.optical_revision, grid.propagation_revision, grid.sight_grid_revision)
 
     def _recompute(self, observers: Sequence[UUID], affected: Mapping[UUID, Optional[Set[Position]]],
                    shared: SharedValues, table_cells: Optional[Set[Position]],
-                   ) -> Dict[UUID, Tuple[Dict[UUID, Optional[PerceivedSpatialEffect]], Optional[Box]]]:
+                   exposed: Mapping[UUID, FrozenSet[UUID]] = {},
+                   ) -> Dict[UUID, Tuple[Dict[UUID, Optional[PerceivedSpatialEffect]], Optional[Box], FrozenSet[UUID]]]:
         """Recompute the observers' views with one settlement world and one target table. Returns, per
-        observer, the prior values of the fixtures it re-observed and the box its published cells changed
-        in (`_publish_cells`)."""
+        observer, the prior values of the fixtures it re-observed, the box its published cells changed
+        in (`_publish_cells`) and the hidden things it noticed (`_concealment`)."""
         diagnostic = action_timing_enabled()
         # The passive-perception rule runs before any world read: its contextual inputs may commit
         # world changes, which this settlement's world and target table then include.
@@ -1742,6 +1773,10 @@ class SpatialSensesSystem:
             views.append(self._view(scope, world, routes, light_changes))
             if diagnostic:
                 record_action_timing("sensory.recompute.view_ms", started)
+        started = time.perf_counter() if diagnostic else 0.0
+        knowledge = self._concealment(views, world, passives, exposed)
+        if diagnostic:
+            record_action_timing("sensory.settlement.concealment_ms", started)
         started = time.perf_counter() if diagnostic else 0.0
         previous_table = self._table
         table = self._target_table(world, table_cells)
@@ -1787,8 +1822,8 @@ class SpatialSensesSystem:
         # wrote for every view, or the objective world, which no stage writes; no fact is stored while
         # they run.
         started = time.perf_counter() if diagnostic else 0.0
-        published = [self._publish_cells(view, world, passives[view.owner.uuid], resolved)
-                     for view, resolved in zip(views, contacts)]
+        published = [self._publish_cells(view, world, passives[view.owner.uuid], resolved, known)
+                     for view, resolved, known in zip(views, contacts, knowledge)]
         before_visible = [visible for visible, _ in published]
         if diagnostic:
             record_action_timing("sensory.recompute.cells_ms", started)
@@ -1798,18 +1833,19 @@ class SpatialSensesSystem:
             record_action_timing("sensory.recompute.volume_geometry_ms", started)
             started = time.perf_counter()
         stack = _visible_stack(before_visible, [view.senses.cells.visible for view in views])
-        effects = self._refresh_spatial_effects(views, sights, before_visible, affected, passives, contacts, stack)
+        effects = self._refresh_spatial_effects(views, sights, before_visible, affected, contacts, stack,
+                                                [known.marks for known in knowledge])
         if diagnostic:
             record_action_timing("sensory.recompute.spatial_effects_ms", started)
             started = time.perf_counter()
         lights = self._refresh_light_sources(views, world, contacts, shared, stack)
         if diagnostic:
             record_action_timing("sensory.recompute.light_sources_ms", started)
-        touched: Dict[UUID, Tuple[Dict[UUID, Optional[PerceivedSpatialEffect]], Optional[Box]]] = {}
+        touched: Dict[UUID, Tuple[Dict[UUID, Optional[PerceivedSpatialEffect]], Optional[Box], FrozenSet[UUID]]] = {}
         grants: Dict[UUID, Optional[CellLayer]] = {}
         for view, (_, _, contact_rows, contact_uuids, contact_changes), (volumes, upper, volume_grants), effect_before, \
-                (light_inputs, light_values), (_, cells_within) in zip(views, contacts, sights, effects, lights,
-                                                                        published):
+                (light_inputs, light_values), (_, cells_within), known in zip(views, contacts, sights, effects, lights,
+                                                                               published, knowledge):
             observer_uuid, field = view.owner.uuid, view.field
             granted = frozenset(volume_grants)
             if not (view.frame_changes is not None and field.volume_grants == granted):
@@ -1821,8 +1857,8 @@ class SpatialSensesSystem:
                 field.felt_rows, field.sight_inputs, field.sight, field.light, field.optical,
                 field.exists_frame, field.felt_frame, field.seen_frame, field.senses_frame,
                 contact_rows, contact_uuids, contact_changes, self._table_version, passives[observer_uuid],
-                light_values, light_inputs, volumes, upper, granted)
-            touched[observer_uuid] = (effect_before, cells_within)
+                light_values, light_inputs, volumes, upper, granted, known.known)
+            touched[observer_uuid] = (effect_before, cells_within, known.noticed)
         # The grants are written once the settlement is published.
         if grants:
             self._grants = _replace_grants(self._grants, grants)
@@ -1982,7 +2018,8 @@ class SpatialSensesSystem:
                               previous.light_inputs if previous is not None else None,
                               previous.volumes if previous is not None else {},
                               previous.upper if previous is not None else {},
-                              previous.volume_grants if previous is not None else frozenset())
+                              previous.volume_grants if previous is not None else frozenset(),
+                              previous.known_concealed if previous is not None else frozenset())
         return ObserverView(owner, senses, origin, modes, ordinary_sight, optical_reach,
                             field, previous is not None, lit_kept, relit, frame_changes, optical, exists,
                             seen_frame,
@@ -2095,8 +2132,58 @@ class SpatialSensesSystem:
             side_array = np.concatenate((old_sides[old_sides[:, 7] >= 0], side_array))
         return _contact_table_value(box, columns, cell_array, side_array)
 
+    def _concealment(self, views: Sequence[ObserverView], world: SettlementWorld, passives: Mapping[UUID, int],
+                     exposed: Mapping[UUID, FrozenSet[UUID]]) -> List[ViewConcealment]:
+        """Notice: every hidden thing a view reaches that its knowers don't know is noticed when its passive
+        Perception meets the DC or it is in plain view (`notices`), or when a fact of this settlement
+        exposes it (a trap firing). Every notice is decided, then written in one
+        `GridMap.record_concealment`, before any stage reads; a view then re-observes the hidden things it
+        came to know since it last settled (its own notices and its party's)."""
+        hidden, self_hidden = world.hazard_concealments, world.hazard_self_hidden
+        frames = []
+        for view in views:
+            cell_rows = frame_index(world.hazard_x, world.hazard_y, view.origin)
+            frames.append((cell_rows, np.unique(world.hazard_owner[(cell_rows != OFF) & view.seen_frame[cell_rows]])))
+        writes: Dict[UUID, Tuple[ConcealmentHolder, Concealment]] = {}
+        noticed: List[Set[UUID]] = [set() for _ in views]
+        for index, (view, (_, reaching)) in enumerate(zip(views, frames)):
+            owner = view.owner
+            passive, exposing = passives[owner.uuid], exposed.get(owner.uuid, frozenset())
+            for owner_index in reaching.tolist():
+                for holder in hidden[owner_index]:
+                    written = writes.get(holder.uuid)
+                    record = written[1] if written is not None else holder.concealment
+                    if record is None or knows(record, owner.faction, owner.uuid):
+                        continue
+                    if notices(record, passive) or holder.uuid in exposing:
+                        writes[holder.uuid] = (holder, with_knowers(record, (knower_key(record, owner.faction, owner.uuid),)))
+                        noticed[index].add(holder.uuid)
+        if writes:
+            get_map().record_concealment(tuple(writes.values()))
+        # Each owner's cells are one run of the concatenated owner cells (`GridMap.hazard_owners`).
+        starts = np.searchsorted(world.hazard_owner, np.arange(len(hidden) + 1))
+        result = []
+        for index, (view, (cell_rows, reaching)) in enumerate(zip(views, frames)):
+            owner = view.owner
+            owner_known = np.ones(reaching.size, dtype=bool)
+            known: Set[UUID] = set()
+            marks: Set[Position] = set()
+            for row, owner_index in enumerate(reaching.tolist()):
+                for holder in hidden[owner_index]:
+                    if knows(holder.concealment, owner.faction, owner.uuid):
+                        known.add(holder.uuid)
+                        if holder.uuid not in view.field.known_concealed:
+                            run = slice(starts[owner_index], starts[owner_index + 1])
+                            seen = cell_rows[run] != OFF
+                            marks.update(zip(world.hazard_x[run][seen].tolist(), world.hazard_y[run][seen].tolist()))
+                    elif self_hidden[owner_index]:
+                        owner_known[row] = False
+            result.append(ViewConcealment(cell_rows, reaching, owner_known, frozenset(known), frozenset(marks),
+                                          frozenset(noticed[index])))
+        return result
+
     def _publish_cells(self, view: ObserverView, world: SettlementWorld, passive: int,
-                       resolved: ResolvedContacts) -> Tuple[CellLayer, Optional[Box]]:
+                       resolved: ResolvedContacts, known: ViewConcealment) -> Tuple[CellLayer, Optional[Box]]:
         """Hazards, cells, seen cells and contacts of one view, published on its Senses.
         Returns the visible cells it published before, and the box outside which its published
         cells and seen cells are the ones before (None: they may differ anywhere)."""
@@ -2104,14 +2191,14 @@ class SpatialSensesSystem:
         observer_uuid = owner.uuid
         entities, objects, _, _, _ = resolved
         window = view.field.window
-        # Each hazard owner states its rule once per observer; its cells are OR-ed in one scatter.
+        # Each hazard owner states its rule once per observer; its cells are OR-ed in one scatter. A hidden
+        # spatial condition counts only for an observer that knows it (a block asks its own conditions).
         hazard_frame = np.zeros(OFF + 1, dtype=bool)
-        cell_rows = frame_index(world.hazard_x, world.hazard_y, origin)
-        reaching = np.unique(world.hazard_owner[(cell_rows != OFF) & view.seen_frame[cell_rows]])
+        cell_rows, reaching = known.cell_rows, known.reaching
         if reaching.size:
             hazardous = np.zeros(len(world.hazard_owners), dtype=bool)
-            hazardous[reaching] = [world.hazard_owners[owner].is_hazardous_for(observer_uuid)
-                                   for owner in reaching.tolist()]
+            hazardous[reaching] = [bool(owner_known) and world.hazard_owners[owner].is_hazardous_for(observer_uuid)
+                                   for owner, owner_known in zip(reaching.tolist(), known.owner_known.tolist())]
             hazard_frame[cell_rows[hazardous[world.hazard_owner]]] = True
         hazard_frame[OFF] = False
         hazard_frame &= view.seen_frame
@@ -2419,7 +2506,7 @@ class SpatialSensesSystem:
             else:
                 xs, ys = occupied_x, occupied_y
                 in_footprint = np.ones(occupied_x.size, dtype=bool)
-            observation = condition.get_spatial_observation(set(), observer_uuid=view.owner.uuid, discovered=True)
+            observation = condition.get_spatial_observation(set(), observer_uuid=view.owner.uuid)
             sphere = observation.area_geometry if observation is not None else None
             base = observation.anchor_elevation_steps if observation is not None else None
             rows = frame_index(xs, ys, origin)
@@ -2499,8 +2586,8 @@ class SpatialSensesSystem:
 
     def _refresh_spatial_effects(
         self, views: Sequence[ObserverView], sights: Sequence[VolumeSights], before_visible: Sequence[CellLayer],
-        affected: Mapping[UUID, Optional[Set[Position]]], passives: Mapping[UUID, int],
-        resolved: Sequence[ResolvedContacts], stack: VisibleStack,
+        affected: Mapping[UUID, Optional[Set[Position]]],
+        resolved: Sequence[ResolvedContacts], stack: VisibleStack, known_marks: Sequence[FrozenSet[Position]],
     ) -> List[Dict[UUID, Optional[PerceivedSpatialEffect]]]:
         """Re-observe every view's fixtures on its newly visible and affected cells, in one pass over the
         stacked views: each spatial condition's footprint meets every view's re-observed cells at once,
@@ -2521,6 +2608,9 @@ class SpatialSensesSystem:
                 if mask is None:
                     mask = named[key] = _cells_mask(key, box)
                 marks[index] = mask
+            if known_marks[index]:
+                # The hidden things it has just come to know are observed again where it sees them.
+                marks[index] = marks[index] | _cells_mask(known_marks[index], box)
         reobserved = now & (everywhere[:, None, None] | ~before | marks)
         changed = reobserved | (before & ~now)
         any_reobserved = reobserved.any(axis=(1, 2)).tolist()
@@ -2532,14 +2622,14 @@ class SpatialSensesSystem:
         object_contact_views: Set[int] = set()
         # The fixture stage reads the visible cells, the seen volumes and the cells the facts name: while
         # the first two held and no named cell is visible or a volume surface, the published fixtures
-        # stand. An observation also reads the observer's contacts (a fixture's anchor) and its passive
-        # perception (hazard perception): any contact change or a passive change re-runs the stage.
+        # stand. An observation also reads the observer's contacts (a fixture's anchor) and what it knows
+        # (`_concealment`): any contact change or a newly known hidden thing re-runs the stage.
         for index, (view, (volumes, upper, _), (_, _, _, _, contact_changes)) in enumerate(zip(views, sights, resolved)):
             surfaces = {position for positions in volumes.values() for position in positions}
             surfaces.update(row.position for rows in upper.values() for row in rows)
             cells = affected[view.owner.uuid]
             if not (view.published and view.senses.cells.visible is before_visible[index] and cells is not None
-                    and contact_changes == (frozenset(), frozenset()) and view.field.passive == passives[view.owner.uuid]
+                    and contact_changes == (frozenset(), frozenset()) and not known_marks[index]
                     and volumes == view.field.volumes and upper == view.field.upper
                     and not affected_seen[index] and surfaces.isdisjoint(cells)):
                 surfaces_of[index] = surfaces
@@ -2633,12 +2723,12 @@ class SpatialSensesSystem:
                 continue
             candidates = candidates_of[index]
             observations: Dict[UUID, PerceivedSpatialEffect] = {}
+            owner = view.owner
             for condition, observed_positions, observed_visible in candidates.values():
+                if not knows(condition.concealment, owner.faction, owner.uuid):
+                    continue  # a hidden thing is observed only by those who know it
                 volume_positions = observed_positions & volumes.get(condition.uuid, frozenset())
-                observation = condition.get_spatial_observation(
-                    observed_visible, observer_uuid=observer_uuid,
-                    discovered=condition.uuid in senses.spatial_effects,
-                )
+                observation = condition.get_spatial_observation(observed_visible, observer_uuid=observer_uuid)
                 if observation is not None:
                     observations[condition.uuid] = observation.model_copy(update={
                         "owner_revision": condition.observation_revision,

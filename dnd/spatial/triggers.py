@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 from pydantic import Field, model_validator
 
 from dnd.core.base_conditions import Duration
+from dnd.core.concealment_types import concealment
 from dnd.core.condition_types import DurationType
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, SpatialChangeEvent, StepMovementEvent, ForcedMovementEvent, MechanismActivationEvent, MechanismInstallEvent, Trigger
@@ -52,9 +53,7 @@ class PressurePlate(SpatialCondition):
         duration=None, duration_type=DurationType.PERMANENT))
 
     def get_spatial_observation(self, positions: set[tuple[int, int]], *,
-                                observer_uuid: UUID, discovered: bool = False) -> PerceivedSpatialEffect | None:
-        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
-            return None
+                                observer_uuid: UUID) -> PerceivedSpatialEffect | None:
         observer = Entity.get(observer_uuid)
         return PerceivedSpatialEffect(content_ref=self.content_ref, name=self.name,
             description="The plate is pressed down." if self.pressed else "The plate is released.",
@@ -73,7 +72,7 @@ class PressurePlate(SpatialCondition):
         positions = set(self.affected_positions)
         effect = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
             previous_positions=positions, affected_positions=positions, parent_event=parent_event,
-            previous_pressed=self.pressed, pressed=occupied)
+            previous_pressed=self.pressed, pressed=occupied, exposes=occupied)
         # Nested movement caused by the output must observe the new contact state.
         self.pressed = occupied
         self.observation_revision += 1
@@ -141,7 +140,7 @@ def materialize_pressure_plate(positions: set[tuple[int, int]], link: ControlLin
                 raise RuntimeError("Pressure plate installation canceled")
             cause = cause.phase_to(phase)
     plate = PressurePlate(source_entity_uuid=source, position=min(positions),
-        affected_positions=positions, link=link, condition_stealth_dc=stealth_dc)
+        affected_positions=positions, link=link, concealment=concealment(stealth_dc))
     result = plate.activate(parent_event=cause)
     if result is None or result.canceled or not plate.applied:
         raise RuntimeError("Pressure plate installation failed")
@@ -186,9 +185,7 @@ class Tripwire(SpatialCondition):
         return self
 
     def get_spatial_observation(self, positions: set[tuple[int, int]], *,
-                                observer_uuid: UUID, discovered: bool = False) -> PerceivedSpatialEffect | None:
-        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
-            return None
+                                observer_uuid: UUID) -> PerceivedSpatialEffect | None:
         observer = Entity.get(observer_uuid)
         return PerceivedSpatialEffect(content_ref=self.content_ref, name=self.name,
             description="A taut wire triggers its connected mechanism when crossed on foot.",
@@ -225,6 +222,10 @@ class Tripwire(SpatialCondition):
                     return None
                 pulse = pulse.phase_to(phase)
             if not pulse.canceled:
+                # The wire gives itself away to every creature that sees it caught.
+                positions = set(self.affected_positions)
+                self._complete_change(self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
+                    previous_positions=positions, affected_positions=positions, parent_event=pulse, exposes=True))
                 activate_link(self.link, parent_event=pulse)
                 pulse.phase_to(EventPhase.COMPLETION, committed=True)
             return None
@@ -250,7 +251,7 @@ def materialize_tripwire(position: tuple[int, int], across: tuple[int, int], lin
                 raise RuntimeError("Tripwire installation canceled")
             cause = cause.phase_to(phase)
     wire = Tripwire(source_entity_uuid=source, position=position, across=across,
-        affected_positions={position, across}, link=link, condition_stealth_dc=stealth_dc)
+        affected_positions={position, across}, link=link, concealment=concealment(stealth_dc))
     result = wire.activate(parent_event=cause)
     if result is None or result.canceled or not wire.applied:
         raise RuntimeError("Tripwire installation failed")

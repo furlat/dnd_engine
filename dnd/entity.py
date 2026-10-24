@@ -2001,10 +2001,11 @@ class Entity(BaseBlock):
         """Every value of this creature that path rules read when it requests a path.
 
         Allegiance and size decide which creatures it may pass
-        (`can_traverse_creature_space`), passive perception which concealed
-        hazards it knows, and type and body form which crossings stop it.
+        (`can_traverse_creature_space`), and type and body form which crossings
+        stop it. Which concealed hazards it knows is a fact of their cells
+        (`GridMap.record_concealment` invalidates the paths reading them).
         """
-        return (self.faction, self.get_passive_perception(), self.size, self.creature_type, self.gaseous_body,
+        return (self.faction, self.size, self.creature_type, self.gaseous_body,
                 self.has_origin_capability(OriginCapability.HALFLING_NIMBLENESS))
 
     def can_traverse_creature_space(self, occupant: "Entity") -> bool:
@@ -5351,10 +5352,13 @@ class Entity(BaseBlock):
         self,
         max_distance: int = 10,
         path_max_distance: Optional[int] = None,
+        *,
+        parent_event: Optional[Event] = None,
     ) -> None:
-        """Reduce perception, materialize navigation, and record any actual delta."""
+        """Reduce perception, materialize navigation, and record any actual delta (a child of
+        `parent_event` when an action caused it, such as a search)."""
         before = published_senses(self.senses)
-        spatial_senses_system.recompute_observer(
+        noticed = spatial_senses_system.recompute_observer(
             self.uuid,
             max_distance=max_distance,
         )
@@ -5362,7 +5366,8 @@ class Entity(BaseBlock):
             max_distance=max_distance,
             path_max_distance=path_max_distance,
         )
-        spatial_senses_system.publish_observer_refresh(self.uuid, before)
+        spatial_senses_system.publish_observer_refresh(self.uuid, before, parent_event=parent_event,
+                                                       concealed_noticed=noticed)
 
     @classmethod
     def update_all_entities_senses(cls, max_distance: int = 10) -> None:

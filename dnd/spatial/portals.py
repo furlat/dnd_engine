@@ -5,8 +5,8 @@ from uuid import UUID, uuid4
 from pydantic import Field, model_validator
 
 from dnd.actions import resolve_paid_entry_retreats, Move
-from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import Duration
+from dnd.core.concealment_types import concealment, with_plain_view
 from dnd.core.condition_types import DurationType, HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import (
@@ -68,14 +68,6 @@ class Portal(SpatialCondition):
             raise ValueError("Portal exit must be outside its entrance footprint")
         return self
 
-    def is_hazard_perceived_by(self, requesting_entity_uuid: UUID | None = None) -> bool:
-        if self.trap_state is TrapState.ACTIVATED:
-            return True
-        observer = BaseBlock.get(requesting_entity_uuid) if requesting_entity_uuid else None
-        senses = observer.get_senses() if observer is not None else None
-        return bool(senses is not None and self.uuid in senses.spatial_effects) or super().is_hazard_perceived_by(
-            requesting_entity_uuid)
-
     def spatial_channels(self) -> frozenset[SpatialChannel]:
         return super().spatial_channels() | {SpatialChannel.MOVEMENT}
 
@@ -85,9 +77,7 @@ class Portal(SpatialCondition):
             entity_uuid, occupancy_layer=occupancy_layer)
 
     def get_spatial_observation(self, positions: set[tuple[int, int]], *,
-                                observer_uuid: UUID, discovered: bool = False) -> PerceivedSpatialEffect | None:
-        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
-            return None
+                                observer_uuid: UUID) -> PerceivedSpatialEffect | None:
         text = {
             TrapState.READY: "Closed and armed; ground contact opens the passage.",
             TrapState.ACTIVATED: "An open passage transports creatures touching its entrance.",
@@ -102,11 +92,12 @@ class Portal(SpatialCondition):
         positions = set(self.affected_positions)
         effect = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
             previous_positions=positions, affected_positions=positions,
-            parent_event=parent_event, trap_state=state, previous_trap_state=self.trap_state)
+            parent_event=parent_event, trap_state=state, previous_trap_state=self.trap_state,
+            exposes=state is TrapState.ACTIVATED)
         self.trap_state = state
         self.observation_revision += 1
-        if state is TrapState.ACTIVATED:
-            self.condition_stealth_dc = None
+        if self.concealment is not None:  # an open hatch is in plain view; shut it hides again
+            get_map().record_concealment(((self, with_plain_view(self.concealment, state is TrapState.ACTIVATED)),))
         self._complete_change(effect)
         if state is TrapState.ACTIVATED:
             # Publish the revealed entrance before moving its witnesses away.
@@ -204,7 +195,8 @@ def materialize_portal(positions: set[tuple[int, int]], exit_position: tuple[int
         raise RuntimeError("Portal installation was canceled")
     portal = Portal(source_entity_uuid=source_uuid, position=min(positions),
         affected_positions=positions, exit_position=exit_position,
-        trap_state=trap_state, content_ref=content_ref, condition_stealth_dc=stealth_dc)
+        trap_state=trap_state, content_ref=content_ref,
+        concealment=concealment(stealth_dc, in_plain_view=trap_state is TrapState.ACTIVATED))
     result = portal.activate(parent_event=cause)
     if result is None or result.canceled or not portal.applied:
         raise RuntimeError("Portal installation failed")

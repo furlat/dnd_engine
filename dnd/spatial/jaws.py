@@ -4,8 +4,8 @@ from uuid import UUID, uuid4
 
 from pydantic import Field
 
-from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import Duration
+from dnd.core.concealment_types import concealment
 from dnd.core.condition_types import ConditionCategory, DurationType, HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.creature_types import DamageType
@@ -77,12 +77,6 @@ class JawTrap(SpatialCondition):
     hazard_filter: HazardFilter = HazardFilter.ALL
     duration: Duration = Field(default_factory=lambda: Duration(duration=None, duration_type=DurationType.PERMANENT))
 
-    def is_hazard_perceived_by(self, requesting_entity_uuid: UUID | None = None) -> bool:
-        observer = BaseBlock.get(requesting_entity_uuid) if requesting_entity_uuid is not None else None
-        senses = observer.get_senses() if observer is not None else None
-        return (senses is not None and self.uuid in senses.spatial_effects
-                or super().is_hazard_perceived_by(requesting_entity_uuid))
-
     def spatial_channels(self) -> frozenset[SpatialChannel]:
         return super().spatial_channels() | {SpatialChannel.MOVEMENT}
 
@@ -92,9 +86,7 @@ class JawTrap(SpatialCondition):
             entity_uuid, occupancy_layer=occupancy_layer)
 
     def get_spatial_observation(self, positions: set[tuple[int, int]], *,
-                               observer_uuid: UUID, discovered: bool = False) -> PerceivedSpatialEffect | None:
-        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
-            return None
+                               observer_uuid: UUID) -> PerceivedSpatialEffect | None:
         if self.trap_state is TrapState.READY:
             description = "Open and armed; ground contact closes the jaws."
         elif self.trap_state is TrapState.DEACTIVATED:
@@ -107,11 +99,11 @@ class JawTrap(SpatialCondition):
             anchor_item_uuid=(self.anchor_uuid if self.anchor_kind is SpatialEffectAnchorKind.WORLD_OBJECT
                 and observer is not None and self.anchor_uuid in observer.senses.objects else None))
 
-    def _publish_state(self, *, parent_event: Event, previous_state: TrapState) -> None:
+    def _publish_state(self, *, parent_event: Event, previous_state: TrapState, exposes: bool = False) -> None:
         positions = set(self.affected_positions)
         change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
             previous_positions=positions, affected_positions=positions, parent_event=parent_event,
-            previous_trap_state=previous_state, trap_state=self.trap_state)
+            previous_trap_state=previous_state, trap_state=self.trap_state, exposes=exposes)
         self._complete_change(change)
 
     def unlink_condition(self, condition_uuid: UUID, *, parent_event: Event) -> None:
@@ -159,7 +151,6 @@ class JawTrap(SpatialCondition):
         if event.canceled:
             return event
         self.trap_state = TrapState.ACTIVATED
-        self.condition_stealth_dc = None
         self.observation_revision += 1
         if target is not None:
             request = target.create_saving_throw_request(target_entity_uuid=target.uuid, ability_name="dexterity",
@@ -177,7 +168,7 @@ class JawTrap(SpatialCondition):
                     applied = target.add_condition(source, parent_event=event)
                     if applied is not None and not applied.canceled:
                         self.add_linked_condition(target.uuid, source.uuid)
-        self._publish_state(parent_event=event, previous_state=TrapState.READY)
+        self._publish_state(parent_event=event, previous_state=TrapState.READY, exposes=True)
         return event.phase_to(EventPhase.COMPLETION, committed=True)
 
     def _apply(self, execution_event: Event) -> tuple[list[tuple[UUID, UUID]], list[UUID], list[UUID], list[UUID], Event]:
@@ -218,7 +209,7 @@ def materialize_jaw_trap(position: tuple[int, int], *, payload: TrapPayload | No
         cause = EventQueue.publish_declaration(Event(name="Install jaw trap", event_type=EventType.BASE_ACTION,
             source_entity_uuid=identity, use_register=False)).phase_to(EventPhase.EXECUTION).phase_to(EventPhase.EFFECT)
     trap = JawTrap(uuid=identity, source_entity_uuid=identity, position=position, affected_positions={position},
-        save_dc=save_dc, escape_dc=escape_dc, trap_state=trap_state, condition_stealth_dc=stealth_dc,
+        save_dc=save_dc, escape_dc=escape_dc, trap_state=trap_state, concealment=concealment(stealth_dc),
         payload=payload or TrapPayload(damages=(TrapDamage(dice_count=1, dice_sides=6, damage_type=DamageType.PIERCING),)))
     result = trap.activate(parent_event=cause)
     if result is None or result.canceled or not trap.applied:

@@ -475,10 +475,10 @@ def _hide_semantics() -> ActionSemantics:
     )
 
 
-def _search_for_traps_semantics() -> ActionSemantics:
-    """Return semantics for a rolled search that may reveal nearby hidden traps."""
+def _search_semantics() -> ActionSemantics:
+    """Return semantics for a rolled search that may reveal nearby hidden things."""
     return ActionSemantics(
-        semantic_id="information.search_for_traps",
+        semantic_id="information.search",
         # Not an information action for the policies yet: when AI searches is exploration-mode work.
         tags=frozenset({ActionTag.SETUP_SELF}),
         stochastic_effects=(
@@ -486,7 +486,7 @@ def _search_for_traps_semantics() -> ActionSemantics:
                 outcome_kind=OutcomeKind.UNKNOWN,
                 effects=(
                     LogicalEffect(
-                        fact_id="actor.known_traps_nearby",
+                        fact_id="actor.known_hidden_nearby",
                         operation=EffectOperation.ADD,
                         value=True,
                     ),
@@ -1269,7 +1269,7 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
     "dnd.actions.Drop": _drop_item_semantics,
     "dnd.summoning.actions.DismissSummon": _dismiss_summon_semantics,
     "dnd.actions.Hide": _hide_semantics,
-    "dnd.actions.SearchForTraps": _search_for_traps_semantics,
+    "dnd.actions.Search": _search_semantics,
     "dnd.items.searchables.SearchBody": _object_interaction_semantics(
         "interaction.object.search", rolled=True, fact_id="selected_object.contents_found"),
     "dnd.items.shoving.ShoveObject": _object_interaction_semantics(

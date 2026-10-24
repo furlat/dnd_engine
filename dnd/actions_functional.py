@@ -28,7 +28,7 @@ from dnd.core.action_types import ActionAffordance, ActionSelection
 from dnd.types.discovery import ActorScan
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.entity import Entity
-from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, AllyHelp, HelpAttack, Hide, SearchForTraps, Attack, Jump, Shove, PickUp, Drop, SpellAction, TraverseConnector
+from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, AllyHelp, HelpAttack, Hide, Search, Attack, Jump, Shove, PickUp, Drop, SpellAction, TraverseConnector
 from dnd.items.container_traps import DisarmTrap
 from dnd.items.locks import ForceLock, LockShut, PickLock, Unlock
 from dnd.items.searchables import SearchBody
@@ -108,7 +108,7 @@ def setup_standard_actions(entity: Entity) -> None:
             "action.disengage",
         ),
         (Hide(source_entity_uuid=entity.uuid, template=True), "action.hide"),
-        (SearchForTraps(source_entity_uuid=entity.uuid, template=True), "action.search_for_traps"),
+        (Search(source_entity_uuid=entity.uuid, template=True), "action.search"),
         (SearchBody(source_entity_uuid=entity.uuid, template=True), "action.environment.search"),
         (ShoveObject(source_entity_uuid=entity.uuid, template=True), "action.environment.shove_object"),
         (WorkPump(source_entity_uuid=entity.uuid, template=True), "action.environment.work_pump"),

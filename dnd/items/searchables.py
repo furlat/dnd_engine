@@ -54,7 +54,7 @@ class SearchBody(BaseAction):
     The roll publishes no DC, and success and failure read alike when the body is empty.
     """
 
-    name: str = Field(default="Search", description="Action name.")
+    name: str = Field(default="Search Inside", description="Action name.")
     description: str = Field(default="Search this for anything tucked away", description="Player-facing summary.")
     target_type: TargetType = Field(default=TargetType.OBJECT, description="Targets the searchable body.")
     costs: List[Cost] = Field(default_factory=lambda: [

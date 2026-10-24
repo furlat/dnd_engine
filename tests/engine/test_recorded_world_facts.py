@@ -157,7 +157,7 @@ def test_tile_condition_and_independent_area_hazards_publish_without_contact_cha
     assert tile.remove_condition("Exposed trap")
     cleared = tile_checkpoint(observer.uuid)
     cause = Event(source_entity_uuid=observer.uuid, event_type=EventType.BASE_ACTION, phase=EventPhase.EFFECT)
-    zone = SpikeGrowthZone(source_entity_uuid=uuid4(), position=(2, 1), area=Sphere(radius_feet=0), spell_dc=0)
+    zone = SpikeGrowthZone(source_entity_uuid=uuid4(), position=(2, 1), area=Sphere(radius_feet=0))
     assert zone.activate(parent_event=cause) is not None
     area = tile_checkpoint(observer.uuid)
     assert tile.active_conditions == {}

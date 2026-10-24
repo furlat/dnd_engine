@@ -9,8 +9,8 @@ Without --base it times only this checkout. Rows (milliseconds unless noted):
 
 - traps: N hidden traps (half spike, half finite, DC 11-18) on a 40x40 map with six observers
   (passive Perception 9-15), all in one faction or each in its own. First full refresh (every
-  notice happens here), a second full refresh, a 4-cell move, an action listing, a search, one
-  firing, and the remembered pairs.
+  notice happens here), a second (routes the notices invalidated are rebuilt) and a third (steady),
+  a 4-cell move, an action listing, a search, one firing, and the remembered pairs.
 - dense_search: a searcher ringed by 24 hidden traps it cannot notice, searching with a high roll.
 - room: a Fireball through 64 packed cells of props, containers, locks and needle traps, the
   looting round before it and the senses refresh after it.
@@ -26,27 +26,28 @@ import sys
 import time
 from uuid import uuid4
 
+from dnd.actions import Move
+from dnd.actions_functional import execute_available_action, setup_standard_actions
+from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.content.items.environment_item_builders import build_storage_chest
+from dnd.content.items.world_prop_builders import build_display_prop, build_searchable_prop
+from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
+from dnd.core.dice import fixed_dice_faces
+from dnd.core.events import Event, EventPhase, EventQueue, EventType
+from dnd.entity import Entity
+from dnd.items.container_traps import install_container_trap
+from dnd.items.environment_interactables import StorageChest
+from dnd.items.locks import install_lock
+from dnd.spatial.environmental_conditions import materialize_spike_trap_condition
+from dnd.spatial.mechanisms import AreaGeometry, materialize_finite_trap
+from dnd.spells.evocation import Fireball
+from tests.manual.spell_regression_support import create_spell_regression_actor, reset_spell_regression_arena
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def run_sample(rows: list[str], counts: list[int], factions: str, seed: int) -> dict:
-    from dnd.actions import Move
-    from dnd.actions_functional import execute_available_action, setup_standard_actions
-    from dnd.content.items.authored_item_builders import build_authored_item
-    from dnd.content.items.environment_item_builders import build_storage_chest
-    from dnd.content.items.world_prop_builders import build_display_prop, build_searchable_prop
-    from dnd.content_system.bootstrap import bootstrap_content_system
-    from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-    from dnd.core.dice import fixed_dice_faces
-    from dnd.core.events import Event, EventPhase, EventQueue, EventType
-    from dnd.entity import Entity
-    from dnd.items.container_traps import install_container_trap
-    from dnd.items.locks import install_lock
-    from dnd.spatial.environmental_conditions import materialize_spike_trap_condition
-    from dnd.spatial.mechanisms import AreaGeometry, materialize_finite_trap
-    from dnd.spells.evocation import Fireball
-    from tests.manual.spell_regression_support import create_spell_regression_actor, reset_spell_regression_arena
-
     SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
 
     def ms(fn) -> float:
@@ -89,7 +90,8 @@ def run_sample(rows: list[str], counts: list[int], factions: str, seed: int) -> 
                 setup_standard_actions(entity)
                 observers.append(entity)
             row = {"refresh_first": ms(lambda: Entity.update_all_entities_senses(max_distance=200)),
-                   "refresh_again": ms(lambda: Entity.update_all_entities_senses(max_distance=200))}
+                   "refresh_again": ms(lambda: Entity.update_all_entities_senses(max_distance=200)),
+                   "refresh_steady": ms(lambda: Entity.update_all_entities_senses(max_distance=200))}
             mover = observers[0]
             mover.action_economy.reset_all_costs()
             row["move_4"] = ms(lambda: Move(source_entity_uuid=mover.uuid, path=list(path), end_position=path[-1]).apply())
@@ -137,6 +139,7 @@ def run_sample(rows: list[str], counts: list[int], factions: str, seed: int) -> 
                 install_lock(chest)
             elif kind == 3:
                 chest = build_authored_item("environment.container.iron_bound_chest", uuid4())
+                assert isinstance(chest, StorageChest)
                 chest.place_on_grid(cell)
                 install_container_trap(chest)
             elif kind == 4:

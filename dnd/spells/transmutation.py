@@ -14,6 +14,7 @@ from dnd.types.materials import Material
 from dnd.core.equipment_types import WeaponKind, WeaponSet, WeaponSlot
 from dnd.types.world import MovementMode
 from dnd.core.base_conditions import Duration
+from dnd.core.concealment_types import Concealment, knower_key, with_knowers
 from typing import Any, Dict, Iterable, Literal, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID, uuid4
 
@@ -168,13 +169,7 @@ class SpikeGrowthZone(AreaCondition):
         default=HazardFilter.NON_SOURCE,
         description="Hazard visibility filter owned by this spatial condition.",
     )
-    spell_dc: int = Field(default=10, description="Spell DC for perception to notice")
     damage_dice: str = Field(default="2d4", description="Damage dice applied on each entered tile.")
-
-    def model_post_init(self, __context: Any) -> None:
-        """Synchronize hazard concealment with the caster's spell save DC."""
-        super().model_post_init(__context)
-        self.condition_stealth_dc = self.spell_dc
 
     def _create_zone_entry_handler(self) -> EventHandler:
         """Create handler for entry damage (2d4 piercing per tile entered)."""
@@ -288,10 +283,12 @@ class SpikeGrowth(SpellAction):
             status_message=f"{caster.name} casts Spike Growth at {target_pos}"
         )
 
+        # The thorns hide behind the spell save DC; the caster's party knows where they grow.
+        hidden = Concealment(dc=dc)
         zone = SpikeGrowthZone(
             source_entity_uuid=caster.uuid,
             position=target_pos,
-            spell_dc=dc,
+            concealment=with_knowers(hidden, (knower_key(hidden, caster.faction, caster.uuid),)),
             effect_origin=execution_event.to_effect_origin(),
         )
         zone_completion = zone.activate(parent_event=effect_event)

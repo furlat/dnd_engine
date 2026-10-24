@@ -118,7 +118,7 @@ def test_zones_change_only_the_world_channels_they_write() -> None:
                  moves_optical=False, zone_hazard=True, difficult=True, hides_beyond=False),
         ZoneCase("spike growth: perceived hidden hazard",
                  lambda source: SpikeGrowthZone(source_entity_uuid=source, position=(4, 1),
-                                                affected_positions=set(ZONE_CELLS), spell_dc=0),
+                                                affected_positions=set(ZONE_CELLS)),
                  moves_optical=False, zone_hazard=True, difficult=True, hides_beyond=False),
         ZoneCase("fog cloud: heavy obscurement",
                  lambda source: FogCloudZone(source_entity_uuid=source, position=(4, 1),

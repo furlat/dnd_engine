@@ -5,8 +5,9 @@ from uuid import UUID, uuid4
 
 from pydantic import Field, PrivateAttr
 
-from dnd.core.base_block import BaseBlock, LightLevel
+from dnd.core.base_block import LightLevel
 from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, Duration
+from dnd.core.concealment_types import concealment, with_plain_view
 from dnd.core.condition_types import (
     ConditionCategory,
     ConditionRemovalTrigger,
@@ -1055,18 +1056,6 @@ class SpikeTrap(SpatialCondition):
     )
     hazard_filter: HazardFilter = Field(default=HazardFilter.ALL)
 
-    def is_hazard_perceived_by(
-        self, requesting_entity_uuid: Optional[UUID] = None,
-    ) -> bool:
-        """A previously discovered mechanism stays known to that observer."""
-        if self.trap_state is TrapState.ACTIVATED:
-            return True
-        observer = BaseBlock.get(requesting_entity_uuid) if requesting_entity_uuid else None
-        senses = observer.get_senses() if observer is not None else None
-        return bool(senses is not None and self.uuid in senses.spatial_effects) or super().is_hazard_perceived_by(
-            requesting_entity_uuid,
-        )
-
     def spatial_channels(self) -> frozenset[SpatialChannel]:
         return super().spatial_channels() | {SpatialChannel.MOVEMENT}
 
@@ -1095,11 +1084,8 @@ class SpikeTrap(SpatialCondition):
 
     def get_spatial_observation(
         self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
-        discovered: bool = False,
     ) -> Optional[PerceivedSpatialEffect]:
         """Provide only the requested perceivable cells, with native state text."""
-        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
-            return None
         observer = Entity.get(observer_uuid)
         return PerceivedSpatialEffect(
             content_ref=self.content_ref, name=self.name,
@@ -1118,12 +1104,13 @@ class SpikeTrap(SpatialCondition):
             SpatialEffectChangeOperation.STATE_CHANGED,
             previous_positions=positions, affected_positions=positions,
             parent_event=parent_event, trap_state=state,
-            previous_trap_state=self.trap_state,
+            previous_trap_state=self.trap_state, exposes=state is TrapState.ACTIVATED,
         )
         self.trap_state = state
         self.observation_revision += 1
+        if self.concealment is not None:  # raised spikes are in plain view; retracted they hide again
+            get_map().record_concealment(((self, with_plain_view(self.concealment, state is TrapState.ACTIVATED)),))
         if state is TrapState.ACTIVATED:
-            self.reveal(parent_event=effect)
             occupants = {identity for position in positions
                          for identity in get_map().get_entities_at(position)}
             for identity in sorted(occupants, key=str):
@@ -1238,23 +1225,6 @@ class SpikeTrap(SpatialCondition):
             event_processor=damage_entering_entity,
         )
 
-    def reveal(self, *, parent_event: Event) -> bool:
-        """Reveal the complete network once after its first trigger."""
-        if not self.is_active_spatial_condition():
-            return False
-        if self.condition_stealth_dc is None:
-            return False
-        previous = set(self.affected_positions)
-        change_effect = self._open_change(
-            SpatialEffectChangeOperation.REVEALED,
-            previous_positions=previous,
-            affected_positions=previous,
-            parent_event=parent_event,
-        )
-        self.condition_stealth_dc = None
-        self._complete_change(change_effect)
-        return True
-
     def extend_footprint(
         self,
         positions: Set[Tuple[int, int]],
@@ -1307,7 +1277,7 @@ def materialize_spike_trap_condition(
     condition = SpikeTrap(
         uuid=condition_uuid or uuid4(), source_entity_uuid=source_uuid,
         position=min(positions), affected_positions=set(positions),
-        condition_stealth_dc=stealth_dc, trap_state=trap_state, payload=payload,
+        concealment=concealment(stealth_dc, in_plain_view=trap_state is TrapState.ACTIVATED), trap_state=trap_state, payload=payload,
         content_ref=content_ref,
     )
     result = condition.activate(parent_event=cause)

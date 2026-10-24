@@ -16,6 +16,7 @@ from dnd.core.base_actions import ActionEvent
 from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
+from dnd.core.concealment_types import concealment
 from dnd.core.condition_types import ConditionCategory, HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import (
@@ -1824,7 +1825,7 @@ def test_eb_12_031_perception_thresholds_refilter_contacts_and_hazards() -> None
                 target_entity_uuid=tile.uuid,
                 condition_category=ConditionCategory.CONDITION,
                 hazard_filter=HazardFilter.ALL,
-                condition_stealth_dc=stealth_dc,
+                concealment=concealment(stealth_dc),
             )
         )
     Entity.update_all_entities_senses(max_distance=10)
@@ -1870,7 +1871,7 @@ def test_eb_12_031_perception_thresholds_refilter_contacts_and_hazards() -> None
     assert easy_hidden.uuid in observer.senses.entities
     assert hard_hidden.uuid not in observer.senses.entities
     assert grid.is_position_hazardous_for(4, 0, observer.uuid)
-    assert not grid.is_position_hazardous_for(4, 2, observer.uuid)
+    assert grid.is_position_hazardous_for(4, 2, observer.uuid)  # a noticed hidden hazard stays known
     removal_updates = [
         event
         for _, event in EventQueue.iter_events_since(cursor)
@@ -1893,8 +1894,8 @@ def test_eb_12_031_perception_thresholds_refilter_contacts_and_hazards() -> None
     assert observer.get_passive_perception() == base_perception - 5
     assert easy_hidden.uuid not in observer.senses.entities
     assert hard_hidden.uuid not in observer.senses.entities
-    assert not grid.is_position_hazardous_for(4, 0, observer.uuid)
-    assert not grid.is_position_hazardous_for(4, 2, observer.uuid)
+    assert grid.is_position_hazardous_for(4, 0, observer.uuid)
+    assert grid.is_position_hazardous_for(4, 2, observer.uuid)
     assert observer.senses._paths_dirty is True
     decrease_updates = [
         event

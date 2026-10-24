@@ -232,7 +232,7 @@ def test_hidden_hardware_uses_existing_discovery_then_reveals_both_contacts_unde
                and hardware.uuid in event.object_contacts_changed for event in changes)
 
 
-@pytest.mark.parametrize("dc_offset,expected", ((-1, True), (0, False), (1, False)))
+@pytest.mark.parametrize("dc_offset,expected", ((-1, True), (0, True), (1, False)))  # meeting the DC notices
 def test_hardware_discovery_matches_mechanism_existing_passive_threshold(arena, dc_offset, expected):
     observer = actor(arena, (2, 2))
     hardware, mechanism = materialize_trap_hardware((3, 2),

@@ -9,6 +9,7 @@ from dnd.core.base_block import MovementMode
 from dnd.actions import Move
 from dnd.blocks.base_item import BaseItem
 from dnd.core.base_conditions import BaseCondition
+from dnd.core.concealment_types import concealment
 from dnd.core.condition_types import HazardFilter
 from dnd.core.events import EventPhase, EventQueue, StepMovementEvent
 from dnd.core.base_tiles import difficult_terrain_factory
@@ -112,7 +113,7 @@ def test_native_route_prefers_fewer_turns_without_extra_cost_or_known_risk(obsta
             tile.add_condition(BaseCondition(name='Route hazard',
                 source_entity_uuid=uuid4(), target_entity_uuid=tile.uuid,
                 hazard_filter=HazardFilter.ALL,
-                condition_stealth_dc=100 if obstacle == 'hidden_hazard' else None))
+                concealment=concealment(100 if obstacle == 'hidden_hazard' else None)))
         if obstacle == 'rough':
             grid.set_tile(4, 2, tile=difficult_terrain_factory((4, 2)))
         if obstacle == 'reactor':

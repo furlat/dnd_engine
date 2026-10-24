@@ -480,7 +480,7 @@ def test_spike_growth_preserves_hidden_hazard_damage_and_source_immunity() -> No
     low_perception = create_spell_regression_actor(
         "Low Perception Observer",
         (17, 8),
-        "monsters",
+        "wanderers",  # its own party: the monsters' find is not its knowledge
         wisdom=8,
     )
     Entity.update_all_entities_senses(max_distance=140)
@@ -507,7 +507,7 @@ def test_spike_growth_preserves_hidden_hazard_damage_and_source_immunity() -> No
     assert center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert center_tile.get_conditions()[zone.uuid] is zone
     assert zone.hazard_filter is HazardFilter.NON_SOURCE
-    assert zone.condition_stealth_dc == caster.spell_save_dc()
+    assert zone.concealment is not None and zone.concealment.dc == caster.spell_save_dc()
     assert not get_map().is_position_hazardous_for(10, 6, caster.uuid)
     assert get_map().is_position_hazardous_for(
         10,

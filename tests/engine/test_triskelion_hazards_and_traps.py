@@ -36,8 +36,8 @@ def arena() -> Iterator[None]:
 
 
 def creature(name: str, position: tuple[int, int], *, strength: int = 10, dexterity: int = 10,
-             constitution: int = 10, wisdom: int = 10) -> Entity:
-    entity = create_spell_regression_actor(name, position, "heroes", strength=strength, dexterity=dexterity,
+             constitution: int = 10, wisdom: int = 10, faction: str = "heroes") -> Entity:
+    entity = create_spell_regression_actor(name, position, faction, strength=strength, dexterity=dexterity,
                                            constitution=constitution, wisdom=wisdom)
     setup_standard_actions(entity)
     Entity.update_all_entities_senses()
@@ -186,11 +186,14 @@ def test_lesser_restoration_cures_the_whole_needle_paralysis(arena):
 def test_search_finds_a_hidden_needle_and_only_then_offers_disarm(arena):
     footlocker = trapped_footlocker((3, 2))
     rogue = creature("Rogue", (2, 2), wisdom=8, dexterity=18)  # passive Perception 9 cannot see DC 13
+    partner = creature("Partner", (2, 3), wisdom=8)
     assert rogue.loot_item(build_authored_item("tool.trap_disarm_toolkit", rogue.uuid))
     assert row(rogue, "Disarm Trap") is None
-    act(rogue, "Search for Traps", faces=(5,))  # 5 - 1 misses DC 13
+    act(rogue, "Search", faces=(5,))  # 5 - 1 misses DC 13
     assert row(rogue, "Disarm Trap") is None
-    act(rogue, "Search for Traps", faces=(16,))  # 16 - 1 finds it
+    act(rogue, "Search", faces=(16,))  # one try each: the rogue's second search cannot find it
+    assert row(rogue, "Disarm Trap") is None
+    act(partner, "Search", faces=(16,))  # 16 - 1 finds it, for the whole party
     assert row(rogue, "Disarm Trap") is not None
     act(rogue, "Disarm Trap", target=footlocker, faces=(12,))  # Sleight of Hand 12 + 4 beats DC 13
     toolkit = next(item for item in rogue.inventory.items.values() if item.item_id == "tool.trap_disarm_toolkit")
@@ -218,10 +221,10 @@ def test_breaking_a_trapped_container_disarms_it(arena):
     assert not get_map().get_spatial_conditions_at((3, 2))
 
 
-def test_only_those_who_perceive_a_needle_see_it_on_its_container(arena):
+def test_only_those_who_know_a_needle_see_it_on_its_container(arena):
     footlocker = trapped_footlocker((3, 2))
     sharp = creature("Sharp", (2, 2), wisdom=20)  # passive Perception 15 beats DC 13
-    dull = creature("Dull", (2, 3), wisdom=8)
+    dull = creature("Dull", (2, 3), wisdom=8, faction="goblins")  # of another party
     sharp.update_entity_senses()
     dull.update_entity_senses()
     seen = [effect for effect in sharp.senses.spatial_effects.values() if effect.anchor_item_uuid == footlocker.uuid]
@@ -229,12 +232,15 @@ def test_only_those_who_perceive_a_needle_see_it_on_its_container(arena):
     assert not any(effect.anchor_item_uuid == footlocker.uuid for effect in dull.senses.spatial_effects.values())
 
 
-def test_search_reveals_a_hidden_floor_trap_to_the_searcher_alone(arena):
+def test_search_reveals_a_hidden_floor_trap_to_the_searchers_party_alone(arena):
     trap = materialize_spike_trap_condition({(4, 2)}, stealth_dc=13)
     searcher = creature("Searcher", (2, 2), wisdom=8)
-    bystander = creature("Bystander", (2, 3), wisdom=8)
+    ally = creature("Ally", (2, 4), wisdom=8)
+    bystander = creature("Bystander", (2, 3), wisdom=8, faction="goblins")
     assert trap.uuid not in searcher.senses.spatial_effects
-    act(searcher, "Search for Traps", faces=(16,))
+    act(searcher, "Search", faces=(16,))
+    ally.update_entity_senses()
     bystander.update_entity_senses()
     assert trap.uuid in searcher.senses.spatial_effects
+    assert trap.uuid in ally.senses.spatial_effects
     assert trap.uuid not in bystander.senses.spatial_effects

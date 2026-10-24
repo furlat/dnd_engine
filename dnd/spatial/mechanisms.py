@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from dnd.core.aoe import line_of_effect_reach
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import Duration
+from dnd.core.concealment_types import concealment
 from dnd.core.condition_types import DurationType
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.creature_types import DamageType
@@ -93,16 +94,8 @@ class FiniteTrap(SpatialCondition):
             raise ValueError("Finite trap direction must be a cardinal unit vector")
         return self
 
-    def is_hazard_perceived_by(self, requesting_entity_uuid: UUID | None = None) -> bool:
-        observer = BaseBlock.get(requesting_entity_uuid) if requesting_entity_uuid is not None else None
-        senses = observer.get_senses() if observer is not None else None
-        return (senses is not None and self.uuid in senses.spatial_effects
-                or super().is_hazard_perceived_by(requesting_entity_uuid))
-
     def get_spatial_observation(self, positions: set[tuple[int, int]], *,
-                               observer_uuid: UUID, discovered: bool = False) -> PerceivedSpatialEffect | None:
-        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
-            return None
+                               observer_uuid: UUID) -> PerceivedSpatialEffect | None:
         state = {TrapState.READY: "Ready for a control signal.",
                  TrapState.ACTIVATED: "Activated; reset is required before another discharge.",
                  TrapState.DEACTIVATED: "Disabled."}[self.trap_state]
@@ -123,11 +116,10 @@ class FiniteTrap(SpatialCondition):
         positions = set(self.affected_positions)
         change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
             previous_positions=positions, affected_positions=positions,
-            parent_event=parent_event, previous_trap_state=self.trap_state, trap_state=state)
+            parent_event=parent_event, previous_trap_state=self.trap_state, trap_state=state,
+            exposes=state is TrapState.ACTIVATED)
         self.trap_state = state
         self.observation_revision += 1
-        if state is TrapState.ACTIVATED:
-            self.condition_stealth_dc = None
         self._complete_change(change)
         return True
 
@@ -242,7 +234,7 @@ def materialize_finite_trap(position: tuple[int, int], *, geometry: LaneGeometry
         content_ref=content_ref, name=name, geometry=geometry, direction=direction,
         avoidance=avoidance or TrapSave(), payload=payload or TrapPayload(damages=(
             TrapDamage(dice_count=1, dice_sides=6, damage_type=DamageType.PIERCING),)),
-        trap_state=trap_state, rearm_after_activation=rearm_after_activation, condition_stealth_dc=stealth_dc)
+        trap_state=trap_state, rearm_after_activation=rearm_after_activation, concealment=concealment(stealth_dc))
     result = trap.activate(parent_event=cause)
     if result is None or result.canceled or not trap.applied:
         raise RuntimeError("Mechanism installation failed")

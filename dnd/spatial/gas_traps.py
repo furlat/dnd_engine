@@ -6,8 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.conditions import Poisoned
 from dnd.core.aoe import AoEShape, Sphere, objective_footprint
-from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import Duration
+from dnd.core.concealment_types import concealment
 from dnd.core.condition_types import DurationType, HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.spatial_effect_definitions import SpatialEffectTransitionDefinition
@@ -87,7 +87,7 @@ class GasCloud(AreaCondition):
     poisoned_duration_rounds: int | None = Field(default=1, ge=1)
 
     def get_spatial_observation(self, positions: set[tuple[int, int]], *,
-                               observer_uuid: UUID, discovered: bool = False) -> PerceivedSpatialEffect:
+                               observer_uuid: UUID) -> PerceivedSpatialEffect:
         return PerceivedSpatialEffect(content_ref=self.content_ref, name=self.name,
             description=self.description, positions=tuple(sorted(positions)))
 
@@ -159,16 +159,8 @@ class GasVent(SpatialCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
     duration: Duration = Field(default_factory=lambda: Duration(duration=None, duration_type=DurationType.PERMANENT))
 
-    def is_hazard_perceived_by(self, requesting_entity_uuid: UUID | None = None) -> bool:
-        observer = BaseBlock.get(requesting_entity_uuid) if requesting_entity_uuid is not None else None
-        senses = observer.get_senses() if observer is not None else None
-        return (senses is not None and self.uuid in senses.spatial_effects
-                or super().is_hazard_perceived_by(requesting_entity_uuid))
-
     def get_spatial_observation(self, positions: set[tuple[int, int]], *,
-                               observer_uuid: UUID, discovered: bool = False) -> PerceivedSpatialEffect | None:
-        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
-            return None
+                               observer_uuid: UUID) -> PerceivedSpatialEffect | None:
         state = {TrapState.READY: "Ready to release gas on a control signal.",
                  TrapState.ACTIVATED: "Discharged; reset is required before another release.",
                  TrapState.DEACTIVATED: "Disabled. Previously released gas may remain."}[self.trap_state]
@@ -184,11 +176,10 @@ class GasVent(SpatialCondition):
         positions = set(self.affected_positions)
         change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
             previous_positions=positions, affected_positions=positions,
-            parent_event=parent_event, previous_trap_state=self.trap_state, trap_state=state)
+            parent_event=parent_event, previous_trap_state=self.trap_state, trap_state=state,
+            exposes=state is TrapState.ACTIVATED)
         self.trap_state = state
         self.observation_revision += 1
-        if state is TrapState.ACTIVATED:
-            self.condition_stealth_dc = None
         self._complete_change(change)
         return True
 
@@ -249,7 +240,7 @@ def materialize_gas_vent(position: tuple[int, int], *, gas: GasCloudSpec | None 
             cause = cause.phase_to(phase)
     vent = GasVent(uuid=identity, source_entity_uuid=identity, position=position,
         affected_positions={position}, gas=gas or GasCloudSpec(), trap_state=trap_state,
-        rearm_after_activation=rearm_after_activation, condition_stealth_dc=stealth_dc)
+        rearm_after_activation=rearm_after_activation, concealment=concealment(stealth_dc))
     result = vent.activate(parent_event=cause)
     if result is None or result.canceled or not vent.applied:
         raise RuntimeError("Gas vent installation failed")

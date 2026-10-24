@@ -246,11 +246,10 @@ class SolidWallZone(AreaCondition):
     def blocks_physical_optics_at(self, position: tuple[int, int]) -> bool:
         return self.material == "stone" and self.allows_contribution_at(position) and any(position in wall_shell_cells(g) for g in self.sections.values())
 
-    def get_spatial_observation(self, positions: set[tuple[int, int]], *, observer_uuid,
-                                discovered=False) -> PerceivedSpatialEffect | None:
+    def get_spatial_observation(self, positions: set[tuple[int, int]], *, observer_uuid) -> PerceivedSpatialEffect | None:
         live = set().union(*(wall_shell_cells(g) for g in self.sections.values())) if self.sections else set()
         observed = SpatialCondition.get_spatial_observation(self, positions & live,
-            observer_uuid=observer_uuid, discovered=discovered)
+            observer_uuid=observer_uuid)
         return observed.model_copy(update={"area_geometry": self.geometry,
             "construction_sections": tuple(g for g in self.sections.values() if wall_shell_cells(g) & positions),
             "anchor_elevation_steps": self.geometry.base_height_steps}) if observed is not None else None

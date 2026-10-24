@@ -80,7 +80,7 @@ def assert_world_grids_match_a_scan() -> None:
     grid.settle_obscurement_activity()
     assert np.array_equal(grid.cell_obscurement.values, expected)
 
-    owners, xs, ys, owner_of = grid.hazard_owners()
+    owners, xs, ys, owner_of, _, _ = grid.hazard_owners()
     reported = {owner.uuid: set(zip(xs[owner_of == index].tolist(), ys[owner_of == index].tolist()))
                 for index, owner in enumerate(owners)}
     scanned = dict(footprints)
