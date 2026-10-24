@@ -7,7 +7,7 @@ from pydantic import Field
 
 from dnd.actions import entity_action_economy_cost_evaluator
 from dnd.blocks.base_item import BaseItem, UsableItem
-from dnd.conditions import Paralyzed
+from dnd.conditions import Paralyzed, Poisoned
 from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
@@ -86,7 +86,7 @@ class ContainerTrap(SpatialCondition):
     earlier observation. Its container's `TrapMount` owns it: the container's committed open springs it
     and breaking the container ends it. Containers never move, so it needs no anchor that follows one.
     """
-    creates = (NeedleParalysis,)
+    creates = (NeedleParalysis, Poisoned)  # Poisoned: a darts payload's condition (`apply_trap_payload`)
     crossing_channels: ClassVar[frozenset[CrossingChannel] | None] = frozenset()
 
     name: str = "Poison needle"
