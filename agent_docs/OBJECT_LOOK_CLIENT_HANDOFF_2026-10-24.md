@@ -1,31 +1,60 @@
-# Client handoff: an object's look can be sent again (player schema 20)
+# Client handoff: re-sent looks, hidden things and camouflage (player schema 20)
 
-From the server branch `object_appearance_opus`, plan [OBJECT_APPEARANCE_PLAN_2026-10-24](plans/OBJECT_APPEARANCE_PLAN_2026-10-24.md).
-No wire type changed. Only the meaning of `WorldUpdate.object_looks` and the schema number changed.
+From the server branch `object_appearance_opus`, 24 October 2026. Plans:
+[party knowledge](plans/PARTY_KNOWLEDGE_AND_HIDDEN_THINGS_PLAN_2026-10-24.md),
+[appearance](plans/OBJECT_APPEARANCE_PLAN_2026-10-24.md),
+[content push](plans/CONTENT_PUSH_OPUS_PLAN_2026-10-23.md).
 
-## What changes
+**No wire type changed** since schema 19. One meaning changed (§1), and everything else is new values on the existing channels.
 
-- **Re-sent looks.** An `ObjectLook` row can now arrive again for an item uuid the client already holds. This happens whenever the object's look differs from the last one the seat was sent. Examples:
-  - a display rack emptying (`swords_full`, `swords_partly_empty`, `swords_empty`);
-  - a destroyed object's passage;
-  - (next step on this branch) a camouflaged object a party finds, which turns from its camouflage look into its own look.
-- **The client replaces the held look.** Schema 19 clients raise on this: the Python reference fold raised "An object's look changed", and Godot raises "A static content id names another value" (`sdk/fold_world.gd:16`).
-- **The object's row comes in the same update** as its re-sent look. Fold the static rows first, as today, then the object row, which joins the new look.
-- **All other static rows keep their constancy check:** tile looks, boundary structures and residue materials.
+The Godot client pins schema 18. Schema 19 (content push, step 3) added the `bone` material and the Urchin background.
 
-## Camouflage (built on this branch)
+## 1. Must do: a look can arrive again (breaks a schema-19 client)
 
-- **A seat whose party hasn't found a camouflaged object is sent it as what it shows.** For the secret door, that is the wall it is set in:
-  - `item_id` `environment.wall.fantasy_a1`, its name and its glyph;
-  - a WALL boundary structure with the door's own blocked channels;
-  - no door mechanism or swing, no hit points, no open state, and no damage facts.
-- **When the party finds it,** by notice, Search, or seeing it open, the seat gets a new look row (the door's) and the object's row with its door state. This is the same re-sent look as above. A seat whose party never found it keeps the wall.
-- **An open or broken camouflaged object is shown as itself to every seat.** So is a hit one: damage ends the camouflage for everyone, like a Dark Souls illusory wall.
-- **Nothing new on the wire:** no new field and no new message.
+- An `ObjectLook` row can arrive again for an item uuid the client already holds, whenever the object's look differs from the last one the seat was sent.
+- **Replace the held look.** Don't raise. Today the Python reference fold raised "An object's look changed", and Godot raises "A static content id names another value" (`sdk/fold_world.gd:16`).
+- The object's row comes in the same update. Fold the static rows first, as today, then the object row, which joins the new look.
+- The other static rows keep their constancy check: tile looks, boundary structures and residue materials.
 
-## Reference
+Reference fold: `dnd/player/world_reduction.py` `fold_static_rows`. Seat test: `tests/player/test_hidden_objects_publication.py::test_a_rack_emptying_reaches_the_seat`.
 
-- Python reference fold: `dnd/player/world_reduction.py` `fold_static_rows` (the object-look loop now assigns).
-- Server: `dnd/player/world_publication.py` `_look`, with the per-seat last look in `dnd/player/static_sent.py`.
-- Seat test: `tests/player/test_hidden_objects_publication.py::test_a_rack_emptying_reaches_the_seat`.
-- Regenerated generated files: `sdk/protocol/*.json`, `sdk/python/src/dnd_player/contracts.py`, `sdk/player-typescript/src/contracts.generated.ts`, and the identity files. No hand-written SDK or client code was changed.
+## 2. What a seat can now see (existing channels)
+
+**Looks that change**
+- **Racks and wall mounts** show what is left: `swords_full`, then `swords_partly_empty`, then `swords_empty`, as pieces are taken.
+- **Camouflaged objects** (the secret door, `environment.door.secret_stone`):
+  - **Unfound:** a seat whose party hasn't found it, while it is closed and intact, receives the wall it is set in:
+    - `item_id` `environment.wall.fantasy_a1`, "Fantasy A1 Wall", glyph `W`;
+    - a WALL boundary structure;
+    - no door mechanism or swing, no hit points, no open state, no damage facts.
+  - **Found** by passive Perception, Search, or seeing it open: the seat gets the door's look (a re-sent look, §1) and its door row.
+  - **Open, broken or hit:** it shows as itself to every seat. A hit that damages it reveals it to everyone, like an illusory wall, and that hit's damage fact arrives with the reveal.
+
+**Things that appear only once found**
+- **Hidden objects** (hidden presence: loot, notes): no row until the seat's party finds one. It then arrives as an ordinary new object.
+- **Hidden contents** (a desk drawer, a false back): a container's contents arrive only after a Search Inside succeeds.
+- **Hidden traps:** a trap's spatial effect reaches a seat once its party knows it, by noticing, searching, or watching it fire. Raised spikes and an open hatch are seen by anyone who sees them.
+
+**Knowledge is per party (faction).** A seat learns what any member of its party noticed, including AI-controlled members and members in other seats, and what was noticed before the seat started.
+
+## 3. Actions
+
+| Action | Change |
+| --- | --- |
+| Area Search | Content id `action.search_for_traps` becomes `action.search`, display "Search". It finds hidden traps, objects, actions and camouflage in reach. |
+| Search Inside | `action.environment.search`, display "Search Inside". It searches one container for hidden contents. One try per creature. |
+| Doors on an edge | "Open Door" and "Close Door" are offered from either cell beside the door. Nobody standing anywhere blocks them, so "someone is standing in the doorway" no longer appears for these doors. A lever or plate opens or closes its door at once. |
+| Attack targets | An unfound camouflaged object is named as its camouflage in choices ("Fantasy A1 Wall"). |
+| Hidden actions | An object whose actions are hidden (a hidden button, a hidden lock) offers no rows until found. |
+
+**New spatial effect:** a **dart trap on a container** uses the dart launcher's content ref, `spatial_effect.environment.dart_launcher`, named "Dart trap". It is a DC 13 Dexterity save against 4d4 piercing, fired once on opening, and shown like the poison needle (Armed, Sprung, Disarmed).
+
+## 4. Generated files
+
+Regenerated by `devtools/export_player_protocol.py`, `devtools/generate_player_python.py` and `sdk/player-typescript/tools/generate.mjs`:
+- `sdk/protocol/*.json`;
+- `sdk/python/src/dnd_player/contracts.py`;
+- `sdk/player-typescript/src/contracts.generated.ts`;
+- the identity files.
+
+Only the schema number and the `ObjectLook` description changed. No hand-written SDK or client code was changed.
