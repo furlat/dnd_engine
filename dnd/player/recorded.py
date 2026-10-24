@@ -16,6 +16,7 @@ class RecordedSequence(BaseModel):
     session's actor fold reads (engine-free replay builds bodies from births and records), and each lineage the
     native combat log of its retained events (`CompletedLineage.native_logs`), which each seat's walk projects.
     The initialization no longer carries the retired presentation's admissions, dispositions or fixture ids.
+    Lineages and the startup interval also carry their sensory versions' notices (`notices`, empty when absent).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)

@@ -22,7 +22,7 @@ from dnd.items.environment_interactables import StorageChest
 from dnd.player.capture import capture_interval, capture_lineages
 from dnd.player.audience import PlayerAudience
 from dnd.player.facts import ObjectDamageFact
-from dnd.player.projection import SessionProjection, begin_projection, project_lineage
+from dnd.player.projection import SessionProjection, begin_projection, begin_projections, project_lineage
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
@@ -208,3 +208,17 @@ def test_a_camouflaged_door_placed_in_view_is_noticed_at_once(party_world):
     state, _ = observe(session, projection, state, finder,
                        lambda: door.place_on_grid((4, 7), boundary_direction=CardinalDirection.WEST))
     assert shown(state, door)[0] == "environment.door.secret_stone"
+
+
+
+def test_what_a_party_member_noticed_before_the_seats_started_reaches_its_partners_seat(party_world):
+    built, finder, partner, _, door = party_world  # DC 15: neither notices it at passive Perception 10
+    partner.add_condition(PerceptionModifierCondition(source_entity_uuid=partner.uuid,
+                                                      target_entity_uuid=partner.uuid, modifier_amount=10))
+    partner.update_entity_senses(max_distance=12)
+    cursor = EventQueue.event_cursor()
+    started = begin_projections(SessionProjection(), tuple(capture_interval(name="hidden objects", start_cursor=0,
+        end_cursor=cursor, observer_uuid=member.uuid, battlefield_id=built.definition.battlefield_id,
+        audience=PlayerAudience(controlled=(member.uuid,), observers=(member.uuid,))) for member in (finder, partner)))
+    for _, public in started:
+        assert shown(reduce_initialization(public), door)[0] == "environment.door.secret_stone"

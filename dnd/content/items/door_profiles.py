@@ -40,8 +40,8 @@ DOOR_PROFILES = MappingProxyType({
     # through; it draws aside with no swing.
     "environment.door.alcove_curtain": DoorProfile("Curtain", Material.FABRIC, DoorMechanism.LIFT, 3,
         supports_jammed_remnant=False, closed_channels=(WorldEdgeChannel.OPTICAL,)),
-    # A stone door set flush in a wall: those who haven't found it don't perceive it, though it blocks like any
-    # closed door (`build_secret_door`).
+    # A stone door set flush in a wall: to those who haven't found it, closed and intact, it is the wall it is set
+    # in (`build_secret_door`).
     "environment.door.secret_stone": DoorProfile("Secret stone door", Material.STONE, DoorMechanism.SINGLE_HINGED,
         40, supports_jammed_remnant=False),
 })

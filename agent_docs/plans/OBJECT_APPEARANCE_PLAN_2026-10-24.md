@@ -118,7 +118,7 @@ Anti-slop and anti-OOP reviewers read the plan and each step's diff, and a plan-
 **Deviations from §3:**
 - **Notices travel seat-independently.** A foreign seat's sensory body is a header (`capture.py:442`), so the notices are read once from the native events, the way `native_logs` are:
   - on `CompletedLineage.notices`;
-  - on `WorldInterval.notices`, for the startup walk, so a seat that starts or rejoins later knows what its party found.
+  - on `WorldInterval.notices`, for the startup walk, so every seat starts knowing what its party found before it, a partner's notice in another seat included.
 - **The fold keeps every notice, but a seat's found set reads only the camouflage index** (`WorldFacts.camouflaged_by_holder`). Filtering at fold time lost the notice of a door placed in view, because its sensory child folds before the placement. Trap knowledge reaches seats as spatial effects. With no camouflage, a seat's per-event check is one emptiness test.
 - **The knower key is the noticer's faction, or its uuid without one.** That is right because a CAMOUFLAGE record is party-scoped. The record's validator now enforces it, together with "camouflage, and only it, shows a look".
 - **`found` is a required argument** of every per-seat function and of the AI's `project_object`. A caller that forgets it fails instead of silently showing the wall. The oracle (`seat_oracle.py`) reads it from the live records with `knows`. The authoring export passes an empty set.

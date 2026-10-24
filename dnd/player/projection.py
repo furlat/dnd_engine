@@ -1896,8 +1896,8 @@ class SessionProjection:
     names: dict[UUID, str] = field(default_factory=dict)
     # The content id of every visual loadout a body entered with, by value (a memo: each value digested once).
     loadout_ids: dict[VisualLoadout, str] = field(default_factory=dict)
-    # Every hidden thing a notice taught, with the knower keys (a party's faction, a creature) that learned it.
-    known_hidden: dict[UUID, set[KnowerKey]] = field(default_factory=dict)
+    # Every hidden thing a notice taught, with the creatures that noticed or found it (their party knows it).
+    known_hidden: dict[UUID, set[UUID]] = field(default_factory=dict)
     walked: set[UUID] = field(default_factory=set)
 
 
@@ -2106,6 +2106,9 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
         for event in walk.events:
             steps.setdefault(group.indexes[event.uuid], []).append((seat, event))
     folded: dict[UUID, AppliedWorldFact | None] = {}
+    # The startup reaches each seat as one snapshot: every row is built with what its party knew by its end.
+    for notice in interval.notices.values():
+        _fold_notices(session, notice)
     for index in sorted(steps.keys() | shared.keys()):
         event = shared[index]
         condition = conditions.get(event.uuid)
@@ -2114,11 +2117,10 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
             _enter_event(walks[seat], states[seat], session.world, row, _found(session, states[seat].audience))
         step = _fold_actors(session.actors, session.names, folded, event, changes, condition)
         applied = _fold_version(session, folded, event, condition)
-        taught = _fold_notices(session, interval.notices.get(event.uuid))
         for seat, row in due:
             _leave_event(walks[seat], group, states[seat], session.world, session.tile_digests,
                          session.actors, session.loadout_ids, row, applied, folded, step,
-                         _found(session, states[seat].audience), _learned(session, taught, states[seat].audience))
+                         _found(session, states[seat].audience), frozenset())
     return tuple(_emit_initialization(group, state, initialization, walk, world)
         for state, initialization, walk, world in zip(states, initializations, walks, worlds, strict=True))
 
@@ -2243,22 +2245,21 @@ def _knower_keys(session: SessionProjection, audience: PlayerAudience) -> frozen
 
 
 def _fold_notices(session: SessionProjection, notice: tuple[UUID, frozenset[UUID]] | None
-                  ) -> tuple[KnowerKey, frozenset[UUID]] | None:
-    """The hidden things a sensory event's observer noticed or found become its party's, for every seat (a seat
+                  ) -> tuple[UUID, frozenset[UUID]] | None:
+    """The hidden things a sensory event's observer noticed or found, for every seat: its party knows them (a seat
     reads only its camouflage, a party-scoped record: a hidden trap's knowledge reaches it as spatial effects)."""
     if notice is None:
         return None
     observer, noticed = notice
-    key = _knower(session, observer)
     for holder in noticed:
-        session.known_hidden.setdefault(holder, set()).add(key)
-    return key, noticed
+        session.known_hidden.setdefault(holder, set()).add(observer)
+    return notice
 
 
-def _learned(session: SessionProjection, taught: tuple[KnowerKey, frozenset[UUID]] | None,
+def _learned(session: SessionProjection, taught: tuple[UUID, frozenset[UUID]] | None,
              audience: PlayerAudience) -> frozenset[UUID]:
     """The camouflaged objects a notice taught this seat's party, rebuilt for it alone."""
-    if taught is None or taught[0] not in _knower_keys(session, audience):
+    if taught is None or _knower(session, taught[0]) not in _knower_keys(session, audience):
         return frozenset()
     return frozenset(identity for holder in taught[1] for identity in session.world.camouflaged_by_holder.get(holder, ()))
 
@@ -2269,7 +2270,8 @@ def _found(session: SessionProjection, audience: PlayerAudience) -> frozenset[UU
     if not camouflage:
         return frozenset()
     keys = _knower_keys(session, audience)
-    return frozenset(holder for holder in camouflage if not session.known_hidden.get(holder, set()).isdisjoint(keys))
+    return frozenset(holder for holder in camouflage
+                     if any(_knower(session, noticer) in keys for noticer in session.known_hidden.get(holder, ())))
 
 
 def project_lineage(session: SessionProjection, state: ProjectionState, lineage: CompletedLineage
