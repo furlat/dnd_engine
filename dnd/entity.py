@@ -5369,7 +5369,7 @@ class Entity(BaseBlock):
             path_max_distance=path_max_distance,
         )
         spatial_senses_system.publish_observer_refresh(self.uuid, before, parent_event=parent_event,
-                                                       concealed_noticed=frozenset(noticed) | found)
+                                                       concealed_noticed=noticed | found)
 
     @classmethod
     def update_all_entities_senses(cls, max_distance: int = 10) -> None:

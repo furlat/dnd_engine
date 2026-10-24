@@ -341,7 +341,9 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
             unchanged.add(identity)
     whole -= unchanged
     for identity in sorted(whole, key=str):
-        _look(rows, split_floor_item(disclosed_floor_item(world, view, identity, known_before, found))[0], sent, pending)
+        item = world.objects[identity].item
+        _look(rows, split_floor_item(disclosed_floor_item(world, view, identity, known_before, found)
+                                     if camouflaged(item, found) else floor_item(item, ()))[0], sent, pending)
     known = sent.object_looks | pending.object_looks
     # A composite names an attachment once its look is sent: its row is sent again with the new name.
     remnants = {remnant for identity in whole for remnant in world.remnants_by_item.get(identity, ())}

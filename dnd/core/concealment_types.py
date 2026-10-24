@@ -26,8 +26,8 @@ class ConcealedAspect(str, Enum):
     CAMOUFLAGE = "camouflage"  # its host, seen as something else while closed and intact: a secret door as wall
 
 
+# What passive Perception and the area Search find on an object (contents only by Search Inside).
 NOTICED_ON_OBJECTS = frozenset({ConcealedAspect.PRESENCE, ConcealedAspect.ACTIONS, ConcealedAspect.CAMOUFLAGE})
-# (contents only by Search Inside)
 SEEN_WHEN_OPEN = frozenset({ConcealedAspect.PRESENCE, ConcealedAspect.CAMOUFLAGE})  # an open secret door's
 
 

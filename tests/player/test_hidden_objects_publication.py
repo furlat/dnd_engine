@@ -11,18 +11,23 @@ from dnd.content.items.world_prop_builders import build_display_prop
 from dnd.core.base_block import BaseBlock
 from dnd.core.concealment_types import ConcealedAspect
 from dnd.core.dice import fixed_dice_faces
+from dnd.actions import Attack
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue
+from dnd.core.item_types import ItemIntegrity
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.items.concealment import install_concealment
 from dnd.items.environment_interactables import StorageChest
 from dnd.player.capture import capture_interval, capture_lineages
+from dnd.player.audience import PlayerAudience
 from dnd.player.facts import ObjectDamageFact
 from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.types.world import CardinalDirection
+from tests.engine.test_senses_light_stealth import PerceptionModifierCondition
 from tests.player.test_object_look_static import armed_actor, attack
 
 
@@ -45,21 +50,22 @@ def cache_world():
         reset_engine_runtime()
 
 
-def seat(built, actor):
+def seat(built, actor, audience=None):
     session = SessionProjection()
     projection, public = begin_projection(session, capture_interval(name="hidden objects", start_cursor=0,
-        end_cursor=EventQueue.event_cursor(), observer_uuid=actor.uuid, battlefield_id=built.definition.battlefield_id))
+        end_cursor=EventQueue.event_cursor(), observer_uuid=actor.uuid, battlefield_id=built.definition.battlefield_id,
+        audience=audience))
     return session, projection, reduce_initialization(public)
 
 
-def observe(session, projection, state, observer, run):
+def observe(session, projection, state, observer, run, audience=None):
     """Run what happens, then the seat of `observer` folds it: its client state and the packets it was sent."""
     start = EventQueue.event_cursor()
     run()
     roots = tuple(event for _, event in EventQueue.iter_events_since(start)
                   if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
     packets = []
-    for native in capture_lineages(roots, observer_uuid=observer.uuid):
+    for native in capture_lineages(roots, observer_uuid=observer.uuid, audience=audience):
         packet = project_lineage(session, projection, native)
         if packet is not None:
             packets.append(packet)
@@ -161,3 +167,44 @@ def test_a_rack_emptying_reaches_the_seat(cache_world):
     assert state.objects[rack.uuid].item.visual_variant_id == "swords_full"
     state = act(session, projection, state, actor, "Loot All", rack)
     assert state.objects[rack.uuid].item.visual_variant_id == "swords_empty"
+
+
+@pytest.mark.parametrize("noticer_first", (True, False))
+def test_a_members_passive_notice_reaches_a_seat_of_two_whichever_member_settles_first(party_world, noticer_first):
+    built, finder, partner, _, door = party_world
+    members = (partner.uuid, finder.uuid) if noticer_first else (finder.uuid, partner.uuid)
+    audience = PlayerAudience(controlled=(), observers=members)
+    session, projection, state = seat(built, finder, audience)
+    assert shown(state, door) == WALL
+
+    def sharpen():  # passive Perception 20 meets DC 15
+        partner.add_condition(PerceptionModifierCondition(source_entity_uuid=partner.uuid,
+                                                          target_entity_uuid=partner.uuid, modifier_amount=10))
+        partner.update_entity_senses(max_distance=12)
+    state, _ = observe(session, projection, state, finder, sharpen, audience)
+    assert shown(state, door)[0] == "environment.door.secret_stone"
+
+
+def test_breaking_a_camouflaged_door_sends_no_damage_to_a_seat_that_saw_a_wall(party_world):
+    built, finder, _, goblin, door = party_world
+    session, projection, state = seat(built, goblin)
+
+    def smash():
+        while door.integrity is ItemIntegrity.INTACT:
+            finder.action_economy.reset_all_costs()
+            with fixed_dice_faces(19, 8):
+                Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=finder.uuid,
+                       target_entity_uuid=door.uuid).apply()
+    state, packets = observe(session, projection, state, goblin, smash)
+    assert not any(isinstance(node.fact, ObjectDamageFact) for packet in packets for node in packet.events)
+    broken = state.objects.get(door.uuid)
+    assert broken is None or broken.item.item_id == "environment.door.secret_stone"  # broken, it is no wall
+
+
+def test_a_camouflaged_door_placed_in_view_is_noticed_at_once(party_world):
+    built, finder, *_ = party_world
+    session, projection, state = seat(built, finder)
+    door = build_secret_door(dc=5)  # passive Perception 10 meets it as it appears
+    state, _ = observe(session, projection, state, finder,
+                       lambda: door.place_on_grid((4, 7), boundary_direction=CardinalDirection.WEST))
+    assert shown(state, door)[0] == "environment.door.secret_stone"

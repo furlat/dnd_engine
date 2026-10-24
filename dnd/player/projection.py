@@ -1165,6 +1165,8 @@ class SeatWalk:
     # native cause and exact zone. Never retained as remembered field sight.
     observed_spatial_removals: set[tuple[UUID, UUID]] = field(default_factory=set)
     destroyed_contacts: dict[UUID, PlayerObject] = field(default_factory=dict)
+    # Those of them the seat saw as their camouflage: no damage of theirs is shown to it.
+    camouflaged_contacts: set[UUID] = field(default_factory=set)
     nodes: list[PlayerNode] = field(default_factory=list)
     bodies: list[BodyRecord] = field(default_factory=list)
     updates: list[WorldUpdate] = field(default_factory=list)
@@ -1287,6 +1289,8 @@ def _enter_removals(walk: SeatWalk, state: "ProjectionState", world: WorldFacts,
         if view is not None and identity in world.objects and object_observed(world, view, identity):
             walk.destroyed_contacts[identity] = disclosed_world_object(world, view, identity,
                 state.static_sent.object_looks | walk.pending.object_looks, found)
+            if camouflaged(world.objects[identity].item, found):
+                walk.camouflaged_contacts.add(identity)
 
 
 def _enter_event(walk: SeatWalk, state: "ProjectionState", world: WorldFacts, event: Event,
@@ -1465,6 +1469,11 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
                         _enter_body(walk, group, state, actors, loadout_ids, event, identity, contact.visual)
         _publish_world(walk, group, state, world, digests, event, applied, folded, before, settlement,
                        found=found, learned=learned)
+    elif not event.canceled and learned:
+        # A later member's notice in a settlement composed at its first: what it taught is rebuilt now.
+        view = state.audience_composition.view
+        _publish_world(walk, group, state, world, digests, event, None, folded,
+                       view.visible if view is not None else EMPTY_CELLS, found=found, learned=learned)
     for identity in observer.controlled:
         # A controlled body is always perceived: it enters once the session holds it.
         if (identity not in walk.known or identity in granted) and identity in actors:
@@ -1552,11 +1561,14 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
     if (isinstance(event, TakeDamageEvent) and not event.canceled
             and event.final_damage is not None and event.resulting_hp is not None):
         identity = event.target_entity_uuid
-        if identity is not None and (
-                identity in world.objects
-                and world.objects[identity].item.integrity is ItemIntegrity.INTACT
+        target = world.objects.get(identity) if identity is not None else None
+        # Hit, even broken by the blow, a camouflage the seat hasn't found shows nothing.
+        unfound = identity in walk.camouflaged_contacts or (
+            target is not None and target.item.camouflage is not None and target.item.camouflage_holder not in found)
+        if identity is not None and not unfound and (
+                target is not None
+                and target.item.integrity is ItemIntegrity.INTACT
                 and object_observed(world, view, identity)
-                and not camouflaged(world.objects[identity].item, found)  # hit, it still shows nothing
                 or identity in destroyed_contacts):
             components = event.resolution.components if event.resolution is not None else ()
             fact = ObjectDamageFact(object_uuid=identity, applied_damage=event.final_damage,
@@ -1885,7 +1897,7 @@ class SessionProjection:
     names: dict[UUID, str] = field(default_factory=dict)
     # The content id of every visual loadout a body entered with, by value (a memo: each value digested once).
     loadout_ids: dict[VisualLoadout, str] = field(default_factory=dict)
-    # Every camouflaged thing a notice taught, with the knower keys (a party's faction, a creature) that learned it.
+    # Every hidden thing a notice taught, with the knower keys (a party's faction, a creature) that learned it.
     known_hidden: dict[UUID, set[KnowerKey]] = field(default_factory=dict)
     walked: set[UUID] = field(default_factory=set)
 
@@ -2233,12 +2245,9 @@ def _knower_keys(session: SessionProjection, audience: PlayerAudience) -> frozen
 
 def _fold_notices(session: SessionProjection, event: Event, noticed: frozenset[UUID] | None
                   ) -> tuple[KnowerKey, frozenset[UUID]] | None:
-    """The camouflaged things a sensory event's observer noticed or found become its party's, for every seat (a
-    hidden trap's knowledge reaches a seat as its members' spatial effects)."""
+    """The hidden things a sensory event's observer noticed or found become its party's, for every seat (a seat
+    reads only its camouflage: a hidden trap's knowledge reaches it as its members' spatial effects)."""
     if not noticed or not isinstance(event, SensoryUpdateEvent):
-        return None
-    noticed = frozenset(holder for holder in noticed if holder in session.world.camouflaged_by_holder)
-    if not noticed:
         return None
     key = _knower(session, event.observer_uuid)
     for holder in noticed:
@@ -2251,15 +2260,16 @@ def _learned(session: SessionProjection, taught: tuple[KnowerKey, frozenset[UUID
     """The camouflaged objects a notice taught this seat's party, rebuilt for it alone."""
     if taught is None or taught[0] not in _knower_keys(session, audience):
         return frozenset()
-    return frozenset(identity for holder in taught[1] for identity in session.world.camouflaged_by_holder[holder])
+    return frozenset(identity for holder in taught[1] for identity in session.world.camouflaged_by_holder.get(holder, ()))
 
 
 def _found(session: SessionProjection, audience: PlayerAudience) -> frozenset[UUID]:
     """The hidden things the seat's party has learned."""
-    if not session.known_hidden:
+    camouflage = session.world.camouflaged_by_holder
+    if not camouflage:
         return frozenset()
     keys = _knower_keys(session, audience)
-    return frozenset(holder for holder, knowers in session.known_hidden.items() if not knowers.isdisjoint(keys))
+    return frozenset(holder for holder in camouflage if not session.known_hidden.get(holder, set()).isdisjoint(keys))
 
 
 def project_lineage(session: SessionProjection, state: ProjectionState, lineage: CompletedLineage
