@@ -332,6 +332,7 @@ class BaseItem(BaseBlock):
         weapon, armor, shield, or finite-use facts. No transport/server model
         participates in this engine contract.
         """
+        camouflaged = self.concealment_holder(ConcealedAspect.CAMOUFLAGE)
         return ItemPresentationState(
             item_uuid=self.uuid,
             item_id=self.item_id,
@@ -390,6 +391,8 @@ class BaseItem(BaseBlock):
             blocks_optics=self.blocks_optics_at_center(),
             blocks_propagation=self.blocks_propagation(),
             presence_concealed=self.concealment_holder(ConcealedAspect.PRESENCE) is not None,
+            camouflage=camouflaged.concealment.shows if camouflaged is not None and camouflaged.concealment else None,
+            camouflage_holder=camouflaged.uuid if camouflaged is not None else None,
         )
 
     def snapshot_item_state(self) -> ItemPresentationState:

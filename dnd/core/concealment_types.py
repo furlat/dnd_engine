@@ -11,6 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from dnd.types.abilities import SkillName
+from dnd.types.world_placement import BoundaryStructure
 
 KnowerKey = Union[str, UUID]
 
@@ -22,9 +23,23 @@ class ConcealedAspect(str, Enum):
     PRESENCE = "presence"    # its host object or creature: not perceived until known
     ACTIONS = "actions"      # what its host does: a secret door, a hidden button
     CONTENTS = "contents"    # what its host holds: a desk's drawer, a false back
+    CAMOUFLAGE = "camouflage"  # its host, seen as something else while closed and intact: a secret door as wall
 
 
-NOTICED_ON_OBJECTS = frozenset({ConcealedAspect.PRESENCE, ConcealedAspect.ACTIONS})  # contents only by Search Inside
+NOTICED_ON_OBJECTS = frozenset({ConcealedAspect.PRESENCE, ConcealedAspect.ACTIONS, ConcealedAspect.CAMOUFLAGE})
+# (contents only by Search Inside)
+
+
+class Camouflage(BaseModel):
+    """What a seat that doesn't know a camouflaged object is shown of it: renderer data only."""
+
+    model_config = ConfigDict(frozen=True)
+
+    item_id: str
+    visual_variant_id: Optional[str] = None
+    name: str
+    map_char: str
+    boundary_structure: Optional[BoundaryStructure] = None
 
 
 class KnowerScope(str, Enum):
@@ -46,6 +61,7 @@ class Concealment(BaseModel):
     known_by: frozenset[KnowerKey] = frozenset()
     failed_by: frozenset[UUID] = frozenset()
     in_plain_view: bool = False  # for now noticed by anyone who sees it (raised spikes, an open hatch)
+    shows: Optional[Camouflage] = None  # a CAMOUFLAGE record's
 
 
 def knower_key(record: Concealment, faction: Optional[str], uuid: UUID) -> KnowerKey:
@@ -76,6 +92,7 @@ def with_plain_view(record: Concealment, in_plain_view: bool) -> Concealment:
 
 
 def concealment(dc: Optional[int], aspect: ConcealedAspect = ConcealedAspect.HAZARD, *, skill: SkillName = "perception",
-                in_plain_view: bool = False) -> Optional[Concealment]:
+                in_plain_view: bool = False, shows: Optional[Camouflage] = None) -> Optional[Concealment]:
     """The record an authored hidden DC makes; None when nothing is hidden."""
-    return None if dc is None else Concealment(dc=dc, aspect=aspect, skill=skill, in_plain_view=in_plain_view)
+    return None if dc is None else Concealment(dc=dc, aspect=aspect, skill=skill, in_plain_view=in_plain_view,
+                                                shows=shows)

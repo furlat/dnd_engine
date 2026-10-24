@@ -5,7 +5,7 @@ from types import MappingProxyType
 from uuid import UUID, uuid4
 from typing import Literal, Sequence
 
-from dnd.core.concealment_types import ConcealedAspect
+from dnd.core.concealment_types import Camouflage, ConcealedAspect
 from dnd.actions import SpellAction
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.core.base_conditions import Duration
@@ -170,20 +170,29 @@ SOLID_WALL_MATERIALS = MappingProxyType({
 })
 
 
+def solid_wall_name(item_id: str) -> str:
+    return f"Fantasy {item_id.rsplit('_', 1)[1].upper()} Wall"
+
+
 def build_solid_wall(item_id: str, source_entity_uuid: UUID) -> DirectionalWall:
     """Compose an already admitted solid skin on the ordinary wall lifecycle."""
     material = SOLID_WALL_MATERIALS[item_id]
     return DirectionalWall(source_entity_uuid=source_entity_uuid, item_id=item_id,
-        name=f"Fantasy {item_id.rsplit('_', 1)[1].upper()} Wall", material=material,
+        name=solid_wall_name(item_id), material=material,
         armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[material])
 
 
 def build_secret_door(item_id: str = "environment.door.secret_stone", *, dc: int = 15,
-                      swing: DoorSwing = DoorSwing.OUTWARD) -> DirectionalDoor:
-    """A door set flush in a wall, hidden until found: closed, a party that hasn't noticed or searched it out
-    does not perceive it at all, and it still blocks sight and passage like any closed door."""
+                      swing: DoorSwing = DoorSwing.OUTWARD,
+                      looks_like: str = "environment.wall.fantasy_a1") -> DirectionalDoor:
+    """A door set flush in a wall: closed, a party that hasn't noticed or searched it out is shown the wall it is
+    set in (its look, name and glyph, and a wall's structure of the door's own channels), nothing else."""
     door = build_authored_door(item_id, swing=swing)
-    install_concealment(door, ConcealedAspect.PRESENCE, dc)
+    wall = BoundaryStructure(structure=BoundaryStructureKind.WALL, material=SOLID_WALL_MATERIALS[looks_like],
+                             blocked_channels=door.blocked_channels)
+    install_concealment(door, ConcealedAspect.CAMOUFLAGE, dc, shows=Camouflage(item_id=looks_like,
+        name=solid_wall_name(looks_like), map_char=DirectionalWall.model_fields["map_char"].default,
+        boundary_structure=wall))
     return door
 
 

@@ -100,7 +100,9 @@ from dnd.core.traversal_connectors import (
 )
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import ConcealmentHolder, get_map
-from dnd.core.concealment_types import ConcealedAspect, Concealment, knower_key, knows, with_failure, with_knowers
+from dnd.core.concealment_types import (
+    NOTICED_ON_OBJECTS, ConcealedAspect, Concealment, knower_key, knows, with_failure, with_knowers,
+)
 from dnd.core.view import cell_visible, visible_positions
 from dnd.core.geometry import grid_distance_feet, position_in_sector
 from dnd.core.presentation_geometry import AoEPresentationGeometry
@@ -3105,8 +3107,7 @@ class Search(BaseAction):
                              description="Player-facing search action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Search targets self")
     search_feet: ClassVar[int] = 10
-    searched_aspects: ClassVar[frozenset[ConcealedAspect]] = frozenset({
-        ConcealedAspect.HAZARD, ConcealedAspect.PRESENCE, ConcealedAspect.ACTIONS})
+    searched_aspects: ClassVar[frozenset[ConcealedAspect]] = frozenset({ConcealedAspect.HAZARD, *NOTICED_ON_OBJECTS})
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Search Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid when searching.")
@@ -3151,21 +3152,21 @@ class Search(BaseAction):
         roll = entity.roll_d20(entity.skill_bonus(target_entity_uuid=None, skill_name="perception"),
                                RollType.CHECK, skill_name="perception", parent_event=effect.uuid)
         writes: List[Tuple[ConcealmentHolder, Concealment]] = []
-        found = 0
+        found: List[UUID] = []
         for holder in self._hidden_nearby(entity):
             record = holder.concealment
             assert record is not None
             if roll.total >= record.dc:
                 writes.append((holder, with_knowers(record, (knower_key(record, entity.faction, entity.uuid),))))
-                found += 1
+                found.append(holder.uuid)
             else:
                 writes.append((holder, with_failure(record, entity.uuid)))
         if writes:
             get_map().record_concealment(writes)
-        if found:
-            entity.update_entity_senses(parent_event=effect)  # the searcher's own view now shows each find
+        if found:  # the searcher's own view now shows each find, which its sensory update names
+            entity.update_entity_senses(parent_event=effect, found=frozenset(found))
         return effect.with_updates(status_message=(
-            f"{entity.name} finds {found} hidden thing{'s' if found != 1 else ''}" if found
+            f"{entity.name} finds {len(found)} hidden thing{'s' if len(found) != 1 else ''}" if found
             else f"{entity.name} finds nothing"))
 
 

@@ -109,9 +109,18 @@ def contents_granted(world: WorldFacts, view: SensesSnapshot, identity: UUID) ->
             and (obj.item.is_open is True or obj.item.integrity is ItemIntegrity.DESTROYED))
 
 
-def disclosed_floor_item(world: WorldFacts, view: SensesSnapshot, identity: UUID, known: Collection[UUID]) -> FloorItem:
+def camouflaged(item: ItemPresentationState, found: Collection[UUID]) -> bool:
+    """Whether a seat is shown an object's camouflage: it is closed and intact, and the seat's party hasn't found
+    it (`found`: the camouflage holders its knower keys learned)."""
+    return (item.camouflage is not None and item.camouflage_holder not in found
+            and item.integrity is ItemIntegrity.INTACT and item.is_open is not True)
+
+
+def disclosed_floor_item(world: WorldFacts, view: SensesSnapshot, identity: UUID, known: Collection[UUID],
+                         found: Collection[UUID] = frozenset()) -> FloorItem:
     """What the seat sees of an observed object now: residues on its observed faces, the suppression rows of
-    providers it perceives (their cells it sees), a remnant naming only known attachments."""
+    providers it perceives (their cells it sees), a remnant naming only known attachments. A camouflaged object is
+    its camouflage's renderer data and its physics, nothing else."""
     obj = world.objects[identity]
     faces = set(observed_faces(obj.placement, view.visible))
     residues = {}
@@ -119,6 +128,14 @@ def disclosed_floor_item(world: WorldFacts, view: SensesSnapshot, identity: UUID
         seen = tuple(face for face in residue.faces if face in faces)
         if seen:
             residues[residue.condition_uuid] = residue.model_copy(update={"faces": seen})
+    shows = obj.item.camouflage
+    if shows is not None and camouflaged(obj.item, found):
+        return FloorItem(item_uuid=identity, item_id=shows.item_id, name=shows.name, visual_item_name=shows.name,
+            visual_variant_id=shows.visual_variant_id, map_char=shows.map_char,
+            boundary_structure=shows.boundary_structure, is_open=None, is_lit=None,
+            is_pickable=obj.item.is_pickable, blocks_propagation=obj.item.blocks_propagation,
+            contact_passage=obj.item.contact_passage,
+            surface_residues=tuple(residues[key] for key in sorted(residues, key=str)))
     suppressions = []
     for outcome in obj.item.construction_suppressions:
         provider = view.spatial_effects.get(outcome.provider_uuid)
@@ -133,12 +150,12 @@ def disclosed_floor_item(world: WorldFacts, view: SensesSnapshot, identity: UUID
 
 
 def disclosed_world_object(world: WorldFacts, view: SensesSnapshot, identity: UUID,
-                           known: Collection[UUID]) -> PlayerObject:
+                           known: Collection[UUID], found: Collection[UUID] = frozenset()) -> PlayerObject:
     """An observed object as the seat sees it now, with its contents when they are seen."""
     obj = world.objects[identity]
     contents = (tuple(floor_item(child, ()) for child in obj.contained_items or ())
                 if contents_granted(world, view, identity) else None)
-    return PlayerObject(placement=obj.placement, item=disclosed_floor_item(world, view, identity, known),
+    return PlayerObject(placement=obj.placement, item=disclosed_floor_item(world, view, identity, known, found),
         contained_items=contents)
 
 
@@ -255,7 +272,8 @@ def _scalars(changes: WorldTileChanges, keys: Iterable[str], tile: WorldTileStat
 def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[AppliedWorldFact, ...], before: CellMask,
                       view: SensesSnapshot, perception: AudiencePerception, audience: PlayerAudience,
                       sensed: SensedWorld | None, *, observed: set[UUID], granted: set[UUID], sent: StaticSent,
-                      pending: StaticSent, digests: TileDigests, stamps: SeatStamps) -> WorldUpdate | None:
+                      pending: StaticSent, digests: TileDigests, stamps: SeatStamps,
+                      found: Collection[UUID] = frozenset()) -> WorldUpdate | None:
     """One seat's world update at an occurrence, or None when it perceives no world change there.
 
     `applied` is what the occurrence wrote (for a member's sensory occurrence, what the changes it saw happen
@@ -323,14 +341,14 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
         if seen is None:
             continue
         placement = world.objects[identity].placement
-        state = split_floor_item(disclosed_floor_item(world, view, identity, known_before))[1]
+        state = split_floor_item(disclosed_floor_item(world, view, identity, known_before, found))[1]
         if (stampable(state) and set(observed_faces(placement, visible)) <= seen.faces
                 and object_members(world, perception, audience, identity) == seen.members
                 and unchanged_since(object_stamps(stamps, identity), identity, object_digest(state, placement))):
             unchanged.add(identity)
     whole -= unchanged
     for identity in sorted(whole, key=str):
-        _look(rows, split_floor_item(floor_item(world.objects[identity].item, ()))[0], sent, pending)
+        _look(rows, split_floor_item(disclosed_floor_item(world, view, identity, known_before, found))[0], sent, pending)
     known = sent.object_looks | pending.object_looks
     # A composite names an attachment once its look is sent: its row is sent again with the new name.
     remnants = {remnant for identity in whole for remnant in world.remnants_by_item.get(identity, ())}
@@ -342,7 +360,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
     for identity in sorted(whole | changed, key=str):
         placement = world.objects[identity].placement
         anchor = world.tiles.get(placement.position)
-        state = _split(rows, disclosed_floor_item(world, view, identity, known), sent, pending)
+        state = _split(rows, disclosed_floor_item(world, view, identity, known, found), sent, pending)
         object_rows.append(ObjectRow(item_uuid=identity, members=object_members(world, perception, audience, identity),
             state=state, placement=pack_placement(placement, anchor.tile_uuid
                 if anchor is not None and anchor.tile_uuid in held_tiles else None)

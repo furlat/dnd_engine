@@ -176,6 +176,9 @@ class CompletedLineage:
     native_logs: Mapping[UUID, RecordedCombatLog] = field(default_factory=dict)
     # The shared fold's actor change of each retained event that has one, by event uuid.
     actor_fact_changes: Mapping[UUID, ActorFactChange] = field(default_factory=dict)
+    # The hidden things each retained sensory event's observer noticed or found (`concealed_noticed`), by event
+    # uuid: seat-independent (a foreign seat's sensory body is a header), folded once for every seat.
+    notices: Mapping[UUID, frozenset[UUID]] = field(default_factory=dict)
 
 
 def _objective_row(index: int, event: Event) -> ObjectiveRow:
@@ -621,6 +624,8 @@ class LineageGraph:
     objective_rows: tuple[ObjectiveRow, ...]
     # Each node's native combat log, by its uuid (`CompletedLineage.native_logs`).
     native_logs: Mapping[UUID, CombatLogEntry]
+    # Each sensory node's notices, by its uuid (`CompletedLineage.notices`).
+    notices: Mapping[UUID, frozenset[UUID]]
 
 
 def capture_context(checkpoint: CaptureCheckpoint, roots: tuple[Event, ...] = (), *,
@@ -750,7 +755,9 @@ def _graph(nodes: dict[UUID, Event], indexed: tuple[tuple[int, Event], ...]) -> 
                        and (fact := _condition_fact(event)) is not None)
     return LineageGraph(nodes, indexed, conditions,
                         tuple(_objective_row(index, event) for index, event in indexed),
-                        {event.uuid: event.combat_log for event in nodes.values() if event.combat_log is not None})
+                        {event.uuid: event.combat_log for event in nodes.values() if event.combat_log is not None},
+                        {event.uuid: frozenset(event.concealed_noticed) for event in nodes.values()
+                         if isinstance(event, SensoryUpdateEvent) and event.concealed_noticed})
 
 
 def _merged_graph(graphs: tuple[LineageGraph, ...]) -> LineageGraph:
@@ -823,6 +830,7 @@ def _capture_lineage(
         observed_sources=tuple(observed_sources),
         native_logs=graph.native_logs,
         actor_fact_changes=_actor_fact_changes(context.records, retained),
+        notices=graph.notices,
     ), audience
 
 

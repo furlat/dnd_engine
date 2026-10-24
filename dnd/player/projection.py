@@ -25,6 +25,7 @@ from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.base_actions import ActionEvent
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.presentation_geometry import ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry
+from dnd.core.concealment_types import KnowerKey
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.effect_types import ResolutionRef
 from dnd.core.content.runtime import HandlerDispatchOutcome
@@ -70,8 +71,8 @@ from dnd.player.world_digests import TileDigests, forget_written
 from dnd.player.world_stamps import SeatStamps, StampChanges, WorldStamps, merge_world_stamps, unchanged_since
 from dnd.player.static_sent import StaticSent, merge_static_sent
 from dnd.player.spatial_commits import commit_current
-from dnd.player.world_publication import (SensedWorld, disclosed_world_object, object_observed, observed_remnant,
-    seat_world_update)
+from dnd.player.world_publication import (SensedWorld, camouflaged, disclosed_world_object, object_observed,
+    observed_remnant, seat_world_update)
 from dnd.player.compatibility import legacy_damage_reference
 from dnd.world_facts import WorldFacts, apply_world_fact
 
@@ -1277,18 +1278,20 @@ def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event,
         observed_objects=set(state.observed_objects))
 
 
-def _enter_removals(walk: SeatWalk, state: "ProjectionState", world: WorldFacts, event: Event) -> None:
+def _enter_removals(walk: SeatWalk, state: "ProjectionState", world: WorldFacts, event: Event,
+                    found: frozenset[UUID] = frozenset()) -> None:
     """Keep currently observed contact before this event or observed source writes it away."""
     view = state.audience_composition.view
     for identity in walk.removals_at.get(event.uuid, ()):
         if view is not None and identity in world.objects and object_observed(world, view, identity):
             walk.destroyed_contacts[identity] = disclosed_world_object(world, view, identity,
-                state.static_sent.object_looks | walk.pending.object_looks)
+                state.static_sent.object_looks | walk.pending.object_looks, found)
 
 
-def _enter_event(walk: SeatWalk, state: "ProjectionState", world: WorldFacts, event: Event) -> None:
+def _enter_event(walk: SeatWalk, state: "ProjectionState", world: WorldFacts, event: Event,
+                 found: frozenset[UUID] = frozenset()) -> None:
     """A seat's part of an event before the session folds take its after-values: the captures due at its cursor."""
-    _enter_removals(walk, state, world, event)
+    _enter_removals(walk, state, world, event, found)
     view = state.audience_composition.view
     for lineage in walk.deliveries_at.get(event.uuid, ()):
         senses = view
@@ -1364,7 +1367,8 @@ def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", w
                    digests: TileDigests, event: Event,
                    applied: AppliedWorldFact | None, folded: Mapping[UUID, AppliedWorldFact | None],
                    before: CellMask, settlement: tuple[SensoryUpdateEvent, ...] = (),
-                   sensed: SensedWorld | None = None) -> None:
+                   sensed: SensedWorld | None = None, found: frozenset[UUID] = frozenset(),
+                   learned: frozenset[UUID] = frozenset()) -> None:
     """The seat's world update at an event (`before`: its composed view's visible cells before the event): what
     the event wrote or, at a settlement of its members (`settlement`, at its first event), what their senses
     changed and what the changes they saw happen wrote (folded at their own versions), each of those once per
@@ -1382,12 +1386,15 @@ def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", w
                 for identity in (*member.object_contacts_changed, *member.object_contacts_removed)),
             frozenset(identity for member in settlement
                 for identity in (*member.spatial_effects_changed, *member.spatial_effects_removed)))
+    if learned:
+        # The camouflaged objects a notice taught this seat's party are rebuilt for it, and for no other seat.
+        records = (*records, AppliedWorldFact(objects=learned))
     view = composition.view
     if view is None:
         return
     update = seat_world_update(world, group.indexes[event.uuid], records, before, view, composition.perception,
         audience, sensed, observed=state.observed_objects, granted=state.granted_containers, sent=state.static_sent,
-        pending=walk.pending, digests=digests, stamps=SeatStamps(state.world_stamps, walk.stamps))
+        pending=walk.pending, digests=digests, stamps=SeatStamps(state.world_stamps, walk.stamps), found=found)
     if update is not None:
         walk.updates.append(update)
 
@@ -1396,7 +1403,8 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
                  digests: TileDigests, actors: Mapping[UUID, ActorState], loadout_ids: dict[VisualLoadout, str],
                  event: Event,
                  applied: AppliedWorldFact | None,
-                 folded: Mapping[UUID, AppliedWorldFact | None], step: BodiesStep) -> None:
+                 folded: Mapping[UUID, AppliedWorldFact | None], step: BodiesStep,
+                 found: frozenset[UUID] = frozenset(), learned: frozenset[UUID] = frozenset()) -> None:
     """A seat's part of an event after the session folds took its after-values (`applied`: what the world fold
     applied; `step`: the actors' change and rows): its senses, the bodies entering its view, its world update, its
     node. `folded` holds what each version the group folded so far applied."""
@@ -1426,13 +1434,13 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
             assert composition.view is not None
             sensory = _settlement_fact(change, composition.view, state, walk)
             _publish_world(walk, group, state, world, digests, event, applied, folded, before,
-                sensed=SensedWorld(frozenset(change.objects), frozenset(change.effects)))
+                sensed=SensedWorld(frozenset(change.objects), frozenset(change.effects)), found=found)
         audience_fact = AudienceFact(audience=observer, sensory=sensory)
     keys, indexes, facts = group.keys, group.indexes, walk.facts
     settlement = walk.settlements.get(event.uuid, ())
     sensory_fact = None
     # A settlement's later events were composed at its first.
-    if not event.canceled and event.uuid not in walk.settled and (applied is not None or settlement):
+    if not event.canceled and event.uuid not in walk.settled and (applied is not None or settlement or learned):
         composition = state.audience_composition
         before = composition.view.visible if composition.view is not None else EMPTY_CELLS
         if settlement:
@@ -1454,7 +1462,8 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
                         walk.unborn.add(identity)
                     elif contact is not None:
                         _enter_body(walk, group, state, actors, loadout_ids, event, identity, contact.visual)
-        _publish_world(walk, group, state, world, digests, event, applied, folded, before, settlement)
+        _publish_world(walk, group, state, world, digests, event, applied, folded, before, settlement,
+                       found=found, learned=learned)
     for identity in observer.controlled:
         # A controlled body is always perceived: it enters once the session holds it.
         if (identity not in walk.known or identity in granted) and identity in actors:
@@ -1546,6 +1555,7 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
                 identity in world.objects
                 and world.objects[identity].item.integrity is ItemIntegrity.INTACT
                 and object_observed(world, view, identity)
+                and not camouflaged(world.objects[identity].item, found)  # hit, it still shows nothing
                 or identity in destroyed_contacts):
             components = event.resolution.components if event.resolution is not None else ()
             fact = ObjectDamageFact(object_uuid=identity, applied_damage=event.final_damage,
@@ -1874,6 +1884,8 @@ class SessionProjection:
     names: dict[UUID, str] = field(default_factory=dict)
     # The content id of every visual loadout a body entered with, by value (a memo: each value digested once).
     loadout_ids: dict[VisualLoadout, str] = field(default_factory=dict)
+    # Every camouflaged thing a notice taught, with the knower keys (a party's faction, a creature) that learned it.
+    known_hidden: dict[UUID, set[KnowerKey]] = field(default_factory=dict)
     walked: set[UUID] = field(default_factory=set)
 
 
@@ -2164,12 +2176,17 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
             source = next(sources, None)
         condition = walks[0].facts.get(event.uuid)
         for walk, state in zip(walks, states):
-            _enter_event(walk, state, session.world, walk.events[position])
+            _enter_event(walk, state, session.world, walk.events[position], _found(session, state.audience))
         step = _fold_actors(session.actors, session.names, folded, event, walks[0].actor_fact_changes, condition)
         applied = _fold_version(session, folded, event, condition)
+        taught = _fold_notices(session, event, lineages[0].notices.get(event.uuid))
         for walk, state in zip(walks, states):
+            learned = (frozenset(identity for holder in taught[1] for identity in
+                                 session.world.camouflaged_by_holder.get(holder, ()))
+                       if taught is not None and taught[0] in _knower_keys(session, state.audience) else frozenset())
             _leave_event(walk, group, state, session.world, session.tile_digests, session.actors,
-                         session.loadout_ids, walk.events[position], applied, folded, step)
+                         session.loadout_ids, walk.events[position], applied, folded, step,
+                         _found(session, state.audience), learned)
     return tuple(_emit_lineage(group, state, lineage, walk, start_cursor)
         for state, lineage, walk, start_cursor in zip(states, lineages, walks, start_cursors))
 
@@ -2202,6 +2219,39 @@ def _emit_lineage(group: WalkGroup, state: ProjectionState, lineage: CompletedLi
         root=root, events=nodes, version_rows=rows, start_cursor=start_cursor,
         end_cursor=state.next_occurrence, bodies=bodies, world_updates=updates,
         sensory_rows=sensory_rows, resolutions=resolution_rows)
+
+
+def _knower(session: SessionProjection, identity: UUID) -> KnowerKey:
+    """A creature's knower key for what its party learns: its faction, or itself when it has none."""
+    actor = session.actors.get(identity)
+    return actor.faction if actor is not None and actor.faction is not None else identity
+
+
+def _knower_keys(session: SessionProjection, audience: PlayerAudience) -> frozenset[KnowerKey]:
+    return frozenset(_knower(session, identity) for identity in (*audience.controlled, *audience.observers))
+
+
+def _fold_notices(session: SessionProjection, event: Event, noticed: frozenset[UUID] | None
+                  ) -> tuple[KnowerKey, frozenset[UUID]] | None:
+    """The camouflaged things a sensory event's observer noticed or found become its party's, for every seat (a
+    hidden trap's knowledge reaches a seat as its members' spatial effects)."""
+    if not noticed or not isinstance(event, SensoryUpdateEvent):
+        return None
+    noticed = frozenset(holder for holder in noticed if holder in session.world.camouflaged_by_holder)
+    if not noticed:
+        return None
+    key = _knower(session, event.observer_uuid)
+    for holder in noticed:
+        session.known_hidden.setdefault(holder, set()).add(key)
+    return key, noticed
+
+
+def _found(session: SessionProjection, audience: PlayerAudience) -> frozenset[UUID]:
+    """The hidden things the seat's party has learned."""
+    if not session.known_hidden:
+        return frozenset()
+    keys = _knower_keys(session, audience)
+    return frozenset(holder for holder, knowers in session.known_hidden.items() if not knowers.isdisjoint(keys))
 
 
 def project_lineage(session: SessionProjection, state: ProjectionState, lineage: CompletedLineage

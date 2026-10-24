@@ -32,6 +32,8 @@ class WorldFacts:
     remnants_by_item: dict[UUID, set[UUID]] = field(default_factory=dict)
     constructions_by_provider: dict[UUID, set[UUID]] = field(default_factory=dict)
     constructions_by_position: dict[tuple[int, int], set[UUID]] = field(default_factory=dict)
+    # The camouflaged object each camouflage condition hides, by the condition a notice names.
+    camouflaged_by_holder: dict[UUID, set[UUID]] = field(default_factory=dict)
 
 
 def world_objects_at(world: WorldFacts, positions: set[tuple[int, int]]) -> set[UUID]:
@@ -55,6 +57,8 @@ def _index_object(world: WorldFacts, identity: UUID, value: WorldObjectState, *,
         row.provider_uuid for row in value.item.construction_suppressions)))
     memberships.append((world.constructions_by_position, tuple(
         position for row in value.item.construction_suppressions for position in row.positions)))
+    memberships.append((world.camouflaged_by_holder, (value.item.camouflage_holder,)
+        if value.item.camouflage_holder is not None else ()))
     for index, keys in memberships:
         for key in set(keys):
             if remove:

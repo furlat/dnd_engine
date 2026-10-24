@@ -11,7 +11,7 @@ from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
-from dnd.core.concealment_types import ConcealedAspect, concealment, with_failure
+from dnd.core.concealment_types import Camouflage, ConcealedAspect, concealment, with_failure
 from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.dice import RollType
 from dnd.core.events import Event, EventPhase
@@ -44,6 +44,8 @@ class Concealed(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message="Only an object's record can hide it")
         if self.concealment.aspect is ConcealedAspect.CONTENTS and not isinstance(host, StorageChest):
             return [], [], [], [], declaration_event.cancel(status_message="Only a body with contents can hide them")
+        if (self.concealment.aspect is ConcealedAspect.CAMOUFLAGE) != (self.concealment.shows is not None):
+            return [], [], [], [], declaration_event.cancel(status_message="Camouflage, and only it, shows a look")
         return [], [], [], [], declaration_event.phase_to(EventPhase.EFFECT)
 
     def on_membership_changed(self, event: Event) -> None:
@@ -96,10 +98,11 @@ class SearchInside(BaseAction):
                                                    if item.chest_inventory.items else f"{entity.name} finds nothing in {item.name}"))
 
 
-def install_concealment(item: BaseItem, aspect: ConcealedAspect, dc: int, *, skill: SkillName = "perception") -> Concealed:
-    """Hide one object's presence, actions or contents behind a DC."""
+def install_concealment(item: BaseItem, aspect: ConcealedAspect, dc: int, *, skill: SkillName = "perception",
+                        shows: Optional[Camouflage] = None) -> Concealed:
+    """Hide one object's presence, actions or contents behind a DC, or camouflage it as what it `shows`."""
     hidden = Concealed(name=f"Concealed {aspect.value}", source_entity_uuid=item.uuid, target_entity_uuid=item.uuid,
-                       concealment=concealment(dc, aspect, skill=skill))
+                       concealment=concealment(dc, aspect, skill=skill, shows=shows))
     result = item.add_condition(hidden)
     if result is None or result.canceled or not hidden.applied:
         raise RuntimeError(f"{item.name} could not be hidden")

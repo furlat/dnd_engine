@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dnd.core.concealment_types import Camouflage
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.creature_types import DamageType
 from dnd.core.equipment_types import EquipmentSlot
@@ -229,6 +230,8 @@ class ItemPresentationState(BaseModel):
     # Server-side facts the seat publication reads and never copies to a seat (`floor_item`).
     contents_concealed: bool = False  # hidden contents (an unsearched drawer, a false back)
     presence_concealed: bool = False  # a hidden presence: only a seat whose members perceive it sees it
+    camouflage: Optional[Camouflage] = None  # what a seat that doesn't know it is shown while closed and intact
+    camouflage_holder: Optional[UUID] = None  # the condition whose record a notice names
 
 
 @runtime_checkable

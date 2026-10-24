@@ -463,7 +463,7 @@ class DirectionalDoor(UsableItem):
         self.is_open = value
         # An open secret door is plain to see: whoever sees it open knows it from then on. The record is
         # written before the change publishes, so the observers settling it see the door open.
-        hidden = self.concealment_holder(ConcealedAspect.PRESENCE)
+        hidden = self.concealment_holder(ConcealedAspect.PRESENCE) or self.concealment_holder(ConcealedAspect.CAMOUFLAGE)
         record = hidden.concealment if hidden is not None else None
         if hidden is not None and record is not None:
             get_map().record_concealment(((hidden, with_plain_view(record, value)),))

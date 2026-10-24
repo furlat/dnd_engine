@@ -11,17 +11,19 @@ from dnd.content.items.world_prop_builders import build_display_prop
 from dnd.core.base_block import BaseBlock
 from dnd.core.concealment_types import ConcealedAspect
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import EventQueue
+from dnd.core.events import EventPhase, EventQueue
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.items.concealment import install_concealment
 from dnd.items.environment_interactables import StorageChest
 from dnd.player.capture import capture_interval, capture_lineages
+from dnd.player.facts import ObjectDamageFact
 from dnd.player.projection import SessionProjection, begin_projection, project_lineage
 from dnd.player.reduction import reduce_initialization, reduce_lineage
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.types.world import CardinalDirection
+from tests.player.test_object_look_static import armed_actor, attack
 
 
 @pytest.fixture
@@ -50,19 +52,32 @@ def seat(built, actor):
     return session, projection, reduce_initialization(public)
 
 
-def act(session, projection, state, actor, name, target=None, faces=(20,)):
+def observe(session, projection, state, observer, run):
+    """Run what happens, then the seat of `observer` folds it: its client state and the packets it was sent."""
+    start = EventQueue.event_cursor()
+    run()
+    roots = tuple(event for _, event in EventQueue.iter_events_since(start)
+                  if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
+    packets = []
+    for native in capture_lineages(roots, observer_uuid=observer.uuid):
+        packet = project_lineage(session, projection, native)
+        if packet is not None:
+            packets.append(packet)
+            state = reduce_lineage(state, packet)
+    return state, packets
+
+
+def act(session, projection, state, actor, name, target=None, faces=(20,), observer=None):
+    actor.action_economy.reset_all_costs()
     rows = [row for row in actor.get_available_actions().all_actions if row.template_name.split("__")[0] == name]
     info, choice = next((row, option) for row in rows for option in row.valid_targets
                         if target is None or target.uuid in (option.target_uuid, row.source_item_uuid))
-    actor.action_economy.reset_all_costs()
-    with fixed_dice_faces(*faces):
-        root = execute_available_action(actor, info, choice)
-    assert root is not None and not root.canceled, root
-    for native in capture_lineages((root,), observer_uuid=actor.uuid):
-        packet = project_lineage(session, projection, native)
-        if packet is not None:
-            state = reduce_lineage(state, packet)
-    return state
+
+    def run():
+        with fixed_dice_faces(*faces):
+            root = execute_available_action(actor, info, choice)
+        assert root is not None and not root.canceled, root
+    return observe(session, projection, state, observer or actor, run)[0]
 
 
 def test_hidden_contents_are_never_sent_before_a_search_finds_them(cache_world):
@@ -76,15 +91,63 @@ def test_hidden_contents_are_never_sent_before_a_search_finds_them(cache_world):
     assert contents is not None and {row.item_uuid for row in contents} == set(chest.chest_inventory.items)
 
 
-def test_a_secret_door_is_sent_to_a_seat_only_once_its_party_finds_it(cache_world):
-    built, actor, _ = cache_world
+def shown(state, door):
+    item = state.objects[door.uuid].item
+    return item.item_id, item.name, item.map_char, item.door_mechanism, item.maximum_hit_points, item.is_open
+
+
+WALL = ("environment.wall.fantasy_a1", "Fantasy A1 Wall", "W", None, None, None)
+
+
+@pytest.fixture
+def party_world():
+    """A secret door on (4, 7)'s east side, a hero beside it, a partner of its party and a goblin who see it."""
+    reset_engine_runtime()
+    built = build_battlefield("battlefield.field_cache_bright")
+    game = Game()
+    finder, partner = armed_actor(game, (4, 7)), armed_actor(game, (4, 8))
+    goblin = Entity.create(uuid4(), "Goblin", config=EntityConfig(position=(4, 6), faction="goblins"))
+    goblin.compose_entity()
+    game.deploy_entity(goblin, (4, 6))
     door = build_secret_door(dc=15)
     door.place_on_grid((4, 7), boundary_direction=CardinalDirection.EAST)
-    actor.update_entity_senses(max_distance=12)
-    session, projection, state = seat(built, actor)
-    assert door.uuid not in state.objects
-    state = act(session, projection, state, actor, "Search")
-    assert state.objects[door.uuid].item.item_id == "environment.door.secret_stone"
+    for entity in (finder, partner, goblin):
+        entity.update_entity_senses(max_distance=12)
+    try:
+        yield built, finder, partner, goblin, door
+    finally:
+        game.close()
+        reset_engine_runtime()
+
+
+def test_a_camouflaged_door_is_its_wall_to_a_seat_until_its_party_finds_it(party_world):
+    built, finder, _, _, door = party_world
+    session, projection, state = seat(built, finder)
+    assert shown(state, door) == WALL  # its look, name and glyph, and nothing of a door
+    state = act(session, projection, state, finder, "Search")
+    assert shown(state, door)[:2] == ("environment.door.secret_stone", "Secret stone door")
+    assert state.objects[door.uuid].item.door_mechanism is not None
+
+
+@pytest.mark.parametrize(("member", "expected"), (("partner", "environment.door.secret_stone"),
+                                                  ("goblin", "environment.wall.fantasy_a1")))
+def test_what_a_party_finds_reaches_its_members_seats_and_no_other(party_world, member, expected):
+    built, finder, partner, goblin, door = party_world
+    observer = partner if member == "partner" else goblin
+    session, projection, state = seat(built, observer)
+    state = act(session, projection, state, finder, "Search", observer=observer)
+    assert state.objects[door.uuid].item.item_id == expected
+
+
+def test_a_camouflaged_door_hit_shows_nothing_and_once_open_is_a_door_for_everyone(party_world):
+    built, finder, _, goblin, door = party_world
+    session, projection, state = seat(built, goblin)
+    state, packets = observe(session, projection, state, goblin, lambda: attack(finder, door, 3))
+    assert shown(state, door) == WALL
+    assert not any(isinstance(node.fact, ObjectDamageFact) for packet in packets for node in packet.events)
+    state = act(session, projection, state, finder, "Search", observer=goblin)
+    state = act(session, projection, state, finder, "Open Door", observer=goblin)
+    assert shown(state, door)[0] == "environment.door.secret_stone" and shown(state, door)[5] is True
 
 
 def test_a_rack_emptying_reaches_the_seat(cache_world):

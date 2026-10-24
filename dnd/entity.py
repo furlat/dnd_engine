@@ -5354,9 +5354,11 @@ class Entity(BaseBlock):
         path_max_distance: Optional[int] = None,
         *,
         parent_event: Optional[Event] = None,
+        found: FrozenSet[UUID] = frozenset(),
     ) -> None:
         """Reduce perception, materialize navigation, and record any actual delta (a child of
-        `parent_event` when an action caused it, such as a search)."""
+        `parent_event` when an action caused it, such as a search; `found`: the hidden things it found, named
+        with its notices)."""
         before = published_senses(self.senses)
         noticed = spatial_senses_system.recompute_observer(
             self.uuid,
@@ -5367,7 +5369,7 @@ class Entity(BaseBlock):
             path_max_distance=path_max_distance,
         )
         spatial_senses_system.publish_observer_refresh(self.uuid, before, parent_event=parent_event,
-                                                       concealed_noticed=noticed)
+                                                       concealed_noticed=frozenset(noticed) | found)
 
     @classmethod
     def update_all_entities_senses(cls, max_distance: int = 10) -> None:

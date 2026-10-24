@@ -264,28 +264,27 @@ def test_a_search_finds_hidden_loot(arena):
     assert key.uuid in searcher.senses.objects
 
 
-def test_a_secret_door_is_unseen_until_found_and_still_blocks_sight_and_passage(arena):
+def test_a_camouflaged_door_offers_nothing_until_found_and_still_blocks_sight_and_passage(arena):
     door = build_secret_door(dc=15)
     door.place_on_grid((3, 2), boundary_direction=CardinalDirection.EAST)
     hero = creature("Hero", (3, 2), wisdom=8)
     goblin = creature("Goblin", (4, 2), wisdom=8, faction="goblins")
     for entity in (hero, goblin):
-        assert door.uuid not in entity.senses.objects and row(entity, "Open Door") is None
+        assert door.uuid in entity.senses.objects and row(entity, "Open Door") is None  # seen, as its wall
     assert not cell_visible(hero.senses.cells, (5, 2)) and not get_map().can_transition((3, 2), (4, 2))
     act(hero, "Search", faces=(16,))  # 16 - 1 meets DC 15
-    assert door.uuid in hero.senses.objects and row(hero, "Open Door") is not None
-    assert door.uuid not in goblin.senses.objects
+    assert row(hero, "Open Door") is not None and row(goblin, "Open Door") is None
     Entity.update_entity_position(goblin, (6, 2), parent_event=cause().uuid)  # clear of the door's swing
     act(hero, "Open Door")
     goblin.update_entity_senses()
-    assert door.uuid in goblin.senses.objects  # an open door is plain to see, and from then on known
+    assert not door.hides_actions_from(goblin.faction, goblin.uuid)  # an open door is plain to see, and known
 
 
-def test_a_secret_door_is_noticed_from_either_side(arena):
+def test_a_camouflaged_door_is_noticed_from_either_side(arena):
     door = build_secret_door(dc=12)
     door.place_on_grid((3, 2), boundary_direction=CardinalDirection.EAST)
     far = creature("Far", (4, 2), wisdom=20)  # passive Perception 15, on the far side of its own cell
-    assert door.uuid in far.senses.objects
+    assert row(far, "Open Door") is not None
 
 
 def test_hidden_actions_leave_a_locked_door_visible_but_offer_nothing_until_found(arena):
