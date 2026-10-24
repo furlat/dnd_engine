@@ -1,11 +1,13 @@
-"""Hidden contents and a secret door reach a seat only once its party has found them."""
+"""What a seat is shown of an object: its look as it changes, and hidden things only once its party has found them."""
 
 from uuid import uuid4
 
 import pytest
 
 from dnd.actions_functional import execute_available_action, execute_use_action, setup_standard_actions
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import build_secret_door
+from dnd.content.items.world_prop_builders import build_display_prop
 from dnd.core.base_block import BaseBlock
 from dnd.core.concealment_types import ConcealedAspect
 from dnd.core.dice import fixed_dice_faces
@@ -49,8 +51,9 @@ def seat(built, actor):
 
 
 def act(session, projection, state, actor, name, target=None, faces=(20,)):
-    info = next(row for row in actor.get_available_actions().all_actions if row.template_name.split("__")[0] == name)
-    choice = next(option for option in info.valid_targets if target is None or option.target_uuid == target.uuid)
+    rows = [row for row in actor.get_available_actions().all_actions if row.template_name.split("__")[0] == name]
+    info, choice = next((row, option) for row in rows for option in row.valid_targets
+                        if target is None or target.uuid in (option.target_uuid, row.source_item_uuid))
     actor.action_economy.reset_all_costs()
     with fixed_dice_faces(*faces):
         root = execute_available_action(actor, info, choice)
@@ -82,3 +85,16 @@ def test_a_secret_door_is_sent_to_a_seat_only_once_its_party_finds_it(cache_worl
     assert door.uuid not in state.objects
     state = act(session, projection, state, actor, "Search")
     assert state.objects[door.uuid].item.item_id == "environment.door.secret_stone"
+
+
+def test_a_rack_emptying_reaches_the_seat(cache_world):
+    built, actor, _ = cache_world
+    rack = build_display_prop("environment.furniture.wall_rack", look="swords", capacity=2)
+    for _ in range(2):
+        assert rack.chest_inventory.add_item(build_authored_item("weapon.longsword", rack.uuid))
+    rack.place_on_grid((5, 7))  # filled before placing, as authored content is
+    actor.update_entity_senses(max_distance=12)
+    session, projection, state = seat(built, actor)
+    assert state.objects[rack.uuid].item.visual_variant_id == "swords_full"
+    state = act(session, projection, state, actor, "Loot All", rack)
+    assert state.objects[rack.uuid].item.visual_variant_id == "swords_empty"

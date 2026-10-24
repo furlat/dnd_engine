@@ -1449,7 +1449,7 @@ class PreviewRequest(TypedDict):
 
 class ProtocolIdentity(TypedDict):
     protocol_version: NotRequired[Literal[1]]
-    player_schema_version: NotRequired[Literal[19]]
+    player_schema_version: NotRequired[Literal[20]]
     schema_digest: str
 
 

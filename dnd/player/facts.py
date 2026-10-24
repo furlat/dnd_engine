@@ -1190,9 +1190,9 @@ class ResidueKey:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ObjectLook:
-    """A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid
-    (`test_object_look_static` and a census of every gallery case's world fold; a broken object's visual name and a
-    cut construction's geometry change, so they are state)."""
+    """A floor item's look, sent on a seat's first sight and again whenever it differs from the last sent (a display
+    emptying): few writers change it (`test_object_look_static`; a broken object's visual name and a cut
+    construction's geometry change often, so they are state)."""
 
     item_uuid: UUID
     item_id: str

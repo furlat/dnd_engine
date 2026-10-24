@@ -12282,7 +12282,7 @@
       "additionalProperties": false
     },
     "ObjectLook": {
-      "description": "A floor item's fixed part, sent once per item uuid: no writer changes these fields for one uuid\n(`test_object_look_static` and a census of every gallery case's world fold; a broken object's visual name and a\ncut construction's geometry change, so they are state).",
+      "description": "A floor item's look, sent on a seat's first sight and again whenever it differs from the last sent (a display\nemptying): few writers change it (`test_object_look_static`; a broken object's visual name and a cut\nconstruction's geometry change often, so they are state).",
       "properties": {
         "item_uuid": {
           "format": "uuid",
@@ -15736,8 +15736,8 @@
           "maximum": 9007199254740991
         },
         "player_schema_version": {
-          "const": 19,
-          "default": 19,
+          "const": 20,
+          "default": 20,
           "title": "Player Schema Version",
           "type": "integer",
           "minimum": -9007199254740991,

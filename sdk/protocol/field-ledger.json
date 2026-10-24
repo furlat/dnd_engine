@@ -27462,8 +27462,8 @@
     ],
     "required": false,
     "schema": {
-      "const": 19,
-      "default": 19,
+      "const": 20,
+      "default": 20,
       "title": "Player Schema Version",
       "type": "integer",
       "minimum": -9007199254740991,

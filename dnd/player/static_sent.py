@@ -7,6 +7,8 @@ kind is one field, typed by its id; the lanes that send a new kind add its field
 from dataclasses import dataclass, field
 from uuid import UUID
 
+from dnd.player.facts import ObjectLook
+
 
 @dataclass(slots=True)
 class StaticSent:
@@ -19,8 +21,8 @@ class StaticSent:
     tile_looks: set[str] = field(default_factory=set)
     # Residue materials whose static row the seat was sent, by residue id.
     residues: set[str] = field(default_factory=set)
-    # Objects whose look the seat was sent (floor objects and contained items), by item uuid.
-    object_looks: set[UUID] = field(default_factory=set)
+    # The last look the seat was sent of each object (floor objects and contained items), by item uuid.
+    object_looks: dict[UUID, ObjectLook] = field(default_factory=dict)
     # Boundary structures the seat was sent, by content id.
     boundary_structures: set[str] = field(default_factory=set)
     # Held items whose look the seat was sent, and those whose profile (a controlled item's) it was sent, by item uuid.

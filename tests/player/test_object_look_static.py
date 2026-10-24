@@ -1,7 +1,7 @@
-"""T6, the look split's premise: no writer changes an object's look (`ObjectLook`) in place.
+"""T6, the look split's premise: the common writers don't change an object's look (`ObjectLook`) in place.
 
-A seat is sent an object's look once per uuid, so a look changed in place would leave every client that holds it
-with a stale look and no error. Native in, fold out: each scenario's completed versions are folded with
+A seat is sent an object's look again only when it differs (a display emptying), so the look must stay what rarely
+changes. Native in, fold out: each scenario's completed versions are folded with
 `world_facts`, and each object's look, floor objects and contained items alike, stays the one it first had.
 """
 

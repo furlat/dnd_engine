@@ -194,9 +194,11 @@ def _material(rows: _Rows, tile: WorldTileState, residue_id: str, sent: StaticSe
 
 
 def _look(rows: _Rows, look: ObjectLook, sent: StaticSent, pending: StaticSent) -> None:
-    if look.item_uuid not in sent.object_looks and look.item_uuid not in pending.object_looks:
+    """An object's look row, on first sight and whenever it differs from the last the seat was sent (a display
+    emptied)."""
+    if pending.object_looks.get(look.item_uuid, sent.object_looks.get(look.item_uuid)) != look:
         rows.object_looks.append(look)
-        pending.object_looks.add(look.item_uuid)
+        pending.object_looks[look.item_uuid] = look
 
 
 def _split(rows: _Rows, item: FloorItem, sent: StaticSent, pending: StaticSent) -> ObjectState:

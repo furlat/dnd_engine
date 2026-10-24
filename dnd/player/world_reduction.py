@@ -39,7 +39,7 @@ def _members(row: ObjectRow, observers: int) -> int:
 
 def fold_static_rows(static: StaticStore, update: WorldUpdate) -> None:
     """The update's static rows into the client's store, which never prunes them; a static row never changes for
-    its id (a tile's static row is the latest for its cell)."""
+    its id (a tile's static row is the latest for its cell, an object's look the latest sent for its uuid)."""
     for row in update.tile_looks:
         if static.tile_looks.setdefault(row.look_id, row) != row:
             raise ValueError("A tile look's content id names another value")
@@ -49,8 +49,7 @@ def fold_static_rows(static: StaticStore, update: WorldUpdate) -> None:
         if static.residues.setdefault(row.residue_id, row) != row:
             raise ValueError("A residue material changed its static row")
     for row in update.object_looks:
-        if static.object_looks.setdefault(row.item_uuid, row) != row:
-            raise ValueError("An object's look changed")
+        static.object_looks[row.item_uuid] = row
     for row in update.boundary_structures:
         if static.boundary_structures.setdefault(row.structure_id, row.structure) != row.structure:
             raise ValueError("A boundary structure's content id names another value")
