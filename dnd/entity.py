@@ -5761,7 +5761,8 @@ class Entity(BaseBlock):
                 target_uuid=target_uuid,
                 target_kind="object" if isinstance(target_entity, BaseItem) else "creature",
                 position=target_pos,
-                target_name=target_entity.name if target_entity else None,
+                target_name=(target_entity.name_seen_by(self.faction, self.uuid) if isinstance(target_entity, BaseItem)
+                             else target_entity.name) if target_entity else None,
                 distance=template.get_target_distance(target_pos)
             ))
         return valid_targets, rules_valid_count

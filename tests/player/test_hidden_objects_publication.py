@@ -11,16 +11,15 @@ from dnd.content.items.world_prop_builders import build_display_prop
 from dnd.core.base_block import BaseBlock
 from dnd.core.concealment_types import ConcealedAspect
 from dnd.core.dice import fixed_dice_faces
-from dnd.actions import Attack
-from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue
-from dnd.core.item_types import ItemIntegrity
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.items.concealment import install_concealment
 from dnd.items.environment_interactables import StorageChest
 from dnd.player.capture import capture_interval, capture_lineages
 from dnd.player.audience import PlayerAudience
+from dnd.spells.evocation import Fireball
+from tests.manual.spell_regression_support import create_spell_regression_actor
 from dnd.player.facts import ObjectDamageFact
 from dnd.player.projection import SessionProjection, begin_projection, begin_projections, project_lineage
 from dnd.player.reduction import reduce_initialization, reduce_lineage
@@ -97,6 +96,20 @@ def test_hidden_contents_are_never_sent_before_a_search_finds_them(cache_world):
     assert contents is not None and {row.item_uuid for row in contents} == set(chest.chest_inventory.items)
 
 
+
+def test_a_rack_emptying_reaches_the_seat(cache_world):
+    built, actor, _ = cache_world
+    rack = build_display_prop("environment.furniture.wall_rack", look="swords", capacity=2)
+    for _ in range(2):
+        assert rack.chest_inventory.add_item(build_authored_item("weapon.longsword", rack.uuid))
+    rack.place_on_grid((5, 7))  # filled before placing, as authored content is
+    actor.update_entity_senses(max_distance=12)
+    session, projection, state = seat(built, actor)
+    assert state.objects[rack.uuid].item.visual_variant_id == "swords_full"
+    state = act(session, projection, state, actor, "Loot All", rack)
+    assert state.objects[rack.uuid].item.visual_variant_id == "swords_empty"
+
+
 def shown(state, door):
     item = state.objects[door.uuid].item
     return item.item_id, item.name, item.map_char, item.door_mechanism, item.maximum_hit_points, item.is_open
@@ -145,28 +158,28 @@ def test_what_a_party_finds_reaches_its_members_seats_and_no_other(party_world, 
     assert state.objects[door.uuid].item.item_id == expected
 
 
-def test_a_camouflaged_door_hit_shows_nothing_and_once_open_is_a_door_for_everyone(party_world):
+def test_a_hit_reveals_a_camouflaged_door_to_every_seat_with_the_damage_it_took(party_world):
     built, finder, _, goblin, door = party_world
     session, projection, state = seat(built, goblin)
-    state, packets = observe(session, projection, state, goblin, lambda: attack(finder, door, 3))
-    assert shown(state, door) == WALL
-    assert not any(isinstance(node.fact, ObjectDamageFact) for packet in packets for node in packet.events)
+    state, packets = observe(session, projection, state, goblin, lambda: attack(finder, door, 3))  # nobody searched
+    assert shown(state, door)[:2] == ("environment.door.secret_stone", "Secret stone door")
+    assert [node.fact.resulting_hp for packet in packets for node in packet.events
+            if isinstance(node.fact, ObjectDamageFact)] == [door.get_hp()]
+
+
+def test_an_opened_camouflaged_door_is_a_door_for_everyone(party_world):
+    built, finder, _, goblin, door = party_world
+    session, projection, state = seat(built, goblin)
     state = act(session, projection, state, finder, "Search", observer=goblin)
     state = act(session, projection, state, finder, "Open Door", observer=goblin)
     assert shown(state, door)[0] == "environment.door.secret_stone" and shown(state, door)[5] is True
 
 
-def test_a_rack_emptying_reaches_the_seat(cache_world):
-    built, actor, _ = cache_world
-    rack = build_display_prop("environment.furniture.wall_rack", look="swords", capacity=2)
-    for _ in range(2):
-        assert rack.chest_inventory.add_item(build_authored_item("weapon.longsword", rack.uuid))
-    rack.place_on_grid((5, 7))  # filled before placing, as authored content is
-    actor.update_entity_senses(max_distance=12)
-    session, projection, state = seat(built, actor)
-    assert state.objects[rack.uuid].item.visual_variant_id == "swords_full"
-    state = act(session, projection, state, actor, "Loot All", rack)
-    assert state.objects[rack.uuid].item.visual_variant_id == "swords_empty"
+def test_an_attackers_row_names_an_unfound_camouflaged_door_as_its_wall(party_world):
+    _, finder, _, _, door = party_world
+    finder.action_economy.reset_all_costs()
+    assert {target.target_name for row in finder.get_available_actions().all_actions for target in row.valid_targets
+            if target.target_uuid == door.uuid} == {"Fantasy A1 Wall"}
 
 
 @pytest.mark.parametrize("noticer_first", (True, False))
@@ -183,22 +196,6 @@ def test_a_members_passive_notice_reaches_a_seat_of_two_whichever_member_settles
         partner.update_entity_senses(max_distance=12)
     state, _ = observe(session, projection, state, finder, sharpen, audience)
     assert shown(state, door)[0] == "environment.door.secret_stone"
-
-
-def test_breaking_a_camouflaged_door_sends_no_damage_to_a_seat_that_saw_a_wall(party_world):
-    built, finder, _, goblin, door = party_world
-    session, projection, state = seat(built, goblin)
-
-    def smash():
-        while door.integrity is ItemIntegrity.INTACT:
-            finder.action_economy.reset_all_costs()
-            with fixed_dice_faces(19, 8):
-                Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=finder.uuid,
-                       target_entity_uuid=door.uuid).apply()
-    state, packets = observe(session, projection, state, goblin, smash)
-    assert not any(isinstance(node.fact, ObjectDamageFact) for packet in packets for node in packet.events)
-    broken = state.objects.get(door.uuid)
-    assert broken is None or broken.item.item_id == "environment.door.secret_stone"  # broken, it is no wall
 
 
 def test_a_camouflaged_door_placed_in_view_is_noticed_at_once(party_world):
@@ -222,3 +219,18 @@ def test_what_a_party_member_noticed_before_the_seats_started_reaches_its_partne
         audience=PlayerAudience(controlled=(member.uuid,), observers=(member.uuid,))) for member in (finder, partner)))
     for _, public in started:
         assert shown(reduce_initialization(public), door)[0] == "environment.door.secret_stone"
+
+
+
+def test_a_fireball_that_reaches_a_camouflaged_door_reveals_it(party_world):
+    built, _, _, goblin, door = party_world
+    caster = create_spell_regression_actor("Caster", (1, 7), "heroes", spell_slots={3: 1})
+    caster.update_entity_senses(max_distance=12)
+    session, projection, state = seat(built, goblin)
+
+    def blast():
+        with fixed_dice_faces(*([1] * 40)):  # 8 damage: the door stands
+            result = Fireball(source_entity_uuid=caster.uuid, end_position=(3, 8), cast_at_level=3).apply()
+        assert result is not None and not result.canceled, result
+    state, _ = observe(session, projection, state, goblin, blast)
+    assert shown(state, door)[:2] == ("environment.door.secret_stone", "Secret stone door")

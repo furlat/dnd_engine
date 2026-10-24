@@ -20,7 +20,7 @@ No wire type changed. Only the meaning of `WorldUpdate.object_looks` and the sch
   - a WALL boundary structure with the door's own blocked channels;
   - no door mechanism or swing, no hit points, no open state, and no damage facts.
 - **When the party finds it,** by notice, Search, or seeing it open, the seat gets a new look row (the door's) and the object's row with its door state. This is the same re-sent look as above. A seat whose party never found it keeps the wall.
-- **An open or broken camouflaged object is shown as itself to every seat.**
+- **An open or broken camouflaged object is shown as itself to every seat.** So is a hit one: damage ends the camouflage for everyone, like a Dark Souls illusory wall.
 - **Nothing new on the wire:** no new field and no new message.
 
 ## Reference

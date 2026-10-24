@@ -38,8 +38,7 @@ from dnd.core.events import (
     MovementTrajectory, StepMovementEvent, TakeDamageEvent, TemporaryHitPointsChangedEvent, TurnEvent, WorldInitializedEvent, SavingThrowEvent,
 )
 from dnd.core.life_types import RemainsDisposition
-from dnd.core.item_types import (ItemConcentrationSlot, ItemEffectPresentationState, ItemIntegrity, ItemLocation,
-    camouflaged)
+from dnd.core.item_types import ItemConcentrationSlot, ItemEffectPresentationState, ItemIntegrity, ItemLocation
 from dnd.types.event_facts import AppliedWorldFact
 from dnd.types.class_features import FontConversion
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult
@@ -1165,8 +1164,6 @@ class SeatWalk:
     # native cause and exact zone. Never retained as remembered field sight.
     observed_spatial_removals: set[tuple[UUID, UUID]] = field(default_factory=set)
     destroyed_contacts: dict[UUID, PlayerObject] = field(default_factory=dict)
-    # Those of them the seat saw as their camouflage: no damage of theirs is shown to it.
-    camouflaged_contacts: set[UUID] = field(default_factory=set)
     nodes: list[PlayerNode] = field(default_factory=list)
     bodies: list[BodyRecord] = field(default_factory=list)
     updates: list[WorldUpdate] = field(default_factory=list)
@@ -1289,8 +1286,6 @@ def _enter_removals(walk: SeatWalk, state: "ProjectionState", world: WorldFacts,
         if view is not None and identity in world.objects and object_observed(world, view, identity):
             walk.destroyed_contacts[identity] = disclosed_world_object(world, view, identity,
                 state.static_sent.object_looks | walk.pending.object_looks, found)
-            if camouflaged(world.objects[identity].item, found):
-                walk.camouflaged_contacts.add(identity)
 
 
 def _enter_event(walk: SeatWalk, state: "ProjectionState", world: WorldFacts, event: Event,
@@ -1561,12 +1556,9 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
     if (isinstance(event, TakeDamageEvent) and not event.canceled
             and event.final_damage is not None and event.resulting_hp is not None):
         identity = event.target_entity_uuid
-        target = world.objects.get(identity) if identity is not None else None
-        # Hit, even broken by the blow, a camouflage the seat is shown shows nothing.
-        unfound = identity in walk.camouflaged_contacts or (target is not None and camouflaged(target.item, found))
-        if identity is not None and not unfound and (
-                target is not None
-                and target.item.integrity is ItemIntegrity.INTACT
+        if identity is not None and (
+                identity in world.objects
+                and world.objects[identity].item.integrity is ItemIntegrity.INTACT
                 and object_observed(world, view, identity)
                 or identity in destroyed_contacts):
             components = event.resolution.components if event.resolution is not None else ()

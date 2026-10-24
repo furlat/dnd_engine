@@ -40,6 +40,7 @@ from dnd.core.item_types import (
     ItemDestructionProfile,
     ItemIntegrity,
     ItemRemnantState,
+    camouflaged,
     DoorMechanism,
     DoorSwing,
     ItemLocation,
@@ -528,6 +529,16 @@ class BaseItem(BaseBlock):
     def should_include_in_senses_objects(self) -> bool:
         """Return whether senses should list this floor object."""
         return self.include_in_senses_objects
+
+    def name_seen_by(self, faction: Optional[str], uuid: UUID) -> str:
+        """Its name, or its camouflage's to a creature whose party hasn't found it (`camouflaged`)."""
+        holder = self.concealment_holder(ConcealedAspect.CAMOUFLAGE)
+        if holder is None:
+            return self.name
+        state = self.to_item_presentation_state()
+        shows = state.camouflage
+        found = frozenset() if not knows(holder.concealment, faction, uuid) else frozenset({holder.uuid})
+        return shows.name if shows is not None and camouflaged(state, found) else self.name
 
     def is_observable_to(self, observer_uuid: UUID) -> bool:
         """A hidden object (`Concealed` presence) is seen by those who know it, and a trap's hidden hardware by
@@ -1203,6 +1214,9 @@ class BaseItem(BaseBlock):
             normal_hit_points_available=max(0, self.get_hp()),
         )
         actual = self.health.apply_damage_preview(preview, source_uuid)
+        camouflage = self.concealment_holder(ConcealedAspect.CAMOUFLAGE) if actual > 0 else None
+        if camouflage is not None:  # hit, a camouflaged object is what it is from then on, for everyone
+            self.remove_condition_by_uuid(camouflage.uuid, parent_event=damage_event)
         if not self.has_hp:
             self.destroy(parent_event=damage_event)
         elif self.tile_uuid is not None:

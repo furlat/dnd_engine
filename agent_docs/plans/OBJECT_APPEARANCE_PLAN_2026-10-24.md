@@ -151,3 +151,9 @@ With 4 seats and 60 camouflaged doors in view, that is about +0.8 ms per move: a
 **Kept as decided, against review:** the camouflage shows no hit points. The human: "do not show the fuck nothing".
 
 **Known limit:** an AI folds only its own observers' notices. A same-faction creature under another controller is not folded, and the engine's action gate still decides what the AI may do.
+
+**Reveal on hit** (the human, 24 October: "make that attacking it reveals it like in dark soul"):
+- Damage taken by a camouflaged object removes its camouflage, for everyone, from any attack or area (`BaseItem.receive_damage`). This is the same physical end as hidden contents found by Search Inside.
+- The condition's removal republishes the object, so every seat and the AI see the door. No knowledge fold is involved.
+- The "no damage shown" gate and its captured-contact set are gone. The camouflaged object can no longer be damaged and stay hidden, so that tell is gone too.
+- Walls in reach are listed as Attack targets, as before, and so is the camouflaged door. An attacker that hasn't found it sees its target named as the wall (`BaseItem.name_seen_by`, the one `camouflaged()` rule): it was "Secret stone door" before.

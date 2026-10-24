@@ -303,7 +303,7 @@ The known failure is test_71, the monster roster, which is out of scope.
 
 ## 9. Open points for the human
 
-Who writes the record (§1). What a closed secret door shows was settled by the human on 24 October: not sent, still blocking; how a seat draws that spot belongs to the subjective-visual discussion. Confirmed 24 October: an opened secret door is learned by anyone who sees it open. Still to confirm: raised spikes and an open hatch (`in_plain_view`). The secret door's camouflage is planned in [the appearance plan](OBJECT_APPEARANCE_PLAN_2026-10-24.md).
+Who writes the record (§1). What a closed secret door shows was settled by the human on 24 October: not sent, still blocking; how a seat draws that spot belongs to the subjective-visual discussion. Confirmed 24 October: an opened secret door is learned by anyone who sees it open. Confirmed by the human the same day: raised spikes and an open hatch are noticed by anyone who sees them (`in_plain_view`). The secret door's camouflage is planned in [the appearance plan](OBJECT_APPEARANCE_PLAN_2026-10-24.md).
 
 ## 10. Review record
 
