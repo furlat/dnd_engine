@@ -111,8 +111,9 @@ class WorldInterval:
     conditions: tuple[ConditionFact, ...] = ()
     # The shared fold's actor change of each of these versions that has one, by event uuid (the session's actors).
     actor_fact_changes: Mapping[UUID, ActorFactChange] = field(default_factory=dict)
-    # The hidden things each sensory version's observer noticed or found, by event uuid (`CompletedLineage.notices`).
-    notices: Mapping[UUID, frozenset[UUID]] = field(default_factory=dict)
+    # Each sensory version's observer and the hidden things it noticed or found, by event uuid
+    # (`CompletedLineage.notices`).
+    notices: Mapping[UUID, tuple[UUID, frozenset[UUID]]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,7 +181,7 @@ class CompletedLineage:
     actor_fact_changes: Mapping[UUID, ActorFactChange] = field(default_factory=dict)
     # The hidden things each retained sensory event's observer noticed or found (`concealed_noticed`), by event
     # uuid: seat-independent (a foreign seat's sensory body is a header), folded once for every seat.
-    notices: Mapping[UUID, frozenset[UUID]] = field(default_factory=dict)
+    notices: Mapping[UUID, tuple[UUID, frozenset[UUID]]] = field(default_factory=dict)
 
 
 def _objective_row(index: int, event: Event) -> ObjectiveRow:
@@ -628,7 +629,7 @@ class LineageGraph:
     # Each node's native combat log, by its uuid (`CompletedLineage.native_logs`).
     native_logs: Mapping[UUID, CombatLogEntry]
     # Each sensory node's notices, by its uuid (`CompletedLineage.notices`).
-    notices: Mapping[UUID, frozenset[UUID]]
+    notices: Mapping[UUID, tuple[UUID, frozenset[UUID]]]
 
 
 def capture_context(checkpoint: CaptureCheckpoint, roots: tuple[Event, ...] = (), *,
@@ -762,9 +763,9 @@ def _graph(nodes: dict[UUID, Event], indexed: tuple[tuple[int, Event], ...]) -> 
                         _notices(nodes.values()))
 
 
-def _notices(events: Iterable[Event]) -> dict[UUID, frozenset[UUID]]:
-    """Each sensory event's notices, by its uuid: what its observer noticed or found."""
-    return {event.uuid: frozenset(event.concealed_noticed) for event in events
+def _notices(events: Iterable[Event]) -> dict[UUID, tuple[UUID, frozenset[UUID]]]:
+    """Each sensory event's notices, by its uuid: its observer and what it noticed or found."""
+    return {event.uuid: (event.observer_uuid, frozenset(event.concealed_noticed)) for event in events
             if isinstance(event, SensoryUpdateEvent) and event.concealed_noticed}
 
 

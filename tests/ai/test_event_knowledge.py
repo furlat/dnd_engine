@@ -240,3 +240,15 @@ def test_a_camouflaged_door_is_its_wall_to_an_ai_until_its_party_finds_it() -> N
             execute_by_index(observer, search.template_name, 0, available=available)
         found = projector.project_world(observer, context(observer)).known_objects[str(door.uuid)]
         assert found.name == "Secret stone door" and found.state["is_open"] is False
+
+
+def test_a_camouflaged_door_placed_in_view_is_noticed_by_an_ai_at_once() -> None:
+    with scene() as game:
+        observer = actor(game, "Observer", (5, 5))
+        projector = open_projector("camouflage placed", observer)
+        projector.project_world(observer, context(observer))
+        door = build_secret_door(dc=5)  # passive Perception 10 meets it as it appears
+        door.place_on_grid((5, 5), boundary_direction=CardinalDirection.EAST)
+        observer.update_entity_senses()
+        assert projector.project_world(observer, context(observer)).known_objects[str(door.uuid)].name == \
+            "Secret stone door"

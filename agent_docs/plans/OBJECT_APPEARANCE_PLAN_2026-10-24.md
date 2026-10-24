@@ -119,7 +119,7 @@ Anti-slop and anti-OOP reviewers read the plan and each step's diff, and a plan-
 - **Notices travel seat-independently.** A foreign seat's sensory body is a header (`capture.py:442`), so the notices are read once from the native events, the way `native_logs` are:
   - on `CompletedLineage.notices`;
   - on `WorldInterval.notices`, for the startup walk, so a seat that starts or rejoins later knows what its party found.
-- **The fold keeps camouflage holders only.** Trap knowledge reaches seats as spatial effects. With no camouflage, a seat's per-event check is one emptiness test.
+- **The fold keeps every notice, but a seat's found set reads only the camouflage index** (`WorldFacts.camouflaged_by_holder`). Filtering at fold time lost the notice of a door placed in view, because its sensory child folds before the placement. Trap knowledge reaches seats as spatial effects. With no camouflage, a seat's per-event check is one emptiness test.
 - **The knower key is the noticer's faction, or its uuid without one.** That is right because a CAMOUFLAGE record is party-scoped. The record's validator now enforces it, together with "camouflage, and only it, shows a look".
 - **`found` is a required argument** of every per-seat function and of the AI's `project_object`. A caller that forgets it fails instead of silently showing the wall. The oracle (`seat_oracle.py`) reads it from the live records with `knows`. The authoring export passes an empty set.
 - **The one rule `camouflaged()` lives in `dnd/core/item_types.py`,** beside the state it reads, so the seat and the AI share it (`dnd/ai` cannot import `dnd/player`).
@@ -129,3 +129,17 @@ Anti-slop and anti-OOP reviewers read the plan and each step's diff, and a plan-
   - The AI fact has a wall's shape: `is_usable` false, no `is_open`, no charges.
 - **`project_tile` is unchanged.** It reads only the boundary's blocked channels and passage, and the camouflage's wall structure is built from the door's own channels.
 - **An opened door puts every presence or camouflage record in plain view** (`SEEN_WHEN_OPEN`), not just the first.
+
+**Step 3, timing** (24 October, interleaved under load; the scripts are in the session scratchpad and not committed):
+
+| Measure | Result |
+| --- | --- |
+| Engine (`hidden_knowledge_timing.py`, base `5dd6e02784` against `6c3125cebf`, load 25) | Equal or faster on every row: refreshes, moves, firing, search, the packed room |
+| Camouflage, seat publication of 6 moves, 1 seat, 20 and 60 doors (camouflaged against plain) | 17.7 against 18.1 ms; 15.7 against 15.0 ms |
+| Same, 4 seats | 27.9 against 26.1 ms; 30.5 against 25.7 ms |
+
+With 4 seats and 60 camouflaged doors in view, that is about +0.8 ms per move: a few microseconds per seat per camouflaged object. Ordinary objects pay nothing measurable.
+
+**Kept as decided, against review:** the camouflage shows no hit points. The human: "do not show the fuck nothing".
+
+**Known limit:** an AI folds only its own observers' notices. A same-faction creature under another controller is not folded, and the engine's action gate still decides what the AI may do.

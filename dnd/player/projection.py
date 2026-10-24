@@ -1562,9 +1562,8 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
             and event.final_damage is not None and event.resulting_hp is not None):
         identity = event.target_entity_uuid
         target = world.objects.get(identity) if identity is not None else None
-        # Hit, even broken by the blow, a camouflage the seat hasn't found shows nothing.
-        unfound = identity in walk.camouflaged_contacts or (
-            target is not None and target.item.camouflage is not None and target.item.camouflage_holder not in found)
+        # Hit, even broken by the blow, a camouflage the seat is shown shows nothing.
+        unfound = identity in walk.camouflaged_contacts or (target is not None and camouflaged(target.item, found))
         if identity is not None and not unfound and (
                 target is not None
                 and target.item.integrity is ItemIntegrity.INTACT
@@ -2115,7 +2114,7 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
             _enter_event(walks[seat], states[seat], session.world, row, _found(session, states[seat].audience))
         step = _fold_actors(session.actors, session.names, folded, event, changes, condition)
         applied = _fold_version(session, folded, event, condition)
-        taught = _fold_notices(session, event, interval.notices.get(event.uuid))
+        taught = _fold_notices(session, interval.notices.get(event.uuid))
         for seat, row in due:
             _leave_event(walks[seat], group, states[seat], session.world, session.tile_digests,
                          session.actors, session.loadout_ids, row, applied, folded, step,
@@ -2194,7 +2193,7 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
             _enter_event(walk, state, session.world, walk.events[position], _found(session, state.audience))
         step = _fold_actors(session.actors, session.names, folded, event, walks[0].actor_fact_changes, condition)
         applied = _fold_version(session, folded, event, condition)
-        taught = _fold_notices(session, event, lineages[0].notices.get(event.uuid))
+        taught = _fold_notices(session, lineages[0].notices.get(event.uuid))
         for walk, state in zip(walks, states):
             _leave_event(walk, group, state, session.world, session.tile_digests, session.actors,
                          session.loadout_ids, walk.events[position], applied, folded, step,
@@ -2243,13 +2242,14 @@ def _knower_keys(session: SessionProjection, audience: PlayerAudience) -> frozen
     return frozenset(_knower(session, identity) for identity in (*audience.controlled, *audience.observers))
 
 
-def _fold_notices(session: SessionProjection, event: Event, noticed: frozenset[UUID] | None
+def _fold_notices(session: SessionProjection, notice: tuple[UUID, frozenset[UUID]] | None
                   ) -> tuple[KnowerKey, frozenset[UUID]] | None:
     """The hidden things a sensory event's observer noticed or found become its party's, for every seat (a seat
-    reads only its camouflage: a hidden trap's knowledge reaches it as its members' spatial effects)."""
-    if not noticed or not isinstance(event, SensoryUpdateEvent):
+    reads only its camouflage, a party-scoped record: a hidden trap's knowledge reaches it as spatial effects)."""
+    if notice is None:
         return None
-    key = _knower(session, event.observer_uuid)
+    observer, noticed = notice
+    key = _knower(session, observer)
     for holder in noticed:
         session.known_hidden.setdefault(holder, set()).add(key)
     return key, noticed

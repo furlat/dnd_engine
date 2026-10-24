@@ -13,6 +13,16 @@ No wire type changed. Only the meaning of `WorldUpdate.object_looks` and the sch
 - **The object's row comes in the same update** as its re-sent look. Fold the static rows first, as today, then the object row, which joins the new look.
 - **All other static rows keep their constancy check:** tile looks, boundary structures and residue materials.
 
+## Camouflage (built on this branch)
+
+- **A seat whose party hasn't found a camouflaged object is sent it as what it shows.** For the secret door, that is the wall it is set in:
+  - `item_id` `environment.wall.fantasy_a1`, its name and its glyph;
+  - a WALL boundary structure with the door's own blocked channels;
+  - no door mechanism or swing, no hit points, no open state, and no damage facts.
+- **When the party finds it,** by notice, Search, or seeing it open, the seat gets a new look row (the door's) and the object's row with its door state. This is the same re-sent look as above. A seat whose party never found it keeps the wall.
+- **An open or broken camouflaged object is shown as itself to every seat.**
+- **Nothing new on the wire:** no new field and no new message.
+
 ## Reference
 
 - Python reference fold: `dnd/player/world_reduction.py` `fold_static_rows` (the object-look loop now assigns).
