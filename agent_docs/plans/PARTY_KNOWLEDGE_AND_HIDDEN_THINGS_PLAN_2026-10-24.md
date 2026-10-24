@@ -155,7 +155,7 @@ All paths decide first, write through one `record_concealment` call, and only th
   - **Publication (as built, 24 October).** A secret door hides its *presence*, not only its actions (`build_secret_door`): a party that hasn't found it does not perceive it, and it still blocks sight and passage like any closed door. The seat publication had shown every boundary object whose cell a seat sees, contact or not (`object_observed`); a server-only `presence_concealed` fact on the item state (like `contents_concealed`, never copied to a seat) now makes a hidden boundary object need a real contact. A seat whose party found it receives it as an ordinary new object.
     - How a seat should *draw* the spot where an unfound secret door stands (today: nothing is sent there) is left to the subjective-visual path; no disguise exists.
     - (24 October: I first drafted "wall to everyone while closed", then a server-side "twin" wall object with a `known_natures` fact through senses, events and seat composition. Both were invented without approval; the twin also leaked the door's hit points and glyph. The human called it made up; it was removed entirely.)
-  - **Opening it (to be confirmed by the human).** An open secret door is in plain view: the door writes its record's `in_plain_view` as it opens (rolled back with it if the structure change fails), so whoever sees it open knows it from then on.
+  - **Opening it (confirmed by the human, 24 October: "an open secret door is open and you can see through").** An open secret door is in plain view: the door writes its record's `in_plain_view` as it opens (rolled back with it if the structure change fails), so whoever sees it open knows it from then on.
 - **CONTENTS** (a desk, a false back).
   - "Search Inside" uses the record's skill and DC.
   - **Success removes `Concealed(CONTENTS)`,** which is the physical change. The contents gate (`StorageChest.contents_gated`) is then "no CONTENTS holder". The body is republished by that removal itself (as built: no extra `publish_location_state` call is needed).
@@ -303,7 +303,7 @@ The known failure is test_71, the monster roster, which is out of scope.
 
 ## 9. Open points for the human
 
-Who writes the record (§1). What a closed secret door shows was settled by the human on 24 October: not sent, still blocking; how a seat draws that spot belongs to the subjective-visual discussion. To confirm: an opened secret door, raised spikes and an open hatch are learned by anyone who sees them (`in_plain_view`).
+Who writes the record (§1). What a closed secret door shows was settled by the human on 24 October: not sent, still blocking; how a seat draws that spot belongs to the subjective-visual discussion. Confirmed 24 October: an opened secret door is learned by anyone who sees it open. Still to confirm: raised spikes and an open hatch (`in_plain_view`). The secret door's camouflage is planned in [the appearance plan](OBJECT_APPEARANCE_PLAN_2026-10-24.md).
 
 ## 10. Review record
 
