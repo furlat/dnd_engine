@@ -140,6 +140,14 @@ Anti-slop and anti-OOP reviewers read the plan and each step's diff, and a plan-
 
 With 4 seats and 60 camouflaged doors in view, that is about +0.8 ms per move: a few microseconds per seat per camouflaged object. Ordinary objects pay nothing measurable.
 
+**Final commit `a557052648`:**
+
+| Measure | Result |
+| --- | --- |
+| Publication (`gallery_crowd.py`, base `5dd6e02784` against new, 5 rounds, load about 40), median publication ms | caster steps: equal or faster (character seats 52 / 51 / 51 against 57 / 55 / 60); Ice Storm: equal (faction 39 against 40.5; character 192 against 188); Fireball, faction seats: equal (74.3 against 76.6) |
+| Fireball, one seat per member | first run: 449.9 against 400.9 ms, re-run alone because it looked anomalous; 9 interleaved rounds, alternating order: new 341.6 (min 316.7) against base 355.3 (min 320.1) ms. Not slower; the first difference was load noise (load 47) |
+| Camouflage against plain doors (final), 6 moves | 1 seat: equal at 20 doors, 19.7 against 14.1 ms at 60; 4 seats: 26.4 against 22.9 ms at 20 doors, 28.1 against 22.9 ms at 60 (about +0.9 ms per move) |
+
 **Kept as decided, against review:** the camouflage shows no hit points. The human: "do not show the fuck nothing".
 
 **Known limit:** an AI folds only its own observers' notices. A same-faction creature under another controller is not folded, and the engine's action gate still decides what the AI may do.
