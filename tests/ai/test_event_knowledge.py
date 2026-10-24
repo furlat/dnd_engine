@@ -15,9 +15,11 @@ from dnd.ai.runtime.knowledge_system import assignment_knowledge, bind_ai_knowle
 from dnd.ai.runtime.movement_revalidation import SubjectiveMovementContinuationGuard
 from dnd.ai.runtime.state_projection import SubjectiveAIStateProjector
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.content.items.environment_item_builders import build_secret_door
 from dnd.controller import TurnContext
 from dnd.core.action_execution import MovementTerminationReason, movement_continuation_scope
 from dnd.core.creature_types import DamageType
+from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EntityCreatedEvent, Event, EventPhase, EventQueue, SensoryUpdateEvent, WorldInitializedEvent
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -26,6 +28,7 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.abjuration import ProtectionFromEnergyEffect, ShieldBuff
 from dnd.spells.necromancy import NoHealing
 from dnd.types.actor_facts import ConditionFact
+from dnd.types.world import CardinalDirection
 from dnd.player.event_record import RecordedEvent
 from dnd.player.audience import resolve_audience
 from dnd.player.capture import _retained_event
@@ -219,3 +222,21 @@ def test_knowledge_read_at_each_decision_equals_one_cold_fold_of_the_record() ->
                     cold.known_tiles, cold.senses, cold.actors), (step, controller.assignment_id)
     finally:
         reset_engine_runtime()
+
+
+def test_a_camouflaged_door_is_its_wall_to_an_ai_until_its_party_finds_it() -> None:
+    with scene() as game:
+        observer = actor(game, "Observer", (5, 5))
+        door = build_secret_door(dc=15)
+        door.place_on_grid((5, 5), boundary_direction=CardinalDirection.EAST)
+        observer.update_entity_senses()
+        projector = open_projector("camouflage", observer)
+        seen = projector.project_world(observer, context(observer)).known_objects[str(door.uuid)]
+        assert (seen.name, seen.map_char, seen.state.get("is_usable"), "is_open" in seen.state) == (
+            "Fantasy A1 Wall", "W", False, False)
+        available = get_available_actions(observer)
+        search = next(row for row in available.all_actions if row.template_name == "Search")
+        with fixed_dice_faces(20):
+            execute_by_index(observer, search.template_name, 0, available=available)
+        found = projector.project_world(observer, context(observer)).known_objects[str(door.uuid)]
+        assert found.name == "Secret stone door" and found.state["is_open"] is False

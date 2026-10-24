@@ -129,7 +129,7 @@ def test_recorded_door_sides_preserve_height_contacts_and_open_close_state(base_
     identity, observer_uuid = door.uuid, observer.uuid
     check_saved_tiles(checkpoints, observer_uuid)
     world, _ = replay(opened, observer_uuid)
-    fact = project_object(world, identity, (1, 1), [str(observer_uuid)])
+    fact = project_object(world, identity, (1, 1), [str(observer_uuid)], frozenset())
     assert fact is not None
     assert fact.state["is_open"] is True
     assert identity not in replay(checkpoints[-1][0], observer_uuid)[0].objects

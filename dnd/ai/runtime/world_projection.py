@@ -1,12 +1,13 @@
 """AI tile/object facts from recorded world and observer after-values."""
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from uuid import UUID
 
 from dnd.ai.contracts.observation import (
     AdjacentOffset, KnowledgeState, ObservationObjectFact, ObservationTileFact,
     SpatialDomainKnowledge,
 )
+from dnd.core.item_types import camouflaged
 from dnd.core.world_edges import WorldEdgeStructuralContribution, world_edge_contribution_allows
 from dnd.types.cells import value_at
 from dnd.types.senses import SensesSnapshot
@@ -95,27 +96,30 @@ def project_tile(
 
 def project_object(
     world: WorldFacts, object_uuid: UUID, position: tuple[int, int] | None,
-    observer_ids: Iterable[str],
+    observer_ids: Iterable[str], found: Collection[UUID],
 ) -> ObservationObjectFact | None:
-    """Expose the recorded current item state, without raw-field introspection."""
+    """Expose the recorded current item state, without raw-field introspection; a camouflaged object the
+    observers' party hasn't `found` is a wall's fact: its camouflage's name and glyph and its physics."""
     obj = world.objects.get(object_uuid)
     if obj is None:
         return None
     item = obj.item
+    shows = item.camouflage if camouflaged(item, found) else None
     state: dict[str, object] = {
         "blocks_movement": item.blocks_movement, "blocks_optics_field": item.blocks_optics,
         "blocks_propagation_field": item.blocks_propagation,
-        "is_pickable": item.is_pickable, "is_usable": item.is_usable,
+        "is_pickable": item.is_pickable, "is_usable": item.is_usable and shows is None,
         "stack_count": item.stack_count,
         "contact_passage": item.contact_passage.value,
         "supported_by_uuid": str(item.supported_by_uuid) if item.supported_by_uuid is not None else None,
     }
-    if item.is_open is not None:
+    if item.is_open is not None and shows is None:
         state["is_open"] = item.is_open
-    if item.charges is not None:
+    if item.charges is not None and shows is None:
         state["charges"] = item.charges
     return ObservationObjectFact(
-        uuid=str(object_uuid), name=item.name, knowledge_state=KnowledgeState.VISIBLE,
-        observer_uuids=sorted(observer_ids), position=position or obj.placement.position,
-        map_char=item.map_char, state=state,
+        uuid=str(object_uuid), name=shows.name if shows is not None else item.name,
+        knowledge_state=KnowledgeState.VISIBLE, observer_uuids=sorted(observer_ids),
+        position=position or obj.placement.position,
+        map_char=shows.map_char if shows is not None else item.map_char, state=state,
     )

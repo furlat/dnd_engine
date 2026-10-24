@@ -50,7 +50,7 @@ def main() -> None:
         passive_perception=0, sense_modes_key=(), sense_modes=(), visual_access=1)
     update = seat_world_update(authored, 0, (), EMPTY_CELLS, view, AudiencePerception(members={observer: view}),
         audience, None, observed=set(), granted=set(), sent=StaticSent(), pending=StaticSent(),
-        digests=TileDigests(), stamps=SeatStamps(WorldStamps()))
+        digests=TileDigests(), stamps=SeatStamps(WorldStamps()), found=frozenset())  # nobody has found anything
     cells, (visible,) = shared_cells((mask_from_positions(positions),))
     light_levels, (light,) = shared_values((values_from_items({position: 3 for position in positions}),))
     rows = SensoryRows(uuids=tuple(o.item.item_uuid for o in objects),

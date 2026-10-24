@@ -108,3 +108,24 @@ Anti-slop and anti-OOP reviewers read the plan and each step's diff, and a plan-
   - the record scope.
 - **Removed as unneeded:** the log probe (objects are never identified) and skipping contents (already gated).
 - **From the anti-OOP review:** the knower keys are passed in as a value. The digest memo is gone, because option B has no digest.
+
+## 7. As built (24 October)
+
+**Steps 1 and 2 are built.**
+- Step 1: `b2e3bf4936`.
+- Step 2: `7212003911`, and step 2b in the commit after it.
+
+**Deviations from §3:**
+- **Notices travel seat-independently.** A foreign seat's sensory body is a header (`capture.py:442`), so the notices are read once from the native events, the way `native_logs` are:
+  - on `CompletedLineage.notices`;
+  - on `WorldInterval.notices`, for the startup walk, so a seat that starts or rejoins later knows what its party found.
+- **The fold keeps camouflage holders only.** Trap knowledge reaches seats as spatial effects. With no camouflage, a seat's per-event check is one emptiness test.
+- **The knower key is the noticer's faction, or its uuid without one.** That is right because a CAMOUFLAGE record is party-scoped. The record's validator now enforces it, together with "camouflage, and only it, shows a look".
+- **`found` is a required argument** of every per-seat function and of the AI's `project_object`. A caller that forgets it fails instead of silently showing the wall. The oracle (`seat_oracle.py`) reads it from the live records with `knows`. The authoring export passes an empty set.
+- **The one rule `camouflaged()` lives in `dnd/core/item_types.py`,** beside the state it reads, so the seat and the AI share it (`dnd/ai` cannot import `dnd/player`).
+- **The camouflage row and the AI fact carry the object's physics:**
+  - blocking, passage and pickability;
+  - the residues on observed faces, because what is on a surface is seen. This is not the rejected imitation of a wall's own residues.
+  - The AI fact has a wall's shape: `is_usable` false, no `is_open`, no charges.
+- **`project_tile` is unchanged.** It reads only the boundary's blocked channels and passage, and the camouflage's wall structure is built from the door's own channels.
+- **An opened door puts every presence or camouflage record in plain view** (`SEEN_WHEN_OPEN`), not just the first.

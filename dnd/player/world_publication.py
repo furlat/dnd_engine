@@ -28,7 +28,7 @@ from uuid import UUID
 
 from dnd.core.cells import mask_difference, mask_from_positions, mask_intersection, mask_positions, mask_union, \
     values_from_items
-from dnd.core.item_types import ItemIntegrity, ItemPresentationState, ItemRemnantState
+from dnd.core.item_types import ItemIntegrity, ItemPresentationState, ItemRemnantState, camouflaged
 from dnd.player.audience import AudiencePerception, PlayerAudience
 from dnd.player.facts import (BoundaryStructureStatic, ContainedItem, ContainerContents, ContentsChange,
     ContributionRow, FloorItem, ObjectLook, ObjectRow, ObjectState, PlayerObject, ResidueKey, ResidueMaterial,
@@ -109,15 +109,8 @@ def contents_granted(world: WorldFacts, view: SensesSnapshot, identity: UUID) ->
             and (obj.item.is_open is True or obj.item.integrity is ItemIntegrity.DESTROYED))
 
 
-def camouflaged(item: ItemPresentationState, found: Collection[UUID]) -> bool:
-    """Whether a seat is shown an object's camouflage: it is closed and intact, and the seat's party hasn't found
-    it (`found`: the camouflage holders its knower keys learned)."""
-    return (item.camouflage is not None and item.camouflage_holder not in found
-            and item.integrity is ItemIntegrity.INTACT and item.is_open is not True)
-
-
 def disclosed_floor_item(world: WorldFacts, view: SensesSnapshot, identity: UUID, known: Collection[UUID],
-                         found: Collection[UUID] = frozenset()) -> FloorItem:
+                         found: Collection[UUID]) -> FloorItem:
     """What the seat sees of an observed object now: residues on its observed faces, the suppression rows of
     providers it perceives (their cells it sees), a remnant naming only known attachments. A camouflaged object is
     its camouflage's renderer data and its physics, nothing else."""
@@ -150,7 +143,7 @@ def disclosed_floor_item(world: WorldFacts, view: SensesSnapshot, identity: UUID
 
 
 def disclosed_world_object(world: WorldFacts, view: SensesSnapshot, identity: UUID,
-                           known: Collection[UUID], found: Collection[UUID] = frozenset()) -> PlayerObject:
+                           known: Collection[UUID], found: Collection[UUID]) -> PlayerObject:
     """An observed object as the seat sees it now, with its contents when they are seen."""
     obj = world.objects[identity]
     contents = (tuple(floor_item(child, ()) for child in obj.contained_items or ())
@@ -273,7 +266,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
                       view: SensesSnapshot, perception: AudiencePerception, audience: PlayerAudience,
                       sensed: SensedWorld | None, *, observed: set[UUID], granted: set[UUID], sent: StaticSent,
                       pending: StaticSent, digests: TileDigests, stamps: SeatStamps,
-                      found: Collection[UUID] = frozenset()) -> WorldUpdate | None:
+                      found: Collection[UUID]) -> WorldUpdate | None:
     """One seat's world update at an occurrence, or None when it perceives no world change there.
 
     `applied` is what the occurrence wrote (for a member's sensory occurrence, what the changes it saw happen
@@ -282,7 +275,7 @@ def seat_world_update(world: WorldFacts, occurrence: int, applied: tuple[Applied
     it. It writes the seat knowledge it is given: `observed` and `granted` (the seat's observed objects and seen
     contents) become the seat's perception after it, and the static rows sent here join `pending` (the walk's,
     merged into `sent` once its group is emitted, never mid-walk: plan §3.5), its stamps the walk's (`stamps.walk`).
-    `digests` are the session's tile digests.
+    `digests` are the session's tile digests, `found` the camouflage holders the seat's party has learned.
     """
     visible = view.visible
     replaced = set().union(*(row.replaced for row in applied))

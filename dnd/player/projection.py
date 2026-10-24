@@ -38,7 +38,8 @@ from dnd.core.events import (
     MovementTrajectory, StepMovementEvent, TakeDamageEvent, TemporaryHitPointsChangedEvent, TurnEvent, WorldInitializedEvent, SavingThrowEvent,
 )
 from dnd.core.life_types import RemainsDisposition
-from dnd.core.item_types import ItemConcentrationSlot, ItemEffectPresentationState, ItemIntegrity, ItemLocation
+from dnd.core.item_types import (ItemConcentrationSlot, ItemEffectPresentationState, ItemIntegrity, ItemLocation,
+    camouflaged)
 from dnd.types.event_facts import AppliedWorldFact
 from dnd.types.class_features import FontConversion
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult
@@ -71,8 +72,8 @@ from dnd.player.world_digests import TileDigests, forget_written
 from dnd.player.world_stamps import SeatStamps, StampChanges, WorldStamps, merge_world_stamps, unchanged_since
 from dnd.player.static_sent import StaticSent, merge_static_sent
 from dnd.player.spatial_commits import commit_current
-from dnd.player.world_publication import (SensedWorld, camouflaged, disclosed_world_object, object_observed,
-    observed_remnant, seat_world_update)
+from dnd.player.world_publication import (SensedWorld, disclosed_world_object, object_observed, observed_remnant,
+    seat_world_update)
 from dnd.player.compatibility import legacy_damage_reference
 from dnd.world_facts import WorldFacts, apply_world_fact
 
@@ -1279,7 +1280,7 @@ def _begin_walk(group: WalkGroup, state: "ProjectionState", events: tuple[Event,
 
 
 def _enter_removals(walk: SeatWalk, state: "ProjectionState", world: WorldFacts, event: Event,
-                    found: frozenset[UUID] = frozenset()) -> None:
+                    found: frozenset[UUID]) -> None:
     """Keep currently observed contact before this event or observed source writes it away."""
     view = state.audience_composition.view
     for identity in walk.removals_at.get(event.uuid, ()):
@@ -1289,7 +1290,7 @@ def _enter_removals(walk: SeatWalk, state: "ProjectionState", world: WorldFacts,
 
 
 def _enter_event(walk: SeatWalk, state: "ProjectionState", world: WorldFacts, event: Event,
-                 found: frozenset[UUID] = frozenset()) -> None:
+                 found: frozenset[UUID]) -> None:
     """A seat's part of an event before the session folds take its after-values: the captures due at its cursor."""
     _enter_removals(walk, state, world, event, found)
     view = state.audience_composition.view
@@ -1367,7 +1368,7 @@ def _publish_world(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", w
                    digests: TileDigests, event: Event,
                    applied: AppliedWorldFact | None, folded: Mapping[UUID, AppliedWorldFact | None],
                    before: CellMask, settlement: tuple[SensoryUpdateEvent, ...] = (),
-                   sensed: SensedWorld | None = None, found: frozenset[UUID] = frozenset(),
+                   sensed: SensedWorld | None = None, *, found: frozenset[UUID],
                    learned: frozenset[UUID] = frozenset()) -> None:
     """The seat's world update at an event (`before`: its composed view's visible cells before the event): what
     the event wrote or, at a settlement of its members (`settlement`, at its first event), what their senses
@@ -1404,7 +1405,7 @@ def _leave_event(walk: SeatWalk, group: WalkGroup, state: "ProjectionState", wor
                  event: Event,
                  applied: AppliedWorldFact | None,
                  folded: Mapping[UUID, AppliedWorldFact | None], step: BodiesStep,
-                 found: frozenset[UUID] = frozenset(), learned: frozenset[UUID] = frozenset()) -> None:
+                 found: frozenset[UUID], learned: frozenset[UUID]) -> None:
     """A seat's part of an event after the session folds took its after-values (`applied`: what the world fold
     applied; `step`: the actors' change and rows): its senses, the bodies entering its view, its world update, its
     node. `folded` holds what each version the group folded so far applied."""
@@ -2099,12 +2100,14 @@ def begin_projections(session: SessionProjection, initializations: tuple[Interva
         condition = conditions.get(event.uuid)
         due = steps.get(index, ())
         for seat, row in due:
-            _enter_event(walks[seat], states[seat], session.world, row)
+            _enter_event(walks[seat], states[seat], session.world, row, _found(session, states[seat].audience))
         step = _fold_actors(session.actors, session.names, folded, event, changes, condition)
         applied = _fold_version(session, folded, event, condition)
+        taught = _fold_notices(session, event, interval.notices.get(event.uuid))
         for seat, row in due:
             _leave_event(walks[seat], group, states[seat], session.world, session.tile_digests,
-                         session.actors, session.loadout_ids, row, applied, folded, step)
+                         session.actors, session.loadout_ids, row, applied, folded, step,
+                         _found(session, states[seat].audience), _learned(session, taught, states[seat].audience))
     return tuple(_emit_initialization(group, state, initialization, walk, world)
         for state, initialization, walk, world in zip(states, initializations, walks, worlds, strict=True))
 
@@ -2171,7 +2174,7 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
         event = walks[0].events[position]
         while source is not None and group.indexes[source.uuid] < group.indexes[event.uuid]:
             for walk, state in zip(walks, states):
-                _enter_removals(walk, state, session.world, source)
+                _enter_removals(walk, state, session.world, source, _found(session, state.audience))
             _fold_version(session, folded, source, None)
             source = next(sources, None)
         condition = walks[0].facts.get(event.uuid)
@@ -2181,12 +2184,9 @@ def project_lineages(session: SessionProjection, states: tuple[ProjectionState, 
         applied = _fold_version(session, folded, event, condition)
         taught = _fold_notices(session, event, lineages[0].notices.get(event.uuid))
         for walk, state in zip(walks, states):
-            learned = (frozenset(identity for holder in taught[1] for identity in
-                                 session.world.camouflaged_by_holder.get(holder, ()))
-                       if taught is not None and taught[0] in _knower_keys(session, state.audience) else frozenset())
             _leave_event(walk, group, state, session.world, session.tile_digests, session.actors,
                          session.loadout_ids, walk.events[position], applied, folded, step,
-                         _found(session, state.audience), learned)
+                         _found(session, state.audience), _learned(session, taught, state.audience))
     return tuple(_emit_lineage(group, state, lineage, walk, start_cursor)
         for state, lineage, walk, start_cursor in zip(states, lineages, walks, start_cursors))
 
@@ -2244,6 +2244,14 @@ def _fold_notices(session: SessionProjection, event: Event, noticed: frozenset[U
     for holder in noticed:
         session.known_hidden.setdefault(holder, set()).add(key)
     return key, noticed
+
+
+def _learned(session: SessionProjection, taught: tuple[KnowerKey, frozenset[UUID]] | None,
+             audience: PlayerAudience) -> frozenset[UUID]:
+    """The camouflaged objects a notice taught this seat's party, rebuilt for it alone."""
+    if taught is None or taught[0] not in _knower_keys(session, audience):
+        return frozenset()
+    return frozenset(identity for holder in taught[1] for identity in session.world.camouflaged_by_holder[holder])
 
 
 def _found(session: SessionProjection, audience: PlayerAudience) -> frozenset[UUID]:

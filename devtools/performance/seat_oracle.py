@@ -60,7 +60,9 @@ from dnd.actor_projection import actor_from_birth
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
+from dnd.core.concealment_types import knows
 from dnd.core.cells import mask_positions, mask_union, values_items
 from dnd.core.item_types import ItemIntegrity
 from dnd.core.events import WorldConnectorState, WorldTileState
@@ -464,6 +466,15 @@ def live_members(session: Session, audience: PlayerAudience) -> dict[UUID, Sense
             if (entity := session.game.entities.get(member)) is not None}
 
 
+def live_found(session: Session, world: WorldFacts, audience: PlayerAudience) -> frozenset[UUID]:
+    """The camouflage holders the seat's members know, read from their live records."""
+    members = [entity for identity in (*audience.controlled, *audience.observers)
+               if (entity := session.game.entities.get(identity)) is not None]
+    holders = (BaseObject.get(holder) for holder in world.camouflaged_by_holder)
+    return frozenset(holder.uuid for holder in holders if isinstance(holder, BaseCondition)
+                     and any(knows(holder.concealment, member.faction, member.uuid) for member in members))
+
+
 def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -> View:
     """The reference: what the seat perceives now, read from the live engine and disclosed by the projector's
     functions. `client` supplies only identities: the seat's generation, stream observer and world bounds."""
@@ -478,6 +489,7 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
     visible = _visible(senses)
     candidates = world_objects_at(world.objects, visible) | (senses.objects.keys() & world.objects.objects.keys())
     observed = {identity for identity in candidates if object_observed(world.objects, senses, identity)}
+    found = live_found(world.session, world.objects, audience)
     actors = {}
     for identity, visual in _perceived_bodies(senses.entities, audience):
         state = _live_actor(world, identity)
@@ -506,7 +518,8 @@ def live_view(world: LiveWorld, audience: PlayerAudience, client: PlayerState) -
                           visible),
         'tiles': {key(position): TILE.dump_python(tile, mode='json') if (tile := _live_tile(world, position)) else None
                   for position in sorted(visible)},
-        'objects': {str(identity): OBJECT.dump_python(disclosed_world_object(world.objects, senses, identity, observed),
+        'objects': {str(identity): OBJECT.dump_python(disclosed_world_object(world.objects, senses, identity, observed,
+                                                                             found),
                                                       mode='json') for identity in sorted(observed, key=str)},
         'connectors': {str(row.connector_uuid): CONNECTOR.dump_python(row, mode='json')
                        for row in map(project_world_connector, get_map().get_all_connectors())

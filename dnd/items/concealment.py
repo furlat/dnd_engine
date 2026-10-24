@@ -44,8 +44,6 @@ class Concealed(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message="Only an object's record can hide it")
         if self.concealment.aspect is ConcealedAspect.CONTENTS and not isinstance(host, StorageChest):
             return [], [], [], [], declaration_event.cancel(status_message="Only a body with contents can hide them")
-        if (self.concealment.aspect is ConcealedAspect.CAMOUFLAGE) != (self.concealment.shows is not None):
-            return [], [], [], [], declaration_event.cancel(status_message="Camouflage, and only it, shows a look")
         return [], [], [], [], declaration_event.phase_to(EventPhase.EFFECT)
 
     def on_membership_changed(self, event: Event) -> None:

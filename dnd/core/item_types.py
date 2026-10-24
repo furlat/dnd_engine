@@ -3,7 +3,7 @@
 from dnd.core.condition_types import ConditionDurationSummary
 
 from enum import Enum
-from typing import Optional, Protocol, Tuple, runtime_checkable
+from typing import Collection, Optional, Protocol, Tuple, runtime_checkable
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -232,6 +232,13 @@ class ItemPresentationState(BaseModel):
     presence_concealed: bool = False  # a hidden presence: only a seat whose members perceive it sees it
     camouflage: Optional[Camouflage] = None  # what a seat that doesn't know it is shown while closed and intact
     camouflage_holder: Optional[UUID] = None  # the condition whose record a notice names
+
+
+def camouflaged(item: ItemPresentationState, found: Collection[UUID]) -> bool:
+    """Whether a viewer is shown an object's camouflage: it is closed and intact, and the viewer's party hasn't
+    found it (`found`: the camouflage holders its knower keys learned)."""
+    return (item.camouflage is not None and item.camouflage_holder not in found
+            and item.integrity is ItemIntegrity.INTACT and item.is_open is not True)
 
 
 @runtime_checkable

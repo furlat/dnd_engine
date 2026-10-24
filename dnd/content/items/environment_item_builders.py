@@ -26,6 +26,8 @@ from dnd.items.environment import (
     DIRECTIONAL_CHANNELS,
     DirectionalDoor,
     DirectionalWall,
+    WALL_MAP_CHAR,
+    wall_structure,
 )
 from dnd.items.environment_interactables import (
     ActivateDeviceAction,
@@ -188,11 +190,9 @@ def build_secret_door(item_id: str = "environment.door.secret_stone", *, dc: int
     """A door set flush in a wall: closed, a party that hasn't noticed or searched it out is shown the wall it is
     set in (its look, name and glyph, and a wall's structure of the door's own channels), nothing else."""
     door = build_authored_door(item_id, swing=swing)
-    wall = BoundaryStructure(structure=BoundaryStructureKind.WALL, material=SOLID_WALL_MATERIALS[looks_like],
-                             blocked_channels=door.blocked_channels)
     install_concealment(door, ConcealedAspect.CAMOUFLAGE, dc, shows=Camouflage(item_id=looks_like,
-        name=solid_wall_name(looks_like), map_char=DirectionalWall.model_fields["map_char"].default,
-        boundary_structure=wall))
+        name=solid_wall_name(looks_like), map_char=WALL_MAP_CHAR,
+        boundary_structure=wall_structure(SOLID_WALL_MATERIALS[looks_like], door.blocked_channels)))
     return door
 
 

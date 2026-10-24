@@ -111,6 +111,8 @@ class WorldInterval:
     conditions: tuple[ConditionFact, ...] = ()
     # The shared fold's actor change of each of these versions that has one, by event uuid (the session's actors).
     actor_fact_changes: Mapping[UUID, ActorFactChange] = field(default_factory=dict)
+    # The hidden things each sensory version's observer noticed or found, by event uuid (`CompletedLineage.notices`).
+    notices: Mapping[UUID, frozenset[UUID]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -327,7 +329,8 @@ def capture_interval(
         world_interval=WorldInterval(events=tuple((index, _cached_body(event, None, True, bodies, end_cursor=end_cursor))
                 for index, event in completed),
             conditions=tuple(fact for _, event in completed if (fact := _condition_fact(event)) is not None),
-            actor_fact_changes=_actor_fact_changes(records, (event for _, event in completed))),
+            actor_fact_changes=_actor_fact_changes(records, (event for _, event in completed)),
+            notices=_notices(event for _, event in completed)),
     )
 
 
@@ -756,8 +759,13 @@ def _graph(nodes: dict[UUID, Event], indexed: tuple[tuple[int, Event], ...]) -> 
     return LineageGraph(nodes, indexed, conditions,
                         tuple(_objective_row(index, event) for index, event in indexed),
                         {event.uuid: event.combat_log for event in nodes.values() if event.combat_log is not None},
-                        {event.uuid: frozenset(event.concealed_noticed) for event in nodes.values()
-                         if isinstance(event, SensoryUpdateEvent) and event.concealed_noticed})
+                        _notices(nodes.values()))
+
+
+def _notices(events: Iterable[Event]) -> dict[UUID, frozenset[UUID]]:
+    """Each sensory event's notices, by its uuid: what its observer noticed or found."""
+    return {event.uuid: frozenset(event.concealed_noticed) for event in events
+            if isinstance(event, SensoryUpdateEvent) and event.concealed_noticed}
 
 
 def _merged_graph(graphs: tuple[LineageGraph, ...]) -> LineageGraph:

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.core.concealment_types import ConcealedAspect, with_plain_view
+from dnd.core.concealment_types import SEEN_WHEN_OPEN, with_plain_view
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import BaseAction, ActionEvent, Cost, TargetType, cell_occupied
@@ -46,6 +46,14 @@ def _validate_channels(channels: tuple[WorldEdgeChannel, ...]) -> None:
             raise ValueError(f"Unsupported directional blocking channel: {channel}")
 
 
+WALL_MAP_CHAR = "W"
+
+
+def wall_structure(material: Material, blocked_channels: tuple[WorldEdgeChannel, ...]) -> BoundaryStructure:
+    """An intact wall's structural contribution: what it blocks, of what it is made."""
+    return BoundaryStructure(structure=BoundaryStructureKind.WALL, material=material, blocked_channels=blocked_channels)
+
+
 class DirectionalWall(BaseItem):
     """One boundary-side structural wall.
 
@@ -69,7 +77,7 @@ class DirectionalWall(BaseItem):
     is_targetable: bool = Field(default=True, description="Whether the wall can be directly targeted.")
     blocks_movement: bool = Field(default=False, description="Global movement blocker flag for the wall.")
     blocks_optics_field: bool = Field(default=False, description="Global optical blocker flag for the wall.")
-    map_char: str = Field(default="W", description="Map-editor glyph for the wall.")
+    map_char: str = Field(default=WALL_MAP_CHAR, description="Map-editor glyph for the wall.")
     include_in_senses_objects: bool = Field(
         default=True,
         description="Whether senses expose the wall as a visible object.",
@@ -123,11 +131,7 @@ class DirectionalWall(BaseItem):
             structure = self.destruction_profile.boundary_structure
             if structure is not None:
                 return structure
-        return BoundaryStructure(
-            structure=BoundaryStructureKind.WALL,
-            material=self.material,
-            blocked_channels=self.blocked_channels,
-        )
+        return wall_structure(self.material, self.blocked_channels)
 
 
 class OpenDirectionalDoorAction(BaseAction):
@@ -463,10 +467,10 @@ class DirectionalDoor(UsableItem):
         self.is_open = value
         # An open secret door is plain to see: whoever sees it open knows it from then on. The record is
         # written before the change publishes, so the observers settling it see the door open.
-        hidden = self.concealment_holder(ConcealedAspect.PRESENCE) or self.concealment_holder(ConcealedAspect.CAMOUFLAGE)
-        record = hidden.concealment if hidden is not None else None
-        if hidden is not None and record is not None:
-            get_map().record_concealment(((hidden, with_plain_view(record, value)),))
+        hidden = tuple((holder, holder.concealment) for holder in self.concealment_holders()
+                       if holder.concealment is not None and holder.concealment.aspect in SEEN_WHEN_OPEN)
+        if hidden:
+            get_map().record_concealment(tuple((holder, with_plain_view(record, value)) for holder, record in hidden))
         try:
             get_map().update_object_boundary_structure(
                 self.uuid,
@@ -476,6 +480,6 @@ class DirectionalDoor(UsableItem):
             )
         except Exception:
             self.is_open = previous_value
-            if hidden is not None and record is not None:
-                get_map().record_concealment(((hidden, record),))
+            if hidden:
+                get_map().record_concealment(hidden)
             raise

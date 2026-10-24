@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Iterable, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from dnd.types.abilities import SkillName
 from dnd.types.world_placement import BoundaryStructure
@@ -28,6 +28,7 @@ class ConcealedAspect(str, Enum):
 
 NOTICED_ON_OBJECTS = frozenset({ConcealedAspect.PRESENCE, ConcealedAspect.ACTIONS, ConcealedAspect.CAMOUFLAGE})
 # (contents only by Search Inside)
+SEEN_WHEN_OPEN = frozenset({ConcealedAspect.PRESENCE, ConcealedAspect.CAMOUFLAGE})  # an open secret door's
 
 
 class Camouflage(BaseModel):
@@ -62,6 +63,15 @@ class Concealment(BaseModel):
     failed_by: frozenset[UUID] = frozenset()
     in_plain_view: bool = False  # for now noticed by anyone who sees it (raised spikes, an open hatch)
     shows: Optional[Camouflage] = None  # a CAMOUFLAGE record's
+
+    @model_validator(mode="after")
+    def _camouflage_shows_a_look_to_parties(self) -> "Concealment":
+        """Camouflage, and only it, shows a look; it is learned by parties (a seat's knowledge is its party's)."""
+        if (self.aspect is ConcealedAspect.CAMOUFLAGE) != (self.shows is not None):
+            raise ValueError("Camouflage, and only it, shows a look")
+        if self.aspect is ConcealedAspect.CAMOUFLAGE and self.knowers is not KnowerScope.PARTY:
+            raise ValueError("Camouflage is learned by parties")
+        return self
 
 
 def knower_key(record: Concealment, faction: Optional[str], uuid: UUID) -> KnowerKey:

@@ -184,6 +184,8 @@ class AIKnowledge:
     projected_actors: dict[UUID, ActorState] = field(default_factory=dict)
     # The visible and seen cells each observer row's cell lists were built from.
     projected_cells: dict[UUID, tuple[CellMask, CellMask]] = field(default_factory=dict)
+    # The camouflaged things its observers noticed or found (`concealed_noticed`): their party knows them.
+    found: set[UUID] = field(default_factory=set)
 
     def consume(self, rows: Iterable[tuple[int, Event, ConditionFact | None]]) -> None:
         """Apply an exact recorded prefix; context/decision authority stays outside.
@@ -286,6 +288,10 @@ class AIKnowledge:
             actors.add(event.observer_uuid)
             objects.update(event.object_contacts_changed)
             objects.update(event.object_contacts_removed)
+            for holder in event.concealed_noticed:
+                if holder in self.world.camouflaged_by_holder and holder not in self.found:
+                    self.found.add(holder)
+                    objects.update(self.world.camouflaged_by_holder[holder])
             positions.update(mask_positions(mask_union(event.visible_cells_added, event.visible_cells_removed,
                 event.seen_cells_added, event.hazardous_cells_changed.cells)))
             # A different known boundary provider changes subjective movement
@@ -371,7 +377,7 @@ class AIKnowledge:
             observers = sorted(self.object_index.get(identity, ()))
             if observers:
                 contact = self.senses[UUID(observers[0])].objects[identity]
-                fact = project_object(self.world, identity, contact.position, observers)
+                fact = project_object(self.world, identity, contact.position, observers, self.found)
                 if fact is not None:
                     self.known_objects[str(identity)] = fact
             elif (prior := self.known_objects.get(str(identity))) is not None:
