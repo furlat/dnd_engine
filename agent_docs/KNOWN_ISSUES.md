@@ -35,7 +35,7 @@ not override a status recorded here.
   should be checked for the same assumption.
 - **Reproducer**: build `environment.door.desert_c7`, place it at `(3, 2)` EAST, open it
   from a creature at `(3, 2)`, then list that creature's door rows (none).
-- **Status**: OPEN (not fixed: outside the hidden-knowledge plan; left for the human).
+- **Status**: FIXED 24 October (`object_appearance_opus`). The doorway's occupant may close the door itself: the action's rule, the door's use rows and its close request all ignore the closer (`DirectionalDoor._doorway_occupied(closer)`). Someone else in the doorway still blocks a close, and a lever's close still waits for the doorway to clear (`tests/engine/test_held_door.py`).
 
 ### Stale Berserker assertion caused unbounded Pytest entity rendering
 

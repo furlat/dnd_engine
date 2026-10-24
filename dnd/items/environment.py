@@ -204,7 +204,8 @@ class CloseDirectionalDoorAction(BaseAction):
         if not door.is_open:
             return "Door already closed"
         position = get_map().get_object_position(door.uuid)
-        if position is not None and cell_occupied(scan, position):
+        # The doorway is the door's own cell; whoever stands there may close it, not have it closed on them.
+        if position is not None and position != scan.position and cell_occupied(scan, position):
             return "Can't close door - someone is standing in the doorway"
         return None
 
@@ -222,7 +223,7 @@ class CloseDirectionalDoorAction(BaseAction):
         door = BaseBlock.get(self.source_item_uuid)
         if not isinstance(door, DirectionalDoor) or not door.is_active:
             return execution_event.cancel(status_message="Door not found")
-        if not door.request_open(False, parent_event=execution_event):
+        if not door.request_open(False, parent_event=execution_event, controller_uuid=self.source_entity_uuid):
             return execution_event.cancel(status_message="Can't close door - someone is standing in the doorway")
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Door closed")
         return effect.with_updates(status_message="Door closed")
@@ -349,7 +350,7 @@ class DirectionalDoor(UsableItem):
         if not self.is_active:
             return []
         if self.is_open:
-            if self._doorway_occupied():
+            if self._doorway_occupied(user_entity_uuid):
                 return []
             return [
                 self.bind_dynamic_use_action(
@@ -370,9 +371,10 @@ class DirectionalDoor(UsableItem):
             )
         ]
 
-    def _doorway_occupied(self) -> bool:
+    def _doorway_occupied(self, closer: UUID | None = None) -> bool:
+        """Someone stands in the doorway, the door's own cell: anyone but the creature closing it."""
         position = get_map().get_object_position(self.uuid)
-        return position is not None and bool(get_map().get_entities_at(position))
+        return position is not None and bool(get_map().get_entities_at(position) - {closer})
 
     def request_open(
         self,
@@ -404,7 +406,7 @@ class DirectionalDoor(UsableItem):
         if value and self.is_held_shut():
             return False
         position = get_map().get_object_position(self.uuid)
-        if not value and self._doorway_occupied():
+        if not value and self._doorway_occupied(controller_uuid):
             if defer_close and position is not None:
                 self._pending_close_controller_uuid = controller_uuid
                 self._pending_close_request_uuid = parent_event

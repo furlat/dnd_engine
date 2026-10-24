@@ -16,7 +16,7 @@ from dnd.core.modifiers import AdvantageStatus
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.core.creature_types import DamageType
-from dnd.items.container_traps import build_trap_disarm_toolkit, install_container_trap
+from dnd.items.container_traps import CONTAINER_DARTS, build_trap_disarm_toolkit, install_container_trap
 from dnd.items.environment_interactables import StorageChest
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spatial.environmental_conditions import (
@@ -157,6 +157,21 @@ def test_a_needle_pricks_its_first_opener_once_and_then_stays_spent(arena):
     act(opener, "Open Chest")  # no die is left to roll: the needle is spent
     assert "Needle paralysis" not in opener.active_conditions
     assert footlocker.is_open
+
+
+@pytest.mark.parametrize(("face", "loss"), ((5, 4 * 3), (15, 0)))  # Dex save against DC 13; four d4 faces of 3
+def test_container_darts_fire_once_at_the_opener_on_a_failed_dexterity_save(arena, face, loss):
+    footlocker = build_authored_item("environment.container.footlocker", uuid4())
+    assert isinstance(footlocker, StorageChest)
+    footlocker.place_on_grid((3, 2))
+    install_container_trap(footlocker, darts=CONTAINER_DARTS)
+    opener = creature("Opener", (2, 2), dexterity=10)
+    before = opener.get_hp()
+    act(opener, "Open Chest", faces=(face, 3, 3, 3, 3))
+    assert before - opener.get_hp() == loss and "Needle paralysis" not in opener.active_conditions
+    act(opener, "Close Chest")
+    act(opener, "Open Chest")  # spent: nothing more to roll
+    assert before - opener.get_hp() == loss
 
 
 def test_a_repeat_save_at_the_victims_turn_end_ends_the_needle_paralysis(arena):

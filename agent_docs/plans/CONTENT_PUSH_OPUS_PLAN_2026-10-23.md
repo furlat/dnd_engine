@@ -1,6 +1,8 @@
 # Content push (Triskelion Outer Ward): content on existing owners, no new systems
 
-Status: plan, 23 October 2026, branch `content_push_opus` (from `feature/rules-checking` 1f044792b1).
+Status: **closed, 24 October 2026** (the human: "close this track ... this track was only about content, no need to
+create rooms at all"); see §10. Branch `content_push_opus` (from `feature/rules-checking` 1f044792b1), continued
+on `object_appearance_opus`.
 It keeps the correct parts of [the Triskelion backend content plan](TRISKELION_BACKEND_CONTENT_PLAN_2026-10-23.md)
 and applies the human's decisions of 23 October. Step 1 (§4.A) is implemented; the rest
 follows §7.
@@ -384,3 +386,23 @@ For each implementation step:
 - The R49 darts: trap attack rolls (a new attack source in the contract) or Dexterity saves.
 - Coughing's effect: disadvantage on Stealth only (§4.C).
 - Putting pieces back on racks and walls (taking them is built, step 5).
+
+## 10. Closing record (24 October)
+
+**Built:**
+- steps 1-5 (§7);
+- the hidden-things work that followed (traps and hidden contents known by the party; secret doors as camouflaged walls a hit reveals: [the appearance plan](OBJECT_APPEARANCE_PLAN_2026-10-24.md));
+- **the R49 darts**, as the human chose, reuse the dart launcher's Dexterity save. A container trap now takes the launcher's avoidance and payload data: `install_container_trap(..., darts=CONTAINER_DARTS)` is a DC 13 Dexterity save against 4d4 piercing, from the source's four +5 attacks of 1d4. As with the launcher, a success takes nothing.
+
+**Fixed:** an open boundary door couldn't be closed from its own side (KNOWN_ISSUES).
+
+**Not a bug:** a rack filled after it is placed keeps its first look. Adding to a placed container's inventory publishes nothing at all, contents included, because the inventory leaves publication to its owner. All authoring fills containers before placing them, and in play contents change only through the loot actions, which republish. Putting pieces back is the one play path that would add, and it isn't built.
+
+**Kept as built:** Coughing gives disadvantage on Stealth only.
+
+**Outside this track:**
+- room composition and floor assembly, with its keys, carriers and per-room counts;
+- items and magic items (§4.B);
+- putting pieces back on racks and walls;
+- the excluded systems (§5);
+- the exploration mode (§6).

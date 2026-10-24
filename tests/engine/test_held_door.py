@@ -95,6 +95,15 @@ def test_held_close_waits_then_belongs_to_departure_not_completed_request(game: 
     assert departure.phase is EventPhase.EFFECT
 
 
+def test_the_creature_in_the_doorway_closes_the_door_itself(game: Game) -> None:
+    door, occupant = occupied_door(game)
+    occupant.update_entity_senses()
+    row = next(row for row in get_available_actions(occupant).all_actions
+               if row.template_name.split("__")[0] == "Close Door")
+    result = execute_available_action(occupant, row, row.valid_targets[0])
+    assert result is not None and not result.canceled and not door.is_open
+
+
 @pytest.mark.parametrize("operation", ("request", "direct"))
 def test_ordinary_close_respects_occupied_door_and_does_not_retry(game: Game, operation: str) -> None:
     door, occupant = occupied_door(game)
