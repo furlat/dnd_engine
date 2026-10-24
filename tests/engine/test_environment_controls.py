@@ -263,7 +263,7 @@ def test_linked_action_rechecks_controller_reach_after_execution_handlers(operat
     assert not item_facts_since(cursor)
 
 
-def test_occupied_door_rejects_remote_close_without_moving_handle(
+def test_a_lever_closes_its_door_at_once_whoever_stands_beside_it(
     operator: Entity, game: Game,
 ) -> None:
     door = build_directional_door(is_open=True)
@@ -277,12 +277,10 @@ def test_occupied_door_rejects_remote_close_without_moving_handle(
     occupant.compose_entity()
     game.deploy_entity(occupant, occupant.position)
 
-    assert available_names(operator, lever.uuid) == set()
-    cursor = EventQueue.event_cursor()
-    refused = execute_use_action(operator, lever.uuid, "Toggle Lever")
-    assert refused is not None and refused.canceled
-    assert lever.is_engaged and door.is_open
-    assert not item_facts_since(cursor)
+    assert available_names(operator, lever.uuid) == {"Toggle Lever"}
+    toggled = execute_use_action(operator, lever.uuid, "Toggle Lever")
+    assert toggled is not None and not toggled.canceled
+    assert not lever.is_engaged and not door.is_open
 
 
 def test_finite_trap_lever_preserves_disabled_fixture_and_spent_handle(operator: Entity) -> None:

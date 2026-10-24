@@ -35,7 +35,7 @@ not override a status recorded here.
   should be checked for the same assumption.
 - **Reproducer**: build `environment.door.desert_c7`, place it at `(3, 2)` EAST, open it
   from a creature at `(3, 2)`, then list that creature's door rows (none).
-- **Status**: FIXED 24 October (`object_appearance_opus`). The doorway's occupant may close the door itself: the action's rule, the door's use rows and its close request all ignore the closer (`DirectionalDoor._doorway_occupied(closer)`). Someone else in the doorway still blocks a close, and a lever's close still waits for the doorway to clear (`tests/engine/test_held_door.py`).
+- **Status**: FIXED 24 October (`object_appearance_opus`). A door on an edge has no doorway cell: it is used from either of its two cells, and nobody standing beside it blocks it (the human: "the most classical game mechanic"). The doorway rule and the held-door retry it fed were relics of cell-placed doors, and both are gone. That covers the close action's rule, the use rows, the close request, and the pending close of levers and plates (`tests/engine/test_held_door.py`). The cell-placed `DoorObject` keeps its real doorway check.
 
 ### Stale Berserker assertion caused unbounded Pytest entity rendering
 

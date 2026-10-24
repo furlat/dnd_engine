@@ -394,7 +394,7 @@ For each implementation step:
 - the hidden-things work that followed (traps and hidden contents known by the party; secret doors as camouflaged walls a hit reveals: [the appearance plan](OBJECT_APPEARANCE_PLAN_2026-10-24.md));
 - **the R49 darts**, as the human chose, reuse the dart launcher's Dexterity save. A container trap now takes the launcher's avoidance and payload data: `install_container_trap(..., darts=CONTAINER_DARTS)` is a DC 13 Dexterity save against 4d4 piercing, from the source's four +5 attacks of 1d4. As with the launcher, a success takes nothing.
 
-**Fixed:** an open boundary door couldn't be closed from its own side (KNOWN_ISSUES).
+**Fixed:** an open boundary door couldn't be closed from its own side. A door on an edge is now used from either of its cells, and nobody beside it blocks it: the made-up doorway rule and the held-door retry are removed (KNOWN_ISSUES).
 
 **Not a bug:** a rack filled after it is placed keeps its first look. Adding to a placed container's inventory publishes nothing at all, contents included, because the inventory leaves publication to its owner. All authoring fills containers before placing them, and in play contents change only through the loot actions, which republish. Putting pieces back is the one play path that would add, and it isn't built.
 

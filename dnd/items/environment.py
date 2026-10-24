@@ -3,15 +3,15 @@
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import Field, PrivateAttr
+from pydantic import Field
 
 from dnd.core.concealment_types import SEEN_WHEN_OPEN, with_plain_view
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.core.action_types import ActionSelection
-from dnd.core.base_actions import BaseAction, ActionEvent, Cost, TargetType, cell_occupied
+from dnd.core.base_actions import BaseAction, ActionEvent, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.item_types import DoorMechanism, DoorSwing, ItemDestructionProfile, ItemIntegrity
-from dnd.core.events import Event, EventPhase, EventQueue, EventType, SpatialHandler
+from dnd.core.events import Event, EventPhase
 from dnd.core.gridmap import get_map
 from dnd.types.discovery import ActorScan
 from dnd.types.materials import Material
@@ -195,7 +195,7 @@ class CloseDirectionalDoorAction(BaseAction):
     )
 
     def rule_error(self, scan: ActorScan, selection: ActionSelection) -> Optional[str]:
-        """The linked door exists, is open, and its doorway is unoccupied."""
+        """The linked door exists and is open."""
         if self.source_item_uuid is None:
             return "No door linked"
         door = BaseBlock.get(self.source_item_uuid)
@@ -203,10 +203,6 @@ class CloseDirectionalDoorAction(BaseAction):
             return "Door not found"
         if not door.is_open:
             return "Door already closed"
-        position = get_map().get_object_position(door.uuid)
-        # The doorway is the door's own cell; whoever stands there may close it, not have it closed on them.
-        if position is not None and position != scan.position and cell_occupied(scan, position):
-            return "Can't close door - someone is standing in the doorway"
         return None
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
@@ -223,8 +219,7 @@ class CloseDirectionalDoorAction(BaseAction):
         door = BaseBlock.get(self.source_item_uuid)
         if not isinstance(door, DirectionalDoor) or not door.is_active:
             return execution_event.cancel(status_message="Door not found")
-        if not door.request_open(False, parent_event=execution_event, controller_uuid=self.source_entity_uuid):
-            return execution_event.cancel(status_message="Can't close door - someone is standing in the doorway")
+        door.request_open(False, parent_event=execution_event)
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Door closed")
         return effect.with_updates(status_message="Door closed")
 
@@ -277,9 +272,6 @@ class DirectionalDoor(UsableItem):
         default_factory=lambda: DIRECTIONAL_CHANNELS,
         description="Spatial channels blocked at the placed boundary side while closed.",
     )
-    _pending_close_controller_uuid: UUID | None = PrivateAttr(default=None)
-    _pending_close_request_uuid: UUID | None = PrivateAttr(default=None)
-    _pending_close_handler_uuid: UUID | None = PrivateAttr(default=None)
 
     def model_post_init(self, __context) -> None:
         """Validate the provider's structural channels."""
@@ -344,14 +336,11 @@ class DirectionalDoor(UsableItem):
             user_entity_uuid: Entity UUID that would execute the action.
 
         Returns:
-            Open or close action templates, or an empty list when an open door is
-            occupied and cannot be closed.
+            The close action template when it is open, the open one when it is closed.
         """
         if not self.is_active:
             return []
         if self.is_open:
-            if self._doorway_occupied(user_entity_uuid):
-                return []
             return [
                 self.bind_dynamic_use_action(
                     CloseDirectionalDoorAction(
@@ -371,94 +360,27 @@ class DirectionalDoor(UsableItem):
             )
         ]
 
-    def _doorway_occupied(self, closer: UUID | None = None) -> bool:
-        """Someone stands in the doorway, the door's own cell: anyone but the creature closing it."""
-        position = get_map().get_object_position(self.uuid)
-        return position is not None and bool(get_map().get_entities_at(position) - {closer})
+    def request_open(self, value: bool, *, parent_event: Event) -> bool:
+        """Open or close it; who stands beside a door on an edge never blocks it. False: a held-shut door
+        stays closed."""
+        return self._request_open(value, parent_event.uuid)
 
-    def request_open(
-        self,
-        value: bool,
-        *,
-        parent_event: Event,
-        controller_uuid: UUID | None = None,
-        defer_close: bool = False,
-    ) -> bool:
-        """Request a native state, optionally waiting for the doorway to clear.
-
-        Each request supersedes the previous one. False means the doorway is
-        occupied; it remains open even when the close was retained for retry.
-        """
-        return self._request_open(value, parent_event.uuid, controller_uuid, defer_close)
-
-    def _request_open(
-        self,
-        value: bool,
-        parent_event: UUID | None,
-        controller_uuid: UUID | None = None,
-        defer_close: bool = False,
-    ) -> bool:
+    def _request_open(self, value: bool, parent_event: UUID | None) -> bool:
         if not self.is_active:
             return False
-        self._clear_pending_close()
         if self.is_open == value:
             return True
         if value and self.is_held_shut():
             return False
-        position = get_map().get_object_position(self.uuid)
-        if not value and self._doorway_occupied(controller_uuid):
-            if defer_close and position is not None:
-                self._pending_close_controller_uuid = controller_uuid
-                self._pending_close_request_uuid = parent_event
-                handler = SpatialHandler(
-                    name="Close cleared doorway",
-                    source_entity_uuid=self.uuid,
-                    positions={position},
-                    event_type=EventType.SPATIAL_ENTITY_LEFT,
-                    event_phase=EventPhase.EFFECT,
-                    event_processor=self._retry_pending_close,
-                )
-                EventQueue.add_spatial_handler(handler)
-                self._pending_close_handler_uuid = handler.uuid
-            return False
         self._set_open(value, parent_event)
         return True
 
-    def _retry_pending_close(self, event: Event, _source_entity_uuid: UUID) -> None:
-        if not self.is_active or self._pending_close_handler_uuid is None or self._doorway_occupied():
-            return
-        self._clear_pending_close()
-        # The current departure owns this consequence. The old control request
-        # was completed already and must never gain another child lineage.
-        self._set_open(False, event.uuid)
-
-    def cancel_pending_close(self, controller_uuid: UUID) -> None:
-        """Withdraw this controller's pending request without changing state."""
-        if self._pending_close_controller_uuid == controller_uuid:
-            self._clear_pending_close()
-
-    def _clear_pending_close(self) -> None:
-        if self._pending_close_handler_uuid is not None:
-            EventQueue.remove_spatial_handler(self._pending_close_handler_uuid)
-        self._pending_close_controller_uuid = None
-        self._pending_close_request_uuid = None
-        self._pending_close_handler_uuid = None
-
-    def on_grid_object_removed(self, position: tuple[int, int], clear_location: bool = True, parent_event: Optional[Event] = None) -> None:
-        if clear_location:
-            self._clear_pending_close()
-        super().on_grid_object_removed(position, clear_location, parent_event)
-
-    def _on_destroy(self, parent_event: Optional[Event]) -> None:
-        self._clear_pending_close()
-        super()._on_destroy(parent_event)
-
     def open(self, parent_event: Optional[UUID] = None) -> None:
-        """Explicitly open the door, superseding any pending control request."""
+        """Explicitly open the door."""
         self._request_open(True, parent_event)
 
     def close(self, parent_event: Optional[UUID] = None) -> None:
-        """Explicitly close an unoccupied door without scheduling a retry."""
+        """Explicitly close the door."""
         self._request_open(False, parent_event)
 
     def _set_open(self, value: bool, parent_event: UUID | None) -> None:

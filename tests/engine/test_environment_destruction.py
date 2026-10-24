@@ -151,14 +151,12 @@ def test_real_door_attacks_preserve_swing_elevation_and_clear_or_jammed_remains(
     assert get_map().can_transition((3, 3), (4, 3)) is (outcome == "clear")
 
 
-def test_door_close_still_rejects_an_occupied_opening_and_retains_swing(arena):
+def test_a_door_closes_with_a_traveler_beside_it_and_retains_its_swing(arena):
     operator = actor(arena, (4, 3))
     door = build_authored_door("environment.door.indoor_door_shabby", swing=DoorSwing.INWARD)
     door.place_on_grid((3, 3), boundary_direction=CardinalDirection.EAST)
     assert not execute_use_action(operator, door.uuid, "Open Door").canceled
-    traveler = actor(arena, (3, 3))
-    assert door.get_use_actions(operator.uuid) == [] and door.is_open
-    move(traveler, (2, 3))
+    actor(arena, (3, 3))  # on the door's other side: nobody stands in an edge
     assert not execute_use_action(operator, door.uuid, "Close Door").canceled
     assert not door.is_open and door.to_item_presentation_state().door_swing is DoorSwing.INWARD
 

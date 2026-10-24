@@ -13,8 +13,7 @@ from typing import ClassVar
 
 from dnd.core.gridmap import CrossingChannel, get_map
 from dnd.entity import Entity
-from dnd.items.environment import DirectionalDoor
-from dnd.items.environment_controls import linked_item, request_control
+from dnd.items.environment_controls import request_control
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spatial.environmental_conditions import SpikeTrap
 from dnd.spatial.mechanisms import FiniteTrap
@@ -83,7 +82,7 @@ class PressurePlate(SpatialCondition):
         # One press and everything it drives are one instant.
         with EventQueue.group(GroupEntryKind.TRAP_FIRE, root=parent_event):
             if isinstance(self.link, ControlLink):
-                request_control(self.link, self.pressed, controller_uuid=self.uuid, parent_event=parent_event)
+                request_control(self.link, self.pressed, parent_event=parent_event)
             elif self.pressed:
                 # One actual press emits all authored pulses even if the first
                 # mechanism moves its recipient and releases this same plate.
@@ -114,9 +113,6 @@ class PressurePlate(SpatialCondition):
 
     def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
         if isinstance(self.link, ControlLink):
-            target = linked_item(self.link)
-            if isinstance(target, DirectionalDoor):
-                target.cancel_pending_close(self.uuid)
             if self.pressed and parent_event is not None:
                 self.pressed = False
                 self.observation_revision += 1
