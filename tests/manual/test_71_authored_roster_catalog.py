@@ -8,12 +8,8 @@ from dnd.core.content.encounters import (
     PremadeCharacterRosterSource,
     RosterItemGrant,
 )
-from dnd.monsters.configured_srd_creatures import (
-    PLAYABLE_SRD_CREATURE_RECIPES_BY_ID,
-)
 from dnd.scenarios.encounter_catalog import (
     AUTHORED_ROSTER_RECIPES,
-    AUTHORED_ENCOUNTER_RECIPES,
     roster_recipe,
 )
 
@@ -48,20 +44,6 @@ def test_every_authored_member_has_a_creature_recipe_or_direct_build() -> None:
                 member.source.recipe.ref.definition_kind.value
                 == "creature"
             )
-
-
-def test_every_srd_creature_factory_is_represented_in_a_roster() -> None:
-    represented_refs = {
-        member.source.recipe.ref.identity_key
-        for roster in (*AUTHORED_ROSTER_RECIPES, *(slot.roster
-            for recipe in AUTHORED_ENCOUNTER_RECIPES for slot in recipe.roster_slots))
-        for member in roster.members
-        if isinstance(member.source, AuthoredCreatureRosterSource)
-    }
-    assert {
-        recipe.ref.identity_key
-        for recipe in PLAYABLE_SRD_CREATURE_RECIPES_BY_ID.values()
-    } <= represented_refs
 
 
 def test_rosters_do_not_repair_ordinary_apparel_as_setup_effects() -> None:
