@@ -3094,16 +3094,19 @@ class Search(BaseAction):
     """Search: one rolled Wisdom (Perception) check against every hidden thing within 10 feet.
 
     It looks, in the cells the searcher sees, for every hidden thing its party doesn't know and it has
-    not searched for already: traps and hazards on the floor, on a tile or anchored to an object. A total
-    that meets a DC makes the searcher's party know that thing; a miss is the searcher's for good, one
-    try per hidden thing. The check publishes no DC, so a failed search tells nothing.
+    not searched for already: traps and hazards on the floor, on a tile or anchored to an object, and
+    objects hidden by presence or by what they do (a lever in an alcove, a secret door). Hidden contents
+    are Search Inside's. A total that meets a DC makes the searcher's party know that thing; a miss is
+    the searcher's for good, one try per hidden thing. The check publishes no DC, so a failed search
+    tells nothing.
     """
     name: str = Field(default="Search", description="Human-readable search action name.")
     description: str = Field(default="Search within 10 feet for anything hidden (Perception check)",
                              description="Player-facing search action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Search targets self")
     search_feet: ClassVar[int] = 10
-    searched_aspects: ClassVar[frozenset[ConcealedAspect]] = frozenset({ConcealedAspect.HAZARD})
+    searched_aspects: ClassVar[frozenset[ConcealedAspect]] = frozenset({
+        ConcealedAspect.HAZARD, ConcealedAspect.PRESENCE, ConcealedAspect.ACTIONS})
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Search Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid when searching.")
@@ -3128,7 +3131,8 @@ class Search(BaseAction):
             if not cell_visible(entity.senses.cells, position) or entity.senses.get_feet_distance(position) > self.search_feet:
                 continue
             tile = grid.get_tile(*position)
-            blocks = [block for block in [tile, *(BaseBlock.get(identity) for identity in grid.get_objects_at(position))]
+            objects = grid.get_objects_at(position) | grid.get_boundary_objects_facing(position)
+            blocks = [block for block in [tile, *(BaseBlock.get(identity) for identity in sorted(objects, key=str))]
                       if block is not None]
             holders: List[ConcealmentHolder] = [*grid.get_spatial_conditions_at(position),
                                                 *(holder for block in blocks for holder in block.concealment_holders())]

@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from dnd.types.abilities import SkillName
+
 KnowerKey = Union[str, UUID]
 
 
@@ -20,6 +22,9 @@ class ConcealedAspect(str, Enum):
     PRESENCE = "presence"    # its host object or creature: not perceived until known
     ACTIONS = "actions"      # what its host does: a secret door, a hidden button
     CONTENTS = "contents"    # what its host holds: a desk's drawer, a false back
+
+
+NOTICED_ON_OBJECTS = frozenset({ConcealedAspect.PRESENCE, ConcealedAspect.ACTIONS})  # contents only by Search Inside
 
 
 class KnowerScope(str, Enum):
@@ -37,6 +42,7 @@ class Concealment(BaseModel):
     dc: int
     aspect: ConcealedAspect = ConcealedAspect.HAZARD
     knowers: KnowerScope = KnowerScope.PARTY
+    skill: SkillName = "perception"  # the check that finds it by searching
     known_by: frozenset[KnowerKey] = frozenset()
     failed_by: frozenset[UUID] = frozenset()
     in_plain_view: bool = False  # for now noticed by anyone who sees it (raised spikes, an open hatch)
@@ -69,6 +75,7 @@ def with_plain_view(record: Concealment, in_plain_view: bool) -> Concealment:
     return record.model_copy(update={"in_plain_view": in_plain_view})
 
 
-def concealment(dc: Optional[int], in_plain_view: bool = False) -> Optional[Concealment]:
+def concealment(dc: Optional[int], aspect: ConcealedAspect = ConcealedAspect.HAZARD, *, skill: SkillName = "perception",
+                in_plain_view: bool = False) -> Optional[Concealment]:
     """The record an authored hidden DC makes; None when nothing is hidden."""
-    return None if dc is None else Concealment(dc=dc, in_plain_view=in_plain_view)
+    return None if dc is None else Concealment(dc=dc, aspect=aspect, skill=skill, in_plain_view=in_plain_view)

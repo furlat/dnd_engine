@@ -19,7 +19,7 @@ from dnd.items.property_composition import ItemPropertyContribution, install_ite
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import DiceRoll
 from dnd.core.gridmap import CommittedObjectRemovals, PreparedObjectPlacement, get_map
-from dnd.core.concealment_types import knows
+from dnd.core.concealment_types import ConcealedAspect, knows
 from dnd.core.events import (
     Damage,
     Event,
@@ -389,6 +389,7 @@ class BaseItem(BaseBlock):
             blocks_movement=self.blocks_walking(),
             blocks_optics=self.blocks_optics_at_center(),
             blocks_propagation=self.blocks_propagation(),
+            presence_concealed=self.concealment_holder(ConcealedAspect.PRESENCE) is not None,
         )
 
     def snapshot_item_state(self) -> ItemPresentationState:
@@ -526,18 +527,22 @@ class BaseItem(BaseBlock):
         return self.include_in_senses_objects
 
     def is_observable_to(self, observer_uuid: UUID) -> bool:
-        """A trap's hidden hardware is seen by those who know its mechanism."""
+        """A hidden object (`Concealed` presence) is seen by those who know it, and a trap's hidden hardware by
+        those who know its mechanism."""
+        observer = BaseBlock.get(observer_uuid)
+        hidden = self.concealment_holder(ConcealedAspect.PRESENCE)
+        if hidden is not None and (observer is None or not knows(hidden.concealment, observer.faction, observer.uuid)):
+            return False
         if self.perception_condition_uuid is None:
             return True
         condition = get_map().get_spatial_condition(self.perception_condition_uuid)
-        observer = BaseBlock.get(observer_uuid)
         return (condition is not None and observer is not None
                 and knows(condition.concealment, observer.faction, observer.uuid)
                 and condition.get_spatial_observation({self.position}, observer_uuid=observer_uuid) is not None)
 
     def observability_reads_the_world(self) -> bool:
-        """A perception condition's observation decides this item's observability."""
-        return self.perception_condition_uuid is not None
+        """Who knows a hidden object, or a perception condition's observation, decides this item's observability."""
+        return self.perception_condition_uuid is not None or self.concealment_holder(ConcealedAspect.PRESENCE) is not None
 
     def get_door_mechanism(self) -> DoorMechanism | None:
         return None
@@ -699,12 +704,16 @@ class BaseItem(BaseBlock):
                 item.retire(parent_event=parent_event)
 
     def loot(self, entity_uuid: UUID, inventory_uuid: UUID) -> None:
-        """Called when item is picked up by an entity.
+        """Called when item is picked up by an entity. Taken from where it was tucked away, a hidden object is
+        hidden no more: dropped again, it is seen like any other.
 
         Args:
             entity_uuid: UUID of the entity picking up the item.
             inventory_uuid: UUID of the inventory receiving the item.
         """
+        hidden = self.concealment_holder(ConcealedAspect.PRESENCE)
+        if hidden is not None:
+            self.remove_condition_by_uuid(hidden.uuid)
         self._on_loot(entity_uuid, inventory_uuid)
 
     def _on_loot(self, entity_uuid: UUID, inventory_uuid: UUID) -> None:

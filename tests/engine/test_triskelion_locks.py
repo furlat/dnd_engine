@@ -141,13 +141,16 @@ def searchable(item_id: str, position: tuple[int, int], *, skill: str, holder: E
 
 def test_a_false_back_frees_its_contents_only_to_an_investigation_that_beats_it(arena):
     sharp = creature("Sharp", (2, 2), wisdom=20, dexterity=10)
+    partner = creature("Partner", (2, 3))
     wardrobe, ring = searchable("environment.furniture.wardrobe", (3, 2), skill="investigation", holder=sharp)
     assert wardrobe.uuid in sharp.senses.objects  # the wardrobe itself is in plain view
     act(sharp, "Open Chest")
     assert row(sharp, "Loot All") is None and row(sharp, "Loot Gold ring") is None
     act(sharp, "Search Inside", target=wardrobe, faces=(8,))  # Investigation 8 + 4 misses DC 13
     assert row(sharp, "Loot All") is None
-    act(sharp, "Search Inside", target=wardrobe, faces=(12,))  # 12 + 4 beats it
+    searches = row(sharp, "Search Inside")  # one try each: the wardrobe is no longer sharp's to search
+    assert searches is None or wardrobe.uuid not in {option.target_uuid for option in searches.valid_targets}
+    act(partner, "Search Inside", target=wardrobe, faces=(16,))  # 16 beats it; the false back is open to all
     act(sharp, "Loot All")
     assert ring.uuid in sharp.inventory.items
 

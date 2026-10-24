@@ -5,6 +5,7 @@ from types import MappingProxyType
 from uuid import UUID, uuid4
 from typing import Literal, Sequence
 
+from dnd.core.concealment_types import ConcealedAspect
 from dnd.actions import SpellAction
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.core.base_conditions import Duration
@@ -20,6 +21,7 @@ from dnd.core.events import (
     SpatialEffectInteractionEvent,
     ItemDestructionEvent,
 )
+from dnd.items.concealment import install_concealment
 from dnd.items.environment import (
     DIRECTIONAL_CHANNELS,
     DirectionalDoor,
@@ -174,6 +176,15 @@ def build_solid_wall(item_id: str, source_entity_uuid: UUID) -> DirectionalWall:
     return DirectionalWall(source_entity_uuid=source_entity_uuid, item_id=item_id,
         name=f"Fantasy {item_id.rsplit('_', 1)[1].upper()} Wall", material=material,
         armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[material])
+
+
+def build_secret_door(item_id: str = "environment.door.secret_stone", *, dc: int = 15,
+                      swing: DoorSwing = DoorSwing.OUTWARD) -> DirectionalDoor:
+    """A door set flush in a wall, hidden until found: closed, a party that hasn't noticed or searched it out
+    does not perceive it at all, and it still blocks sight and passage like any closed door."""
+    door = build_authored_door(item_id, swing=swing)
+    install_concealment(door, ConcealedAspect.PRESENCE, dc)
+    return door
 
 
 def build_directional_wall(

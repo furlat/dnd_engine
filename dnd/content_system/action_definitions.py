@@ -27,7 +27,7 @@ import dnd.extensions.field_focus as field_focus
 import dnd.items.consumables as consumables
 import dnd.items.container_traps as container_traps
 import dnd.items.locks as locks
-import dnd.items.searchables as searchables
+import dnd.items.concealment as concealment
 import dnd.items.shoving as shoving
 import dnd.items.water_fixtures as water_fixtures
 import dnd.items.environment as environment
@@ -266,7 +266,7 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _original(locks.LockShut, "action.environment.lock.lock", "Lock", "Lock with the right key, or set a bar from its side."),
     _original(locks.PickLock, "action.environment.lock.pick", "Pick Lock", "Pick a lock with Thieves' Tools and Sleight of Hand."),
     _original(locks.ForceLock, "action.environment.lock.force", "Force Lock", "Force a lock or bar open with Athletics."),
-    _original(searchables.SearchBody, "action.environment.search", "Search", "Search one desk, cabinet, board or body for anything tucked away."),
+    _original(concealment.SearchInside, "action.environment.search", "Search Inside", "Search one desk, cabinet, board or body for anything tucked away."),
     _original(shoving.ShoveObject, "action.environment.shove_object", "Shove Object", "Push a piece of furniture one square straight away."),
     _original(water_fixtures.WorkPump, "action.environment.work_pump", "Work Pump", "Work a pump to fill a waterskin, or turn a tap."),
     _original(torches.TakeWallTorchAction, "action.environment.wall_torch.take", "Take Torch", "Lift a torch out of its holder to carry it."),

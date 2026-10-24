@@ -11,8 +11,6 @@ from uuid import UUID
 
 from dnd.actions_functional import get_available_actions
 from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder
-from dnd.blocks.base_item import UsableItem
-from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
     ActionAvailabilityStatus,
     ActionOutcomeProfile as EngineActionOutcomeProfile,
@@ -489,11 +487,7 @@ def _build_action_capabilities(
     started = time.perf_counter()
     environment_sources = [
         (template, str(object_uuid))
-        for object_uuid in sorted(actor.senses.objects, key=str)
-        for obj in [BaseBlock.get(object_uuid)]
-        if isinstance(obj, UsableItem)
-        and obj.should_include_in_available_object_actions()
-        for template in obj.get_use_actions(actor.uuid)
+        for template, object_uuid, _ in sorted(actor.observed_world_use_sources(), key=lambda row: str(row[1]))
     ]
     _record_timing(record_timing, "build_capabilities.environment_sources_ms", started)
 

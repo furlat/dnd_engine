@@ -1270,7 +1270,7 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
     "dnd.summoning.actions.DismissSummon": _dismiss_summon_semantics,
     "dnd.actions.Hide": _hide_semantics,
     "dnd.actions.Search": _search_semantics,
-    "dnd.items.searchables.SearchBody": _object_interaction_semantics(
+    "dnd.items.concealment.SearchInside": _object_interaction_semantics(
         "interaction.object.search", rolled=True, fact_id="selected_object.contents_found"),
     "dnd.items.shoving.ShoveObject": _object_interaction_semantics(
         "interaction.object.shove", rolled=True, fact_id="selected_object.moved"),

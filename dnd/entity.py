@@ -7025,8 +7025,9 @@ class Entity(BaseBlock):
             base = template.current_selection()
             for obj_uuid, obj_pos in candidates.items():
                 obj_block = BaseBlock.get(obj_uuid)
-                if obj_block is not None and not obj_block.should_include_in_available_object_actions():
-                    continue
+                if obj_block is not None and (not obj_block.should_include_in_available_object_actions()
+                                              or obj_block.hides_actions_from(self.faction, self.uuid)):
+                    continue  # what it does, or the object itself, is hidden from this creature
                 selection = replace(base, target_uuids=(obj_uuid,))
                 record_action_count("discovery.validation", 1)
                 if template.discovery_error(scan, selection) is None:
@@ -7096,11 +7097,13 @@ class Entity(BaseBlock):
             result.position_actions.append(action_info)
 
     def observed_world_use_sources(self) -> tuple[tuple[BaseAction, UUID, str], ...]:
-        """Describe observed devices before reach admission; never execute them."""
+        """Describe observed devices before reach admission; never execute them. A device whose actions are
+        hidden from this creature's party (a secret door, a hidden button) offers none."""
         sources = []
         for identity in self.senses.objects:
             item = BaseBlock.get(identity)
-            if isinstance(item, UsableItem) and item.should_include_in_available_object_actions():
+            if (isinstance(item, UsableItem) and item.should_include_in_available_object_actions()
+                    and not item.hides_actions_from(self.faction, self.uuid)):
                 sources.extend((action, identity, item.name) for action in item.get_use_actions(self.uuid))
         return tuple(sources)
 

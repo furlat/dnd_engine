@@ -57,7 +57,9 @@ def test_item_components_partition_every_item_field():
     components = [{row.name for row in fields(value)} for value in (ItemLook, ItemProfile, ItemState)]
     components.append({"item_effects"})
     assert sum(len(names) for names in components) == len(set().union(*components))
-    assert set().union(*components) == set(ItemPresentationState.model_fields) - {"item_uuid"}
+    # Hidden contents and a hidden presence are the seat publication's own inputs, never sent.
+    assert set().union(*components) == set(ItemPresentationState.model_fields) - {"item_uuid", "contents_concealed",
+                                                                                  "presence_concealed"}
     assert "effects" in {row.name for row in fields(PlayerItem)}
 
 

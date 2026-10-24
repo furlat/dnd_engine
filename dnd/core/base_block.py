@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_fi
 from dnd.core.values import ModifiableValue, retire_value
 from dnd.core.base_object import BaseObject, CreatesModels, build_creatable_models, read_private_attribute
 from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent
-from dnd.core.concealment_types import knows
+from dnd.core.concealment_types import NOTICED_ON_OBJECTS, ConcealedAspect, knows
 from dnd.core.condition_types import (
     HazardFilter, InvoluntarySustainLoss, SustainLossPolicy,
 )
@@ -273,6 +273,9 @@ class BaseBlock(BaseModel):
     # written at every condition membership commit; GridMap's hazard owners read it with
     # the blocks' placements.
     ground_hazard_holders: ClassVar[dict[UUID, None]] = {}
+    # Blocks whose own presence or actions a condition hides, written at the same commits; perception
+    # notices them with their placements (`GridMap.concealed_object_hosts`).
+    concealment_hosts: ClassVar[dict[UUID, None]] = {}
 
     @classmethod
     def register_condition_removal_participant(cls, participant: ConditionRemovalParticipant) -> UUID:
@@ -1142,11 +1145,28 @@ class BaseBlock(BaseModel):
         """This block's conditions that hide something, written at every condition membership commit."""
         return self._concealment_holders
 
+    def concealment_holder(self, aspect: ConcealedAspect) -> Optional[BaseCondition]:
+        """The condition hiding this aspect of the block; the highest DC governs when several do."""
+        holders = [(condition.concealment.dc, condition) for condition in self._concealment_holders
+                   if condition.concealment is not None and condition.concealment.aspect is aspect]
+        return max(holders, key=lambda row: row[0])[1] if holders else None
+
+    def hides_actions_from(self, faction: Optional[str], uuid: UUID) -> bool:
+        """Whether what this block does is hidden from a creature: its actions (a hidden button), or the block
+        itself (an unfound secret door)."""
+        return any(condition.concealment is not None and condition.concealment.aspect in NOTICED_ON_OBJECTS
+                   and not knows(condition.concealment, faction, uuid) for condition in self._concealment_holders)
+
     def _write_condition_indexes(self) -> None:
-        """After a membership change: this block's concealing conditions, and its entry in
-        `ground_hazard_holders`."""
+        """After a membership change: this block's concealing conditions, its entry in
+        `concealment_hosts`, and its entry in `ground_hazard_holders`."""
         self._concealment_holders = tuple(condition for condition in self.active_conditions.values()
                                           if condition.concealment is not None)
+        if any(condition.concealment is not None and condition.concealment.aspect in NOTICED_ON_OBJECTS
+               for condition in self._concealment_holders):
+            BaseBlock.concealment_hosts[self.uuid] = None
+        else:
+            BaseBlock.concealment_hosts.pop(self.uuid, None)
         if any(condition.hazard_filter is not None and condition.affects_occupancy_layer(OccupancyLayer.GROUND)
                for condition in self.active_conditions.values()):
             BaseBlock.ground_hazard_holders[self.uuid] = None

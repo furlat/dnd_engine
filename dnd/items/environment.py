@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
+from dnd.core.concealment_types import ConcealedAspect, with_plain_view
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.core.action_types import ActionSelection
 from dnd.core.base_actions import BaseAction, ActionEvent, Cost, TargetType, cell_occupied
@@ -460,6 +461,12 @@ class DirectionalDoor(UsableItem):
         previous_structure = self.get_boundary_structure()
         previous_value = self.is_open
         self.is_open = value
+        # An open secret door is plain to see: whoever sees it open knows it from then on. The record is
+        # written before the change publishes, so the observers settling it see the door open.
+        hidden = self.concealment_holder(ConcealedAspect.PRESENCE)
+        record = hidden.concealment if hidden is not None else None
+        if hidden is not None and record is not None:
+            get_map().record_concealment(((hidden, with_plain_view(record, value)),))
         try:
             get_map().update_object_boundary_structure(
                 self.uuid,
@@ -469,4 +476,6 @@ class DirectionalDoor(UsableItem):
             )
         except Exception:
             self.is_open = previous_value
+            if hidden is not None and record is not None:
+                get_map().record_concealment(((hidden, record),))
             raise

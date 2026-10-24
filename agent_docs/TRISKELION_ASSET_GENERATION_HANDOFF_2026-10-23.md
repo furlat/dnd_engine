@@ -448,6 +448,14 @@ only line a wall stay decor.
 | Green curtain with a bulge R49 | Pull aside | closed → open | Curtain drawn back, revealing the wooden manikin with brown feet |
 | Curtains (all) | Pull aside / close | closed ↔ open | Fabric gathers to the side |
 
+Built (24 October): a secret door, `environment.door.secret_stone`, a stone door set flush in a wall. A
+party that hasn't found it is not sent the door at all; once it has, the door is sent like any door. What a
+seat should draw at that spot before then is still open (the subjective-visual question).
+
+| Asset | Interaction | From → to | What visibly happens |
+| --- | --- | --- | --- |
+| Secret stone door | Open / close | closed ↔ open | The stone slab pivots on its hinge side, out of the wall face |
+
 ### 12.6 Pushing furniture (Shove Object)
 
 | Asset | Interaction | From → to | What visibly happens |

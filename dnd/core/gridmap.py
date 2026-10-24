@@ -861,8 +861,8 @@ class GridMap:
         for holder, record in writes:
             learned = holder.concealment is None or record.known_by != holder.concealment.known_by
             holder.concealment = record
-            if not learned:
-                continue  # a missed search or a change of plain view moves no route
+            if not learned or record.aspect is not ConcealedAspect.HAZARD:
+                continue  # a missed search, a change of plain view or a found object moves no route
             footprint = self._spatial_condition_positions.get(holder.uuid)
             if footprint is not None:
                 cells |= footprint
@@ -4455,6 +4455,14 @@ class GridMap:
             object_uuids.update(identities)
         return object_uuids
 
+    def get_boundary_objects_facing(self, position: Tuple[int, int]) -> Set[UUID]:
+        """The boundary objects on neighbouring Tiles' sides toward this cell: the far side of a boundary, seen
+        from here (`get_objects_at` holds this Tile's own sides). `placement_support_cells` decides the cells."""
+        x, y = position
+        return {identity for owner, _, identities in self.boundary_sides_in_box((x - 1, y - 1, x + 1, y + 1))
+                if owner != position for identity in identities
+                if position in placement_support_cells(self._object_placements[identity])}
+
     def get_center_objects_at(
         self,
         position: Tuple[int, int],
@@ -5570,6 +5578,27 @@ class GridMap:
         self_hidden = np.array([index < spatial and bool(rows) for index, rows in enumerate(hidden)], dtype=bool)
         return (tuple(owners), np.concatenate(xs).astype(np.int64), np.concatenate(ys).astype(np.int64), owner_of,
                 tuple(hidden), self_hidden)
+
+    def concealed_object_hosts(self) -> Tuple[Tuple[BaseBlock, ...], np.ndarray, np.ndarray, np.ndarray]:
+        """Every placed object whose presence or actions a condition hides (`BaseBlock.concealment_hosts`), with
+        its cells: the owners and, concatenated, their cells' x, y and owner index (as `hazard_owners`)."""
+        hosts: List[BaseBlock] = []
+        xs: List[np.ndarray] = []
+        ys: List[np.ndarray] = []
+        for identity in BaseBlock.concealment_hosts:
+            placement = self._object_placements.get(identity)
+            block = BaseBlock.get(identity)
+            if placement is None or block is None:
+                continue
+            cells = tuple(placement_support_cells(placement))  # a boundary is seen from either side
+            hosts.append(block)
+            xs.append(np.array([cell[0] for cell in cells], dtype=np.int64))
+            ys.append(np.array([cell[1] for cell in cells], dtype=np.int64))
+        if not hosts:
+            empty = np.zeros(0, dtype=np.int64)
+            return (), empty, empty, empty
+        owner_of = np.repeat(np.arange(len(hosts), dtype=np.int64), [len(cell_xs) for cell_xs in xs])
+        return tuple(hosts), np.concatenate(xs), np.concatenate(ys), owner_of
 
     def optical_obscurement_bits_at(self, position: Tuple[int, int]) -> int:
         """The OBSCUREMENT_BITS covering one cell, from every contributing owner."""

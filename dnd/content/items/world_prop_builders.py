@@ -15,7 +15,8 @@ from dnd.core.events import Event
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemDestructionProfile, ItemIntegrity
 from dnd.items.environment_interactables import LootAllAction, StorageChest
-from dnd.items.searchables import install_search_gate
+from dnd.core.concealment_types import ConcealedAspect
+from dnd.items.concealment import install_concealment
 from dnd.items.shoving import SHOVEABLE_TAG
 from dnd.items.water_fixtures import DRY_TAP_TAG, WATER_PUMP_TAG
 from dnd.items.visual_variants import ItemVisualVariantParameters
@@ -1165,14 +1166,14 @@ def build_searchable_prop(item_id: str, *, dc: int = 13,
                           skill: Literal["perception", "investigation"] = "perception",
                           source_entity_uuid: UUID | None = None,
                           variant: ItemVisualVariantParameters | None = None) -> StorageChest:
-    """One profiled body (a desk, a false-backed wardrobe, loose boards) holding contents a Search frees.
+    """One profiled body (a desk, a false-backed wardrobe, loose boards) holding contents Search Inside frees.
 
     It keeps the prop's body and art, plus a lid; the caller puts the contents in its inventory.
     """
     profile = WORLD_PROP_PROFILES[item_id]
     body = _container_body(item_id, profile, _checked_variant(item_id, profile, variant),
                            source_entity_uuid=source_entity_uuid, is_open=False)
-    install_search_gate(body, dc=dc, skill=skill)
+    install_concealment(body, ConcealedAspect.CONTENTS, dc, skill=skill)
     return body
 
 

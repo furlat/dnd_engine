@@ -31,7 +31,7 @@ from dnd.entity import Entity
 from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, AllyHelp, HelpAttack, Hide, Search, Attack, Jump, Shove, PickUp, Drop, SpellAction, TraverseConnector
 from dnd.items.container_traps import DisarmTrap
 from dnd.items.locks import ForceLock, LockShut, PickLock, Unlock
-from dnd.items.searchables import SearchBody
+from dnd.items.concealment import SearchInside
 from dnd.items.shoving import ShoveObject
 from dnd.items.water_fixtures import WorkPump
 from dnd.summoning.actions import DismissSummon
@@ -109,7 +109,7 @@ def setup_standard_actions(entity: Entity) -> None:
         ),
         (Hide(source_entity_uuid=entity.uuid, template=True), "action.hide"),
         (Search(source_entity_uuid=entity.uuid, template=True), "action.search"),
-        (SearchBody(source_entity_uuid=entity.uuid, template=True), "action.environment.search"),
+        (SearchInside(source_entity_uuid=entity.uuid, template=True), "action.environment.search"),
         (ShoveObject(source_entity_uuid=entity.uuid, template=True), "action.environment.shove_object"),
         (WorkPump(source_entity_uuid=entity.uuid, template=True), "action.environment.work_pump"),
         (DisarmTrap(source_entity_uuid=entity.uuid, template=True), "action.environment.trap.disarm"),
@@ -820,9 +820,9 @@ def execute_use_action(
         raise ValueError("Item is out of reach")
 
     clean_name = action_name.split("__item_")[0] if action_name is not None else None
+    offered = () if item.hides_actions_from(entity.faction, entity.uuid) else item.get_use_actions(entity.uuid)
     template = discovered_template or next(
-        (action for action in item.get_use_actions(entity.uuid) if action.get_discovery_template_name() == clean_name),
-        None)
+        (action for action in offered if action.get_discovery_template_name() == clean_name), None)
     if template is None:
         raise ValueError(f"Use action '{action_name}' not found on item")
     if template.source_item_uuid != item_uuid or template.source_entity_uuid != entity.uuid:

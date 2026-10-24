@@ -24,7 +24,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.base_tiles import Tile
 from dnd.core.gridmap import CellBox, ConcealmentHolder, GridMap, SpatialConditionOwner, get_map
-from dnd.core.concealment_types import Concealment, knower_key, knows, notices, with_knowers
+from dnd.core.concealment_types import NOTICED_ON_OBJECTS, Concealment, knower_key, knows, notices, with_knowers
 from dnd.core.navigation import NO_CELLS_LAYER, NO_ROUTES, NO_SIDES_LAYER, Routes, has_route
 from dnd.core.geometry import ROUTE_STEP_SHIFT, supercover_line, supercover_route_table
 from dnd.core.presentation_geometry import SpherePresentationGeometry
@@ -930,6 +930,10 @@ class SettlementWorld:
     hazard_owner: np.ndarray
     hazard_concealments: Tuple[Tuple[ConcealmentHolder, ...], ...]  # per owner, the conditions hiding a hazard there
     hazard_self_hidden: np.ndarray   # per owner: a hidden spatial condition (its own rule holds only for knowers)
+    object_hosts: Tuple[BaseBlock, ...]  # placed objects whose presence or actions a condition hides
+    object_host_x: np.ndarray        # their cells, concatenated, with each cell's host index
+    object_host_y: np.ndarray
+    object_host_owner: np.ndarray
     light_sources: LightSourceTable
     optical_revision: int
     propagation_revision: int
@@ -1708,6 +1712,7 @@ class SpatialSensesSystem:
         exists = grid.cell_exists
         grid.settle_obscurement_activity()
         hazard_owners, hazard_x, hazard_y, hazard_owner, hazard_concealments, hazard_self_hidden = grid.hazard_owners()
+        object_hosts, object_host_x, object_host_y, object_host_owner = grid.concealed_object_hosts()
         light_rows = tuple(grid.light_source_rows())
         # A table whose every row held is the same table: an observer's emitters then compare by identity.
         lights = self._light_table
@@ -1729,7 +1734,7 @@ class SpatialSensesSystem:
                                                 CellLayer(grid.cell_light.x0, grid.cell_light.y0, values))
         return SettlementWorld(exists, light, grid.obscurement_layers(), grid.cell_obscurement,
                                hazard_owners, hazard_x, hazard_y, hazard_owner, hazard_concealments,
-                               hazard_self_hidden, lights,
+                               hazard_self_hidden, object_hosts, object_host_x, object_host_y, object_host_owner, lights,
                                grid.optical_revision, grid.propagation_revision, grid.sight_grid_revision)
 
     def _recompute(self, observers: Sequence[UUID], affected: Mapping[UUID, Optional[Set[Position]]],
@@ -2136,28 +2141,35 @@ class SpatialSensesSystem:
                      exposed: Mapping[UUID, FrozenSet[UUID]]) -> List[ViewConcealment]:
         """Notice: every hidden thing a view reaches that its knowers don't know is noticed when its passive
         Perception meets the DC or it is in plain view (`notices`), or when a fact of this settlement
-        exposes it (a trap firing). Every notice is decided, then written in one
-        `GridMap.record_concealment`, before any stage reads; a view then re-observes the hidden things it
-        came to know since it last settled (its own notices and its party's)."""
+        exposes it (a trap firing). Hidden traps and hazards are found on the hazard owners it sees, hidden
+        objects (their presence or what they do) on the concealed object hosts it sees. Every notice is
+        decided, then written in one `GridMap.record_concealment`, before any stage reads; a view then
+        re-observes the hidden things it came to know since it last settled (its own notices and its
+        party's)."""
         hidden, self_hidden = world.hazard_concealments, world.hazard_self_hidden
-        frames = []
+        frames, host_frames = [], []
         for view in views:
             cell_rows = frame_index(world.hazard_x, world.hazard_y, view.origin)
             frames.append((cell_rows, np.unique(world.hazard_owner[(cell_rows != OFF) & view.seen_frame[cell_rows]])))
+            host_rows = frame_index(world.object_host_x, world.object_host_y, view.origin)
+            host_frames.append(np.unique(world.object_host_owner[(host_rows != OFF) & view.seen_frame[host_rows]]))
         writes: Dict[UUID, Tuple[ConcealmentHolder, Concealment]] = {}
         noticed: List[Set[UUID]] = [set() for _ in views]
-        for index, (view, (_, reaching)) in enumerate(zip(views, frames)):
+        for index, (view, (_, reaching), hosts) in enumerate(zip(views, frames, host_frames)):
             owner = view.owner
             passive, exposing = passives[owner.uuid], exposed.get(owner.uuid, frozenset())
-            for owner_index in reaching.tolist():
-                for holder in hidden[owner_index]:
-                    written = writes.get(holder.uuid)
-                    record = written[1] if written is not None else holder.concealment
-                    if record is None or knows(record, owner.faction, owner.uuid):
-                        continue
-                    if notices(record, passive) or holder.uuid in exposing:
-                        writes[holder.uuid] = (holder, with_knowers(record, (knower_key(record, owner.faction, owner.uuid),)))
-                        noticed[index].add(holder.uuid)
+            candidates = [holder for owner_index in reaching.tolist() for holder in hidden[owner_index]]
+            candidates += [holder for host_index in hosts.tolist()
+                           for holder in world.object_hosts[host_index].concealment_holders()
+                           if holder.concealment is not None and holder.concealment.aspect in NOTICED_ON_OBJECTS]
+            for holder in candidates:
+                written = writes.get(holder.uuid)
+                record = written[1] if written is not None else holder.concealment
+                if record is None or knows(record, owner.faction, owner.uuid):
+                    continue
+                if notices(record, passive) or holder.uuid in exposing:
+                    writes[holder.uuid] = (holder, with_knowers(record, (knower_key(record, owner.faction, owner.uuid),)))
+                    noticed[index].add(holder.uuid)
         if writes:
             get_map().record_concealment(tuple(writes.values()))
         # Each owner's cells are one run of the concatenated owner cells (`GridMap.hazard_owners`).

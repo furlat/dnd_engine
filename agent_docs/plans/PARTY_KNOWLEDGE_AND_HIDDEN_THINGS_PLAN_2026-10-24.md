@@ -1,7 +1,7 @@
 # Hidden things and party knowledge: one record, one rule
 
 Status: plan, 24 October 2026, branch `hidden_knowledge_opus` (from `content_push_opus` b139f0569b).
-Two rounds of anti-slop and anti-OOP review are folded in (§10). Not implemented.
+Two rounds of anti-slop and anti-OOP review are folded in (§10). Steps 0, 1 and 2 are built (as-built notes inline); steps 3-5 are not.
 
 Design: proposal A of [the proposals](../HIDDEN_THINGS_KNOWLEDGE_DESIGN_PROPOSALS_2026-10-23.md).
 Background: [the study](../HIDDEN_THINGS_AND_KNOWLEDGE_STUDY_2026-10-23.md).
@@ -26,7 +26,7 @@ Background: [the study](../HIDDEN_THINGS_AND_KNOWLEDGE_STUDY_2026-10-23.md).
 
 **Two places where the plan states something the decisions imply rather than ask:**
 1. **Who writes the record.** "The condition records it" becomes "the record is the condition's data, written by one GridMap function". dnd/core conditions cannot import the map (base_block.py:8 imports base_conditions, gridmap.py:29 imports base_block), so a handler on the base condition could not compute the party or invalidate routes. The deciders (the settlement and the searches) call that one function.
-2. **What a closed secret door shows.** To a party that doesn't know it, the door is published as the wall it is disguised as: the wall's identity and name, and no door fields. The human described it as "a hidden door that looks like a wall when hidden".
+2. **What a closed secret door shows.** To a party that doesn't know it, the door is published as the wall it is disguised as: the wall's identity and name, and no door fields. The human described it as "a hidden door that looks like a wall when hidden". **Superseded 24 October:** the human dropped the disguise ("hidden door become invisible but they still block light and path"); an unfound secret door is not sent to the seat at all (§3.6 as built).
 
 ## 2. Rules for this work
 
@@ -49,7 +49,7 @@ Background: [the study](../HIDDEN_THINGS_AND_KNOWLEDGE_STUDY_2026-10-23.md).
   - **Step 2:**
     - `dnd/items/searchables.py` (`SearchGate`, `SearchBody`, `install_search_gate`), replaced by `dnd/items/concealment.py`;
     - the `gates_owner_contents` hook;
-    - every object-level `BaseBlock.stealth_dc` use. From step 2 the contact table reads an object's DC only from its record. A test that sets it today is test_window_attack_access.py:175.
+    - (moved to step 4) object-level `BaseBlock.stealth_dc`: hidden objects use the record through observability, so the generic stealth column goes with the creature step.
   - **Step 4:**
     - `Hidden.stealth_result` (conditions.py:2544);
     - `BaseBlock.stealth_dc` and `set_stealth_dc`;
@@ -116,11 +116,10 @@ All paths decide first, write through one `record_concealment` call, and only th
   - This covers party members after another member's notice or search: they draw it at their next settlement, at the latest their turn start.
   - Same-settlement party views are marked at once.
   - The fixture stage's passive test in its early exit (sensory.py:2541) becomes "no marks for this view".
-- **Hidden-presence objects (step 2).**
-  - **The DC.** The contact table reads it from the record through `concealment_holder(PRESENCE)`. Installing or removing `Concealed` publishes the existing perceivability fact, as `Hidden.on_membership_changed` does (conditions.py:2623-2627), so the table row updates.
-  - **The filter.** `stealth < passive` (sensory.py:2249, 2269) becomes "known to the observer's knowers, or passive ≥ DC". It is checked only on rows that have a record. The rows kept only by passive Perception are notices.
-  - **Party members.** Such objects are volatile targets, the existing `table.volatile` path that trap parts use (sensory.py:1759), so party members' contacts pick up a knowledge change at their next settlement. The object scaling script measures the cost.
-- **Hidden-nature objects (step 2).** A has-holder column marks the rows that have an ACTIONS record. Among the view's object contacts, the rows the party doesn't know and passive Perception meets are notices.
+- **Hidden objects (step 2, as built).** The batched contact filter is untouched.
+  - **Candidates.** `GridMap.concealed_object_hosts()` lists the placed objects whose presence or actions a condition hides, from `BaseBlock.concealment_hosts` (written at membership commits, like `ground_hazard_holders`), with every cell they touch (`placement_support_cells`: a boundary object from either side). The settlement finds them in each view's visible cells and notices them by the same rule and the same single write.
+  - **Presence.** `BaseItem.is_observable_to` asks the record, and such objects answer `observability_reads_the_world`, so the existing volatile-target path re-asks them at every settlement (the path trap parts already use). Same-settlement party members see the object at once, because the write precedes the contacts stage.
+  - **Search** also reads the boundary objects on neighbouring cells' sides toward a visible cell (`GridMap.get_boundary_objects_facing`), so a secret door is found from either side.
 - **The event.**
   - `SensoryUpdateEvent.concealed_noticed: frozenset[UUID]` is a fact only. No handler writes from it.
   - It is filled by `_emit_settled` and by the refresh path: `_recompute` returns it, because `recompute_observer` (sensory.py:1627) builds its event later.
@@ -153,14 +152,13 @@ All paths decide first, write through one `record_concealment` call, and only th
 - **ACTIONS** (a secret door, a hidden button or lever).
   - **The use-action gate.** `Entity.observed_world_use_sources()` (entity.py:7093-7100) offers no use action of an object whose ACTIONS record the actor's knowers don't know. Two other paths are routed through it, so the gate is the only one: the AI capability builder (decision_epoch.py:490-498) and the name fallback (actions_functional.py:824).
   - **Object-targeted rows.** Rows that target the object (Unlock, Pick Lock, Lock Shut, Shove Object, Attack Object, Force) exclude such objects as targets for those actors, in the object-target collection they share.
-  - **Publication.** To a seat whose party doesn't know it, a closed secret door is published as its disguise: the wall identity and name authored on its profile, and no door fields (`is_open`, `door_mechanism`, `door_swing`, world_publication.py:81-95).
-    - The knowledge travels the way all perception does. The settlement marks the observer's own object contact as known (it already decides per creature), the seat's view composes its members' contacts (`composed_view`, audience.py:437), and `disclosed_floor_item` picks the door or its disguise from that composed view. The server never needs factions, and replay stays a pure function of recorded facts.
-    - If the contact flag reaches the wire, the schema goes up; that is accepted.
-    - Once opened, the door is published as a door to everyone.
-    - (On 24 October I first drafted "wall to everyone while closed" to avoid this path, without asking; the human objected, and this is the plan's version.)
+  - **Publication (as built, 24 October).** A secret door hides its *presence*, not only its actions (`build_secret_door`): a party that hasn't found it does not perceive it, and it still blocks sight and passage like any closed door. The seat publication had shown every boundary object whose cell a seat sees, contact or not (`object_observed`); a server-only `presence_concealed` fact on the item state (like `contents_concealed`, never copied to a seat) now makes a hidden boundary object need a real contact. A seat whose party found it receives it as an ordinary new object.
+    - How a seat should *draw* the spot where an unfound secret door stands (today: nothing is sent there) is left to the subjective-visual path; no disguise exists.
+    - (24 October: I first drafted "wall to everyone while closed", then a server-side "twin" wall object with a `known_natures` fact through senses, events and seat composition. Both were invented without approval; the twin also leaked the door's hit points and glyph. The human called it made up; it was removed entirely.)
+  - **Opening it (to be confirmed by the human).** An open secret door is in plain view: the door writes its record's `in_plain_view` as it opens (rolled back with it if the structure change fails), so whoever sees it open knows it from then on.
 - **CONTENTS** (a desk, a false back).
   - "Search Inside" uses the record's skill and DC.
-  - **Success removes `Concealed(CONTENTS)`,** which is the physical change. The contents gate (`StorageChest.contents_gated`) is then "no CONTENTS holder". The body is republished with `publish_location_state(ItemLocation.FLOOR, parent_event=effect)` (environment_interactables.py:587-590).
+  - **Success removes `Concealed(CONTENTS)`,** which is the physical change. The contents gate (`StorageChest.contents_gated`) is then "no CONTENTS holder". The body is republished by that removal itself (as built: no extra `publish_location_state` call is needed).
   - **Failure** adds the searcher to `failed_by`.
 - **The contents leak.**
   - `ItemPresentationState` gains a server-only `contents_concealed`, derived at snapshot time from the holder. It is not a stored item field.
@@ -168,7 +166,7 @@ All paths decide first, write through one `record_concealment` call, and only th
   - It is never sent to seats, because sending it would itself tell them the desk has a compartment.
 - **Content.**
   - `install_concealment(obj, aspect, dc, skill)`.
-  - One secret-door profile, with its wall disguise and open look.
+  - One secret-door profile and its open look (the wall disguise was dropped, §3.6 as built).
   - The searchable furniture moves to `install_concealment(..., CONTENTS, ...)`.
   - The asset handoff gains the secret door's looks.
 
@@ -239,7 +237,7 @@ The known failure is test_71, the monster roster, which is out of scope.
 - **Step 2, objects:**
   13. **Hidden presence:** a hidden note isn't perceived until passive Perception meets its DC or a Search finds it. After that, party members perceive it at their next settlement.
   14. **Secret door:**
-      - For the goblins, the closed door publishes as wall and has no door fields, no Open, Unlock, Pick Lock, Shove or Attack rows.
+      - For the goblins, the door is not perceived and not published (as built: no wall disguise), and they get no Open, Unlock, Pick Lock, Shove or Attack rows. It still blocks their sight and passage.
       - Once the heroes know it, they get those rows.
       - After it is opened, everyone sees an open door.
   15. **Contents:**
@@ -305,7 +303,7 @@ The known failure is test_71, the monster roster, which is out of scope.
 
 ## 9. Open points for the human
 
-The two statements at the end of §1: who writes the record, and what a closed secret door shows.
+Who writes the record (§1). What a closed secret door shows was settled by the human on 24 October: not sent, still blocking; how a seat draws that spot belongs to the subjective-visual discussion. To confirm: an opened secret door, raised spikes and an open hatch are learned by anyone who sees them (`in_plain_view`).
 
 ## 10. Review record
 
@@ -332,7 +330,7 @@ The two statements at the end of §1: who writes the record, and what a closed s
 | A base condition can't compute a party or call the map (import order). | Data only on the condition; one `GridMap.record_concealment` writer, called by the deciders (§1, §3.2). |
 | The aspect had no generic home, and HAZARD clashed with PRESENCE. | The aspect is in the record, a HAZARD value added, and an indexed `concealment_holder` (§3.1). |
 | Party members never drew a known thing already in view. | Pull marks every settlement; volatile hidden-presence objects (§3.3). |
-| A secret door leaked through published door fields and object-targeted rows; the AI built actions on its own path. | Per-seat disguise from server-only facts; every object-targeted row gated; one use-action gate shared by the AI and the fallback (§3.6). |
+| A secret door leaked through published door fields and object-targeted rows; the AI built actions on its own path. | Per-seat disguise from server-only facts (later dropped: the door is not sent, §3.6); every object-targeted row gated; one use-action gate shared by the AI and the fallback (§3.6). |
 | Knowledge inside `is_hazardous_for` would corrupt zone effect rules (conjuration.py:4315). | `is_hazardous_for` stays objective; knowledge is applied where hazard answers are combined (§3.2). |
 | Second homes: `Hidden.stealth_result`, a stale table DC, a stored `contents_concealed`, `is_found`. | All removed or derived; success removes the CONTENTS holder (§3.6, §3.8). |
 | `spatial_condition_changed` does too much mid-settlement; one cache walk per write. | MOVEMENT-only, batched once per settlement (§3.2). |

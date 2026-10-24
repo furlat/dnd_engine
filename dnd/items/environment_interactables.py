@@ -17,6 +17,7 @@ from dnd.core.base_actions import (
 from dnd.core.action_types import ActionSelection
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
+from dnd.core.concealment_types import ConcealedAspect
 from dnd.core.events import Event, EventPhase
 from dnd.types.abilities import SkillName
 from dnd.core.gridmap import get_map
@@ -577,6 +578,8 @@ class StorageChest(UsableItem):
 
     def to_item_presentation_state(self, *, stack_count: Optional[int] = None) -> ItemPresentationState:
         state = super().to_item_presentation_state(stack_count=stack_count)
+        if self.contents_gated():
+            state = state.model_copy(update={"contents_concealed": True})
         if self.fill_looks is None:
             return state
         held = len(self.chest_inventory.items)
@@ -641,8 +644,8 @@ class StorageChest(UsableItem):
         return bool(self.chest_inventory.items) and (not self.is_active or self.is_open) and not self.contents_gated()
 
     def contents_gated(self) -> bool:
-        """Whether a condition, such as an unsearched hiding place, keeps the contents out of reach."""
-        return self.is_active and any(condition.gates_owner_contents() for condition in self.active_conditions.values())
+        """Whether hidden contents (an unsearched drawer, a false back) are out of reach."""
+        return self.is_active and self.concealment_holder(ConcealedAspect.CONTENTS) is not None
 
     def should_include_in_available_object_actions(self) -> bool:
         return super().should_include_in_available_object_actions() or self.has_accessible_contents()

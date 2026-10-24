@@ -226,6 +226,9 @@ class ItemPresentationState(BaseModel):
     very_bright_radius_feet: Optional[int] = Field(default=None, ge=0)
     bright_radius_feet: Optional[int] = Field(default=None, ge=0)
     dim_radius_feet: Optional[int] = Field(default=None, ge=0)
+    # Server-side facts the seat publication reads and never copies to a seat (`floor_item`).
+    contents_concealed: bool = False  # hidden contents (an unsearched drawer, a false back)
+    presence_concealed: bool = False  # a hidden presence: only a seat whose members perceive it sees it
 
 
 @runtime_checkable

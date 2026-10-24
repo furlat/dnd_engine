@@ -375,10 +375,6 @@ class BaseCondition(BaseObject):
         """Whether this condition (a lock, a bar) keeps its owning door or container from opening."""
         return False
 
-    def gates_owner_contents(self) -> bool:
-        """Whether this condition keeps its owning container's contents out of reach (unsearched)."""
-        return False
-
     def snapshot_concentration_slots(self) -> tuple[ItemConcentrationSlot, ...]:
         """Return public capacity use for a condition that sustains spells."""
         return ()

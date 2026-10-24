@@ -53,13 +53,14 @@ Position = tuple[int, int]
 
 def object_observed(world: WorldFacts, view: SensesSnapshot | None, identity: UUID) -> bool:
     """A contact, or a boundary's appearance through either visible incident support (an attachment needs its own
-    contact: a visible supporting wall is no permission to disclose a hidden insert)."""
+    contact: a visible supporting wall is no permission to disclose a hidden insert, and a hidden presence such as
+    a secret door needs its own contact too)."""
     if view is None:
         return False
     if identity in view.objects:
         return True
     obj = world.objects[identity]
-    if obj.item.supported_by_uuid is not None or obj.item.boundary_structure is None:
+    if obj.item.supported_by_uuid is not None or obj.item.boundary_structure is None or obj.item.presence_concealed:
         return False
     return any(cell_in(view.visible, cell) for _, cell in boundary_sides(obj.placement))
 
@@ -99,10 +100,12 @@ def floor_item(item: ItemPresentationState, residues: tuple[ObjectResidueState, 
 
 
 def contents_granted(world: WorldFacts, view: SensesSnapshot, identity: UUID) -> bool:
-    """A container's contents are seen while it is open (or broken) and in visual contact."""
+    """A container's contents are seen while it is open (or broken) and in visual contact, unless they are
+    hidden (an unsearched drawer, a false back)."""
     obj = world.objects[identity]
     contact = view.objects.get(identity)
     return (obj.contained_items is not None and contact is not None and contact.visual
+            and not obj.item.contents_concealed
             and (obj.item.is_open is True or obj.item.integrity is ItemIntegrity.DESTROYED))
 
 

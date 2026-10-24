@@ -21,6 +21,22 @@ This section is the canonical status index as of 2026-07-24. The historical
 ledger below is preserved as discovery evidence, but an older `OPEN` label does
 not override a status recorded here.
 
+### An open boundary door can never be closed from its own side
+
+- **Found**: 2026-10-24, while testing secret doors on `hidden_knowledge_opus`;
+  reproduced identically on the pre-feature base (ee1a37db7e), so it predates that work.
+- **Behavior**: a door placed on a cell's side (for example `(3, 2)` EAST) is closed
+  from the far cell `(4, 2)` but never from `(3, 2)`. A creature in `(3, 2)` gets no
+  "Close Door" row; one step away it is out of reach, so that side can only open it.
+- **Cause**: `CloseDirectionalDoorAction.rule_error` (dnd/items/environment.py:202-204)
+  refuses whenever a creature occupies the door's object position. For a boundary door
+  that position is its owning cell, so the creature standing on that side is always
+  treated as "standing in the doorway". `DirectionalDoor._doorway_occupied` (line 369)
+  should be checked for the same assumption.
+- **Reproducer**: build `environment.door.desert_c7`, place it at `(3, 2)` EAST, open it
+  from a creature at `(3, 2)`, then list that creature's door rows (none).
+- **Status**: OPEN (not fixed: outside the hidden-knowledge plan; left for the human).
+
 ### Stale Berserker assertion caused unbounded Pytest entity rendering
 
 - **Found**: 2026-07-29 during the complete pre-commit manual-test sweep.
